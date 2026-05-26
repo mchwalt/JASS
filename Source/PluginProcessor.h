@@ -38,6 +38,9 @@ public:
     juce::MidiKeyboardState& getKeyboardState() { return keyboardState; }
     WaveformCapture& getWaveformCapture() { return waveformCapture; }
 
+    // Randomize all parameters (with guards so the result stays audible).
+    void randomize();
+
 private:
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;

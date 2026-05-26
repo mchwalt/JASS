@@ -383,6 +383,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         });
     };
 
+    addAndMakeVisible(randomBtn);
+    randomBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff6d28d9));
+    randomBtn.onClick = [this] { processor.randomize(); };
+
     // Noise
     auto noiseGrey = juce::Colour(0xff9ca3af);
     noiseTitle.setText("NOISE", juce::dontSendNotification);
@@ -528,10 +532,12 @@ void SynthyEditor::resized()
     // ===== Row 0: Header — Save/Load left, Title center, Master right =====
     auto headerRow = area.removeFromTop(80);
 
-    // Save/Load buttons on the left
-    auto leftBtns = headerRow.removeFromLeft(90);
-    saveBtn.setBounds(leftBtns.removeFromTop(34).reduced(4, 3));
-    loadBtn.setBounds(leftBtns.removeFromTop(34).reduced(4, 3));
+    // Save/Load (top row) + Randomize (below) on the left
+    auto leftBtns = headerRow.removeFromLeft(120);
+    auto topBtns = leftBtns.removeFromTop(34);
+    saveBtn.setBounds(topBtns.removeFromLeft(topBtns.getWidth() / 2).reduced(3, 3));
+    loadBtn.setBounds(topBtns.reduced(3, 3));
+    randomBtn.setBounds(leftBtns.removeFromTop(34).reduced(3, 3));
 
     // Master on the right
     auto masterArea = headerRow.removeFromRight(100);

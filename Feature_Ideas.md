@@ -18,15 +18,16 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Spectrum Analyzer** | FFT-Anzeige neben dem Oszilloskop |
 | **ADSR · LFO · Biquad-Filter** | Standard-Modulation & Filterung |
 | **Delay · Chorus · Reverb** | Effekt-Kette |
+| **Randomize-Button** | würfelt einen zufälligen, hörbaren Patch (mit Sanity-Guards) |
 | **Gemeinsames Preset-Format** | `.synthy` JSON + geteilter LiveState (App-übergreifend) |
 
 ---
 
 ## 🎯 Als Nächstes empfohlen
 
-1. **Randomize-Button** – würfelt alle Parameter → bestes Tool zum Sound-Entdecken (★ / ★★★★★)
-2. **Wavefolding** – klanglich komplett neu, simpel zu bauen (★★ / ★★★★★)
-3. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
+1. **Wavefolding** – klanglich komplett neu, simpel zu bauen (★★ / ★★★★★)
+2. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
+3. **Sub-Oszillator** – dedizierter Bass mit einem Klick (★ / ★★★★)
 
 ---
 
@@ -54,7 +55,7 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 
 | Feature | Was es macht | Aufwand | Coolness |
 |---|---|---|---|
-| **Randomize-Button** | würfelt alle/ausgewählte Parameter | ★ | ★★★★★ |
+| ~~Randomize-Button~~ | ✅ umgesetzt (beide Apps) | – | – |
 | **Macro-Knöpfe + Preset-Morph** | ein Knopf steuert viele Parameter; A/B überblenden | ★★★ | ★★★★★ |
 | **Live-Modulations-Anzeige** | animierte Ringe zeigen LFO/Env-Bewegung | ★★★ | ★★★★★ |
 | **Tempo-Sync** | LFO & Delay an BPM koppeln (1/4, 1/8, Triolen) | ★★ | ★★★★ |

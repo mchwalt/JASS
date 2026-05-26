@@ -33,6 +33,7 @@ identischen Einstellungen direkt gegenüberstellen.
 - **Distortion** — Off / SoftClip / HardClip / Foldback, Drive, Mix
 - **Effekte** — Delay, Chorus, Reverb
 - **Visualisierung** — Oszilloskop + Spektrum-Analyzer (FFT)
+- **Randomize** — würfelt per Knopfdruck einen zufälligen, hörbaren Patch
 - **Presets** im gemeinsamen `.synthy`-Format + geteilter LiveState
 
 ## Gemeinsames Preset-Format & LiveState

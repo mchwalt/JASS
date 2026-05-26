@@ -135,8 +135,8 @@ private:
     juce::Label masterLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> masterAttach;
 
-    // Preset save/load (shared .synthy JSON format)
-    juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" };
+    // Preset save/load (shared .synthy JSON format) + randomize
+    juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" };
     std::unique_ptr<juce::FileChooser> presetChooser;
 
     // Oscilloscope + Spectrum

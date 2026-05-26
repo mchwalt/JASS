@@ -49,6 +49,41 @@ void SynthyProcessor::saveLiveState()
     PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), "LiveState");
 }
 
+void SynthyProcessor::randomize()
+{
+    using namespace Parameters;
+    auto& rng = juce::Random::getSystemRandom();
+
+    // Random value for every parameter...
+    for (auto* p : getParameters())
+        p->setValueNotifyingHost(rng.nextFloat());
+
+    auto set = [this](const juce::String& id, float raw)
+    {
+        if (auto* p = apvts.getParameter(id))
+            p->setValueNotifyingHost(p->convertTo0to1(raw));
+    };
+
+    // ...then guards so the patch is actually audible & playable.
+    bool anySource = *apvts.getRawParameterValue(ID::oscOn(1)) > 0.5f
+                   || *apvts.getRawParameterValue(ID::oscOn(2)) > 0.5f
+                   || *apvts.getRawParameterValue(ID::oscOn(3)) > 0.5f
+                   || *apvts.getRawParameterValue(ID::wavetableOn) > 0.5f;
+    if (! anySource)
+        set(ID::oscOn(1), 1.0f);
+
+    if (*apvts.getRawParameterValue(ID::oscAmp(1)) < 0.2f)
+        set(ID::oscAmp(1), 0.3f + rng.nextFloat() * 0.5f);
+
+    // Keep a sane master volume, sustain (drone is heard) and a not-too-slow attack.
+    set(ID::masterVol, 0.4f + rng.nextFloat() * 0.35f);
+    set(ID::sustain,   0.6f + rng.nextFloat() * 0.4f);
+    set(ID::attack,    rng.nextFloat() * 0.5f);
+
+    // Pick a valid built-in wavetable bank (0..5), not an empty WAV slot.
+    set(ID::wavetableBank, (float) rng.nextInt(juce::Range<int>(0, 6)));
+}
+
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
     synth.setCurrentPlaybackSampleRate(sampleRate);
