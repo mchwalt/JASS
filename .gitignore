@@ -1,0 +1,14 @@
+# Build output (CMake / MSBuild artifacts)
+/build/
+
+# Visual Studio / IDE
+.vs/
+*.user
+*.suo
+
+# Local Claude settings
+.claude/settings.local.json
+
+# OS junk
+Thumbs.db
+.DS_Store
