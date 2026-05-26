@@ -1,37 +1,82 @@
-# Synthy – Feature Ideas
+# Synthy – Feature Ideas & Roadmap
 
-## Einfach bis mittel
+Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Coolness ★ … ★★★★★
+
+---
+
+## ✅ Bereits umgesetzt (in C# **und** C++)
+
+| Feature | Was es macht |
+|---|---|
+| **Triangle-Wellenform** | 4. Grundwellenform |
+| **Unison/Detune** | per-Oszillator, 1–7 Stimmen → fetter Sound |
+| **Mix-Modi** | Additive · **Ring-Modulation** · **FM** (OSC1→OSC2) |
+| **Wavetable-Synthese** | 6 Built-in Banks + Position-Morph + **WAV-Import** |
+| **Noise Generator** | White + Pink (Voss-McCartney) |
+| **Karplus-Strong** | gezupfte Saite (Physical Modeling), Damping/Stretch |
+| **Distortion** | SoftClip / HardClip / **Foldback**, Drive, Mix |
+| **Spectrum Analyzer** | FFT-Anzeige neben dem Oszilloskop |
+| **ADSR · LFO · Biquad-Filter** | Standard-Modulation & Filterung |
+| **Delay · Chorus · Reverb** | Effekt-Kette |
+| **Gemeinsames Preset-Format** | `.synthy` JSON + geteilter LiveState (App-übergreifend) |
+
+---
+
+## 🎯 Als Nächstes empfohlen
+
+1. **Randomize-Button** – würfelt alle Parameter → bestes Tool zum Sound-Entdecken (★ / ★★★★★)
+2. **Wavefolding** – klanglich komplett neu, simpel zu bauen (★★ / ★★★★★)
+3. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
+
+---
+
+## 🔊 Neue Klang-Engines
 
 | Feature | Was es macht | Aufwand | Coolness |
 |---|---|---|---|
-| **Unison/Detune** | Mehrere leicht verstimmte Kopien pro Oszillator → fetter Sound | ★★ | ★★★★★ |
-| **Portamento/Glide** | Tonhöhe gleitet sanft von Note zu Note | ★★ | ★★★★ |
-| **Noise Generator** | Weißes/Rosa Rauschen als 4. Quelle → Percussion, Wind, Ambient | ★ | ★★★★ |
-| **EQ (3-Band)** | Bass/Mid/Treble Regler | ★★ | ★★★ |
-| **Distortion/Overdrive** | Waveshaping → aggressiver Sound | ★ | ★★★★ |
-| **Stereo-Panning** | Pro Oszillator Links/Rechts platzieren | ★★ | ★★★ |
-| **Pitch-Envelope** | Tonhöhe verändert sich über Zeit (Laser-Sounds, Kicks) | ★★ | ★★★★ |
+| **Wavefolding** | Welle „faltet" statt zu clippen (West-Coast/Buchla) – anderer Charakter als Distortion | ★★ | ★★★★★ |
+| **Granular-Synthese** | Sample in Körner zerlegen, streuen/pitchen → Clouds, Texturen | ★★★★ | ★★★★★ |
+| **Formant-/Vokal-Filter** | morpht A-E-I-O-U → „sprechender" Synth (Helm/Odin haben das) | ★★★ | ★★★★★ |
+| **Modal-Synthese** | Karplus-Erweiterung für Glocken/Mallets (Resonatoren) | ★★★ | ★★★★ |
+| **Sub-Oszillator** | dedizierter −1/−2 Oktav Sine/Square → fetter Bass | ★ | ★★★★ |
 
-## Mittel bis aufwändig
+## 🎛️ Neue Effekte
 
 | Feature | Was es macht | Aufwand | Coolness |
 |---|---|---|---|
-| **Modulation Matrix** | Beliebige Quelle → beliebiges Ziel (z.B. LFO2 → Reverb Mix) | ★★★ | ★★★★★ |
-| **Arpeggiator** | Spielt automatisch Notenfolgen (Auf/Ab/Random) | ★★★ | ★★★★★ |
-| **Spectrum Analyzer** | FFT-Anzeige neben dem Oszilloskop (Frequenzspektrum) | ★★★ | ★★★★ |
-| **Ring Modulation** | OSC1 × OSC2 → metallische/glockenartige Klänge | ★★ | ★★★★ |
-| **FM-Synthese** | OSC1 moduliert die Frequenz von OSC2 → komplexe Obertöne | ★★★ | ★★★★★ |
+| **Phaser / Flanger** | Allpass-Kette / modulierter Comb → Sweep-Sounds | ★★ | ★★★★ |
+| **Bitcrusher** | Bit-/Samplerate-Reduktion → Lo-Fi, 8-bit | ★ | ★★★★ |
+| **Convolution-Reverb** | echte Impulsantworten laden (Kathedrale, Platte) | ★★★★ | ★★★★ |
+| **Stereo-Width / Mid-Side** | Breite stufenlos regeln, Haas-Effekt | ★★ | ★★★ |
+| **EQ (3-Band)** | Bass/Mid/Treble | ★★ | ★★★ |
 
-## Aufwändig
+## ✨ Workflow & UX
 
 | Feature | Was es macht | Aufwand | Coolness |
 |---|---|---|---|
-| **Wavetable-Synthese** | Beliebige Wellenformen laden und stufenlos morphen | ★★★★ | ★★★★★ |
-| **Sampler-Modul** | WAV-Dateien als Klangquelle laden und abspielen | ★★★★ | ★★★★ |
-| **MIDI-Learn** | Jeden Knopf an einen Hardware-MIDI-Controller binden | ★★★ | ★★★★ |
+| **Randomize-Button** | würfelt alle/ausgewählte Parameter | ★ | ★★★★★ |
+| **Macro-Knöpfe + Preset-Morph** | ein Knopf steuert viele Parameter; A/B überblenden | ★★★ | ★★★★★ |
+| **Live-Modulations-Anzeige** | animierte Ringe zeigen LFO/Env-Bewegung | ★★★ | ★★★★★ |
+| **Tempo-Sync** | LFO & Delay an BPM koppeln (1/4, 1/8, Triolen) | ★★ | ★★★★ |
+| **Step-Sequencer** | eigenes Pattern-Modul | ★★★ | ★★★★ |
+| **Arpeggiator** | automatische Notenfolgen (Auf/Ab/Random) | ★★★ | ★★★★★ |
+| **WAV-Export / Recording** | aufnehmen, was man spielt | ★★ | ★★★ |
+| **MIDI-Learn** | Knöpfe an Hardware-Controller binden | ★★★ | ★★★★ |
 
-## Priorisiert (als nächstes umsetzen)
+---
 
-1. ✅ **Unison/Detune** – sofort fetter Sound, wenig Aufwand
-2. ✅ **Distortion/Overdrive** – einfach zu bauen, dramatischer Effekt
-3. ✅ **Spectrum Analyzer** – sieht cool aus neben dem Oszilloskop
+## 📋 Klassiker noch offen
+
+- **Portamento/Glide** – Tonhöhe gleitet von Note zu Note (★★ / ★★★★)
+- **Pitch-Envelope** – Tonhöhe verändert sich über Zeit (Laser, Kicks) (★★ / ★★★★)
+- **Stereo-Panning** – pro Oszillator L/R platzieren (★★ / ★★★)
+- **Modulation Matrix** – beliebige Quelle → beliebiges Ziel (★★★ / ★★★★★)
+- **Voller Sampler** – WAV als Klangquelle (Wavetable-Import deckt schon Teile ab) (★★★★ / ★★★★)
+
+---
+
+## 🔗 Cross-Projekt (das Zwei-Sprachen-Setup)
+
+- ✅ **Gemeinsames Preset-Format** – erledigt (`.synthy` + LiveState)
+- ✅ **C++ auf C#-Stand gebracht** – Engine-Parität erreicht (MixMode, per-OSC-Unison, Distortion-Typen)
+- **Offen:** neue Features konsequent in *beiden* Apps spiegeln, damit Presets verlustfrei bleiben

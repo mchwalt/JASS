@@ -1,134 +1,106 @@
-# Synthesizer Project
+# Synthy
 
-Research and evaluation phase for building a custom software synthesizer.
+Ein Software-Synthesizer, **zweimal gebaut** — einmal in **C# (WPF/NAudio)** und einmal in
+**C++ (JUCE)**. Beide teilen denselben DSP-Kern und ein **gemeinsames Preset-Format**, sodass
+sich derselbe Patch in beiden Apps laden lässt. Ziel des Projekts: dieselbe Synthese in zwei
+Sprachen/Frameworks vergleichen — und über einen geteilten „LiveState" den Klang bei
+identischen Einstellungen direkt gegenüberstellen.
 
-## Technology Stack Decision
+> Bei gleichem Algorithmus klingen beide identisch. Der Mehrwert der C++-Variante ist der
+> **VST3-Export für REAPER & Co.** sowie Echtzeitsicherheit (kein GC).
 
-### Recommended Language: C++ with JUCE Framework
+## Die zwei Implementierungen
 
-**JUCE** (Jules' Utility Class Extensions) is the de-facto standard framework for audio plugin development.
-
-- Audio DSP engine (oscillators, filters, effects, MIDI)
-- Plugin export: VST3, AU, AAX, CLAP, Standalone — from a single codebase
-- Built-in GUI framework with knobs, sliders, spectrum analyzers
-- Cross-platform: Windows, macOS, Linux, iOS, Android
-- Project management via **Projucer**
-- License: GPLv3 (free/open source) or commercial
-
-### Alternative Stacks
-
-| Language | Libraries | Notes |
+| | C# Synthy | C++ Synthy |
 |---|---|---|
-| **Rust** | cpal, fundsp, nih-plug | Modern, memory-safe, growing audio community |
-| **C#** | NAudio, SoundFlow | Possible but limited ecosystem for DSP |
-| **JavaScript** | Tone.js, Web Audio API | Good for prototyping, browser-based |
-| **Faust** | (standalone DSP language) | Compiles to C++, VST, Web Audio |
+| Stack | .NET 9, WPF, NAudio | C++20, JUCE 8, CMake/MSVC |
+| Ausgabe | Standalone (WPF-Fenster) | Standalone **+ VST3** |
+| Stimmen | globale Engine (monophon-artig) | polyphon, 8 Voices |
+| Ordner | `D:\Projects\C#\Synthesizer\Synthy` | dieses Repo |
 
-## Open Source Synthesizers — Evaluation Candidates
+## Features (in beiden vorhanden)
 
-All synths below are to be installed and tested before choosing a base project.
+- **3 Oszillatoren** — Sine / Sawtooth / Square / Triangle, je mit Enable, Freq, Amp
+- **Per-Oszillator-Unison** — 1–7 Stimmen, Detune (0–1 = ±1 Halbton)
+- **Mix-Modi** — Additive, Ring-Modulation, FM (OSC1 → OSC2)
+- **Wavetable-Oszillator** — 6 Built-in Banks (Basic, Digital, Harmonic, Vocal, PWM, Spectral),
+  Position-Morph, **WAV-Import**, eigenes Unison
+- **Noise** — White + Pink (Voss-McCartney)
+- **Karplus-Strong** — gezupfte Saite (Freq, Amp, Damping, Stretch)
+- **ADSR-Hüllkurve**
+- **LFO** — Sine/Triangle/Square/Saw → Frequency / Amplitude / Filter-Cutoff
+- **Biquad-Filter** — Off / Lowpass / Highpass, Resonanz
+- **Distortion** — Off / SoftClip / HardClip / Foldback, Drive, Mix
+- **Effekte** — Delay, Chorus, Reverb
+- **Visualisierung** — Oszilloskop + Spektrum-Analyzer (FFT)
+- **Presets** im gemeinsamen `.synthy`-Format + geteilter LiveState
 
-### Surge XT
-- **Type:** Hybrid (subtractive, wavetable, FM, additive)
-- **Stack:** C++ / JUCE | GPLv3
-- **Website:** https://surge-synthesizer.github.io
-- **Pros:** Very active community, excellent code documentation, versatile engine, developer wiki + Discord, accessibility features
-- **Cons:** Large codebase, historically grown (some inconsistencies), functional but not flashy UI
-- **Best for:** Building on an existing, actively maintained project
+## Gemeinsames Preset-Format & LiveState
 
-### Vital
-- **Type:** Wavetable synth
-- **Stack:** C++ / JUCE | GPLv3
-- **Website:** https://vital.audio
-- **Pros:** Professional quality, stunning UI with real-time visualizations, wavetable editor, visual modulation matrix
-- **Cons:** Very complex codebase (~150k lines), main developer less active, fragmented forks, GPU-dependent UI
-- **Best for:** Learning wavetable synthesis at a professional level
+Beide Apps lesen/schreiben dasselbe JSON-Format (`*.synthy`) im selben Verzeichnis:
 
-### Odin 2
-- **Type:** Semi-modular synth
-- **Stack:** C++ / JUCE | GPLv3
-- **Website:** https://thewavewarden.com/odin2
-- **Pros:** Semi-modular design with flexible routing, multiple oscillator types, modern UI, balanced complexity
-- **Cons:** Smaller community, fewer presets, limited documentation
-- **Best for:** Understanding semi-modular routing architectures
+```
+%AppData%\Roaming\Synthy\
+├─ Presets\*.synthy      ← benannte Presets (Save/Load)
+└─ LiveState.synthy      ← aktueller Zustand, auto-geladen/-gespeichert
+```
 
-### Helm
-- **Type:** Polyphonic subtractive synth
-- **Stack:** C++ / JUCE | GPLv3
-- **Website:** https://tytel.org/helm
-- **Pros:** Clean architecture, best entry point for learning, well-structured code
-- **Cons:** No longer actively developed (succeeded by Vital), older JUCE version
-- **Best for:** Learning synth development fundamentals
+Der **LiveState** wird beim Start geladen und bei jeder Änderung (debounced ~1,5 s) sowie beim
+Beenden gespeichert. So kannst du C# Synthy schließen, C++ Synthy öffnen — und arbeitest mit
+denselben Einstellungen weiter (ideal für A/B-Klangvergleiche bei identischen Parametern).
 
-### Dexed
-- **Type:** FM synth (Yamaha DX7 emulation)
-- **Stack:** C++ / JUCE | GPLv3
-- **Website:** https://asb2m10.github.io/dexed
-- **Pros:** Compact and readable code, faithful DX7 emulation, thousands of SysEx patches available
-- **Cons:** FM synthesis only, limited extensibility, dated UI
-- **Best for:** Learning FM synthesis
+Details & vollständiges Schema: **[`Synthy_Preset_Format.md`](Synthy_Preset_Format.md)**.
 
-### OB-Xd
-- **Type:** Subtractive synth (Oberheim OB-X emulation)
-- **Stack:** C++ / JUCE | GPLv3
-- **Website:** https://github.com/reales/OB-Xd/releases
-- **Pros:** Classic warm analog sound, small and understandable codebase
-- **Cons:** Less active development, limited modulation, no wavetable/FM
-- **Best for:** Understanding analog emulation / virtual analog synthesis
+## Bauen & Starten
 
-### ZynAddSubFX (Zyn-Fusion)
-- **Type:** Additive, subtractive, pad synthesis
-- **Stack:** C++ (custom framework, not JUCE) | GPLv2
-- **Website:** https://zynaddsubfx.sourceforge.io
-- **Pros:** Unique additive synthesis engine, extremely deep sound design, mature project
-- **Cons:** Custom UI framework (harder to extend), historically grown code, steep learning curve
-- **Best for:** Exploring additive synthesis
+### C++ (JUCE)
 
-### VCV Rack
-- **Type:** Modular Eurorack simulator
-- **Stack:** C++ (custom SDK, not JUCE) | GPLv3
-- **Website:** https://vcvrack.com
-- **Pros:** Fully modular system, huge plugin ecosystem (1000+ modules), well-documented module development
-- **Cons:** No VST export in open-source version, custom SDK, more of an ecosystem than a single synth
-- **Best for:** Building individual modules within a modular environment
+Voraussetzungen: Visual Studio 2022 (C++-Desktop-Workload), JUCE als Git-Submodule.
 
-## Comparison Matrix
+```powershell
+# Submodule holen (einmalig nach dem Klonen)
+git submodule update --init --recursive
 
-| Project | Learning | Extensibility | Community | Code Quality |
-|---|---|---|---|---|
-| **Surge XT** | medium | very good | very active | very good |
-| **Vital** | hard | medium | medium | good |
-| **Odin 2** | good | good | small | good |
-| **Helm** | very good | medium | inactive | very good |
-| **Dexed** | very good | limited | small | good |
-| **OB-Xd** | good | medium | small | medium |
-| **VCV Rack** | medium | very good | very active | good |
-| **ZynAddSubFX** | hard | medium | medium | medium |
+# Konfigurieren (erzeugt build/ via CMake) und bauen
+cmake -B build -G "Visual Studio 17 2022"
+& 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' `
+    build\Synthy_Standalone.vcxproj /p:Configuration=Release /m
+```
 
-## DAW for Testing
+Ausgabe:
+- Standalone: `build\Synthy_artefacts\Release\Standalone\Synthy.exe`
+- VST3: `build\Synthy_artefacts\Release\VST3\Synthy.vst3` (Target `Synthy_VST3.vcxproj`)
 
-**Chosen: REAPER** (https://www.reaper.fm)
+> Hinweis: In der Git-Bash werden MSBuild-Slash-Argumente (`/m`) verstümmelt — den Build
+> **über PowerShell** ausführen.
 
-- Unlimited trial with no restrictions
-- ~30 MB install, starts instantly
-- Reliable VST3 plugin support
-- Lightweight and ideal for plugin testing
+### C# (WPF)
 
-### Other Free DAW Options Considered
+```powershell
+cd D:\Projects\C#\Synthesizer\Synthy
+dotnet run
+```
 
-| DAW | Notes |
-|---|---|
-| **Cakewalk by BandLab** | Full-featured, free, Windows only |
-| **Ardour** | Open source (GPLv2), more recording-focused |
-| **Waveform Free** | Modern UI, good VST3 support |
-| **LMMS** | Open source, electronic music focus, limited VST support |
-| **FL Studio Trial** | Full features but cannot reopen saved projects |
+## Projektstruktur (C++)
 
-## Next Steps
+```
+Source/
+├─ PluginProcessor.*      Audio-Processor, APVTS, Auto-Play, LiveState
+├─ Audio/
+│  ├─ Parameters.h        alle Parameter + applyToVoice()
+│  ├─ PresetIO.h          .synthy Import/Export (gemeinsames Format)
+│  ├─ SynthVoice.*        eine Stimme (Oszillatoren, Generatoren, Effekte)
+│  └─ SynthSound.*
+├─ DSP/                   Oscillator, NoiseGenerator, KarplusStrong,
+│                         WavetableBank/-Oscillator, BiquadFilter, LFO,
+│                         AdsrEnvelope, Effects
+└─ UI/                    PluginEditor + Knob/Display-Komponenten
+```
 
-1. Install REAPER
-2. Download and install all candidate synths as VST3 plugins
-3. Test each synth for sound, workflow, and UI
-4. Choose a base project
-5. Set up the development environment (C++ / JUCE)
-6. Fork and start customizing
+## Weitere Doku
+
+- **[`Feature_Ideas.md`](Feature_Ideas.md)** — Roadmap: erledigt & geplant, inkl. neuer Ideen
+- **[`Synthy_Preset_Format.md`](Synthy_Preset_Format.md)** — Spezifikation des `.synthy`-Formats
+- **[`Synth_Cheatsheet.md`](Synth_Cheatsheet.md)** — Referenz zu Surge XT / Helm / Odin 2 (Recherche)
+- **[`CPP_Synth_Entwicklung_Uebersicht.md`](CPP_Synth_Entwicklung_Uebersicht.md)** — Recherche zu C++-Frameworks
+- **[`REAPER_Keybindings_Cheatsheet.md`](REAPER_Keybindings_Cheatsheet.md)** — REAPER-Shortcuts fürs Plugin-Testing
