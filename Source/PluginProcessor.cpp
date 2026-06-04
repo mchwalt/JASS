@@ -123,6 +123,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
+    // Manual string re-pluck (requested from the UI; applied here on the audio thread)
+    if (pluckRequested.exchange(false))
+        for (int i = 0; i < synth.getNumVoices(); ++i)
+            if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+                voice->getKarplus().pluck();
+
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))

@@ -40,11 +40,17 @@ public:
                 const juce::String& name, juce::Colour color,
                 const juce::String& onParam,
                 const juce::StringArray& knobParams,
-                const juce::StringArray& knobLabels);
+                const juce::StringArray& knobLabels,
+                const juce::String& triggerText = {});
+
+    // Set by the owner; called when the optional trigger button (e.g. "PLUCK") is clicked.
+    std::function<void()> onTrigger;
 
 private:
     juce::Label title;
     juce::ToggleButton enableBtn;
+    juce::TextButton triggerButton;     // optional (only shown if triggerText given)
+    bool hasTrigger = false;
     juce::OwnedArray<SynthySlider> knobs;
     juce::OwnedArray<juce::Label> labels;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> btnAttach;
@@ -61,6 +67,7 @@ public:
 
     void paint(juce::Graphics&) override;
     void resized() override;
+    bool keyPressed(const juce::KeyPress& key) override;
 
 private:
     SynthyProcessor& processor;
@@ -68,8 +75,10 @@ private:
 
     OscillatorPanel osc1, osc2, osc3;
 
-    // Mix mode
+    // Mix mode (placed inline between OSC 1 and OSC 2; "+" sits before OSC 3)
     juce::Label mixModeTitle;
+    juce::Label mixModeHint;   // "OSC 1 <-> 2" sub-caption under the selector
+    juce::Label mixPlusLabel;  // "+" between OSC 2 and OSC 3
     juce::ComboBox mixModeSelector;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> mixModeAttach;
 

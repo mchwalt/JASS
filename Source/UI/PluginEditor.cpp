@@ -20,6 +20,9 @@ void SynthyLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wi
 {
     auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(4.0f);
     auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) / 2.0f;
+    // Cap to the slider's knob-size category so the whole UI uses just three sizes.
+    if (auto* ss = dynamic_cast<SynthySlider*>(&slider))
+        radius = juce::jmin(radius, ss->getKnobDiameter() / 2.0f);
     auto centreX = bounds.getCentreX();
     auto centreY = bounds.getCentreY();
     auto angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
@@ -104,6 +107,10 @@ OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
     addAndMakeVisible(uniDetuneLabel);
     uniDetuneAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, prefix + "UniDetune", uniDetuneKnob);
+
+    // Four knobs in a narrow panel → Small
+    for (auto* k : { &freqKnob, &ampKnob, &uniVoicesKnob, &uniDetuneKnob })
+        k->setKnobDiameter(KnobSize::Small);
 }
 
 void OscillatorPanel::resized()
@@ -115,21 +122,19 @@ void OscillatorPanel::resized()
     waveSelector.setBounds(area.removeFromTop(24).reduced(20, 0));
     area.removeFromTop(4);
 
-    // 2×2 knob grid: FREQ | AMP (top), VOICES | DETUNE (bottom)
-    auto topRow = area.removeFromTop(area.getHeight() / 2);
-    auto botRow = area;
-
-    auto tl = topRow.removeFromLeft(topRow.getWidth() / 2);
-    freqLabel.setBounds(tl.removeFromTop(14));
-    freqKnob.setBounds(tl);
-    ampLabel.setBounds(topRow.removeFromTop(14));
-    ampKnob.setBounds(topRow);
-
-    auto bl = botRow.removeFromLeft(botRow.getWidth() / 2);
-    uniVoicesLabel.setBounds(bl.removeFromTop(14));
-    uniVoicesKnob.setBounds(bl);
-    uniDetuneLabel.setBounds(botRow.removeFromTop(14));
-    uniDetuneKnob.setBounds(botRow);
+    // Single knob row: FREQ | AMP | VOICES | DETUNE
+    int kw = area.getWidth() / 4;
+    auto c1 = area.removeFromLeft(kw);
+    freqLabel.setBounds(c1.removeFromTop(14));
+    freqKnob.setBounds(c1);
+    auto c2 = area.removeFromLeft(kw);
+    ampLabel.setBounds(c2.removeFromTop(14));
+    ampKnob.setBounds(c2);
+    auto c3 = area.removeFromLeft(kw);
+    uniVoicesLabel.setBounds(c3.removeFromTop(14));
+    uniVoicesKnob.setBounds(c3);
+    uniDetuneLabel.setBounds(area.removeFromTop(14));
+    uniDetuneKnob.setBounds(area);
 }
 
 // --- EffectPanel ---
@@ -138,7 +143,8 @@ EffectPanel::EffectPanel(juce::AudioProcessorValueTreeState& apvts,
                           const juce::String& name, juce::Colour color,
                           const juce::String& onParam,
                           const juce::StringArray& knobParams,
-                          const juce::StringArray& knobLabels)
+                          const juce::StringArray& knobLabels,
+                          const juce::String& triggerText)
 {
     title.setText(name, juce::dontSendNotification);
     title.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -150,6 +156,16 @@ EffectPanel::EffectPanel(juce::AudioProcessorValueTreeState& apvts,
     addAndMakeVisible(enableBtn);
     btnAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
         apvts, onParam, enableBtn);
+
+    // Optional trigger button (e.g. PLUCK for the Karplus string).
+    if (triggerText.isNotEmpty())
+    {
+        hasTrigger = true;
+        triggerButton.setButtonText(triggerText);
+        triggerButton.setColour(juce::TextButton::buttonColourId, color.darker(0.6f));
+        triggerButton.onClick = [this] { if (onTrigger) onTrigger(); };
+        addAndMakeVisible(triggerButton);
+    }
 
     for (int i = 0; i < knobParams.size(); ++i)
     {
@@ -176,6 +192,8 @@ void EffectPanel::resized()
     auto area = getLocalBounds().reduced(4);
     auto top = area.removeFromTop(22);
     enableBtn.setBounds(top.removeFromLeft(50));
+    if (hasTrigger)
+        triggerButton.setBounds(top.removeFromRight(64).reduced(2, 1));
     title.setBounds(top);
 
     int knobWidth = area.getWidth() / std::max(1, knobs.size());
@@ -215,7 +233,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                   "reverbOn", {"reverbRoom", "reverbDamp", "reverbMix"}, {"ROOM", "DAMP", "MIX"}),
       karplusPanel(p.getAPVTS(), "STRING (KARPLUS)", juce::Colour(0xff34d399),
                    "karplusOn", {"karplusFreq", "karplusAmp", "karplusDamping", "karplusStretch"},
-                   {"FREQ", "AMP", "DAMP", "STR"}),
+                   {"FREQ", "AMP", "DAMP", "STR"}, "PLUCK"),
       wavefoldPanel(p.getAPVTS(), "WAVEFOLD", juce::Colour(0xfffbbf24),
                     "wavefoldOn", {"wavefoldDrive", "wavefoldSymmetry", "wavefoldMix"},
                     {"DRIVE", "SYM", "MIX"})
@@ -233,10 +251,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     spectrumDisplay = std::make_unique<SpectrumDisplay>(p.getWaveformCapture());
     addAndMakeVisible(*spectrumDisplay);
 
-    // Mix mode
+    // Mix mode — sits between OSC 1 and OSC 2; combines them, OSC 3 is added.
     auto mixGold = juce::Colour(0xfffacc15);
-    mixModeTitle.setText("MIX MODE", juce::dontSendNotification);
-    mixModeTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    mixModeTitle.setText("MIX", juce::dontSendNotification);
+    mixModeTitle.setFont(juce::FontOptions(11.0f, juce::Font::bold));
     mixModeTitle.setColour(juce::Label::textColourId, mixGold);
     mixModeTitle.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(mixModeTitle);
@@ -245,6 +263,19 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(mixModeSelector);
     mixModeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getAPVTS(), "mixMode", mixModeSelector);
+
+    mixModeHint.setText("OSC 1 <-> 2", juce::dontSendNotification);
+    mixModeHint.setFont(juce::FontOptions(9.0f));
+    mixModeHint.setColour(juce::Label::textColourId, juce::Colour(0xff888888));
+    mixModeHint.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(mixModeHint);
+
+    // "+" between OSC 2 and OSC 3 (OSC 3 is always added).
+    mixPlusLabel.setText("+", juce::dontSendNotification);
+    mixPlusLabel.setFont(juce::FontOptions(26.0f, juce::Font::bold));
+    mixPlusLabel.setColour(juce::Label::textColourId, juce::Colour(0xff666666));
+    mixPlusLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(mixPlusLabel);
 
     // ADSR
     adsrTitle.setText("ENVELOPE (ADSR)", juce::dontSendNotification);
@@ -262,6 +293,12 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     sustainKnob.setColour(juce::Slider::rotarySliderFillColourId, green);
     setupKnob(releaseKnob, relLabel, "REL").setColour(juce::Slider::thumbColourId, green);
     releaseKnob.setColour(juce::Slider::rotarySliderFillColourId, green);
+
+    // ADSR are the focal knobs → Large
+    attackKnob.setKnobDiameter(KnobSize::Large);
+    decayKnob.setKnobDiameter(KnobSize::Large);
+    sustainKnob.setKnobDiameter(KnobSize::Large);
+    releaseKnob.setKnobDiameter(KnobSize::Large);
 
     atkAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "attack", attackKnob);
     decAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "decay", decayKnob);
@@ -318,6 +355,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(chorusPanel);
     addAndMakeVisible(reverbPanel);
     addAndMakeVisible(karplusPanel);
+    karplusPanel.onTrigger = [this] { processor.pluckString(); };
     addAndMakeVisible(wavefoldPanel);
 
     // LFO
@@ -477,8 +515,15 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     wtDetuneAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "wavetableUniDetune", wtDetuneKnob);
 
+    // Wavetable packs five knobs into one row → Small
+    for (auto* k : { &wtPositionKnob, &wtFreqKnob, &wtAmpKnob, &wtVoicesKnob, &wtDetuneKnob })
+        k->setKnobDiameter(KnobSize::Small);
+
+    // Spacebar anywhere in the editor plucks the Karplus string.
+    setWantsKeyboardFocus(true);
+
     // setSize must be LAST so resized() sees all components
-    setSize(820, 1250);
+    setSize(820, 1240);
 }
 
 void SynthyEditor::refreshBankSelector()
@@ -491,6 +536,16 @@ void SynthyEditor::refreshBankSelector()
     int current = (int) *processor.getAPVTS().getRawParameterValue("wavetableBank");
     current = juce::jlimit(0, juce::jmax(0, names.size() - 1), current);
     wtBankSelector.setSelectedId(current + 1, juce::dontSendNotification);
+}
+
+bool SynthyEditor::keyPressed(const juce::KeyPress& key)
+{
+    if (key == juce::KeyPress::spaceKey)
+    {
+        processor.pluckString();
+        return true;
+    }
+    return false;
 }
 
 void SynthyEditor::paint(juce::Graphics& g)
@@ -550,7 +605,7 @@ void SynthyEditor::resized()
     auto area = getLocalBounds().reduced(12);
 
     // ===== Header — Save/Load/Random left, Title center, Master right =====
-    auto headerRow = area.removeFromTop(80);
+    auto headerRow = area.removeFromTop(88);
     auto leftBtns = headerRow.removeFromLeft(120);
     auto topBtns = leftBtns.removeFromTop(34);
     saveBtn.setBounds(topBtns.removeFromLeft(topBtns.getWidth() / 2).reduced(3, 3));
@@ -568,35 +623,38 @@ void SynthyEditor::resized()
     genHeaderBounds = area.removeFromTop(24);
     area.removeFromTop(2);
 
-    // Oscillators (each: wave + FREQ/AMP/VOICES/DETUNE)
-    auto oscRow = area.removeFromTop(210);
-    int oscW = oscRow.getWidth() / 3;
+    // Oscillators with MIX MODE wired between OSC 1 & 2, and "+" before OSC 3.
+    auto oscRow = area.removeFromTop(165);
+    const int mixW = 90, plusW = 34;
+    int oscW = (oscRow.getWidth() - mixW - plusW) / 3;
     osc1.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
+
+    auto mixCol = oscRow.removeFromLeft(mixW).withSizeKeepingCentre(mixW, 66);
+    mixModeTitle.setBounds(mixCol.removeFromTop(16));
+    mixModeSelector.setBounds(mixCol.removeFromTop(26).reduced(4, 0));
+    mixModeHint.setBounds(mixCol.removeFromTop(16));
+
     osc2.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
+    mixPlusLabel.setBounds(oscRow.removeFromLeft(plusW));
     osc3.setBounds(oscRow.reduced(3));
     area.removeFromTop(6);
 
-    // Mix Mode (centered)
-    auto mixRow = area.removeFromTop(50).reduced(3, 0);
-    mixModeTitle.setBounds(mixRow.removeFromTop(20));
-    mixModeSelector.setBounds(mixRow.withSizeKeepingCentre(220, 26));
-    area.removeFromTop(6);
-
     // Noise | Karplus (String)
-    auto genRow = area.removeFromTop(100);
+    auto genRow = area.removeFromTop(140);
     int genW = genRow.getWidth() / 3;
     auto noiseArea = genRow.removeFromLeft(genW).reduced(3);
     noiseBounds = noiseArea;
     noiseTitle.setBounds(noiseArea.removeFromTop(20));
     noiseTypeSelector.setBounds(noiseArea.removeFromTop(24).reduced(20, 0));
-    noiseArea.removeFromTop(4);
+    noiseArea.removeFromTop(6);
     noiseAmpLabel.setBounds(noiseArea.removeFromTop(14));
-    noiseAmpKnob.setBounds(noiseArea.withSizeKeepingCentre(60, noiseArea.getHeight()));
+    noiseAmpKnob.setBounds(noiseArea.withSizeKeepingCentre(
+        juce::jmin(110, noiseArea.getWidth()), noiseArea.getHeight()));
     karplusPanel.setBounds(genRow.reduced(3)); // remaining two columns (4 knobs)
     area.removeFromTop(6);
 
     // Wavetable (full width)
-    auto wtRow = area.removeFromTop(110).reduced(3, 0);
+    auto wtRow = area.removeFromTop(124).reduced(3, 0);
     wtBounds = wtRow;
     auto wtTop = wtRow.removeFromTop(22);
     wtEnableBtn.setBounds(wtTop.removeFromLeft(50));
@@ -628,7 +686,7 @@ void SynthyEditor::resized()
     modHeaderBounds = area.removeFromTop(24);
     area.removeFromTop(2);
 
-    auto modRow = area.removeFromTop(130);
+    auto modRow = area.removeFromTop(150);
     auto adsrArea = modRow.removeFromLeft(modRow.getWidth() / 2).reduced(3);
     adsrBounds = adsrArea;
     adsrTitle.setBounds(adsrArea.removeFromTop(20));
@@ -666,7 +724,7 @@ void SynthyEditor::resized()
     area.removeFromTop(2);
 
     // Filter | Distortion
-    auto fdRow = area.removeFromTop(130);
+    auto fdRow = area.removeFromTop(145);
     auto filterArea = fdRow.removeFromLeft(fdRow.getWidth() / 2).reduced(3);
     filterBounds = filterArea;
     filterTitle.setBounds(filterArea.removeFromTop(20));

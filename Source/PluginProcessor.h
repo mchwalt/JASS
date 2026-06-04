@@ -41,12 +41,16 @@ public:
     // Randomize all parameters (with guards so the result stays audible).
     void randomize();
 
+    // Re-pluck the Karplus string on every voice (handled on the audio thread).
+    void pluckString() { pluckRequested = true; }
+
 private:
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
     WaveformCapture waveformCapture { 512 };
     bool autoNoteOn = false;
+    std::atomic<bool> pluckRequested { false };
 
     // Shared live-state persistence (see PresetIO::liveStateFile)
     std::atomic<bool> liveDirty { false };

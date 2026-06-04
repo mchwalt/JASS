@@ -101,7 +101,7 @@ namespace Parameters
 
         // Oscillators
         float defaultFreqs[] = { 261.63f, 329.63f, 392.0f };
-        float defaultAmps[]  = { 0.5f, 0.0f, 0.0f };
+        float defaultAmps[]  = { 0.5f, 0.5f, 0.5f };  // all amp knobs default to half
 
         for (int i = 1; i <= 3; ++i)
         {
@@ -188,7 +188,7 @@ namespace Parameters
 
         // Noise
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::noiseType, 1), "Noise Type", juce::StringArray{"Off", "White", "Pink"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::noiseAmp, 1), "Noise Amount", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::noiseAmp, 1), "Noise Amount", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
         // Karplus-Strong
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::karplusOn, 1), "Karplus On", false));
@@ -207,7 +207,7 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableUniDetune, 1), "Wavetable Uni Detune", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
 
         // Master
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
         return { params.begin(), params.end() };
     }
