@@ -478,7 +478,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         p.getAPVTS(), "wavetableUniDetune", wtDetuneKnob);
 
     // setSize must be LAST so resized() sees all components
-    setSize(820, 1200);
+    setSize(820, 1250);
 }
 
 void SynthyEditor::refreshBankSelector()
@@ -508,146 +508,83 @@ void SynthyEditor::paint(juce::Graphics& g)
         g.fillRoundedRectangle(bounds.toFloat(), 10.0f);
     };
 
+    // --- Zone 1: Tonerzeuger ---
     drawSection(osc1.getBounds().expanded(2));
     drawSection(osc2.getBounds().expanded(2));
     drawSection(osc3.getBounds().expanded(2));
-
-    // Modulation grid backgrounds
-    drawSection(adsrBounds.expanded(2));
-    drawSection(lfoBounds.expanded(2));
-    drawSection(filterBounds.expanded(2));
-    drawSection(distBounds.expanded(2));
-
-    // Effect backgrounds
-    drawSection(delayPanel.getBounds().expanded(2));
-    drawSection(chorusPanel.getBounds().expanded(2));
-    drawSection(reverbPanel.getBounds().expanded(2));
-    drawSection(wavefoldPanel.getBounds().expanded(2));
-
-    // Generators
     drawSection(noiseBounds.expanded(2));
     drawSection(karplusPanel.getBounds().expanded(2));
     drawSection(wtBounds.expanded(2));
+
+    // --- Zone 2: Modulation ---
+    drawSection(adsrBounds.expanded(2));
+    drawSection(lfoBounds.expanded(2));
+
+    // --- Zone 3: Soundverarbeitung ---
+    drawSection(filterBounds.expanded(2));
+    drawSection(distBounds.expanded(2));
+    drawSection(wavefoldPanel.getBounds().expanded(2));
+    drawSection(delayPanel.getBounds().expanded(2));
+    drawSection(chorusPanel.getBounds().expanded(2));
+    drawSection(reverbPanel.getBounds().expanded(2));
+
+    // Zone separator headers: bold label on the left + a divider rule across.
+    auto drawZoneHeader = [&](juce::Rectangle<int> bounds, const juce::String& text, juce::Colour col)
+    {
+        if (bounds.isEmpty()) return;
+        g.setColour(col);
+        g.setFont(juce::FontOptions(15.0f, juce::Font::bold));
+        auto label = bounds.removeFromLeft(220);
+        g.drawText(text, label, juce::Justification::centredLeft);
+        auto yMid = (float) bounds.getCentreY();
+        g.setColour(col.withAlpha(0.35f));
+        g.drawLine((float) bounds.getX(), yMid, (float) bounds.getRight() - 4.0f, yMid, 1.5f);
+    };
+    drawZoneHeader(genHeaderBounds,  "TONERZEUGER",       juce::Colour(0xff40c0ff));
+    drawZoneHeader(modHeaderBounds,  "MODULATION",        juce::Colour(0xff22d3ee));
+    drawZoneHeader(procHeaderBounds, "SOUNDVERARBEITUNG", juce::Colour(0xfffb923c));
 }
 
 void SynthyEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // ===== Row 0: Header — Save/Load left, Title center, Master right =====
+    // ===== Header — Save/Load/Random left, Title center, Master right =====
     auto headerRow = area.removeFromTop(80);
-
-    // Save/Load (top row) + Randomize (below) on the left
     auto leftBtns = headerRow.removeFromLeft(120);
     auto topBtns = leftBtns.removeFromTop(34);
     saveBtn.setBounds(topBtns.removeFromLeft(topBtns.getWidth() / 2).reduced(3, 3));
     loadBtn.setBounds(topBtns.reduced(3, 3));
     randomBtn.setBounds(leftBtns.removeFromTop(34).reduced(3, 3));
-
-    // Master on the right
     auto masterArea = headerRow.removeFromRight(100);
     masterLabel.setBounds(masterArea.removeFromTop(14));
     masterKnob.setBounds(masterArea);
-
-    // Title centered in the remaining middle
     g_titleBounds = headerRow;
+    area.removeFromTop(4);
 
-    area.removeFromTop(6);
+    // ============================================================
+    // ZONE 1: TONERZEUGER (sound sources)
+    // ============================================================
+    genHeaderBounds = area.removeFromTop(24);
+    area.removeFromTop(2);
 
-    // ===== Row 1: Oscillators (each: wave + FREQ/AMP/VOICES/DETUNE) =====
+    // Oscillators (each: wave + FREQ/AMP/VOICES/DETUNE)
     auto oscRow = area.removeFromTop(210);
     int oscW = oscRow.getWidth() / 3;
     osc1.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
     osc2.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
     osc3.setBounds(oscRow.reduced(3));
-
     area.removeFromTop(6);
 
-    // ===== Row 2: Mix Mode (centered) =====
-    auto mixRow = area.removeFromTop(54).reduced(3, 0);
+    // Mix Mode (centered)
+    auto mixRow = area.removeFromTop(50).reduced(3, 0);
     mixModeTitle.setBounds(mixRow.removeFromTop(20));
     mixModeSelector.setBounds(mixRow.withSizeKeepingCentre(220, 26));
-
     area.removeFromTop(6);
 
-    // ===== Row 3: Modulation grid — ADSR+LFO left | Filter+Distortion right =====
-    auto modRow = area.removeFromTop(260);
-    auto modLeft = modRow.removeFromLeft(modRow.getWidth() / 2);
-    auto modRight = modRow;
-
-    // --- Left column: ADSR (top) + LFO (bottom) ---
-    auto adsrArea = modLeft.removeFromTop(modLeft.getHeight() / 2).reduced(3);
-    adsrBounds = adsrArea;
-
-    adsrTitle.setBounds(adsrArea.removeFromTop(20));
-    int knobW = adsrArea.getWidth() / 4;
-    auto a1 = adsrArea.removeFromLeft(knobW);
-    atkLabel.setBounds(a1.removeFromTop(14));
-    attackKnob.setBounds(a1);
-    auto a2 = adsrArea.removeFromLeft(knobW);
-    decLabel.setBounds(a2.removeFromTop(14));
-    decayKnob.setBounds(a2);
-    auto a3 = adsrArea.removeFromLeft(knobW);
-    susLabel.setBounds(a3.removeFromTop(14));
-    sustainKnob.setBounds(a3);
-    relLabel.setBounds(adsrArea.removeFromTop(14));
-    releaseKnob.setBounds(adsrArea);
-
-    auto lfoArea = modLeft.reduced(3);
-    lfoBounds = lfoArea;
-
-    lfoTitle.setBounds(lfoArea.removeFromTop(20));
-    auto lfoSelectors = lfoArea.removeFromTop(28);
-    lfoWaveSelector.setBounds(lfoSelectors.removeFromLeft(lfoSelectors.getWidth() / 2).reduced(4, 2));
-    lfoTargetSelector.setBounds(lfoSelectors.reduced(4, 2));
-    lfoArea.removeFromTop(2);
-    auto lfoKnob1 = lfoArea.removeFromLeft(lfoArea.getWidth() / 2);
-    lfoRateLabel.setBounds(lfoKnob1.removeFromTop(14));
-    lfoRateKnob.setBounds(lfoKnob1);
-    lfoDepthLabel.setBounds(lfoArea.removeFromTop(14));
-    lfoDepthKnob.setBounds(lfoArea);
-
-    // --- Right column: Filter (top) + Distortion (bottom) ---
-    auto filterArea = modRight.removeFromTop(modRight.getHeight() / 2).reduced(3);
-    filterBounds = filterArea;
-
-    filterTitle.setBounds(filterArea.removeFromTop(20));
-    filterType.setBounds(filterArea.removeFromTop(24).reduced(20, 0));
-    filterArea.removeFromTop(4);
-    auto fLeft = filterArea.removeFromLeft(filterArea.getWidth() / 2);
-    cutLabel.setBounds(fLeft.removeFromTop(14));
-    cutoffKnob.setBounds(fLeft);
-    resoLabel.setBounds(filterArea.removeFromTop(14));
-    resoKnob.setBounds(filterArea);
-
-    // Distortion (inline) — bottom of the right modulation column
-    auto distArea = modRight.reduced(3);
-    distBounds = distArea;
-    distTitle.setBounds(distArea.removeFromTop(20));
-    distTypeSelector.setBounds(distArea.removeFromTop(24).reduced(20, 0));
-    distArea.removeFromTop(4);
-    auto dLeft = distArea.removeFromLeft(distArea.getWidth() / 2);
-    distDriveLabel.setBounds(dLeft.removeFromTop(14));
-    distDriveKnob.setBounds(dLeft);
-    distMixLabel.setBounds(distArea.removeFromTop(14));
-    distMixKnob.setBounds(distArea);
-
-    area.removeFromTop(6);
-
-    // ===== Row 4: Effects — Delay | Chorus | Reverb | Wavefold =====
-    auto fxRow = area.removeFromTop(120);
-    int fxW = fxRow.getWidth() / 4;
-    delayPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
-    chorusPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
-    reverbPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
-    wavefoldPanel.setBounds(fxRow.reduced(3));
-
-    area.removeFromTop(6);
-
-    // ===== Row 4.5: Generators — Noise | Karplus | Wavetable =====
+    // Noise | Karplus (String)
     auto genRow = area.removeFromTop(100);
     int genW = genRow.getWidth() / 3;
-
     auto noiseArea = genRow.removeFromLeft(genW).reduced(3);
     noiseBounds = noiseArea;
     noiseTitle.setBounds(noiseArea.removeFromTop(20));
@@ -655,24 +592,19 @@ void SynthyEditor::resized()
     noiseArea.removeFromTop(4);
     noiseAmpLabel.setBounds(noiseArea.removeFromTop(14));
     noiseAmpKnob.setBounds(noiseArea.withSizeKeepingCentre(60, noiseArea.getHeight()));
-
-    // Karplus-Strong takes the remaining two columns (it has 4 knobs)
-    karplusPanel.setBounds(genRow.reduced(3));
-
+    karplusPanel.setBounds(genRow.reduced(3)); // remaining two columns (4 knobs)
     area.removeFromTop(6);
 
-    // ===== Row 4.6: Wavetable =====
+    // Wavetable (full width)
     auto wtRow = area.removeFromTop(110).reduced(3, 0);
     wtBounds = wtRow;
     auto wtTop = wtRow.removeFromTop(22);
     wtEnableBtn.setBounds(wtTop.removeFromLeft(50));
     wtTitle.setBounds(wtTop);
-
     auto wtControls = wtRow.removeFromTop(26);
     wtLoadBtn.setBounds(wtControls.removeFromRight(90).reduced(2, 2));
     wtBankSelector.setBounds(wtControls.reduced(4, 2));
     wtRow.removeFromTop(2);
-
     int wtKnobW = wtRow.getWidth() / 5;
     auto wk1 = wtRow.removeFromLeft(wtKnobW);
     wtPositionLabel.setBounds(wk1.removeFromTop(14));
@@ -688,10 +620,86 @@ void SynthyEditor::resized()
     wtVoicesKnob.setBounds(wk4);
     wtDetuneLabel.setBounds(wtRow.removeFromTop(14));
     wtDetuneKnob.setBounds(wtRow);
+    area.removeFromTop(10);
 
+    // ============================================================
+    // ZONE 2: MODULATION (ADSR + LFO)
+    // ============================================================
+    modHeaderBounds = area.removeFromTop(24);
+    area.removeFromTop(2);
+
+    auto modRow = area.removeFromTop(130);
+    auto adsrArea = modRow.removeFromLeft(modRow.getWidth() / 2).reduced(3);
+    adsrBounds = adsrArea;
+    adsrTitle.setBounds(adsrArea.removeFromTop(20));
+    int knobW = adsrArea.getWidth() / 4;
+    auto a1 = adsrArea.removeFromLeft(knobW);
+    atkLabel.setBounds(a1.removeFromTop(14));
+    attackKnob.setBounds(a1);
+    auto a2 = adsrArea.removeFromLeft(knobW);
+    decLabel.setBounds(a2.removeFromTop(14));
+    decayKnob.setBounds(a2);
+    auto a3 = adsrArea.removeFromLeft(knobW);
+    susLabel.setBounds(a3.removeFromTop(14));
+    sustainKnob.setBounds(a3);
+    relLabel.setBounds(adsrArea.removeFromTop(14));
+    releaseKnob.setBounds(adsrArea);
+
+    auto lfoArea = modRow.reduced(3);
+    lfoBounds = lfoArea;
+    lfoTitle.setBounds(lfoArea.removeFromTop(20));
+    auto lfoSelectors = lfoArea.removeFromTop(28);
+    lfoWaveSelector.setBounds(lfoSelectors.removeFromLeft(lfoSelectors.getWidth() / 2).reduced(4, 2));
+    lfoTargetSelector.setBounds(lfoSelectors.reduced(4, 2));
+    lfoArea.removeFromTop(2);
+    auto lfoKnob1 = lfoArea.removeFromLeft(lfoArea.getWidth() / 2);
+    lfoRateLabel.setBounds(lfoKnob1.removeFromTop(14));
+    lfoRateKnob.setBounds(lfoKnob1);
+    lfoDepthLabel.setBounds(lfoArea.removeFromTop(14));
+    lfoDepthKnob.setBounds(lfoArea);
+    area.removeFromTop(10);
+
+    // ============================================================
+    // ZONE 3: SOUNDVERARBEITUNG (filter + shapers + effects)
+    // ============================================================
+    procHeaderBounds = area.removeFromTop(24);
+    area.removeFromTop(2);
+
+    // Filter | Distortion
+    auto fdRow = area.removeFromTop(130);
+    auto filterArea = fdRow.removeFromLeft(fdRow.getWidth() / 2).reduced(3);
+    filterBounds = filterArea;
+    filterTitle.setBounds(filterArea.removeFromTop(20));
+    filterType.setBounds(filterArea.removeFromTop(24).reduced(20, 0));
+    filterArea.removeFromTop(4);
+    auto fLeft = filterArea.removeFromLeft(filterArea.getWidth() / 2);
+    cutLabel.setBounds(fLeft.removeFromTop(14));
+    cutoffKnob.setBounds(fLeft);
+    resoLabel.setBounds(filterArea.removeFromTop(14));
+    resoKnob.setBounds(filterArea);
+
+    auto distArea = fdRow.reduced(3);
+    distBounds = distArea;
+    distTitle.setBounds(distArea.removeFromTop(20));
+    distTypeSelector.setBounds(distArea.removeFromTop(24).reduced(20, 0));
+    distArea.removeFromTop(4);
+    auto dLeft = distArea.removeFromLeft(distArea.getWidth() / 2);
+    distDriveLabel.setBounds(dLeft.removeFromTop(14));
+    distDriveKnob.setBounds(dLeft);
+    distMixLabel.setBounds(distArea.removeFromTop(14));
+    distMixKnob.setBounds(distArea);
     area.removeFromTop(6);
 
-    // ===== Row 5: Visualization — Oscilloscope | Spectrum =====
+    // Wavefold | Delay | Chorus | Reverb
+    auto fxRow = area.removeFromTop(120);
+    int fxW = fxRow.getWidth() / 4;
+    wavefoldPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
+    delayPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
+    chorusPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
+    reverbPanel.setBounds(fxRow.reduced(3));
+    area.removeFromTop(8);
+
+    // ===== Visualization — Oscilloscope | Spectrum =====
     auto vizRow = area.removeFromTop(150).reduced(3, 0);
     if (waveformDisplay)
         waveformDisplay->setBounds(vizRow.removeFromLeft(vizRow.getWidth() / 2).withTrimmedRight(3));

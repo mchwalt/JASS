@@ -150,6 +150,8 @@ private:
 
     // Layout bounds for paint()
     juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds;
+    // Zone separator headers (TONERZEUGER / MODULATION / SOUNDVERARBEITUNG)
+    juce::Rectangle<int> genHeaderBounds, modHeaderBounds, procHeaderBounds;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyEditor)
 };
