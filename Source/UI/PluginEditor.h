@@ -130,6 +130,9 @@ private:
     // Wavefolder (reuses EffectPanel: ON toggle + DRIVE/SYM/MIX knobs)
     EffectPanel wavefoldPanel;
 
+    // Bitcrusher (reuses EffectPanel: ON toggle + BITS/RATE/MIX knobs)
+    EffectPanel bitcrushPanel;
+
     // Karplus-Strong (reuses EffectPanel: ON toggle + knobs)
     EffectPanel karplusPanel;
 

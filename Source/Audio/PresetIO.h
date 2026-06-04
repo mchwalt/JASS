@@ -121,6 +121,11 @@ namespace PresetIO
         root->setProperty("WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry));
         root->setProperty("WavefoldMix",      rawF(a, ID::wavefoldMix));
 
+        root->setProperty("BitcrushEnabled", rawB(a, ID::bitcrushOn));
+        root->setProperty("BitcrushBits",    rawI(a, ID::bitcrushBits));
+        root->setProperty("BitcrushRate",    rawI(a, ID::bitcrushRate));
+        root->setProperty("BitcrushMix",     rawF(a, ID::bitcrushMix));
+
         root->setProperty("SubEnabled",  rawB(a, ID::subOn));
         root->setProperty("SubWaveform", rawChoice(a, ID::subWave, kSubWave));
         root->setProperty("SubOctave",   -(rawI(a, ID::subOctave) + 1));  // -1 or -2
@@ -212,6 +217,11 @@ namespace PresetIO
         setRaw(a, ID::wavefoldDrive,    (float) jnum(v, "WavefoldDrive",    rawF(a, ID::wavefoldDrive)));
         setRaw(a, ID::wavefoldSymmetry, (float) jnum(v, "WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry)));
         setRaw(a, ID::wavefoldMix,      (float) jnum(v, "WavefoldMix",      rawF(a, ID::wavefoldMix)));
+
+        setRaw(a, ID::bitcrushOn,   jbool(v, "BitcrushEnabled", rawB(a, ID::bitcrushOn)) ? 1.f : 0.f);
+        setRaw(a, ID::bitcrushBits, (float) jint(v, "BitcrushBits", rawI(a, ID::bitcrushBits)));
+        setRaw(a, ID::bitcrushRate, (float) jint(v, "BitcrushRate", rawI(a, ID::bitcrushRate)));
+        setRaw(a, ID::bitcrushMix,  (float) jnum(v, "BitcrushMix",  rawF(a, ID::bitcrushMix)));
 
         setRaw   (a, ID::subOn, jbool(v, "SubEnabled", rawB(a, ID::subOn)) ? 1.f : 0.f);
         setChoice(a, ID::subWave, kSubWave, v["SubWaveform"], rawI(a, ID::subWave));

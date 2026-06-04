@@ -47,6 +47,12 @@ namespace Parameters
         constexpr const char* wavefoldSymmetry = "wavefoldSymmetry";
         constexpr const char* wavefoldMix      = "wavefoldMix";
 
+        // Bitcrusher (lo-fi)
+        constexpr const char* bitcrushOn   = "bitcrushOn";
+        constexpr const char* bitcrushBits = "bitcrushBits";
+        constexpr const char* bitcrushRate = "bitcrushRate";
+        constexpr const char* bitcrushMix  = "bitcrushMix";
+
         // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
         constexpr const char* subOn     = "subOn";
         constexpr const char* subWave   = "subWave";
@@ -212,6 +218,12 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::wavetableUniVoices, 1), "Wavetable Uni Voices", 1, 7, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableUniDetune, 1), "Wavetable Uni Detune", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
 
+        // Bitcrusher
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::bitcrushOn, 1), "Bitcrush On", false));
+        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::bitcrushBits, 1), "Bitcrush Bits", 1, 16, 8));
+        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::bitcrushRate, 1), "Bitcrush Rate", 1, 50, 1));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::bitcrushMix, 1), "Bitcrush Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
+
         // Sub oscillator
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::subOn, 1), "Sub On", false));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subWave, 1), "Sub Wave", juce::StringArray{"Sine", "Square"}, 0));
@@ -228,7 +240,7 @@ namespace Parameters
     inline void applyToVoice(juce::AudioProcessorValueTreeState& apvts,
                               Oscillator* oscillators, AdsrEnvelope& env,
                               BiquadFilter& filter, DistortionEffect& distortion,
-                              WavefolderEffect& wavefolder,
+                              WavefolderEffect& wavefolder, BitcrusherEffect& bitcrusher,
                               DelayEffect& delay,
                               ChorusEffect& chorus, ReverbEffect& reverb,
                               LFO& lfo, NoiseGenerator& noise,
@@ -266,6 +278,11 @@ namespace Parameters
         wavefolder.drive    = *apvts.getRawParameterValue(ID::wavefoldDrive);
         wavefolder.symmetry = *apvts.getRawParameterValue(ID::wavefoldSymmetry);
         wavefolder.mix      = *apvts.getRawParameterValue(ID::wavefoldMix);
+
+        bitcrusher.enabled = *apvts.getRawParameterValue(ID::bitcrushOn) > 0.5f;
+        bitcrusher.bits    = *apvts.getRawParameterValue(ID::bitcrushBits);
+        bitcrusher.rate    = *apvts.getRawParameterValue(ID::bitcrushRate);
+        bitcrusher.mix     = *apvts.getRawParameterValue(ID::bitcrushMix);
 
         delay.enabled  = *apvts.getRawParameterValue(ID::delayOn) > 0.5f;
         delay.time     = *apvts.getRawParameterValue(ID::delayTime);

@@ -39,6 +39,7 @@ identischen Einstellungen direkt gegenüberstellen.
 - **Biquad-Filter** — Off / Lowpass / Highpass, Resonanz
 - **Distortion** — Off / SoftClip / HardClip / Foldback, Drive, Mix
 - **Wavefolding** — West-Coast Sinus-Wavefolder (pre-filter), Drive / Symmetry / Mix
+- **Bitcrusher** — Lo-Fi: Bit-Tiefe (BITS) + Samplerate (RATE) reduzieren, Mix
 - **Effekte** — Delay, Chorus, Reverb
 - **Visualisierung** — Oszilloskop + Spektrum-Analyzer (FFT)
 - **Randomize** — würfelt per Knopfdruck einen zufälligen, hörbaren Patch

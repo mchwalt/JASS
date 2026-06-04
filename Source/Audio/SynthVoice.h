@@ -26,6 +26,7 @@ public:
     BiquadFilter& getFilter() { return filter; }
     DistortionEffect& getDistortion() { return distortion; }
     WavefolderEffect& getWavefolder() { return wavefolder; }
+    BitcrusherEffect& getBitcrusher() { return bitcrusher; }
     DelayEffect& getDelay() { return delay; }
     ChorusEffect& getChorus() { return chorus; }
     ReverbEffect& getReverb() { return reverb; }
@@ -51,6 +52,7 @@ private:
     BiquadFilter filter;
     DistortionEffect distortion;
     WavefolderEffect wavefolder;
+    BitcrusherEffect bitcrusher;
     DelayEffect delay;
     ChorusEffect chorus;
     ReverbEffect reverb;

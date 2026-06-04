@@ -261,7 +261,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                    {"FREQ", "AMP", "DAMP", "STR"}),
       wavefoldPanel(p.getAPVTS(), "WAVEFOLD", juce::Colour(0xfffbbf24),
                     "wavefoldOn", {"wavefoldDrive", "wavefoldSymmetry", "wavefoldMix"},
-                    {"DRIVE", "SYM", "MIX"})
+                    {"DRIVE", "SYM", "MIX"}),
+      bitcrushPanel(p.getAPVTS(), "BITCRUSH", juce::Colour(0xff2dd4bf),
+                    "bitcrushOn", {"bitcrushBits", "bitcrushRate", "bitcrushMix"},
+                    {"BITS", "RATE", "MIX"})
 {
     setLookAndFeel(&lnf);
 
@@ -387,6 +390,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(reverbPanel);
     addAndMakeVisible(karplusPanel);
     addAndMakeVisible(wavefoldPanel);
+    addAndMakeVisible(bitcrushPanel);
 
     // LFO
     auto cyan = juce::Colour(0xff22d3ee);
@@ -670,6 +674,7 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawSection(filterBounds.expanded(2));
     drawSection(distBounds.expanded(2));
     drawSection(wavefoldPanel.getBounds().expanded(2));
+    drawSection(bitcrushPanel.getBounds().expanded(2));
     drawSection(delayPanel.getBounds().expanded(2));
     drawSection(chorusPanel.getBounds().expanded(2));
     drawSection(reverbPanel.getBounds().expanded(2));
@@ -854,10 +859,11 @@ void SynthyEditor::resized()
     distMixKnob.setBounds(distArea);
     area.removeFromTop(6);
 
-    // Wavefold | Delay | Chorus | Reverb
+    // Wavefold | Bitcrush | Delay | Chorus | Reverb
     auto fxRow = area.removeFromTop(120);
-    int fxW = fxRow.getWidth() / 4;
+    int fxW = fxRow.getWidth() / 5;
     wavefoldPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
+    bitcrushPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     delayPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     chorusPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     reverbPanel.setBounds(fxRow.reduced(3));

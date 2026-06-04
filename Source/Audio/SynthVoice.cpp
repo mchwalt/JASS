@@ -151,6 +151,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // Effects
         mixedSample = distortion.process(mixedSample);
+        mixedSample = bitcrusher.process(mixedSample);
         mixedSample = chorus.process(mixedSample);
         mixedSample = delay.process(mixedSample);
         mixedSample = reverb.process(mixedSample);

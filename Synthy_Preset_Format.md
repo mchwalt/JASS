@@ -57,6 +57,10 @@ sound at identical parameters.
   "WavefoldDrive": 0.3,        // 0..1  (mapped to fold gain 1x..8x)
   "WavefoldSymmetry": 0.0,     // -1..1 (asymmetry → even harmonics)
   "WavefoldMix": 1.0,
+  "BitcrushEnabled": false,    // lo-fi bitcrusher (after distortion)
+  "BitcrushBits": 8,           // 1..16 bit depth
+  "BitcrushRate": 1,           // 1..50 sample-rate reduction factor
+  "BitcrushMix": 1.0,          // 0..1
   "SubEnabled": false,         // sub-oscillator (tracks OSC 1 pitch, octave(s) down)
   "SubWaveform": "Sine",       // Sine | Square
   "SubOctave": -1,             // -1 or -2 octaves
@@ -87,7 +91,7 @@ sound at identical parameters.
 - **Quantization:** values snap to each parameter's step on the C++ side (e.g.
   `MasterVolume` step 0.01), so a round-trip may differ by less than one step.
 - **Missing fields** are tolerated on both sides (kept at the current/default value). Newer
-  fields (`Wavefold*`, `Sub*`) are added by the actively-developed **C++** app; the frozen C#
+  fields (`Wavefold*`, `Bitcrush*`, `Sub*`) are added by the actively-developed **C++** app; the frozen C#
   app simply ignores them (and they keep their defaults when it writes a preset).
 - Note: `Sub*` and the auto-play behaviour are C++ additions. Auto-play is no longer a stored
   field — it is automatic runtime behaviour (drone steps aside when you play, returns when a

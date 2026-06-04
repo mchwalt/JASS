@@ -30,6 +30,23 @@ public:
     float process(float input);
 };
 
+// Lo-Fi bitcrusher: reduces bit depth (quantisation → gritty/digital) and the
+// effective sample rate (sample & hold → aliasing/crunch). Stateful.
+class BitcrusherEffect
+{
+public:
+    bool enabled = false;
+    double bits = 8.0;    // 1..16 bit depth
+    double rate = 1.0;    // sample-rate reduction factor (1 = none, hold N samples)
+    double mix = 1.0;     // dry/wet 0..1
+
+    float process(float input);
+
+private:
+    float held = 0.0f;
+    int counter = 0;
+};
+
 class DelayEffect
 {
 public:

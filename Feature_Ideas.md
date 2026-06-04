@@ -12,6 +12,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | Feature | Was es macht |
 |---|---|
 | **Sub-Oszillator** | Sine/Square, −1/−2 Oktav, folgt OSC-1-Tonhöhe → fetter Bass |
+| **Bitcrusher** | Lo-Fi: Bit-Tiefe (BITS) + Samplerate (RATE) reduzieren, Mix |
 | **On-Screen-Klaviatur** | spielbar per Maus & Computertasten (z/x = Oktave); löst ADSR pro Note aus |
 | **Tonhöhen-Transponierung** | gespielte Note transponiert alle Erzeuger relativ zu C4 (FREQ-Knöpfe = Grundklang) |
 | **FREQ-Regler-Anzeige** | aktive OSC-FREQ-Regler zeigen beim Spielen die gespielte Frequenz, danach zurück zur Basis |
@@ -41,9 +42,9 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 
 ## 🎯 Als Nächstes empfohlen
 
-1. **Bitcrusher** – Bit-/Samplerate-Reduktion → Lo-Fi (★ / ★★★★)
+1. **Tempo-Sync** – LFO & Delay an BPM koppeln (★★ / ★★★★)
 2. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
-3. **Tempo-Sync** – LFO & Delay an BPM koppeln (★★ / ★★★★)
+3. **Arpeggiator** – automatische Notenfolgen (jetzt mit Klaviatur sinnvoll) (★★★ / ★★★★★)
 
 ---
 
@@ -62,7 +63,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | Feature | Was es macht | Aufwand | Coolness |
 |---|---|---|---|
 | **Phaser / Flanger** | Allpass-Kette / modulierter Comb → Sweep-Sounds | ★★ | ★★★★ |
-| **Bitcrusher** | Bit-/Samplerate-Reduktion → Lo-Fi, 8-bit | ★ | ★★★★ |
+| ~~Bitcrusher~~ | ✅ umgesetzt (C++) – BITS + RATE + MIX | – | – |
 | **Convolution-Reverb** | echte Impulsantworten laden (Kathedrale, Platte) | ★★★★ | ★★★★ |
 | **Stereo-Width / Mid-Side** | Breite stufenlos regeln, Haas-Effekt | ★★ | ★★★ |
 | **EQ (3-Band)** | Bass/Mid/Treble | ★★ | ★★★ |

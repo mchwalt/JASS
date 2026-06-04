@@ -51,6 +51,28 @@ float WavefolderEffect::process(float input)
     return static_cast<float>(std::clamp(output, -1.0, 1.0));
 }
 
+// --- Bitcrusher ---
+
+float BitcrusherEffect::process(float input)
+{
+    if (!enabled) return input;
+
+    // Sample-rate reduction: hold one value for 'rate' samples (sample & hold).
+    int hold = std::max(1, (int) rate);
+    if (counter == 0)
+        held = input;
+    counter = (counter + 1) % hold;
+    double s = held;
+
+    // Bit-depth reduction: quantise to 2^bits steps across the -1..1 range.
+    double levels = std::pow(2.0, std::clamp(bits, 1.0, 16.0));
+    double step = 2.0 / levels;
+    s = step * std::floor(s / step + 0.5);
+
+    double output = input * (1.0 - mix) + s * mix;
+    return static_cast<float>(std::clamp(output, -1.0, 1.0));
+}
+
 // --- Delay ---
 
 void DelayEffect::prepare(double sampleRate)

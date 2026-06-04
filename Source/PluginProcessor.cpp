@@ -166,6 +166,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getFilter(),
                                      voice->getDistortion(), voice->getWavefolder(),
+                                     voice->getBitcrusher(),
                                      voice->getDelay(),
                                      voice->getChorus(), voice->getReverb(),
                                      voice->getLFO(), voice->getNoise(),
