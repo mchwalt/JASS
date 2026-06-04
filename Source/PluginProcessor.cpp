@@ -19,6 +19,8 @@ SynthyProcessor::SynthyProcessor()
     if (wrapperType == wrapperType_Standalone)
     {
         PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
+        if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
+            currentPresetName = n;
         apvts.state.addListener(this);
         startTimer(1500);
 
@@ -27,6 +29,8 @@ SynthyProcessor::SynthyProcessor()
         juce::MessageManager::callAsync([this]
         {
             PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
+            if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
+                currentPresetName = n;
         });
     }
 }
@@ -77,7 +81,8 @@ void SynthyProcessor::timerCallback()
 
 void SynthyProcessor::saveLiveState()
 {
-    PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), "LiveState");
+    // Persist the active preset name so it (and the patch) come back on restart.
+    PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), currentPresetName);
 }
 
 void SynthyProcessor::randomize()
@@ -121,6 +126,8 @@ void SynthyProcessor::randomize()
     set(ID::bitcrushRate, (float) rng.nextInt(juce::Range<int>(1, 9)));   // 1..8x
     set(ID::subLevel,     0.3f + rng.nextFloat() * 0.4f);                 // 0.3..0.7
     set(ID::subOctave,    (float) rng.nextInt(juce::Range<int>(0, 2)));   // -1/-2 only
+
+    currentPresetName = "Random";
 }
 
 void SynthyProcessor::resetToDefault()
@@ -134,6 +141,7 @@ void SynthyProcessor::resetToDefault()
         osc1On->setValueNotifyingHost(1.0f);
 
     autoPlayEnabled.store(true);
+    currentPresetName = "Init";
 }
 
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)

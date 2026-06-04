@@ -277,4 +277,15 @@ namespace PresetIO
         applyVar(a, v);
         return true;
     }
+
+    // Reads just the "Name" field of a preset file (empty if absent/unreadable).
+    inline juce::String nameFromFile(const juce::File& file)
+    {
+        if (! file.existsAsFile())
+            return {};
+        auto v = juce::JSON::parse(file.loadFileAsString());
+        if (v.isObject() && v.hasProperty("Name"))
+            return v["Name"].toString();
+        return {};
+    }
 }

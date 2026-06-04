@@ -50,6 +50,12 @@ public:
     // FREQ knobs can display the actually-played frequency.
     float getCurrentNoteRatio() const { return currentNoteRatio.load(); }
 
+    // Name of the currently loaded/active preset (shown in the header). It is
+    // persisted into the LiveState file so it survives a restart. Touched only
+    // on the message thread (editor + LiveState save).
+    juce::String getCurrentPresetName() const { return currentPresetName; }
+    void setCurrentPresetName(const juce::String& n) { currentPresetName = n; }
+
 private:
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;
@@ -72,6 +78,7 @@ private:
     void handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNote, float) override;
 
     // Shared live-state persistence (see PresetIO::liveStateFile)
+    juce::String currentPresetName { "Init" };   // restored from LiveState on start
     std::atomic<bool> liveDirty { false };
     void timerCallback() override;
     void valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&) override { liveDirty = true; }

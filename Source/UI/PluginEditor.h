@@ -175,6 +175,7 @@ private:
     juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" }, resetBtn { "RESET" };
     std::unique_ptr<juce::FileChooser> presetChooser;
     juce::Label presetNameLabel;                 // shows the currently loaded preset
+    juce::String shownPresetName;                // last value pushed to the label (timer sync)
     void setPresetName(const juce::String& name);
 
     // Oscilloscope + Spectrum
@@ -189,7 +190,7 @@ private:
 
     // Layout bounds for paint()
     juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds;
-    // Zone separator headers (TONERZEUGER / MODULATION / SOUNDVERARBEITUNG)
+    // Zone separator headers (GENERATORS / MODULATION / PROCESSING)
     juce::Rectangle<int> genHeaderBounds, modHeaderBounds, procHeaderBounds;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyEditor)

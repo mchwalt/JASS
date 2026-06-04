@@ -474,7 +474,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xff888888));
     presetNameLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(presetNameLabel);
-    setPresetName("LiveState");
+    setPresetName(processor.getCurrentPresetName());   // restored from LiveState
 
     // Noise
     auto noiseGrey = juce::Colour(0xff9ca3af);
@@ -626,10 +626,20 @@ void SynthyEditor::timerCallback()
     osc1.setPlayedRatio(ratio);
     osc2.setPlayedRatio(ratio);
     osc3.setPlayedRatio(ratio);
+
+    // The shared LiveState is re-loaded asynchronously after construction; keep
+    // the header label in sync with the processor's (restored) preset name.
+    if (auto pn = processor.getCurrentPresetName(); pn != shownPresetName)
+    {
+        shownPresetName = pn;
+        presetNameLabel.setText("Preset: " + pn, juce::dontSendNotification);
+    }
 }
 
 void SynthyEditor::setPresetName(const juce::String& name)
 {
+    processor.setCurrentPresetName(name);   // keep the processor (LiveState) in sync
+    shownPresetName = name;
     presetNameLabel.setText("Preset: " + name, juce::dontSendNotification);
 }
 
@@ -709,9 +719,9 @@ void SynthyEditor::paint(juce::Graphics& g)
         g.setColour(col.withAlpha(0.35f));
         g.drawLine((float) bounds.getX(), yMid, (float) bounds.getRight() - 4.0f, yMid, 1.5f);
     };
-    drawZoneHeader(genHeaderBounds,  "TONERZEUGER",       juce::Colour(0xff40c0ff));
-    drawZoneHeader(modHeaderBounds,  "MODULATION",        juce::Colour(0xff22d3ee));
-    drawZoneHeader(procHeaderBounds, "SOUNDVERARBEITUNG", juce::Colour(0xfffb923c));
+    drawZoneHeader(genHeaderBounds,  "GENERATORS", juce::Colour(0xff40c0ff));
+    drawZoneHeader(modHeaderBounds,  "MODULATION", juce::Colour(0xff22d3ee));
+    drawZoneHeader(procHeaderBounds, "PROCESSING", juce::Colour(0xfffb923c));
 }
 
 void SynthyEditor::resized()
@@ -737,7 +747,7 @@ void SynthyEditor::resized()
     area.removeFromTop(4);
 
     // ============================================================
-    // ZONE 1: TONERZEUGER (sound sources)
+    // ZONE 1: GENERATORS (sound sources)
     // ============================================================
     genHeaderBounds = area.removeFromTop(24);
     area.removeFromTop(2);
@@ -852,7 +862,7 @@ void SynthyEditor::resized()
     area.removeFromTop(10);
 
     // ============================================================
-    // ZONE 3: SOUNDVERARBEITUNG (filter + shapers + effects)
+    // ZONE 3: PROCESSING (filter + shapers + effects)
     // ============================================================
     procHeaderBounds = area.removeFromTop(24);
     area.removeFromTop(2);
