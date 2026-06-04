@@ -33,6 +33,24 @@ float DistortionEffect::process(float input)
     return static_cast<float>(std::clamp(output, -1.0, 1.0));
 }
 
+// --- Wavefolder ---
+
+float WavefolderEffect::process(float input)
+{
+    if (!enabled) return input;
+
+    constexpr double PI = 3.14159265358979323846;
+
+    double g = 1.0 + drive * 7.0;  // 1x..8x fold gain — more gain = more folds
+    // Asymmetric gain per half-cycle adds even harmonics while keeping f(0)=0
+    // (so no DC offset is introduced).
+    double asym = (input >= 0.0f) ? (1.0 + symmetry) : (1.0 - symmetry);
+    double folded = std::sin(static_cast<double>(input) * g * asym * PI * 0.5);
+
+    double output = input * (1.0 - mix) + folded * mix;
+    return static_cast<float>(std::clamp(output, -1.0, 1.0));
+}
+
 // --- Delay ---
 
 void DelayEffect::prepare(double sampleRate)

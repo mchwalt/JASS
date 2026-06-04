@@ -41,6 +41,12 @@ namespace Parameters
         constexpr const char* distortionDrive = "distortionDrive";
         constexpr const char* distortionMix   = "distortionMix";
 
+        // Wavefolder
+        constexpr const char* wavefoldOn       = "wavefoldOn";
+        constexpr const char* wavefoldDrive    = "wavefoldDrive";
+        constexpr const char* wavefoldSymmetry = "wavefoldSymmetry";
+        constexpr const char* wavefoldMix      = "wavefoldMix";
+
         // Delay
         constexpr const char* delayOn       = "delayOn";
         constexpr const char* delayTime     = "delayTime";
@@ -150,6 +156,12 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::distortionDrive, 1), "Distortion Drive", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::distortionMix, 1), "Distortion Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
 
+        // Wavefolder
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::wavefoldOn, 1), "Wavefold On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavefoldDrive, 1), "Wavefold Drive", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavefoldSymmetry, 1), "Wavefold Symmetry", juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 0.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavefoldMix, 1), "Wavefold Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
+
         // Delay
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::delayOn, 1), "Delay On", false));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayTime, 1), "Delay Time", juce::NormalisableRange<float>(0.01f, 2.0f, 0.01f), 0.3f));
@@ -204,6 +216,7 @@ namespace Parameters
     inline void applyToVoice(juce::AudioProcessorValueTreeState& apvts,
                               Oscillator* oscillators, AdsrEnvelope& env,
                               BiquadFilter& filter, DistortionEffect& distortion,
+                              WavefolderEffect& wavefolder,
                               DelayEffect& delay,
                               ChorusEffect& chorus, ReverbEffect& reverb,
                               LFO& lfo, NoiseGenerator& noise,
@@ -236,6 +249,11 @@ namespace Parameters
         distortion.type  = static_cast<DistortionType>(static_cast<int>(*apvts.getRawParameterValue(ID::distortionType)));
         distortion.drive = *apvts.getRawParameterValue(ID::distortionDrive);
         distortion.mix   = *apvts.getRawParameterValue(ID::distortionMix);
+
+        wavefolder.enabled  = *apvts.getRawParameterValue(ID::wavefoldOn) > 0.5f;
+        wavefolder.drive    = *apvts.getRawParameterValue(ID::wavefoldDrive);
+        wavefolder.symmetry = *apvts.getRawParameterValue(ID::wavefoldSymmetry);
+        wavefolder.mix      = *apvts.getRawParameterValue(ID::wavefoldMix);
 
         delay.enabled  = *apvts.getRawParameterValue(ID::delayOn) > 0.5f;
         delay.time     = *apvts.getRawParameterValue(ID::delayTime);

@@ -215,7 +215,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                   "reverbOn", {"reverbRoom", "reverbDamp", "reverbMix"}, {"ROOM", "DAMP", "MIX"}),
       karplusPanel(p.getAPVTS(), "STRING (KARPLUS)", juce::Colour(0xff34d399),
                    "karplusOn", {"karplusFreq", "karplusAmp", "karplusDamping", "karplusStretch"},
-                   {"FREQ", "AMP", "DAMP", "STR"})
+                   {"FREQ", "AMP", "DAMP", "STR"}),
+      wavefoldPanel(p.getAPVTS(), "WAVEFOLD", juce::Colour(0xfffbbf24),
+                    "wavefoldOn", {"wavefoldDrive", "wavefoldSymmetry", "wavefoldMix"},
+                    {"DRIVE", "SYM", "MIX"})
 {
     setLookAndFeel(&lnf);
 
@@ -315,6 +318,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(chorusPanel);
     addAndMakeVisible(reverbPanel);
     addAndMakeVisible(karplusPanel);
+    addAndMakeVisible(wavefoldPanel);
 
     // LFO
     auto cyan = juce::Colour(0xff22d3ee);
@@ -518,6 +522,7 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawSection(delayPanel.getBounds().expanded(2));
     drawSection(chorusPanel.getBounds().expanded(2));
     drawSection(reverbPanel.getBounds().expanded(2));
+    drawSection(wavefoldPanel.getBounds().expanded(2));
 
     // Generators
     drawSection(noiseBounds.expanded(2));
@@ -629,12 +634,13 @@ void SynthyEditor::resized()
 
     area.removeFromTop(6);
 
-    // ===== Row 4: Effects — Delay | Chorus | Reverb =====
+    // ===== Row 4: Effects — Delay | Chorus | Reverb | Wavefold =====
     auto fxRow = area.removeFromTop(120);
-    int fxW = fxRow.getWidth() / 3;
+    int fxW = fxRow.getWidth() / 4;
     delayPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     chorusPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
-    reverbPanel.setBounds(fxRow.reduced(3));
+    reverbPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
+    wavefoldPanel.setBounds(fxRow.reduced(3));
 
     area.removeFromTop(6);
 

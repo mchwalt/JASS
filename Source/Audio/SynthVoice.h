@@ -25,6 +25,7 @@ public:
     AdsrEnvelope& getEnvelope() { return envelope; }
     BiquadFilter& getFilter() { return filter; }
     DistortionEffect& getDistortion() { return distortion; }
+    WavefolderEffect& getWavefolder() { return wavefolder; }
     DelayEffect& getDelay() { return delay; }
     ChorusEffect& getChorus() { return chorus; }
     ReverbEffect& getReverb() { return reverb; }
@@ -39,6 +40,7 @@ private:
     AdsrEnvelope envelope;
     BiquadFilter filter;
     DistortionEffect distortion;
+    WavefolderEffect wavefolder;
     DelayEffect delay;
     ChorusEffect chorus;
     ReverbEffect reverb;

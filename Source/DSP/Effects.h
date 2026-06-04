@@ -15,6 +15,21 @@ public:
     float process(float input);
 };
 
+// West-Coast / Buchla-style sine wavefolder. Unlike the Foldback distortion
+// (which reflects a triangle off ±1), this drives the signal through a smooth
+// sine so it folds back on itself repeatedly, producing rich, evolving
+// harmonics. Stateless (no DC offset: the transfer function passes through 0).
+class WavefolderEffect
+{
+public:
+    bool enabled = false;
+    double drive = 0.3;     // 0..1 (mapped to fold gain 1x..8x)
+    double symmetry = 0.0;  // -1..1 asymmetry → adds even harmonics
+    double mix = 1.0;       // dry/wet 0..1
+
+    float process(float input);
+};
+
 class DelayEffect
 {
 public:

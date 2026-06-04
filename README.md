@@ -31,6 +31,7 @@ identischen Einstellungen direkt gegenüberstellen.
 - **LFO** — Sine/Triangle/Square/Saw → Frequency / Amplitude / Filter-Cutoff
 - **Biquad-Filter** — Off / Lowpass / Highpass, Resonanz
 - **Distortion** — Off / SoftClip / HardClip / Foldback, Drive, Mix
+- **Wavefolding** — West-Coast Sinus-Wavefolder (pre-filter), Drive / Symmetry / Mix
 - **Effekte** — Delay, Chorus, Reverb
 - **Visualisierung** — Oszilloskop + Spektrum-Analyzer (FFT)
 - **Randomize** — würfelt per Knopfdruck einen zufälligen, hörbaren Patch

@@ -128,7 +128,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getFilter(),
-                                     voice->getDistortion(), voice->getDelay(),
+                                     voice->getDistortion(), voice->getWavefolder(),
+                                     voice->getDelay(),
                                      voice->getChorus(), voice->getReverb(),
                                      voice->getLFO(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),

@@ -15,6 +15,7 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Noise Generator** | White + Pink (Voss-McCartney) |
 | **Karplus-Strong** | gezupfte Saite (Physical Modeling), Damping/Stretch |
 | **Distortion** | SoftClip / HardClip / **Foldback**, Drive, Mix |
+| **Wavefolding** | West-Coast Sinus-Wavefolder (pre-filter), Drive / Symmetry / Mix |
 | **Spectrum Analyzer** | FFT-Anzeige neben dem Oszilloskop |
 | **ADSR · LFO · Biquad-Filter** | Standard-Modulation & Filterung |
 | **Delay · Chorus · Reverb** | Effekt-Kette |
@@ -25,9 +26,9 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 
 ## 🎯 Als Nächstes empfohlen
 
-1. **Wavefolding** – klanglich komplett neu, simpel zu bauen (★★ / ★★★★★)
-2. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
-3. **Sub-Oszillator** – dedizierter Bass mit einem Klick (★ / ★★★★)
+1. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
+2. **Sub-Oszillator** – dedizierter Bass mit einem Klick (★ / ★★★★)
+3. **Bitcrusher** – Bit-/Samplerate-Reduktion → Lo-Fi (★ / ★★★★)
 
 ---
 
@@ -35,7 +36,7 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 
 | Feature | Was es macht | Aufwand | Coolness |
 |---|---|---|---|
-| **Wavefolding** | Welle „faltet" statt zu clippen (West-Coast/Buchla) – anderer Charakter als Distortion | ★★ | ★★★★★ |
+| ~~Wavefolding~~ | ✅ umgesetzt (beide Apps) – Sinus-Folder, Drive/Symmetry/Mix, pre-filter | – | – |
 | **Granular-Synthese** | Sample in Körner zerlegen, streuen/pitchen → Clouds, Texturen | ★★★★ | ★★★★★ |
 | **Formant-/Vokal-Filter** | morpht A-E-I-O-U → „sprechender" Synth (Helm/Odin haben das) | ★★★ | ★★★★★ |
 | **Modal-Synthese** | Karplus-Erweiterung für Glocken/Mallets (Resonatoren) | ★★★ | ★★★★ |

@@ -53,6 +53,10 @@ sound at identical parameters.
   "DistortionType": "Off",     // Off | SoftClip | HardClip | Foldback
   "DistortionDrive": 0.5,      // 0..1  (mapped to gain 1x..20x)
   "DistortionMix": 1.0,
+  "WavefoldEnabled": false,    // West-Coast sine wavefolder (pre-filter)
+  "WavefoldDrive": 0.3,        // 0..1  (mapped to fold gain 1x..8x)
+  "WavefoldSymmetry": 0.0,     // -1..1 (asymmetry → even harmonics)
+  "WavefoldMix": 1.0,
   "LfoWaveform": "Sine",       // Sine | Triangle | Square | Sawtooth
   "LfoTarget": "Off",          // Off | Frequency | Amplitude | FilterCutoff
   "LfoRate": 2.0, "LfoDepth": 0.5,

@@ -109,6 +109,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         mixedSample += karplus.nextSample();
         mixedSample += wavetable.nextSample();
 
+        // Wavefolding (West-Coast timbre): fold the raw signal BEFORE the filter
+        // so the filter can tame the harsh upper harmonics it generates.
+        mixedSample = wavefolder.process(mixedSample);
+
         // Apply amplitude LFO (tremolo)
         if (lfoTarget == LFOTarget::Amplitude)
             mixedSample *= (1.0f + lfoValue) * 0.5f; // map -1..+1 to 0..1

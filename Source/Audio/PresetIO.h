@@ -115,6 +115,11 @@ namespace PresetIO
         root->setProperty("DistortionDrive", rawF(a, ID::distortionDrive));
         root->setProperty("DistortionMix",   rawF(a, ID::distortionMix));
 
+        root->setProperty("WavefoldEnabled",  rawB(a, ID::wavefoldOn));
+        root->setProperty("WavefoldDrive",    rawF(a, ID::wavefoldDrive));
+        root->setProperty("WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry));
+        root->setProperty("WavefoldMix",      rawF(a, ID::wavefoldMix));
+
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   rawChoice(a, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
@@ -196,6 +201,11 @@ namespace PresetIO
         setChoice(a, ID::distortionType, kDistortion, v["DistortionType"], rawI(a, ID::distortionType));
         setRaw(a, ID::distortionDrive, (float) jnum(v, "DistortionDrive", rawF(a, ID::distortionDrive)));
         setRaw(a, ID::distortionMix,   (float) jnum(v, "DistortionMix",   rawF(a, ID::distortionMix)));
+
+        setRaw(a, ID::wavefoldOn,       jbool(v, "WavefoldEnabled", rawB(a, ID::wavefoldOn)) ? 1.f : 0.f);
+        setRaw(a, ID::wavefoldDrive,    (float) jnum(v, "WavefoldDrive",    rawF(a, ID::wavefoldDrive)));
+        setRaw(a, ID::wavefoldSymmetry, (float) jnum(v, "WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry)));
+        setRaw(a, ID::wavefoldMix,      (float) jnum(v, "WavefoldMix",      rawF(a, ID::wavefoldMix)));
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
         setChoice(a, ID::lfoTarget, kLfoTarget, v["LfoTarget"],   rawI(a, ID::lfoTarget));

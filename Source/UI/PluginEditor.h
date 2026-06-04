@@ -107,6 +107,9 @@ private:
     // Effects
     EffectPanel delayPanel, chorusPanel, reverbPanel;
 
+    // Wavefolder (reuses EffectPanel: ON toggle + DRIVE/SYM/MIX knobs)
+    EffectPanel wavefoldPanel;
+
     // Karplus-Strong (reuses EffectPanel: ON toggle + knobs)
     EffectPanel karplusPanel;
 
