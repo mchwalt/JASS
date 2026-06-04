@@ -300,6 +300,12 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     sustainKnob.setKnobDiameter(KnobSize::Large);
     releaseKnob.setKnobDiameter(KnobSize::Large);
 
+    // Time knobs have a 1 ms automation interval but want ~10 ms wheel steps
+    // (fine 10 ms / coarse 100 ms) over their wide 0..5 s range.
+    attackKnob.setWheelStep(0.01);
+    decayKnob.setWheelStep(0.01);
+    releaseKnob.setWheelStep(0.01);
+
     atkAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "attack", attackKnob);
     decAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "decay", decayKnob);
     susAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "sustain", sustainKnob);

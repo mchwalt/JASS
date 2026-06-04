@@ -30,6 +30,7 @@ public:
         for (int i = 0; i < bufferLength; ++i)
             buffer[(size_t) i] = whiteNoise();
 
+        ampEnv = 1.0f;
         isActive = true;
     }
 
@@ -62,7 +63,14 @@ public:
         buffer[(size_t) writePos] = averaged;
         writePos = nextPos;
 
-        if (std::abs(current) < 0.0001f && std::abs(averaged) < 0.0001f)
+        // Deactivate only once the string has TRULY decayed. Testing the
+        // instantaneous sample was buggy: the waveform crosses zero constantly,
+        // so two tiny consecutive samples (a zero crossing) could kill a string
+        // that was still ringing -> occasional abrupt cut-offs. Use a slowly
+        // decaying peak follower instead.
+        float a = std::abs(current);
+        ampEnv = (a > ampEnv) ? a : ampEnv * 0.9995f;
+        if (ampEnv < 0.0002f)
             isActive = false;
 
         return current * (float) amplitude;
@@ -74,6 +82,7 @@ public:
         writePos = 0;
         isActive = false;
         prevSample = 0.0f;
+        ampEnv = 0.0f;
     }
 
 private:
@@ -91,6 +100,7 @@ private:
     int bufferLength = 0;
     bool isActive = false;
     float prevSample = 0.0f;
+    float ampEnv = 0.0f;   // peak follower for end-of-string detection
 
     bool enabled = false;
     double frequency = 261.63;

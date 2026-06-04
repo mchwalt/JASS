@@ -26,6 +26,11 @@ public:
     void setKnobDiameter(int d) { knobDiameter = d; }
     int  getKnobDiameter() const { return knobDiameter; }
 
+    // Overrides the per-notch fine step for the mouse wheel. Use when the
+    // parameter's automation granularity is much finer than is useful for the
+    // wheel (e.g. ADSR times have a 1 ms interval but want ~10 ms wheel steps).
+    void setWheelStep(double s) { wheelStep = s; }
+
     void mouseDown(const juce::MouseEvent& e) override
     {
         if (e.mods.isRightButtonDown())
@@ -49,20 +54,31 @@ public:
 
     void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
     {
-        double range = getMaximum() - getMinimum();
-        if (range <= 0.0) { juce::Slider::mouseWheelMove(e, wheel); return; }
+        double interval = wheelStep > 0.0 ? wheelStep : getInterval();
+        double range    = getMaximum() - getMinimum();
+        if (interval <= 0.0 || range <= 0.0) { juce::Slider::mouseWheelMove(e, wheel); return; }
 
-        // Proportional steps so coarse + fine work the same on every knob
-        // (the old code left coarse to the JUCE default, which barely moved
-        //  wide-range knobs like Frequency).
-        double interval = getInterval();
-        double coarse = juce::jmax(range / 50.0,  interval);   // ~2% per notch
-        double fine   = juce::jmax(range / 500.0, interval);   // finer with Shift
+        double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
+
+        // Small discrete ranges (e.g. unison voices 1..7): one step per notch.
+        if (range / interval <= 24.0)
+        {
+            setValue(getValue() + dir * interval, juce::sendNotificationSync);
+            return;
+        }
+
+        // Fine (Shift) = one granularity step; coarse = ten steps, but at least
+        // ~range/400 so wide knobs move usefully:
+        //   0..1   -> fine 0.01, coarse 0.1
+        //   0..100 -> fine 1,    coarse 10
+        //   0..10000 Hz -> fine 1 Hz, coarse ~25 Hz
+        double fine   = interval;
+        double coarse = juce::jmax(interval * 10.0, range / 400.0);
         double step   = e.mods.isShiftDown() ? fine : coarse;
-        double dir    = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
         setValue(getValue() + dir * step, juce::sendNotificationSync);
     }
 
 private:
     int knobDiameter = KnobSize::Medium;
+    double wheelStep = 0.0;   // 0 = use the parameter's own interval
 };

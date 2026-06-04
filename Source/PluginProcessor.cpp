@@ -123,7 +123,9 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
-    // Manual string re-pluck (requested from the UI; applied here on the audio thread)
+    // Manual re-pluck (PLUCK button / spacebar): re-excite the Karplus string so
+    // it rings out with its own natural decay (the amp envelope is NOT re-gated,
+    // otherwise a short decay/low sustain would choke the string). Audio thread.
     if (pluckRequested.exchange(false))
         for (int i = 0; i < synth.getNumVoices(); ++i)
             if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
