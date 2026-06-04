@@ -34,9 +34,19 @@ public:
     KarplusStrong& getKarplus() { return karplus; }
     MixMode& getMixMode() { return mixMode; }
     WavetableOscillator& getWavetable() { return wavetable; }
+    Oscillator& getSubOsc() { return subOsc; }
+    int& getSubOctaveRef() { return subOctave; }
+
+    // Re-pluck the Karplus string at the voice's current (transposed) pitch.
+    void pluckKarplus();
+
+    // When false, startNote does NOT pluck the string (used so the auto-play
+    // drone doesn't auto-pluck STRING — it's played via the keyboard).
+    void setPluckEnabled(bool b) { pluckEnabled = b; }
 
 private:
     Oscillator oscillators[3];
+    Oscillator subOsc;            // sub-oscillator: tracks OSC1 pitch, octave(s) down
     AdsrEnvelope envelope;
     BiquadFilter filter;
     DistortionEffect distortion;
@@ -55,6 +65,11 @@ private:
     double baseFrequencies[3] = {};
     double baseCutoff = 5000.0;
 
+    // Pitch transposition: played note relative to C4 (note 60). 1.0 = no shift.
+    double transposeRatio = 1.0;
+    int subOctave = -1;           // sub-oscillator octave offset (-1 or -2)
+
     double currentSampleRate = 44100.0;
     bool noteOn = false;
+    bool pluckEnabled = true;   // false → startNote skips the Karplus pluck (drone)
 };

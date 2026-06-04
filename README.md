@@ -18,15 +18,22 @@ identischen Einstellungen direkt gegenüberstellen.
 | Stimmen | globale Engine (monophon-artig) | polyphon, 8 Voices |
 | Ordner | `D:\Projects\C#\Synthesizer\Synthy` | dieses Repo |
 
-## Features (in beiden vorhanden)
+## Features
+
+> Weiterentwicklung erfolgt in der **C++ (JUCE)** App; die C# App ist eingefroren (gleicher Stand
+> bis dahin). Neuere Features (Wavefolding, Sub-Oszillator, Klaviatur) gibt es nur in C++.
 
 - **3 Oszillatoren** — Sine / Sawtooth / Square / Triangle, je mit Enable, Freq, Amp
 - **Per-Oszillator-Unison** — 1–7 Stimmen, Detune (0–1 = ±1 Halbton)
 - **Mix-Modi** — Additive, Ring-Modulation, FM (OSC1 → OSC2)
+- **Sub-Oszillator** — Sine/Square, −1/−2 Oktav, folgt der OSC-1-Tonhöhe (fetter Bass)
 - **Wavetable-Oszillator** — 6 Built-in Banks (Basic, Digital, Harmonic, Vocal, PWM, Spectral),
   Position-Morph, **WAV-Import**, eigenes Unison
 - **Noise** — White + Pink (Voss-McCartney)
-- **Karplus-Strong** — gezupfte Saite (Freq, Amp, Damping, Stretch)
+- **Karplus-Strong** — gezupfte Saite (Freq, Amp, Damping, Stretch), über die Klaviatur gespielt
+- **On-Screen-Klaviatur** — spielbar per Maus & Computertasten; jede Note transponiert alle
+  Erzeuger relativ zu C4 (FREQ-Knöpfe = Grundklang) und löst die ADSR aus. Auto-Play-Drone
+  weicht automatisch beim Spielen und kehrt beim erneuten Aktivieren einer Quelle zurück.
 - **ADSR-Hüllkurve**
 - **LFO** — Sine/Triangle/Square/Saw → Frequency / Amplitude / Filter-Cutoff
 - **Biquad-Filter** — Off / Lowpass / Highpass, Resonanz

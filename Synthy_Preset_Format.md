@@ -57,6 +57,10 @@ sound at identical parameters.
   "WavefoldDrive": 0.3,        // 0..1  (mapped to fold gain 1x..8x)
   "WavefoldSymmetry": 0.0,     // -1..1 (asymmetry → even harmonics)
   "WavefoldMix": 1.0,
+  "SubEnabled": false,         // sub-oscillator (tracks OSC 1 pitch, octave(s) down)
+  "SubWaveform": "Sine",       // Sine | Square
+  "SubOctave": -1,             // -1 or -2 octaves
+  "SubLevel": 0.5,             // 0..1
   "LfoWaveform": "Sine",       // Sine | Triangle | Square | Sawtooth
   "LfoTarget": "Off",          // Off | Frequency | Amplitude | FilterCutoff
   "LfoRate": 2.0, "LfoDepth": 0.5,
@@ -82,6 +86,11 @@ sound at identical parameters.
   from one app won't resolve to the same waveform in the other.
 - **Quantization:** values snap to each parameter's step on the C++ side (e.g.
   `MasterVolume` step 0.01), so a round-trip may differ by less than one step.
-- **Missing fields** are tolerated on both sides (kept at the current/default value).
+- **Missing fields** are tolerated on both sides (kept at the current/default value). Newer
+  fields (`Wavefold*`, `Sub*`) are added by the actively-developed **C++** app; the frozen C#
+  app simply ignores them (and they keep their defaults when it writes a preset).
+- Note: `Sub*` and the auto-play behaviour are C++ additions. Auto-play is no longer a stored
+  field — it is automatic runtime behaviour (drone steps aside when you play, returns when a
+  generator is re-enabled).
 - C++ implementation: `Source/Audio/PresetIO.h`. C#: `Audio/PresetManager.cs` +
   `MainViewModel.BuildPreset()/ApplyPreset()`.

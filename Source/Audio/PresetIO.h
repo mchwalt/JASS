@@ -16,6 +16,7 @@ namespace PresetIO
     inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth" };
     inline const juce::StringArray kLfoTarget  { "Off", "Frequency", "Amplitude", "FilterCutoff" };
     inline const juce::StringArray kNoiseType  { "Off", "White", "Pink" };
+    inline const juce::StringArray kSubWave     { "Sine", "Square" };
 
     constexpr int kFormatVersion = 1;
 
@@ -120,6 +121,11 @@ namespace PresetIO
         root->setProperty("WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry));
         root->setProperty("WavefoldMix",      rawF(a, ID::wavefoldMix));
 
+        root->setProperty("SubEnabled",  rawB(a, ID::subOn));
+        root->setProperty("SubWaveform", rawChoice(a, ID::subWave, kSubWave));
+        root->setProperty("SubOctave",   -(rawI(a, ID::subOctave) + 1));  // -1 or -2
+        root->setProperty("SubLevel",    rawF(a, ID::subLevel));
+
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   rawChoice(a, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
@@ -206,6 +212,12 @@ namespace PresetIO
         setRaw(a, ID::wavefoldDrive,    (float) jnum(v, "WavefoldDrive",    rawF(a, ID::wavefoldDrive)));
         setRaw(a, ID::wavefoldSymmetry, (float) jnum(v, "WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry)));
         setRaw(a, ID::wavefoldMix,      (float) jnum(v, "WavefoldMix",      rawF(a, ID::wavefoldMix)));
+
+        setRaw   (a, ID::subOn, jbool(v, "SubEnabled", rawB(a, ID::subOn)) ? 1.f : 0.f);
+        setChoice(a, ID::subWave, kSubWave, v["SubWaveform"], rawI(a, ID::subWave));
+        // Stored as -1 / -2; map back to choice index 0 / 1.
+        setRaw   (a, ID::subOctave, (float) (-jint(v, "SubOctave", -(rawI(a, ID::subOctave) + 1)) - 1));
+        setRaw   (a, ID::subLevel, (float) jnum(v, "SubLevel", rawF(a, ID::subLevel)));
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
         setChoice(a, ID::lfoTarget, kLfoTarget, v["LfoTarget"],   rawI(a, ID::lfoTarget));

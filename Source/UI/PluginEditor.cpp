@@ -52,6 +52,7 @@ void SynthyLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wi
 
 OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
                                   int oscIndex, juce::Colour color)
+    : apvts(apvts), freqId("osc" + juce::String(oscIndex) + "Freq")
 {
     auto prefix = "osc" + juce::String(oscIndex);
 
@@ -74,12 +75,24 @@ OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
     freqKnob.setColour(juce::Slider::thumbColourId, color);
     freqKnob.setColour(juce::Slider::rotarySliderFillColourId, color);
     freqKnob.setTextValueSuffix(" Hz");
+    // Decoupled from the parameter (no SliderAttachment) so it can display the
+    // played frequency (base × note ratio). Range/skew mirror the param.
+    freqKnob.setRange(20.0, 10000.0, 1.0);
+    freqKnob.setSkewFactor(0.3);
     addAndMakeVisible(freqKnob);
     freqLabel.setText("FREQ", juce::dontSendNotification);
     freqLabel.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(freqLabel);
-    freqAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        apvts, prefix + "Freq", freqKnob);
+    freqKnob.onValueChange = [this]
+    {
+        if (auto* p = this->apvts.getParameter(freqId))
+        {
+            double er = enableBtn.getToggleState() ? playedRatio : 1.0;
+            double base = freqKnob.getValue() / juce::jmax(0.0001, er);
+            p->setValueNotifyingHost(p->convertTo0to1((float) base));
+        }
+    };
+    setPlayedRatio(1.0);   // initialise display from the current base value
 
     ampKnob.setColour(juce::Slider::thumbColourId, color);
     ampKnob.setColour(juce::Slider::rotarySliderFillColourId, color);
@@ -111,6 +124,18 @@ OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
     // Four knobs in a narrow panel → Small
     for (auto* k : { &freqKnob, &ampKnob, &uniVoicesKnob, &uniDetuneKnob })
         k->setKnobDiameter(KnobSize::Small);
+}
+
+void OscillatorPanel::setPlayedRatio(double ratio)
+{
+    playedRatio = ratio;
+    if (freqKnob.isMouseButtonDown())
+        return;   // don't fight the user while they drag the knob
+    // Only an ENABLED oscillator follows the played pitch; a disabled one isn't
+    // sounding, so it keeps showing its own base frequency.
+    double er = enableBtn.getToggleState() ? ratio : 1.0;
+    double base = (double) *apvts.getRawParameterValue(freqId);
+    freqKnob.setValue(base * er, juce::dontSendNotification);
 }
 
 void OscillatorPanel::resized()
@@ -233,7 +258,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                   "reverbOn", {"reverbRoom", "reverbDamp", "reverbMix"}, {"ROOM", "DAMP", "MIX"}),
       karplusPanel(p.getAPVTS(), "STRING (KARPLUS)", juce::Colour(0xff34d399),
                    "karplusOn", {"karplusFreq", "karplusAmp", "karplusDamping", "karplusStretch"},
-                   {"FREQ", "AMP", "DAMP", "STR"}, "PLUCK"),
+                   {"FREQ", "AMP", "DAMP", "STR"}),
       wavefoldPanel(p.getAPVTS(), "WAVEFOLD", juce::Colour(0xfffbbf24),
                     "wavefoldOn", {"wavefoldDrive", "wavefoldSymmetry", "wavefoldMix"},
                     {"DRIVE", "SYM", "MIX"})
@@ -361,7 +386,6 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(chorusPanel);
     addAndMakeVisible(reverbPanel);
     addAndMakeVisible(karplusPanel);
-    karplusPanel.onTrigger = [this] { processor.pluckString(); };
     addAndMakeVisible(wavefoldPanel);
 
     // LFO
@@ -453,6 +477,35 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     noiseAmpAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "noiseAmp", noiseAmpKnob);
 
+    // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
+    auto subBlue = juce::Colour(0xff60a5fa);
+    subTitle.setText("SUB OSC", juce::dontSendNotification);
+    subTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    subTitle.setColour(juce::Label::textColourId, subBlue);
+    subTitle.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(subTitle);
+
+    subEnableBtn.setButtonText("ON");
+    subEnableBtn.setColour(juce::ToggleButton::tickColourId, subBlue);
+    addAndMakeVisible(subEnableBtn);
+    subEnableAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        p.getAPVTS(), "subOn", subEnableBtn);
+
+    subWaveSelector.addItemList({"Sine", "Square"}, 1);
+    addAndMakeVisible(subWaveSelector);
+    subWaveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        p.getAPVTS(), "subWave", subWaveSelector);
+
+    subOctaveSelector.addItemList({"-1 Oct", "-2 Oct"}, 1);
+    addAndMakeVisible(subOctaveSelector);
+    subOctaveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        p.getAPVTS(), "subOctave", subOctaveSelector);
+
+    setupKnob(subLevelKnob, subLevelLabel, "LEVEL").setColour(juce::Slider::thumbColourId, subBlue);
+    subLevelKnob.setColour(juce::Slider::rotarySliderFillColourId, subBlue);
+    subLevelAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getAPVTS(), "subLevel", subLevelKnob);
+
     // Wavetable
     auto wtPink = juce::Colour(0xfff472b6);
     wtTitle.setText("WAVETABLE", juce::dontSendNotification);
@@ -525,11 +578,37 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     for (auto* k : { &wtPositionKnob, &wtFreqKnob, &wtAmpKnob, &wtVoicesKnob, &wtDetuneKnob })
         k->setKnobDiameter(KnobSize::Small);
 
-    // Spacebar anywhere in the editor plucks the Karplus string.
+    // On-screen keyboard (shares the processor's MidiKeyboardState → plays the
+    // active generators with full ADSR per note, transposed relative to C4).
+    keyboard = std::make_unique<juce::MidiKeyboardComponent>(
+        processor.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard);
+    keyboard->setAvailableRange(36, 96);   // C2 .. C7
+    keyboard->setKeyWidth(20.0f);
+    keyboard->setKeyPressBaseOctave(kbBaseOctave);
+    keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
+    // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
+    // z / x shift the octave; the keyboard must have focus — grabbed on launch/click).
+    keyboard->setWantsKeyboardFocus(true);
+    addAndMakeVisible(*keyboard);
+    juce::Component::SafePointer<juce::MidiKeyboardComponent> kbPtr(keyboard.get());
+    juce::MessageManager::callAsync([kbPtr]() mutable { if (kbPtr) kbPtr->grabKeyboardFocus(); });
+
+    // Keep keyboard focus available so z / x (octave shift) reach keyPressed.
     setWantsKeyboardFocus(true);
 
     // setSize must be LAST so resized() sees all components
-    setSize(820, 1240);
+    setSize(820, 1330);
+
+    // Drive the OSC FREQ-knob display (played frequency).
+    startTimerHz(30);
+}
+
+void SynthyEditor::timerCallback()
+{
+    double ratio = processor.getCurrentNoteRatio();
+    osc1.setPlayedRatio(ratio);
+    osc2.setPlayedRatio(ratio);
+    osc3.setPlayedRatio(ratio);
 }
 
 void SynthyEditor::refreshBankSelector()
@@ -546,9 +625,14 @@ void SynthyEditor::refreshBankSelector()
 
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
 {
-    if (key == juce::KeyPress::spaceKey)
+    // z / x shift the computer-keyboard octave (these keys aren't note keys).
+    auto c = key.getTextCharacter();
+    if (c == 'z' || c == 'Z' || c == 'x' || c == 'X')
     {
-        processor.pluckString();
+        int dir = (c == 'z' || c == 'Z') ? -1 : 1;
+        kbBaseOctave = juce::jlimit(1, 7, kbBaseOctave + dir);
+        if (keyboard)
+            keyboard->setKeyPressBaseOctave(kbBaseOctave);
         return true;
     }
     return false;
@@ -574,6 +658,7 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawSection(osc2.getBounds().expanded(2));
     drawSection(osc3.getBounds().expanded(2));
     drawSection(noiseBounds.expanded(2));
+    drawSection(subBounds.expanded(2));
     drawSection(karplusPanel.getBounds().expanded(2));
     drawSection(wtBounds.expanded(2));
 
@@ -645,17 +730,32 @@ void SynthyEditor::resized()
     osc3.setBounds(oscRow.reduced(3));
     area.removeFromTop(6);
 
-    // Noise | Karplus (String)
-    auto genRow = area.removeFromTop(140);
-    int genW = genRow.getWidth() / 3;
+    // Noise | Sub Osc | Karplus (String)
+    auto genRow = area.removeFromTop(150);
+    int genW = genRow.getWidth() / 4;
+
     auto noiseArea = genRow.removeFromLeft(genW).reduced(3);
     noiseBounds = noiseArea;
     noiseTitle.setBounds(noiseArea.removeFromTop(20));
-    noiseTypeSelector.setBounds(noiseArea.removeFromTop(24).reduced(20, 0));
+    noiseTypeSelector.setBounds(noiseArea.removeFromTop(24).reduced(12, 0));
     noiseArea.removeFromTop(6);
     noiseAmpLabel.setBounds(noiseArea.removeFromTop(14));
     noiseAmpKnob.setBounds(noiseArea.withSizeKeepingCentre(
-        juce::jmin(110, noiseArea.getWidth()), noiseArea.getHeight()));
+        juce::jmin(90, noiseArea.getWidth()), noiseArea.getHeight()));
+
+    // Sub oscillator
+    auto subArea = genRow.removeFromLeft(genW).reduced(3);
+    subBounds = subArea;
+    auto subTitleRow = subArea.removeFromTop(22);
+    subEnableBtn.setBounds(subTitleRow.removeFromLeft(44));
+    subTitle.setBounds(subTitleRow);
+    subWaveSelector.setBounds(subArea.removeFromTop(24).reduced(10, 0));
+    subOctaveSelector.setBounds(subArea.removeFromTop(24).reduced(10, 0));
+    subArea.removeFromTop(2);
+    subLevelLabel.setBounds(subArea.removeFromTop(14));
+    subLevelKnob.setBounds(subArea.withSizeKeepingCentre(
+        juce::jmin(80, subArea.getWidth()), subArea.getHeight()));
+
     karplusPanel.setBounds(genRow.reduced(3)); // remaining two columns (4 knobs)
     area.removeFromTop(6);
 
@@ -769,4 +869,11 @@ void SynthyEditor::resized()
         waveformDisplay->setBounds(vizRow.removeFromLeft(vizRow.getWidth() / 2).withTrimmedRight(3));
     if (spectrumDisplay)
         spectrumDisplay->setBounds(vizRow.withTrimmedLeft(3));
+
+    area.removeFromTop(6);
+
+    // ===== Keyboard (full width) =====
+    auto kbRow = area.removeFromTop(72).reduced(3, 0);
+    if (keyboard)
+        keyboard->setBounds(kbRow.reduced(2));
 }

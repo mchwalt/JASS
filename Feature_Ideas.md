@@ -1,6 +1,21 @@
 # Synthy – Feature Ideas & Roadmap
 
-Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Coolness ★ … ★★★★★
+Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Coolness ★ … ★★★★★
+
+> **Fokus:** Es wird nur noch die **C++ (JUCE)** App weiterentwickelt; die C# App ist eingefroren.
+> Das gemeinsame `.synthy`-Preset-Format wird weiter gepflegt.
+
+---
+
+## ✅ Neu in C++ (seit C#-Einfrieren)
+
+| Feature | Was es macht |
+|---|---|
+| **Sub-Oszillator** | Sine/Square, −1/−2 Oktav, folgt OSC-1-Tonhöhe → fetter Bass |
+| **On-Screen-Klaviatur** | spielbar per Maus & Computertasten (z/x = Oktave); löst ADSR pro Note aus |
+| **Tonhöhen-Transponierung** | gespielte Note transponiert alle Erzeuger relativ zu C4 (FREQ-Knöpfe = Grundklang) |
+| **FREQ-Regler-Anzeige** | aktive OSC-FREQ-Regler zeigen beim Spielen die gespielte Frequenz, danach zurück zur Basis |
+| **Auto-Play automatisch** | Drone (eigener MIDI-Kanal) beim Aktivieren einer Quelle; verstummt beim Spielen, kehrt beim erneuten Aktivieren zurück |
 
 ---
 
@@ -26,9 +41,9 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 
 ## 🎯 Als Nächstes empfohlen
 
-1. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
-2. **Sub-Oszillator** – dedizierter Bass mit einem Klick (★ / ★★★★)
-3. **Bitcrusher** – Bit-/Samplerate-Reduktion → Lo-Fi (★ / ★★★★)
+1. **Bitcrusher** – Bit-/Samplerate-Reduktion → Lo-Fi (★ / ★★★★)
+2. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
+3. **Tempo-Sync** – LFO & Delay an BPM koppeln (★★ / ★★★★)
 
 ---
 
@@ -40,7 +55,7 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Granular-Synthese** | Sample in Körner zerlegen, streuen/pitchen → Clouds, Texturen | ★★★★ | ★★★★★ |
 | **Formant-/Vokal-Filter** | morpht A-E-I-O-U → „sprechender" Synth (Helm/Odin haben das) | ★★★ | ★★★★★ |
 | **Modal-Synthese** | Karplus-Erweiterung für Glocken/Mallets (Resonatoren) | ★★★ | ★★★★ |
-| **Sub-Oszillator** | dedizierter −1/−2 Oktav Sine/Square → fetter Bass | ★ | ★★★★ |
+| ~~Sub-Oszillator~~ | ✅ umgesetzt (C++) – Sine/Square, −1/−2 Oktav | – | – |
 
 ## 🎛️ Neue Effekte
 
@@ -77,8 +92,7 @@ Stand: 2026-05-26. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 
 ---
 
-## 🔗 Cross-Projekt (das Zwei-Sprachen-Setup)
+## 🔗 Cross-Projekt
 
-- ✅ **Gemeinsames Preset-Format** – erledigt (`.synthy` + LiveState)
-- ✅ **C++ auf C#-Stand gebracht** – Engine-Parität erreicht (MixMode, per-OSC-Unison, Distortion-Typen)
-- **Offen:** neue Features konsequent in *beiden* Apps spiegeln, damit Presets verlustfrei bleiben
+- ✅ **Gemeinsames Preset-Format** – `.synthy` + LiveState, wird in C++ weiter gepflegt
+- **C# ist eingefroren** – Entwicklung läuft nur noch in C++ (kein Spiegeln mehr). Format bleibt rückwärtskompatibel (fehlende Felder = Defaults).

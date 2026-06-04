@@ -7,7 +7,8 @@
 
 class SynthyProcessor : public juce::AudioProcessor,
                         private juce::Timer,
-                        private juce::ValueTree::Listener
+                        private juce::ValueTree::Listener,
+                        private juce::MidiKeyboardState::Listener
 {
 public:
     SynthyProcessor();
@@ -41,8 +42,10 @@ public:
     // Randomize all parameters (with guards so the result stays audible).
     void randomize();
 
-    // Re-pluck the Karplus string on every voice (handled on the audio thread).
-    void pluckString() { pluckRequested = true; }
+    // Pitch ratio of the note currently being played (relative to C4 = note 60);
+    // 1.0 when only the drone or nothing sounds. Used by the editor so the OSC
+    // FREQ knobs can display the actually-played frequency.
+    float getCurrentNoteRatio() const { return currentNoteRatio.load(); }
 
 private:
     juce::Synthesiser synth;
@@ -50,7 +53,20 @@ private:
     juce::MidiKeyboardState keyboardState;
     WaveformCapture waveformCapture { 512 };
     bool autoNoteOn = false;
-    std::atomic<bool> pluckRequested { false };
+
+    // Auto-play drone is automatic now: ON until the user plays a key, back ON
+    // when a sound generator is (re)activated. No user-facing parameter. The drone
+    // lives on its own MIDI channel so it never collides with played notes.
+    static constexpr int kDroneChannel = 16;
+    static constexpr int kDroneNote = 60;        // C4 → transpose ratio 1.0
+    std::atomic<bool> autoPlayEnabled { true };
+    unsigned prevSourcesMask = 0;                // for rising-edge "generator enabled" detection
+
+    std::atomic<float> currentNoteRatio { 1.0f };           // played note vs C4 (FREQ display); 1.0 = base
+    std::atomic<std::uint64_t> heldNotesLo { 0 }, heldNotesHi { 0 };  // bitset of held user notes
+
+    void handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNote, float) override;
+    void handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNote, float) override;
 
     // Shared live-state persistence (see PresetIO::liveStateFile)
     std::atomic<bool> liveDirty { false };

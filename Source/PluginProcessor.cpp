@@ -11,6 +11,9 @@ SynthyProcessor::SynthyProcessor()
         synth.addVoice(new SynthVoice());
     synth.addSound(new SynthSound());
 
+    // Listen for keypresses so the auto-play drone can step aside when played.
+    keyboardState.addListener(this);
+
     // The shared LiveState bridges the two standalone apps (C# <-> C++). In a
     // plugin host (e.g. REAPER) the host owns project state, so leave it alone.
     if (wrapperType == wrapperType_Standalone)
@@ -30,12 +33,40 @@ SynthyProcessor::SynthyProcessor()
 
 SynthyProcessor::~SynthyProcessor()
 {
+    keyboardState.removeListener(this);
     if (wrapperType == wrapperType_Standalone)
     {
         stopTimer();
         apvts.state.removeListener(this);
         saveLiveState();
     }
+}
+
+void SynthyProcessor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNote, float)
+{
+    if (midiChannel == kDroneChannel)
+    {
+        currentNoteRatio.store(1.0f);   // our drone note (C4) → FREQ knobs show base
+        return;
+    }
+
+    // A real keypress silences the auto-play drone and, while held, drives the
+    // FREQ-knob display to the played frequency (it reverts to base on release).
+    autoPlayEnabled.store(false);
+    if (midiNote >= 0 && midiNote < 128)
+        (midiNote < 64 ? heldNotesLo : heldNotesHi).fetch_or(1ULL << (midiNote & 63));
+    currentNoteRatio.store((float) (juce::MidiMessage::getMidiNoteInHertz(midiNote)
+                                  / juce::MidiMessage::getMidiNoteInHertz(60)));
+}
+
+void SynthyProcessor::handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNote, float)
+{
+    if (midiChannel == kDroneChannel)
+        return;
+    if (midiNote >= 0 && midiNote < 128)
+        (midiNote < 64 ? heldNotesLo : heldNotesHi).fetch_and(~(1ULL << (midiNote & 63)));
+    if (heldNotesLo.load() == 0 && heldNotesHi.load() == 0)
+        currentNoteRatio.store(1.0f);   // nothing held → FREQ knobs back to base
 }
 
 void SynthyProcessor::timerCallback()
@@ -97,39 +128,37 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
 
-    // Auto-play: trigger note when any sound source is enabled
-    bool anyOscOn = false;
+    // Which sound generators are currently enabled (one bit each).
+    unsigned mask = 0;
     for (int i = 1; i <= 3; ++i)
-        if (*apvts.getRawParameterValue(Parameters::ID::oscOn(i)) > 0.5f)
-            anyOscOn = true;
+        if (*apvts.getRawParameterValue(Parameters::ID::oscOn(i)) > 0.5f) mask |= (1u << i);
+    if (*apvts.getRawParameterValue(Parameters::ID::karplusOn)  > 0.5f) mask |= (1u << 4);
+    if (*apvts.getRawParameterValue(Parameters::ID::noiseType)  > 0.5f) mask |= (1u << 5);
+    if (*apvts.getRawParameterValue(Parameters::ID::wavetableOn) > 0.5f) mask |= (1u << 6);
+    if (*apvts.getRawParameterValue(Parameters::ID::subOn)      > 0.5f) mask |= (1u << 7);
 
-    if (*apvts.getRawParameterValue(Parameters::ID::karplusOn) > 0.5f)
-        anyOscOn = true;
-    if (*apvts.getRawParameterValue(Parameters::ID::noiseType) > 0.5f)
-        anyOscOn = true;
-    if (*apvts.getRawParameterValue(Parameters::ID::wavetableOn) > 0.5f)
-        anyOscOn = true;
+    // A newly enabled generator re-arms the auto-play drone (rising edge).
+    if ((mask & ~prevSourcesMask) != 0)
+        autoPlayEnabled.store(true);
+    prevSourcesMask = mask;
 
-    if (anyOscOn && !autoNoteOn)
+    // Drone note 60 (C4) while auto-play is armed and a source is on. The user
+    // playing a key clears autoPlayEnabled (see handleNoteOn) → drone steps aside.
+    bool wantDrone = autoPlayEnabled.load() && (mask != 0);
+    bool droneJustTriggered = false;
+    if (wantDrone && !autoNoteOn)
     {
-        keyboardState.noteOn(1, 60, 0.8f);
+        keyboardState.noteOn(kDroneChannel, kDroneNote, 0.8f);
         autoNoteOn = true;
+        droneJustTriggered = true;
     }
-    else if (!anyOscOn && autoNoteOn)
+    else if (!wantDrone && autoNoteOn)
     {
-        keyboardState.noteOff(1, 60, 0.0f);
+        keyboardState.noteOff(kDroneChannel, kDroneNote, 0.0f);
         autoNoteOn = false;
     }
 
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
-
-    // Manual re-pluck (PLUCK button / spacebar): re-excite the Karplus string so
-    // it rings out with its own natural decay (the amp envelope is NOT re-gated,
-    // otherwise a short decay/low sustain would choke the string). Audio thread.
-    if (pluckRequested.exchange(false))
-        for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
-                voice->getKarplus().pluck();
 
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
@@ -141,9 +170,22 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getChorus(), voice->getReverb(),
                                      voice->getLFO(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
-                                     voice->getMixMode());
+                                     voice->getMixMode(),
+                                     voice->getSubOsc(), voice->getSubOctaveRef());
+
+    // Don't let the auto-play drone pluck the Karplus string (it's played via
+    // the keyboard). Suppress the pluck only for the drone's own note-on.
+    if (droneJustTriggered)
+        for (int i = 0; i < synth.getNumVoices(); ++i)
+            if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+                v->setPluckEnabled(false);
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+
+    if (droneJustTriggered)
+        for (int i = 0; i < synth.getNumVoices(); ++i)
+            if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+                v->setPluckEnabled(true);
 
     // Capture waveform before master volume
     auto* channelData = buffer.getReadPointer(0);

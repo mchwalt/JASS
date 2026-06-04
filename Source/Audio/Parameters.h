@@ -47,6 +47,12 @@ namespace Parameters
         constexpr const char* wavefoldSymmetry = "wavefoldSymmetry";
         constexpr const char* wavefoldMix      = "wavefoldMix";
 
+        // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
+        constexpr const char* subOn     = "subOn";
+        constexpr const char* subWave   = "subWave";
+        constexpr const char* subOctave = "subOctave";
+        constexpr const char* subLevel  = "subLevel";
+
         // Delay
         constexpr const char* delayOn       = "delayOn";
         constexpr const char* delayTime     = "delayTime";
@@ -206,6 +212,12 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::wavetableUniVoices, 1), "Wavetable Uni Voices", 1, 7, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableUniDetune, 1), "Wavetable Uni Detune", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
 
+        // Sub oscillator
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::subOn, 1), "Sub On", false));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subWave, 1), "Sub Wave", juce::StringArray{"Sine", "Square"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subOctave, 1), "Sub Octave", juce::StringArray{"-1 Oct", "-2 Oct"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::subLevel, 1), "Sub Level", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+
         // Master
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
@@ -221,7 +233,7 @@ namespace Parameters
                               ChorusEffect& chorus, ReverbEffect& reverb,
                               LFO& lfo, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
-                              MixMode& mixMode)
+                              MixMode& mixMode, Oscillator& subOsc, int& subOctave)
     {
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
 
@@ -292,5 +304,12 @@ namespace Parameters
         wavetable.setAmplitude(*apvts.getRawParameterValue(ID::wavetableAmp));
         wavetable.setUnisonCount(static_cast<int>(*apvts.getRawParameterValue(ID::wavetableUniVoices)));
         wavetable.setDetuneAmount(*apvts.getRawParameterValue(ID::wavetableUniDetune) * 100.0);
+
+        subOsc.setEnabled(*apvts.getRawParameterValue(ID::subOn) > 0.5f);
+        subOsc.setWaveform(static_cast<int>(*apvts.getRawParameterValue(ID::subWave)) == 0
+                               ? WaveformType::Sine : WaveformType::Square);
+        subOsc.setAmplitude(*apvts.getRawParameterValue(ID::subLevel));
+        // Choice 0 -> -1 octave, 1 -> -2 octaves
+        subOctave = -(static_cast<int>(*apvts.getRawParameterValue(ID::subOctave)) + 1);
     }
 }

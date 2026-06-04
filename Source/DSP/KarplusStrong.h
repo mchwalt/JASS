@@ -15,6 +15,7 @@ public:
     void setDamping(double d) { damping = d; }   // 0 = bright/long, 1 = muffled/short
     void setStretch(double s) { stretch = s; }   // 0 = normal, 1 = inharmonic/bell-like
     void setSampleRate(double sr) { sampleRate = sr; }
+    double getFrequency() const { return frequency; }
 
     // Trigger (pluck) the string — fills the delay buffer with noise.
     void pluck()

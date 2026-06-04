@@ -10,6 +10,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     currentSampleRate = sampleRate;
     for (auto& osc : oscillators)
         osc.setSampleRate(sampleRate);
+    subOsc.setSampleRate(sampleRate);
     envelope.setSampleRate(sampleRate);
     filter.setSampleRate(sampleRate);
     lfo.setSampleRate(sampleRate);
@@ -20,20 +21,36 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     reverb.prepare(sampleRate);
 }
 
-void SynthVoice::startNote(int midiNoteNumber, float velocity,
+void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
                            juce::SynthesiserSound*, int)
 {
-    double freq = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber);
-    oscillators[0].setFrequency(freq);
-    oscillators[0].setAmplitude(static_cast<double>(velocity));
-    oscillators[0].reset();
+    // All generators transpose relative to C4 (note 60); the FREQ knobs define
+    // the sound AT C4. Note 60 (the auto-play drone) gives ratio 1.0 = no shift.
+    transposeRatio = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber)
+                   / juce::MidiMessage::getMidiNoteInHertz(60);
+
+    for (auto& osc : oscillators)
+        osc.reset();
+    subOsc.reset();
     lfo.reset();
     noise.reset();
-    karplus.pluck();
     wavetable.reset();
+    if (pluckEnabled)
+        pluckKarplus();   // pluck at the transposed pitch (skipped for the drone)
 
     envelope.gateOn();
     noteOn = true;
+}
+
+void SynthVoice::pluckKarplus()
+{
+    // The string's pitch is fixed at pluck time by its delay-line length, so
+    // apply the transposition here (then restore the knob value to avoid
+    // compounding on the next pluck).
+    double knob = karplus.getFrequency();
+    karplus.setFrequency(knob * transposeRatio);
+    karplus.pluck();
+    karplus.setFrequency(knob);
 }
 
 void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
@@ -54,10 +71,18 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     if (!noteOn && envelope.getStage() == AdsrEnvelope::Stage::Idle)
         return;
 
-    // Store base values before LFO modulation
+    // Capture the knob frequencies; everything plays transposed by the note.
     for (int i = 0; i < 3; ++i)
         baseFrequencies[i] = oscillators[i].getFrequency();
+    double baseWtFreq = wavetable.getFrequency();
     baseCutoff = filter.getCutoff();
+
+    // Apply the note transposition for this block.
+    for (int i = 0; i < 3; ++i)
+        oscillators[i].setFrequency(baseFrequencies[i] * transposeRatio);
+    wavetable.setFrequency(baseWtFreq * transposeRatio);
+    // Sub-oscillator tracks OSC 1, shifted down by subOctave octave(s).
+    subOsc.setFrequency(baseFrequencies[0] * transposeRatio * std::pow(2.0, subOctave));
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
@@ -70,7 +95,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             // Modulate frequency by semitones (±12 semitones at full depth)
             double factor = std::pow(2.0, lfoValue * 12.0 / 12.0);
             for (int i = 0; i < 3; ++i)
-                oscillators[i].setFrequency(baseFrequencies[i] * factor);
+                oscillators[i].setFrequency(baseFrequencies[i] * transposeRatio * factor);
         }
         else if (lfoTarget == LFOTarget::FilterCutoff)
         {
@@ -104,10 +129,11 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 mixedSample += osc.nextSample();
         }
 
-        // Add noise generator + Karplus-Strong string + wavetable oscillator
+        // Add noise + Karplus string + wavetable + sub-oscillator
         mixedSample += noise.nextSample();
         mixedSample += karplus.nextSample();
         mixedSample += wavetable.nextSample();
+        mixedSample += subOsc.nextSample();
 
         // Wavefolding (West-Coast timbre): fold the raw signal BEFORE the filter
         // so the filter can tame the harsh upper harmonics it generates.
@@ -142,8 +168,9 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         }
     }
 
-    // Restore base values
+    // Restore the knob frequencies (applyToVoice resets them next block anyway)
     for (int i = 0; i < 3; ++i)
         oscillators[i].setFrequency(baseFrequencies[i]);
+    wavetable.setFrequency(baseWtFreq);
     filter.setCutoff(baseCutoff);
 }

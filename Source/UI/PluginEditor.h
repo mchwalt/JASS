@@ -20,7 +20,16 @@ public:
     OscillatorPanel(juce::AudioProcessorValueTreeState& apvts, int oscIndex,
                     juce::Colour color);
 
+    // Make the FREQ knob show the actually-played frequency: display = base × ratio.
+    // The underlying parameter stays the C4 base value (turning the knob writes
+    // display ÷ ratio back as the new base).
+    void setPlayedRatio(double ratio);
+
 private:
+    juce::AudioProcessorValueTreeState& apvts;
+    juce::String freqId;
+    double playedRatio = 1.0;
+
     juce::ToggleButton enableBtn;
     juce::Label title;
     juce::ComboBox waveSelector;
@@ -28,7 +37,7 @@ private:
     juce::Label freqLabel, ampLabel, uniVoicesLabel, uniDetuneLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> enableAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> waveAttach;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> freqAttach, ampAttach, uniVoicesAttach, uniDetuneAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> ampAttach, uniVoicesAttach, uniDetuneAttach;
 
     void resized() override;
 };
@@ -59,15 +68,17 @@ private:
     void resized() override;
 };
 
-class SynthyEditor : public juce::AudioProcessorEditor
+class SynthyEditor : public juce::AudioProcessorEditor,
+                     private juce::Timer
 {
 public:
     explicit SynthyEditor(SynthyProcessor&);
-    ~SynthyEditor() override { setLookAndFeel(nullptr); }
+    ~SynthyEditor() override { stopTimer(); setLookAndFeel(nullptr); }
 
     void paint(juce::Graphics&) override;
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
+    void timerCallback() override;
 
 private:
     SynthyProcessor& processor;
@@ -130,6 +141,16 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> noiseTypeAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> noiseAmpAttach;
 
+    // Sub oscillator (inline: ON + wave/octave combos + LEVEL knob)
+    juce::Label subTitle;
+    juce::ToggleButton subEnableBtn;
+    juce::ComboBox subWaveSelector, subOctaveSelector;
+    SynthySlider subLevelKnob;
+    juce::Label subLevelLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> subEnableAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> subWaveAttach, subOctaveAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> subLevelAttach;
+
     // Wavetable
     juce::Label wtTitle;
     juce::ToggleButton wtEnableBtn;
@@ -155,10 +176,14 @@ private:
     std::unique_ptr<WaveformDisplay> waveformDisplay;
     std::unique_ptr<SpectrumDisplay> spectrumDisplay;
 
+    // On-screen keyboard (auto-play drone is handled automatically by the processor)
+    std::unique_ptr<juce::MidiKeyboardComponent> keyboard;
+    int kbBaseOctave = 4;   // computer-keyboard octave (z / x shift it)
+
     juce::Slider& setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 
     // Layout bounds for paint()
-    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds;
+    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds;
     // Zone separator headers (TONERZEUGER / MODULATION / SOUNDVERARBEITUNG)
     juce::Rectangle<int> genHeaderBounds, modHeaderBounds, procHeaderBounds;
 
