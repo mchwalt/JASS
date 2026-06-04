@@ -42,6 +42,9 @@ public:
     // Randomize all parameters (with guards so the result stays audible).
     void randomize();
 
+    // Reset everything to defaults, then enable only OSC 1 (auto-play drone).
+    void resetToDefault();
+
     // Pitch ratio of the note currently being played (relative to C4 = note 60);
     // 1.0 when only the drone or nothing sounds. Used by the editor so the OSC
     // FREQ knobs can display the actually-played frequency.

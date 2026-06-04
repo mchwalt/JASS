@@ -42,8 +42,9 @@ identischen Einstellungen direkt gegenüberstellen.
 - **Bitcrusher** — Lo-Fi: Bit-Tiefe (BITS) + Samplerate (RATE) reduzieren, Mix
 - **Effekte** — Delay, Chorus, Reverb
 - **Visualisierung** — Oszilloskop + Spektrum-Analyzer (FFT)
-- **Randomize** — würfelt per Knopfdruck einen zufälligen, hörbaren Patch
-- **Presets** im gemeinsamen `.synthy`-Format + geteilter LiveState
+- **Randomize** — würfelt per Knopfdruck einen zufälligen, hörbaren Patch (alle Parameter, mit Sanity-Guards)
+- **Reset** — alles auf Default, nur OSC 1 an (Auto-Play-Drone, halbe Lautstärke)
+- **Presets** im gemeinsamen `.synthy`-Format + geteilter LiveState; der aktuell geladene Preset-Name wird im Header angezeigt
 
 ## Gemeinsames Preset-Format & LiveState
 

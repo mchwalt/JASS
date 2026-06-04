@@ -113,6 +113,27 @@ void SynthyProcessor::randomize()
 
     // Pick a valid built-in wavetable bank (0..5), not an empty WAV slot.
     set(ID::wavetableBank, (float) rng.nextInt(juce::Range<int>(0, 6)));
+
+    // Keep the newer effects/sources tasteful so random patches stay musical
+    // (their On/Off stays random; only the extreme ranges are reined in).
+    set(ID::wavefoldDrive, rng.nextFloat() * 0.6f);
+    set(ID::bitcrushBits, (float) rng.nextInt(juce::Range<int>(4, 13)));  // 4..12 bit
+    set(ID::bitcrushRate, (float) rng.nextInt(juce::Range<int>(1, 9)));   // 1..8x
+    set(ID::subLevel,     0.3f + rng.nextFloat() * 0.4f);                 // 0.3..0.7
+    set(ID::subOctave,    (float) rng.nextInt(juce::Range<int>(0, 2)));   // -1/-2 only
+}
+
+void SynthyProcessor::resetToDefault()
+{
+    // Reset every parameter to its default, then enable only OSC 1 so the
+    // auto-play drone has exactly one (half-volume) source.
+    for (auto* p : getParameters())
+        p->setValueNotifyingHost(p->getDefaultValue());
+
+    if (auto* osc1On = apvts.getParameter(Parameters::ID::oscOn(1)))
+        osc1On->setValueNotifyingHost(1.0f);
+
+    autoPlayEnabled.store(true);
 }
 
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)

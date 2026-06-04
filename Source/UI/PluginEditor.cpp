@@ -444,6 +444,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
             if (f == juce::File{}) return;
             if (! f.hasFileExtension("synthy")) f = f.withFileExtension("synthy");
             PresetIO::saveToFile(processor.getAPVTS(), f, f.getFileNameWithoutExtension());
+            setPresetName(f.getFileNameWithoutExtension());
         });
     };
     loadBtn.onClick = [this]
@@ -456,12 +457,24 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
             auto f = fc.getResult();
             if (f == juce::File{}) return;
             PresetIO::loadFromFile(processor.getAPVTS(), f);
+            setPresetName(f.getFileNameWithoutExtension());
         });
     };
 
     addAndMakeVisible(randomBtn);
     randomBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff6d28d9));
-    randomBtn.onClick = [this] { processor.randomize(); };
+    randomBtn.onClick = [this] { processor.randomize(); setPresetName("Random"); };
+
+    addAndMakeVisible(resetBtn);
+    resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
+    resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init"); };
+
+    // Current-preset display
+    presetNameLabel.setFont(juce::FontOptions(11.0f, juce::Font::bold));
+    presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xff888888));
+    presetNameLabel.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(presetNameLabel);
+    setPresetName("LiveState");
 
     // Noise
     auto noiseGrey = juce::Colour(0xff9ca3af);
@@ -615,6 +628,11 @@ void SynthyEditor::timerCallback()
     osc3.setPlayedRatio(ratio);
 }
 
+void SynthyEditor::setPresetName(const juce::String& name)
+{
+    presetNameLabel.setText("Preset: " + name, juce::dontSendNotification);
+}
+
 void SynthyEditor::refreshBankSelector()
 {
     wtBankSelector.clear(juce::dontSendNotification);
@@ -700,17 +718,22 @@ void SynthyEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // ===== Header — Save/Load/Random left, Title center, Master right =====
+    // ===== Header — Save/Load/Random/Reset left, Title+Preset center, Master right =====
     auto headerRow = area.removeFromTop(88);
-    auto leftBtns = headerRow.removeFromLeft(120);
-    auto topBtns = leftBtns.removeFromTop(34);
-    saveBtn.setBounds(topBtns.removeFromLeft(topBtns.getWidth() / 2).reduced(3, 3));
-    loadBtn.setBounds(topBtns.reduced(3, 3));
-    randomBtn.setBounds(leftBtns.removeFromTop(34).reduced(3, 3));
+    auto leftBtns = headerRow.removeFromLeft(150);
+    auto row1 = leftBtns.removeFromTop(30);
+    saveBtn.setBounds(row1.removeFromLeft(row1.getWidth() / 2).reduced(3, 2));
+    loadBtn.setBounds(row1.reduced(3, 2));
+    auto row2 = leftBtns.removeFromTop(30);
+    randomBtn.setBounds(row2.removeFromLeft(row2.getWidth() / 2).reduced(3, 2));
+    resetBtn.setBounds(row2.reduced(3, 2));
     auto masterArea = headerRow.removeFromRight(100);
     masterLabel.setBounds(masterArea.removeFromTop(14));
     masterKnob.setBounds(masterArea);
-    g_titleBounds = headerRow;
+    // Center: SYNTHY title (top) + current-preset name (below)
+    auto centerArea = headerRow;
+    g_titleBounds = centerArea.removeFromTop(centerArea.getHeight() - 18);
+    presetNameLabel.setBounds(centerArea);
     area.removeFromTop(4);
 
     // ============================================================
