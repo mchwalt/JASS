@@ -446,7 +446,16 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     resoAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "filterReso", resoKnob);
 
     // filterType excluded (its "Off" = bypass) — reset must not disable the filter.
-    initResetButton(filterResetBtn, orange, {"filterCutoff", "filterReso"});
+    // The cutoff default is TYPE-DEPENDENT: a Lowpass wants a moderate cutoff
+    // (550 Hz = warm, body kept) while a Highpass wants a low one (150 Hz = just
+    // de-rumble, sound kept). Reso resets normally; cutoff is set in the afterFn.
+    initResetButton(filterResetBtn, orange, {"filterReso"}, [this]
+    {
+        auto& a = processor.getAPVTS();
+        const bool highpass = (int) *a.getRawParameterValue("filterType") == 2;  // 0 Off, 1 LP, 2 HP
+        if (auto* p = a.getParameter("filterCutoff"))
+            p->setValueNotifyingHost(p->convertTo0to1(highpass ? 150.0f : 550.0f));
+    });
 
     // Distortion (inline)
     auto distRed = juce::Colour(0xffef4444);
