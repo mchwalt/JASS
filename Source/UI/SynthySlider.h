@@ -26,6 +26,15 @@ public:
     void setKnobDiameter(int d) { knobDiameter = d; }
     int  getKnobDiameter() const { return knobDiameter; }
 
+    // Live modulation amount (-1..+1) for the animated ring the LookAndFeel draws
+    // around the knob (Vital-style). 0 = no ring. Set by the editor's timer from
+    // the current LFO value; repaints only on a meaningful change.
+    void setModAmount(float a)
+    {
+        if (std::abs(a - modAmount) > 0.003f) { modAmount = a; repaint(); }
+    }
+    float getModAmount() const { return modAmount; }
+
     // Overrides the per-notch fine step for the mouse wheel. Use when the
     // parameter's automation granularity is much finer than is useful for the
     // wheel (e.g. ADSR times have a 1 ms interval but want ~10 ms wheel steps).
@@ -81,4 +90,5 @@ public:
 private:
     int knobDiameter = KnobSize::Medium;
     double wheelStep = 0.0;   // 0 = use the parameter's own interval
+    float modAmount = 0.0f;   // live LFO modulation for the ring (-1..+1)
 };

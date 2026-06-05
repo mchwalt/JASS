@@ -199,6 +199,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
             voice->prepareToPlay(sampleRate, samplesPerBlock);
 
     stereoWidth.prepare(sampleRate);
+    uiLfo.setSampleRate(sampleRate);
 }
 
 void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -265,6 +266,20 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         for (int i = 0; i < synth.getNumVoices(); ++i)
             if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
                 v->setPluckEnabled(true);
+
+    // Advance the display-only LFO so the editor can draw live modulation rings.
+    // Mirrors the patch LFO params; runs regardless of whether a note sounds.
+    {
+        using namespace Parameters;
+        uiLfo.setRate(*apvts.getRawParameterValue(ID::lfoRate));
+        uiLfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
+        uiLfo.setWaveform((LFOWaveform)(int) *apvts.getRawParameterValue(ID::lfoWave));
+        uiLfo.setTarget((LFOTarget)(int) *apvts.getRawParameterValue(ID::lfoTarget));
+        float v = 0.0f;
+        for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
+            v = uiLfo.process();
+        lfoDisplayValue.store(v);
+    }
 
     // Capture waveform before master volume (still mono content -> the scope
     // shows the dry mono mix, unaffected by the stereo stage below).

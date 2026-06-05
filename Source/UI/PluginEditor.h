@@ -25,6 +25,10 @@ public:
     // display ÷ ratio back as the new base).
     void setPlayedRatio(double ratio);
 
+    // Live LFO modulation rings (set by the editor timer; 0 = no ring).
+    void setFreqMod(float a) { freqKnob.setModAmount(a); }
+    void setAmpMod(float a)  { ampKnob.setModAmount(a); }
+
 private:
     juce::AudioProcessorValueTreeState& apvts;
     juce::String freqId;

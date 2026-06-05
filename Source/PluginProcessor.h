@@ -51,6 +51,11 @@ public:
     // FREQ knobs can display the actually-played frequency.
     float getCurrentNoteRatio() const { return currentNoteRatio.load(); }
 
+    // Current LFO oscillation value (-1..+1, already scaled by depth) for the
+    // editor's live modulation rings. Driven by a dedicated display LFO that
+    // mirrors the patch's LFO params and runs even when no note sounds.
+    float getLfoDisplayValue() const { return lfoDisplayValue.load(); }
+
     // Name of the currently loaded/active preset (shown in the header). It is
     // persisted into the LiveState file so it survives a restart. Touched only
     // on the message thread (editor + LiveState save).
@@ -73,6 +78,8 @@ private:
     juce::MidiKeyboardState keyboardState;
     WaveformCapture waveformCapture { 512 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
+    LFO uiLfo;                 // display-only LFO mirroring the patch LFO (for the rings)
+    std::atomic<float> lfoDisplayValue { 0.0f };
     bool autoNoteOn = false;
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON

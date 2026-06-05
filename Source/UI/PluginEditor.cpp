@@ -36,6 +36,25 @@ void SynthyLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int wi
     g.fillEllipse(centreX - radius * 0.8f, centreY - radius * 0.8f,
                   radius * 1.6f, radius * 1.6f);
 
+    // Live modulation ring (Vital-style): an arc just outside the knob that
+    // extends from the set value towards where the LFO is currently pushing it.
+    if (auto* ss = dynamic_cast<SynthySlider*>(&slider))
+    {
+        float mod = ss->getModAmount();
+        if (std::abs(mod) > 0.003f)
+        {
+            auto sweep = rotaryEndAngle - rotaryStartAngle;
+            auto target = juce::jlimit(rotaryStartAngle, rotaryEndAngle, angle + mod * sweep);
+            auto ringR = radius + 5.0f;
+            juce::Path arc;
+            arc.addCentredArc(centreX, centreY, ringR, ringR, 0.0f,
+                              juce::jmin(angle, target), juce::jmax(angle, target), true);
+            g.setColour(juce::Colour(0xff22d3ee).withAlpha(0.45f));   // MODULATION cyan (subtle)
+            g.strokePath(arc, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved,
+                                                   juce::PathStrokeType::rounded));
+        }
+    }
+
     // Indicator line
     auto lineLength = radius * 0.6f;
     auto lineX = centreX + lineLength * std::sin(angle);
@@ -672,6 +691,16 @@ void SynthyEditor::timerCallback()
     osc1.setPlayedRatio(ratio);
     osc2.setPlayedRatio(ratio);
     osc3.setPlayedRatio(ratio);
+
+    // Live modulation rings: route the current LFO value to whichever knob(s) the
+    // LFO targets (0 Off, 1 Frequency, 2 Amplitude, 3 FilterCutoff); 0 elsewhere.
+    float lfo = processor.getLfoDisplayValue();
+    int target = (int) *processor.getAPVTS().getRawParameterValue("lfoTarget");
+    float freqMod = (target == 1) ? lfo : 0.0f;
+    float ampMod  = (target == 2) ? lfo : 0.0f;
+    osc1.setFreqMod(freqMod); osc2.setFreqMod(freqMod); osc3.setFreqMod(freqMod);
+    osc1.setAmpMod(ampMod);   osc2.setAmpMod(ampMod);   osc3.setAmpMod(ampMod);
+    cutoffKnob.setModAmount((target == 3) ? lfo : 0.0f);
 
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.
