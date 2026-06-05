@@ -123,8 +123,13 @@ namespace Parameters
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-        // Oscillators
-        float defaultFreqs[] = { 261.63f, 329.63f, 392.0f };
+        // Oscillators — default tuning is an OCTAVE STACK (not a chord): OSC1
+        // at C4 (= the played note, since pitch transposes relative to C4),
+        // OSC2 one octave up (brilliance), OSC3 one octave down (body/sub).
+        // Octaves (2:1) stay consonant with ANY note or chord the user plays,
+        // so all three together sound full but never "off" — unlike the old
+        // C-E-G major triad, which forced a major chord onto every key.
+        float defaultFreqs[] = { 261.63f, 523.25f, 130.81f };  // C4, C5, C3
         float defaultAmps[]  = { 0.5f, 0.5f, 0.5f };  // all amp knobs default to half
 
         for (int i = 1; i <= 3; ++i)
