@@ -150,13 +150,15 @@ void SynthyProcessor::randomize()
 
 void SynthyProcessor::resetToDefault()
 {
-    // Reset every parameter to its default, then enable only OSC 1 so the
-    // auto-play drone has exactly one (half-volume) source.
+    // Reset every parameter to its default, then enable all three oscillators
+    // so the octave-stack default tuning (C3/C4/C5) sounds full immediately —
+    // the auto-play drone now drives the whole stack.
     for (auto* p : getParameters())
         p->setValueNotifyingHost(p->getDefaultValue());
 
-    if (auto* osc1On = apvts.getParameter(Parameters::ID::oscOn(1)))
-        osc1On->setValueNotifyingHost(1.0f);
+    for (int i = 1; i <= 3; ++i)
+        if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
+            oscOn->setValueNotifyingHost(1.0f);
 
     autoPlayEnabled.store(true);
     currentPresetName = "Init";

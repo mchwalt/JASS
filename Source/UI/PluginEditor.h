@@ -36,6 +36,7 @@ private:
 
     juce::ToggleButton enableBtn;
     juce::Label title;
+    juce::TextButton freqResetBtn;   // ↺ — restore this OSC's default tuning
     juce::ComboBox waveSelector;
     SynthySlider freqKnob, ampKnob, uniVoicesKnob, uniDetuneKnob;
     juce::Label freqLabel, ampLabel, uniVoicesLabel, uniDetuneLabel;

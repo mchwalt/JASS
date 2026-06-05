@@ -86,6 +86,21 @@ OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
     title.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(title);
 
+    // Small "↺" button — restores THIS oscillator's default tuning (its base
+    // FREQ) on one click, without touching the other two. Handy after the
+    // played-note display has been dragged around.
+    freqResetBtn.setButtonText(juce::String::fromUTF8("\xE2\x86\xBA"));
+    freqResetBtn.setTooltip("Reset tuning to default");
+    freqResetBtn.setColour(juce::TextButton::buttonColourId, color.withAlpha(0.25f));
+    freqResetBtn.setColour(juce::TextButton::textColourOffId, color);
+    freqResetBtn.onClick = [this]
+    {
+        if (auto* p = this->apvts.getParameter(freqId))
+            p->setValueNotifyingHost(p->getDefaultValue());
+        setPlayedRatio(playedRatio);   // refresh the knob display right away
+    };
+    addAndMakeVisible(freqResetBtn);
+
     waveSelector.addItemList({"Sine", "Sawtooth", "Square", "Triangle"}, 1);
     addAndMakeVisible(waveSelector);
     waveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
@@ -162,6 +177,7 @@ void OscillatorPanel::resized()
     auto area = getLocalBounds().reduced(6);
     auto titleRow = area.removeFromTop(22);
     enableBtn.setBounds(titleRow.removeFromLeft(28));
+    freqResetBtn.setBounds(titleRow.removeFromRight(24).reduced(1));
     title.setBounds(titleRow);
     waveSelector.setBounds(area.removeFromTop(24).reduced(20, 0));
     area.removeFromTop(4);
