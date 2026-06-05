@@ -2,6 +2,28 @@
 #include "../DSP/WavetableBank.h"
 #include "../Audio/PresetIO.h"
 
+namespace
+{
+    // Reset a set of parameters to their default values (used by the per-
+    // generator "↺" buttons to restore one sound source to its factory state).
+    void resetParamsToDefault(juce::AudioProcessorValueTreeState& apvts,
+                              const juce::StringArray& ids)
+    {
+        for (const auto& id : ids)
+            if (auto* p = apvts.getParameter(id))
+                p->setValueNotifyingHost(p->getDefaultValue());
+    }
+
+    // Style a small "↺" reset button in the given accent colour.
+    void styleResetButton(juce::TextButton& b, juce::Colour c)
+    {
+        b.setButtonText(juce::String::fromUTF8("\xE2\x86\xBA"));
+        b.setTooltip("Reset this source to default");
+        b.setColour(juce::TextButton::buttonColourId, c.withAlpha(0.25f));
+        b.setColour(juce::TextButton::textColourOffId, c);
+    }
+}
+
 // --- LookAndFeel ---
 
 SynthyLookAndFeel::SynthyLookAndFeel()
@@ -86,20 +108,18 @@ OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
     title.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(title);
 
-    // Small "↺" button — restores THIS oscillator's default tuning (its base
-    // FREQ) on one click, without touching the other two. Handy after the
-    // played-note display has been dragged around.
-    freqResetBtn.setButtonText(juce::String::fromUTF8("\xE2\x86\xBA"));
-    freqResetBtn.setTooltip("Reset tuning to default");
-    freqResetBtn.setColour(juce::TextButton::buttonColourId, color.withAlpha(0.25f));
-    freqResetBtn.setColour(juce::TextButton::textColourOffId, color);
-    freqResetBtn.onClick = [this]
+    // Small "↺" button — restores this oscillator's sound parameters to
+    // default on one click, without touching the other two. The On toggle is
+    // deliberately EXCLUDED so a reset never switches the oscillator off.
+    styleResetButton(resetBtn, color);
+    juce::StringArray myParams { prefix + "Wave", prefix + "Freq",
+                                 prefix + "Amp", prefix + "UniVoices", prefix + "UniDetune" };
+    resetBtn.onClick = [this, myParams]
     {
-        if (auto* p = this->apvts.getParameter(freqId))
-            p->setValueNotifyingHost(p->getDefaultValue());
-        setPlayedRatio(playedRatio);   // refresh the knob display right away
+        resetParamsToDefault(this->apvts, myParams);
+        setPlayedRatio(playedRatio);   // refresh the FREQ knob display right away
     };
-    addAndMakeVisible(freqResetBtn);
+    addAndMakeVisible(resetBtn);
 
     waveSelector.addItemList({"Sine", "Sawtooth", "Square", "Triangle"}, 1);
     addAndMakeVisible(waveSelector);
@@ -177,7 +197,7 @@ void OscillatorPanel::resized()
     auto area = getLocalBounds().reduced(6);
     auto titleRow = area.removeFromTop(22);
     enableBtn.setBounds(titleRow.removeFromLeft(28));
-    freqResetBtn.setBounds(titleRow.removeFromRight(24).reduced(1));
+    resetBtn.setBounds(titleRow.removeFromRight(24).reduced(1));
     title.setBounds(titleRow);
     waveSelector.setBounds(area.removeFromTop(24).reduced(20, 0));
     area.removeFromTop(4);
@@ -204,7 +224,8 @@ EffectPanel::EffectPanel(juce::AudioProcessorValueTreeState& apvts,
                           const juce::String& onParam,
                           const juce::StringArray& knobParams,
                           const juce::StringArray& knobLabels,
-                          const juce::String& triggerText)
+                          const juce::String& triggerText,
+                          bool withReset)
 {
     title.setText(name, juce::dontSendNotification);
     title.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -245,6 +266,18 @@ EffectPanel::EffectPanel(juce::AudioProcessorValueTreeState& apvts,
         knobAttachments.add(new juce::AudioProcessorValueTreeState::SliderAttachment(
             apvts, knobParams[i], *knob));
     }
+
+    // Optional "↺" button — resets this generator's knob params to default.
+    // The on/enable param is deliberately excluded so a reset never disables it.
+    if (withReset)
+    {
+        hasReset = true;
+        styleResetButton(resetBtn, color);
+        juce::StringArray ids = knobParams;
+        auto* ap = &apvts;
+        resetBtn.onClick = [ap, ids] { resetParamsToDefault(*ap, ids); };
+        addAndMakeVisible(resetBtn);
+    }
 }
 
 void EffectPanel::resized()
@@ -252,6 +285,8 @@ void EffectPanel::resized()
     auto area = getLocalBounds().reduced(4);
     auto top = area.removeFromTop(22);
     enableBtn.setBounds(top.removeFromLeft(50));
+    if (hasReset)
+        resetBtn.setBounds(top.removeFromRight(24).reduced(1));
     if (hasTrigger)
         triggerButton.setBounds(top.removeFromRight(64).reduced(2, 1));
     title.setBounds(top);
@@ -293,7 +328,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                   "reverbOn", {"reverbRoom", "reverbDamp", "reverbMix"}, {"ROOM", "DAMP", "MIX"}),
       karplusPanel(p.getAPVTS(), "STRING (KARPLUS)", juce::Colour(0xff34d399),
                    "karplusOn", {"karplusFreq", "karplusAmp", "karplusDamping", "karplusStretch"},
-                   {"FREQ", "AMP", "DAMP", "STR"}),
+                   {"FREQ", "AMP", "DAMP", "STR"}, {}, /*withReset*/ true),
       wavefoldPanel(p.getAPVTS(), "WAVEFOLD", juce::Colour(0xfffbbf24),
                     "wavefoldOn", {"wavefoldDrive", "wavefoldSymmetry", "wavefoldMix"},
                     {"DRIVE", "SYM", "MIX"}),
@@ -590,6 +625,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     noiseAmpAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "noiseAmp", noiseAmpKnob);
 
+    // noiseType doubles as the on/off (its "Off" entry), so it's excluded —
+    // a reset must not silence the noise source; only AMP is reset.
+    styleResetButton(noiseResetBtn, noiseGrey);
+    noiseResetBtn.onClick = [this]
+        { resetParamsToDefault(processor.getAPVTS(), {"noiseAmp"}); };
+    addAndMakeVisible(noiseResetBtn);
+
     // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
     auto subBlue = juce::Colour(0xff60a5fa);
     subTitle.setText("SUB OSC", juce::dontSendNotification);
@@ -618,6 +660,11 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     subLevelKnob.setColour(juce::Slider::rotarySliderFillColourId, subBlue);
     subLevelAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "subLevel", subLevelKnob);
+
+    styleResetButton(subResetBtn, subBlue);
+    subResetBtn.onClick = [this]   // subOn excluded — reset must not switch it off
+        { resetParamsToDefault(processor.getAPVTS(), {"subWave", "subOctave", "subLevel"}); };
+    addAndMakeVisible(subResetBtn);
 
     // Wavetable
     auto wtPink = juce::Colour(0xfff472b6);
@@ -690,6 +737,16 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // Wavetable packs five knobs into one row → Small
     for (auto* k : { &wtPositionKnob, &wtFreqKnob, &wtAmpKnob, &wtVoicesKnob, &wtDetuneKnob })
         k->setKnobDiameter(KnobSize::Small);
+
+    styleResetButton(wtResetBtn, wtPink);
+    wtResetBtn.onClick = [this]   // wavetableOn excluded — reset must not switch it off
+    {
+        resetParamsToDefault(processor.getAPVTS(),
+            {"wavetableBank", "wavetablePosition", "wavetableFreq",
+             "wavetableAmp", "wavetableUniVoices", "wavetableUniDetune"});
+        refreshBankSelector();   // wtBankSelector is manually synced, not an attachment
+    };
+    addAndMakeVisible(wtResetBtn);
 
     // On-screen keyboard (shares the processor's MidiKeyboardState → plays the
     // active generators with full ADSR per note, transposed relative to C4).
@@ -971,7 +1028,9 @@ void SynthyEditor::resized()
 
     auto noiseArea = genRow.removeFromLeft(genW).reduced(3);
     noiseBounds = noiseArea;
-    noiseTitle.setBounds(noiseArea.removeFromTop(20));
+    auto noiseTitleRow = noiseArea.removeFromTop(20);
+    noiseResetBtn.setBounds(noiseTitleRow.removeFromRight(22).reduced(1));
+    noiseTitle.setBounds(noiseTitleRow);
     noiseTypeSelector.setBounds(noiseArea.removeFromTop(24).reduced(12, 0));
     noiseArea.removeFromTop(6);
     noiseAmpLabel.setBounds(noiseArea.removeFromTop(14));
@@ -983,6 +1042,7 @@ void SynthyEditor::resized()
     subBounds = subArea;
     auto subTitleRow = subArea.removeFromTop(22);
     subEnableBtn.setBounds(subTitleRow.removeFromLeft(44));
+    subResetBtn.setBounds(subTitleRow.removeFromRight(22).reduced(1));
     subTitle.setBounds(subTitleRow);
     subWaveSelector.setBounds(subArea.removeFromTop(24).reduced(10, 0));
     subOctaveSelector.setBounds(subArea.removeFromTop(24).reduced(10, 0));
@@ -999,6 +1059,7 @@ void SynthyEditor::resized()
     wtBounds = wtRow;
     auto wtTop = wtRow.removeFromTop(22);
     wtEnableBtn.setBounds(wtTop.removeFromLeft(50));
+    wtResetBtn.setBounds(wtTop.removeFromRight(22).reduced(1));
     wtTitle.setBounds(wtTop);
     auto wtControls = wtRow.removeFromTop(26);
     wtLoadBtn.setBounds(wtControls.removeFromRight(90).reduced(2, 2));

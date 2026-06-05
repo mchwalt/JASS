@@ -36,7 +36,7 @@ private:
 
     juce::ToggleButton enableBtn;
     juce::Label title;
-    juce::TextButton freqResetBtn;   // ↺ — restore this OSC's default tuning
+    juce::TextButton resetBtn;       // ↺ — restore all of this OSC's params to default
     juce::ComboBox waveSelector;
     SynthySlider freqKnob, ampKnob, uniVoicesKnob, uniDetuneKnob;
     juce::Label freqLabel, ampLabel, uniVoicesLabel, uniDetuneLabel;
@@ -55,7 +55,8 @@ public:
                 const juce::String& onParam,
                 const juce::StringArray& knobParams,
                 const juce::StringArray& knobLabels,
-                const juce::String& triggerText = {});
+                const juce::String& triggerText = {},
+                bool withReset = false);
 
     // Set by the owner; called when the optional trigger button (e.g. "PLUCK") is clicked.
     std::function<void()> onTrigger;
@@ -64,7 +65,9 @@ private:
     juce::Label title;
     juce::ToggleButton enableBtn;
     juce::TextButton triggerButton;     // optional (only shown if triggerText given)
+    juce::TextButton resetBtn;          // optional ↺ (reset all params to default)
     bool hasTrigger = false;
+    bool hasReset = false;
     juce::OwnedArray<SynthySlider> knobs;
     juce::OwnedArray<juce::Label> labels;
     std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> btnAttach;
@@ -150,6 +153,10 @@ private:
 
     // Karplus-Strong (reuses EffectPanel: ON toggle + knobs)
     EffectPanel karplusPanel;
+
+    // Per-generator "↺" reset buttons for the inline sources (the OSC and
+    // Karplus panels carry their own; these cover Noise / Sub / Wavetable).
+    juce::TextButton noiseResetBtn, subResetBtn, wtResetBtn;
 
     // Noise
     juce::Label noiseTitle;
