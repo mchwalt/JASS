@@ -53,6 +53,13 @@ namespace Parameters
         constexpr const char* bitcrushRate = "bitcrushRate";
         constexpr const char* bitcrushMix  = "bitcrushMix";
 
+        // Arpeggiator (turns a held chord into an automatic note sequence)
+        constexpr const char* arpOn      = "arpOn";
+        constexpr const char* arpRate    = "arpRate";
+        constexpr const char* arpMode    = "arpMode";
+        constexpr const char* arpOctaves = "arpOctaves";
+        constexpr const char* arpGate    = "arpGate";
+
         // Stereo width (pseudo-stereo master stage; mono engine -> stereo)
         constexpr const char* stereoOn    = "stereoOn";
         constexpr const char* stereoWidth = "stereoWidth";
@@ -234,6 +241,13 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subWave, 1), "Sub Wave", juce::StringArray{"Sine", "Square"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subOctave, 1), "Sub Octave", juce::StringArray{"-1 Oct", "-2 Oct"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::subLevel, 1), "Sub Level", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+
+        // Arpeggiator
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::arpOn, 1), "Arp On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::arpRate, 1), "Arp Rate", juce::NormalisableRange<float>(1.0f, 16.0f, 0.1f), 8.0f));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::arpMode, 1), "Arp Mode", juce::StringArray{"Up", "Down", "UpDown", "Random"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::arpOctaves, 1), "Arp Octaves", 1, 4, 2));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::arpGate, 1), "Arp Gate", juce::NormalisableRange<float>(0.05f, 1.0f, 0.01f), 0.5f));
 
         // Stereo width (pseudo-stereo master stage)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::stereoOn, 1), "Stereo On", false));

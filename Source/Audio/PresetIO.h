@@ -17,6 +17,7 @@ namespace PresetIO
     inline const juce::StringArray kLfoTarget  { "Off", "Frequency", "Amplitude", "FilterCutoff" };
     inline const juce::StringArray kNoiseType  { "Off", "White", "Pink" };
     inline const juce::StringArray kSubWave     { "Sine", "Square" };
+    inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
 
     constexpr int kFormatVersion = 1;
 
@@ -138,6 +139,12 @@ namespace PresetIO
         root->setProperty("StereoWidth",   rawF(a, ID::stereoWidth));
         root->setProperty("StereoTime",    rawF(a, ID::stereoTime));  // 1..15 ms
 
+        root->setProperty("ArpEnabled", rawB(a, ID::arpOn));
+        root->setProperty("ArpRate",    rawF(a, ID::arpRate));
+        root->setProperty("ArpMode",    rawChoice(a, ID::arpMode, kArpMode));
+        root->setProperty("ArpOctaves", rawI(a, ID::arpOctaves));
+        root->setProperty("ArpGate",    rawF(a, ID::arpGate));
+
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   rawChoice(a, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
@@ -248,6 +255,12 @@ namespace PresetIO
         setRaw(a, ID::stereoOn,    jbool(v, "StereoEnabled", rawB(a, ID::stereoOn)) ? 1.f : 0.f);
         setRaw(a, ID::stereoWidth, (float) jnum(v, "StereoWidth", rawF(a, ID::stereoWidth)));
         setRaw(a, ID::stereoTime,  (float) jnum(v, "StereoTime",  rawF(a, ID::stereoTime)));
+
+        setRaw   (a, ID::arpOn,      jbool(v, "ArpEnabled", rawB(a, ID::arpOn)) ? 1.f : 0.f);
+        setRaw   (a, ID::arpRate,    (float) jnum(v, "ArpRate", rawF(a, ID::arpRate)));
+        setChoice(a, ID::arpMode, kArpMode, v["ArpMode"], rawI(a, ID::arpMode));
+        setRaw   (a, ID::arpOctaves, (float) jint(v, "ArpOctaves", rawI(a, ID::arpOctaves)));
+        setRaw   (a, ID::arpGate,    (float) jnum(v, "ArpGate", rawF(a, ID::arpGate)));
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
         setChoice(a, ID::lfoTarget, kLfoTarget, v["LfoTarget"],   rawI(a, ID::lfoTarget));

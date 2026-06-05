@@ -99,6 +99,7 @@ void SynthyProcessor::randomize()
     const float keepStereoWidth = *apvts.getRawParameterValue(ID::stereoWidth);
     const float keepStereoTime  = *apvts.getRawParameterValue(ID::stereoTime);
     const float keepMasterVol   = *apvts.getRawParameterValue(ID::masterVol);
+    const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
 
     // Random value for every parameter...
     for (auto* p : getParameters())
@@ -141,6 +142,7 @@ void SynthyProcessor::randomize()
     set(ID::stereoWidth, keepStereoWidth);
     set(ID::stereoTime,  keepStereoTime);
     set(ID::masterVol,   keepMasterVol);
+    set(ID::arpOn,       keepArpOn);
 
     currentPresetName = "Random";
     markPresetClean();   // a fresh random patch is its own "clean" state
@@ -200,6 +202,8 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
     stereoWidth.prepare(sampleRate);
     uiLfo.setSampleRate(sampleRate);
+    arp.prepare(sampleRate);
+    arpHeldScratch.reserve(128);
 }
 
 void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -252,6 +256,46 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef());
+
+    // Arpeggiator: replace the raw held chord with an automatic note sequence.
+    {
+        using namespace Parameters;
+        bool arpOn = *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
+        if (arpOn)
+        {
+            arp.enabled = true;
+            arp.rateHz  = *apvts.getRawParameterValue(ID::arpRate);
+            arp.mode    = (Arpeggiator::Mode)(int) *apvts.getRawParameterValue(ID::arpMode);
+            arp.octaves = (int) *apvts.getRawParameterValue(ID::arpOctaves);
+            arp.gate    = *apvts.getRawParameterValue(ID::arpGate);
+
+            // Held chord = the channel-1 notes currently down (keyboardState was
+            // just updated above). The drone lives on channel 16, so it's excluded.
+            arpHeldScratch.clear();
+            for (int n = 0; n < 128; ++n)
+                if (keyboardState.isNoteOn(1, n)) arpHeldScratch.push_back(n);
+            arp.setHeldNotes(arpHeldScratch);
+
+            // Drop the raw chord (channel-1 note on/off) so only the arp sounds;
+            // keep everything else (e.g. the channel-16 auto-play drone).
+            juce::MidiBuffer kept;
+            for (const auto meta : midiMessages)
+            {
+                auto m = meta.getMessage();
+                if ((m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
+                    continue;
+                kept.addEvent(m, meta.samplePosition);
+            }
+            arp.processBlock(buffer.getNumSamples(), kept, 1);
+            midiMessages.swapWith(kept);
+        }
+        else if (arp.enabled)
+        {
+            arp.enabled = false;           // just switched off → release its note
+            arp.releaseAll(midiMessages, 1);
+            arp.reset();
+        }
+    }
 
     // Don't let the auto-play drone pluck the Karplus string (it's played via
     // the keyboard). Suppress the pluck only for the drone's own note-on.

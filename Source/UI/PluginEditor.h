@@ -120,6 +120,16 @@ private:
     std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> lfoWaveAttach, lfoTargetAttach;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> lfoRateAttach, lfoDepthAttach;
 
+    // Arpeggiator (MODULATION zone)
+    juce::Label arpTitle;
+    juce::ToggleButton arpEnableBtn;
+    juce::ComboBox arpModeSelector;
+    SynthySlider arpRateKnob, arpOctavesKnob, arpGateKnob;
+    juce::Label arpRateLabel, arpOctavesLabel, arpGateLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> arpEnableAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment> arpModeAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> arpRateAttach, arpOctavesAttach, arpGateAttach;
+
     // Distortion (inline: type ComboBox + DRIVE/MIX knobs)
     juce::Label distTitle;
     juce::ComboBox distTypeSelector;
@@ -204,7 +214,7 @@ private:
     juce::Slider& setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 
     // Layout bounds for paint()
-    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds, stereoBounds;
+    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds, stereoBounds, arpBounds;
     // Zone separator headers (GENERATORS / MODULATION / PROCESSING)
     juce::Rectangle<int> genHeaderBounds, modHeaderBounds, procHeaderBounds;
 

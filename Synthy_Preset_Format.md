@@ -69,6 +69,11 @@ sound at identical parameters.
   "StereoEnabled": false,      // pseudo-stereo master stage (mono engine -> wide stereo)
   "StereoWidth": 0.5,          // 0..1  (0 = mono, higher = wider)
   "StereoTime": 12.0,          // 1..15 ms comb/Haas delay
+  "ArpEnabled": false,         // arpeggiator: held chord -> automatic note sequence
+  "ArpRate": 8.0,              // 1..16 steps per second
+  "ArpMode": "Up",             // Up | Down | UpDown | Random
+  "ArpOctaves": 2,             // 1..4 octave span
+  "ArpGate": 0.5,              // 0.05..1.0 note length as fraction of the step
   "LfoWaveform": "Sine",       // Sine | Triangle | Square | Sawtooth
   "LfoTarget": "Off",          // Off | Frequency | Amplitude | FilterCutoff
   "LfoRate": 2.0, "LfoDepth": 0.5,
@@ -99,7 +104,7 @@ sound at identical parameters.
   a feature added after the preset was saved) lands on its default instead of inheriting the
   previously loaded patch's value. (LiveState always contains all current fields, so its
   round-trip is unaffected.) Newer
-  fields (`Wavefold*`, `Bitcrush*`, `Sub*`, `Stereo*`) are added by the actively-developed **C++** app; the frozen C#
+  fields (`Wavefold*`, `Bitcrush*`, `Sub*`, `Stereo*`, `Arp*`) are added by the actively-developed **C++** app; the frozen C#
   app simply ignores them (and they keep their defaults when it writes a preset).
 - Note: `Sub*` and the auto-play behaviour are C++ additions. Auto-play is no longer a stored
   field — it is automatic runtime behaviour (drone steps aside when you play, returns when a

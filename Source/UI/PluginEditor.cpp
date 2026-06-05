@@ -440,6 +440,39 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     lfoDepthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "lfoDepth", lfoDepthKnob);
 
+    // Arpeggiator (MODULATION zone)
+    arpTitle.setText("ARPEGGIATOR", juce::dontSendNotification);
+    arpTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    arpTitle.setColour(juce::Label::textColourId, cyan);
+    addAndMakeVisible(arpTitle);
+
+    arpEnableBtn.setButtonText("ON");
+    arpEnableBtn.setColour(juce::ToggleButton::tickColourId, cyan);
+    addAndMakeVisible(arpEnableBtn);
+    arpEnableAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        p.getAPVTS(), "arpOn", arpEnableBtn);
+
+    arpModeSelector.addItemList({"Up", "Down", "Up/Down", "Random"}, 1);
+    addAndMakeVisible(arpModeSelector);
+    arpModeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
+        p.getAPVTS(), "arpMode", arpModeSelector);
+
+    setupKnob(arpRateKnob, arpRateLabel, "RATE").setColour(juce::Slider::thumbColourId, cyan);
+    arpRateKnob.setColour(juce::Slider::rotarySliderFillColourId, cyan);
+    arpRateKnob.setTextValueSuffix(" /s");
+    arpRateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getAPVTS(), "arpRate", arpRateKnob);
+
+    setupKnob(arpOctavesKnob, arpOctavesLabel, "OCT").setColour(juce::Slider::thumbColourId, cyan);
+    arpOctavesKnob.setColour(juce::Slider::rotarySliderFillColourId, cyan);
+    arpOctavesAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getAPVTS(), "arpOctaves", arpOctavesKnob);
+
+    setupKnob(arpGateKnob, arpGateLabel, "GATE").setColour(juce::Slider::thumbColourId, cyan);
+    arpGateKnob.setColour(juce::Slider::rotarySliderFillColourId, cyan);
+    arpGateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getAPVTS(), "arpGate", arpGateKnob);
+
     // Master
     auto gold = juce::Colour(0xffffd700);
     setupKnob(masterKnob, masterLabel, "MASTER").setColour(juce::Slider::thumbColourId, gold);
@@ -679,7 +712,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     dropFocus(*this);
 
     // setSize must be LAST so resized() sees all components
-    setSize(820, 1330);
+    setSize(820, 1432);
 
     // Drive the OSC FREQ-knob display (played frequency).
     startTimerHz(30);
@@ -781,6 +814,7 @@ void SynthyEditor::paint(juce::Graphics& g)
     // --- Zone 2: Modulation ---
     drawSection(adsrBounds.expanded(2));
     drawSection(lfoBounds.expanded(2));
+    drawSection(arpBounds.expanded(2));
 
     // --- Zone 3: Soundverarbeitung ---
     drawSection(filterBounds.expanded(2));
@@ -960,6 +994,28 @@ void SynthyEditor::resized()
     lfoRateKnob.setBounds(lfoKnob1);
     lfoDepthLabel.setBounds(lfoArea.removeFromTop(14));
     lfoDepthKnob.setBounds(lfoArea);
+    area.removeFromTop(6);
+
+    // Arpeggiator row: [ON + title | MODE] left, then RATE / OCT / GATE knobs.
+    auto arpArea = area.removeFromTop(96).reduced(3);
+    arpBounds = arpArea;
+    auto arpTop = arpArea.removeFromTop(22);
+    arpEnableBtn.setBounds(arpTop.removeFromLeft(50));
+    arpTitle.setBounds(arpTop.removeFromLeft(150));
+    arpArea.removeFromTop(2);
+    // Left: MODE selector; right: three knobs.
+    int arpColW = arpArea.getWidth() / 4;
+    auto modeCol = arpArea.removeFromLeft(arpColW + 30);
+    arpModeSelector.setBounds(modeCol.withSizeKeepingCentre(modeCol.getWidth() - 8, 26));
+    auto arpKnobW = arpArea.getWidth() / 3;
+    auto ak1 = arpArea.removeFromLeft(arpKnobW);
+    arpRateLabel.setBounds(ak1.removeFromTop(14));
+    arpRateKnob.setBounds(ak1);
+    auto ak2 = arpArea.removeFromLeft(arpKnobW);
+    arpOctavesLabel.setBounds(ak2.removeFromTop(14));
+    arpOctavesKnob.setBounds(ak2);
+    arpGateLabel.setBounds(arpArea.removeFromTop(14));
+    arpGateKnob.setBounds(arpArea);
     area.removeFromTop(10);
 
     // ============================================================

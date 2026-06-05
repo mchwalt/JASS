@@ -5,6 +5,8 @@
 #include "Audio/Parameters.h"
 #include "DSP/WaveformCapture.h"
 #include "DSP/StereoWidth.h"
+#include "DSP/Arpeggiator.h"
+#include <vector>
 
 class SynthyProcessor : public juce::AudioProcessor,
                         private juce::Timer,
@@ -80,6 +82,8 @@ private:
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
     LFO uiLfo;                 // display-only LFO mirroring the patch LFO (for the rings)
     std::atomic<float> lfoDisplayValue { 0.0f };
+    Arpeggiator arp;
+    std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
     bool autoNoteOn = false;
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON

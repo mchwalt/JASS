@@ -43,8 +43,8 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 ## 🎯 Als Nächstes empfohlen
 
 1. **Tempo-Sync** – LFO & Delay an BPM koppeln (★★ / ★★★★)
-2. **Live-Modulations-Ringe** – animierte Ringe um Knöpfe (Vital-Style), sieht edel aus (★★★ / ★★★★★)
-3. **Arpeggiator** – automatische Notenfolgen (jetzt mit Klaviatur sinnvoll) (★★★ / ★★★★★)
+2. ~~Live-Modulations-Ringe~~ – ✅ umgesetzt (C++): dezenter cyan-Bogen um die LFO-Ziel-Knöpfe
+3. ~~Arpeggiator~~ – ✅ umgesetzt (C++): Up/Down/UpDown/Random, Rate/Octaves/Gate, spielt gehaltene Akkorde
 
 ---
 
@@ -77,7 +77,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Live-Modulations-Anzeige** | animierte Ringe zeigen LFO/Env-Bewegung | ★★★ | ★★★★★ |
 | **Tempo-Sync** | LFO & Delay an BPM koppeln (1/4, 1/8, Triolen) | ★★ | ★★★★ |
 | **Step-Sequencer** | eigenes Pattern-Modul | ★★★ | ★★★★ |
-| **Arpeggiator** | automatische Notenfolgen (Auf/Ab/Random) | ★★★ | ★★★★★ |
+| ~~Arpeggiator~~ | ✅ umgesetzt (C++) – Up/Down/UpDown/Random, Rate/Octaves/Gate | – | – |
 | **WAV-Export / Recording** | aufnehmen, was man spielt | ★★ | ★★★ |
 | **MIDI-Learn** | Knöpfe an Hardware-Controller binden | ★★★ | ★★★★ |
 
