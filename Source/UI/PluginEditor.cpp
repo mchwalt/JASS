@@ -791,10 +791,17 @@ void SynthyEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff1a1a2e));
 
-    // Title
-    g.setFont(juce::FontOptions(28.0f, juce::Font::bold));
-    g.setColour(juce::Colour(0xff40c0ff));
-    g.drawText("S Y N T H Y", g_titleBounds, juce::Justification::centred);
+    // Title: big "J A S S" with the full name as a small subtitle beneath it.
+    {
+        auto titleArea = g_titleBounds;
+        auto subArea = titleArea.removeFromBottom(13);
+        g.setFont(juce::FontOptions(28.0f, juce::Font::bold));
+        g.setColour(juce::Colour(0xff40c0ff));
+        g.drawText("J A S S", titleArea, juce::Justification::centred);
+        g.setFont(juce::FontOptions(10.0f));
+        g.setColour(juce::Colour(0xff8899aa));
+        g.drawText("Just Another Simple Synthesizer", subArea, juce::Justification::centred);
+    }
 
     // Section backgrounds
     auto drawSection = [&](juce::Rectangle<int> bounds) {

@@ -1,4 +1,8 @@
-# Synthy
+# JASS – Just Another Simple Synthesizer
+
+> Früher „Synthy". Die App heißt jetzt **JASS** (Just Another Simple Synthesizer); das geteilte
+> Preset-/Austauschformat bleibt aus Kompatibilitätsgründen weiterhin `.synthy` (im Ordner
+> `%AppData%\Synthy`), und die internen Klassennamen (`SynthyProcessor` …) bleiben ebenfalls.
 
 Ein Software-Synthesizer, **zweimal gebaut** — einmal in **C# (WPF/NAudio)** und einmal in
 **C++ (JUCE)**. Beide teilen denselben DSP-Kern und ein **gemeinsames Preset-Format**, sodass
