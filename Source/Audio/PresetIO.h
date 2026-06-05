@@ -187,6 +187,15 @@ namespace PresetIO
         if (! v.isObject())
             return;
 
+        // A preset is a COMPLETE patch snapshot. Reset every parameter to its
+        // default FIRST, so any field the file omits — e.g. a feature added
+        // after this preset was saved (Sub, Stereo, Bitcrush, …) — falls back to
+        // its default instead of inheriting the previously loaded patch's value.
+        // (The per-field readers below use the now-default current value as their
+        // "missing key" fallback, so omitted fields correctly stay at default.)
+        for (auto* p : a.processor.getParameters())
+            p->setValueNotifyingHost(p->getDefaultValue());
+
         if (auto oscs = v["Oscillators"]; oscs.isArray())
         {
             for (int o = 0; o < juce::jmin(3, oscs.size()); ++o)

@@ -93,7 +93,11 @@ sound at identical parameters.
   from one app won't resolve to the same waveform in the other.
 - **Quantization:** values snap to each parameter's step on the C++ side (e.g.
   `MasterVolume` step 0.01), so a round-trip may differ by less than one step.
-- **Missing fields** are tolerated on both sides (kept at the current/default value). Newer
+- **Missing fields** are tolerated on both sides. On the C++ side a preset load first resets
+  every parameter to its **default**, then applies the file — so a field the preset omits (e.g.
+  a feature added after the preset was saved) lands on its default instead of inheriting the
+  previously loaded patch's value. (LiveState always contains all current fields, so its
+  round-trip is unaffected.) Newer
   fields (`Wavefold*`, `Bitcrush*`, `Sub*`, `Stereo*`) are added by the actively-developed **C++** app; the frozen C#
   app simply ignores them (and they keep their defaults when it writes a preset).
 - Note: `Sub*` and the auto-play behaviour are C++ additions. Auto-play is no longer a stored
