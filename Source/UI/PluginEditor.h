@@ -133,6 +133,9 @@ private:
     // Bitcrusher (reuses EffectPanel: ON toggle + BITS/RATE/MIX knobs)
     EffectPanel bitcrushPanel;
 
+    // Stereo width (reuses EffectPanel: ON toggle + WIDTH/TIME knobs)
+    EffectPanel stereoPanel;
+
     // Karplus-Strong (reuses EffectPanel: ON toggle + knobs)
     EffectPanel karplusPanel;
 

@@ -65,6 +65,9 @@ sound at identical parameters.
   "SubWaveform": "Sine",       // Sine | Square
   "SubOctave": -1,             // -1 or -2 octaves
   "SubLevel": 0.5,             // 0..1
+  "StereoEnabled": false,      // pseudo-stereo master stage (mono engine -> wide stereo)
+  "StereoWidth": 0.5,          // 0..1  (0 = mono, higher = wider)
+  "StereoTime": 12.0,          // 1..30 ms comb/Haas delay
   "LfoWaveform": "Sine",       // Sine | Triangle | Square | Sawtooth
   "LfoTarget": "Off",          // Off | Frequency | Amplitude | FilterCutoff
   "LfoRate": 2.0, "LfoDepth": 0.5,
@@ -91,7 +94,7 @@ sound at identical parameters.
 - **Quantization:** values snap to each parameter's step on the C++ side (e.g.
   `MasterVolume` step 0.01), so a round-trip may differ by less than one step.
 - **Missing fields** are tolerated on both sides (kept at the current/default value). Newer
-  fields (`Wavefold*`, `Bitcrush*`, `Sub*`) are added by the actively-developed **C++** app; the frozen C#
+  fields (`Wavefold*`, `Bitcrush*`, `Sub*`, `Stereo*`) are added by the actively-developed **C++** app; the frozen C#
   app simply ignores them (and they keep their defaults when it writes a preset).
 - Note: `Sub*` and the auto-play behaviour are C++ additions. Auto-play is no longer a stored
   field — it is automatic runtime behaviour (drone steps aside when you play, returns when a

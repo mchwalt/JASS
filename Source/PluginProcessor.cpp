@@ -126,6 +126,8 @@ void SynthyProcessor::randomize()
     set(ID::bitcrushRate, (float) rng.nextInt(juce::Range<int>(1, 9)));   // 1..8x
     set(ID::subLevel,     0.3f + rng.nextFloat() * 0.4f);                 // 0.3..0.7
     set(ID::subOctave,    (float) rng.nextInt(juce::Range<int>(0, 2)));   // -1/-2 only
+    set(ID::stereoWidth,  0.3f + rng.nextFloat() * 0.5f);                 // 0.3..0.8 (not extreme)
+    set(ID::stereoTime,   3.0f + rng.nextFloat() * 22.0f);               // 3..25 ms
 
     currentPresetName = "Random";
 }
@@ -150,6 +152,8 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
             voice->prepareToPlay(sampleRate, samplesPerBlock);
+
+    stereoWidth.prepare(sampleRate);
 }
 
 void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)
@@ -217,10 +221,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
                 v->setPluckEnabled(true);
 
-    // Capture waveform before master volume
+    // Capture waveform before master volume (still mono content -> the scope
+    // shows the dry mono mix, unaffected by the stereo stage below).
     auto* channelData = buffer.getReadPointer(0);
     for (int i = 0; i < buffer.getNumSamples(); ++i)
         waveformCapture.writeSample(channelData[i]);
+
+    // Final pseudo-stereo stage: turns the mono mix into a wide stereo image.
+    stereoWidth.enabled = *apvts.getRawParameterValue(Parameters::ID::stereoOn) > 0.5f;
+    stereoWidth.width   = *apvts.getRawParameterValue(Parameters::ID::stereoWidth);
+    stereoWidth.timeMs  = *apvts.getRawParameterValue(Parameters::ID::stereoTime);
+    stereoWidth.process(buffer);
 
     buffer.applyGain(*apvts.getRawParameterValue(Parameters::ID::masterVol));
 }

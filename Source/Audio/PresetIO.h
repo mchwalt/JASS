@@ -131,6 +131,10 @@ namespace PresetIO
         root->setProperty("SubOctave",   -(rawI(a, ID::subOctave) + 1));  // -1 or -2
         root->setProperty("SubLevel",    rawF(a, ID::subLevel));
 
+        root->setProperty("StereoEnabled", rawB(a, ID::stereoOn));
+        root->setProperty("StereoWidth",   rawF(a, ID::stereoWidth));
+        root->setProperty("StereoTime",    rawF(a, ID::stereoTime));
+
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   rawChoice(a, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
@@ -228,6 +232,10 @@ namespace PresetIO
         // Stored as -1 / -2; map back to choice index 0 / 1.
         setRaw   (a, ID::subOctave, (float) (-jint(v, "SubOctave", -(rawI(a, ID::subOctave) + 1)) - 1));
         setRaw   (a, ID::subLevel, (float) jnum(v, "SubLevel", rawF(a, ID::subLevel)));
+
+        setRaw(a, ID::stereoOn,    jbool(v, "StereoEnabled", rawB(a, ID::stereoOn)) ? 1.f : 0.f);
+        setRaw(a, ID::stereoWidth, (float) jnum(v, "StereoWidth", rawF(a, ID::stereoWidth)));
+        setRaw(a, ID::stereoTime,  (float) jnum(v, "StereoTime",  rawF(a, ID::stereoTime)));
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
         setChoice(a, ID::lfoTarget, kLfoTarget, v["LfoTarget"],   rawI(a, ID::lfoTarget));

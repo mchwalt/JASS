@@ -4,6 +4,7 @@
 #include "Audio/SynthSound.h"
 #include "Audio/Parameters.h"
 #include "DSP/WaveformCapture.h"
+#include "DSP/StereoWidth.h"
 
 class SynthyProcessor : public juce::AudioProcessor,
                         private juce::Timer,
@@ -61,6 +62,7 @@ private:
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
     WaveformCapture waveformCapture { 512 };
+    StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
     bool autoNoteOn = false;
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON

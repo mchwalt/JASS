@@ -65,7 +65,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Phaser / Flanger** | Allpass-Kette / modulierter Comb → Sweep-Sounds | ★★ | ★★★★ |
 | ~~Bitcrusher~~ | ✅ umgesetzt (C++) – BITS + RATE + MIX | – | – |
 | **Convolution-Reverb** | echte Impulsantworten laden (Kathedrale, Platte) | ★★★★ | ★★★★ |
-| **Stereo-Width / Mid-Side** | Breite stufenlos regeln, Haas-Effekt | ★★ | ★★★ |
+| ~~Stereo-Width / Pseudo-Stereo~~ | ✅ umgesetzt (C++) – Master-Stufe WIDTH+TIME, mono-kompatibel (Lauridsen-Comb). Siehe „Echtes Stereo" unten | – | – |
 | **EQ (3-Band)** | Bass/Mid/Treble | ★★ | ★★★ |
 
 ## ✨ Workflow & UX
@@ -80,6 +80,31 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Arpeggiator** | automatische Notenfolgen (Auf/Ab/Random) | ★★★ | ★★★★★ |
 | **WAV-Export / Recording** | aufnehmen, was man spielt | ★★ | ★★★ |
 | **MIDI-Learn** | Knöpfe an Hardware-Controller binden | ★★★ | ★★★★ |
+
+---
+
+## 🎧 Echtes Stereo (Schritt B – größerer Umbau, ★★★★)
+
+**Ausgangslage (Stand heute):** Die ganze Synth-Engine ist **mono**. Jede `SynthVoice`
+rechnet einen einzigen `mixedSample` (`SynthVoice.cpp` `renderNextBlock`) und schreibt ihn
+identisch in alle Ausgangskanäle (`outputBuffer.addSample(channel, …, mixedSample)`). Der
+Processor summiert alle 8 Voices zu einem mono-identischen L/R-Buffer. **Schritt A**
+(Pseudo-Stereo, ✅ umgesetzt) erzeugt Breite *am Ende* der Kette über eine Master-Stufe
+(`DSP/StereoWidth.h`, aufgerufen in `processBlock` nach `renderNextBlock`) – ohne die Engine
+anzufassen. Das deckt ~80 % des wahrnehmbaren Effekts für ~20 % Aufwand.
+
+**Was „echtes" Stereo (Pan pro Oszillator, Unison-Spread) erfordern würde:**
+- Sobald ein Erzeuger **nicht** mittig sitzt, sind L und R **unterschiedliche Signale** →
+  ab diesem Punkt muss die **gesamte Signalkette pro Kanal doppelt** laufen.
+- `mixedSample` (Skalar) müsste zu **`float[2]` (L/R)** werden.
+- **Jeder stateful per-Voice-Effekt braucht Zustand pro Kanal**, sonst Phasen-/Knackser-Bugs:
+  `BiquadFilter` (z1/z2), `ChorusEffect`, `DelayEffect`, `ReverbEffect`,
+  `BitcrusherEffect` (held/counter). → praktisch alle DSP-Klassen anfassen.
+- **Rechenlast ~×2** pro Voice (× 8 Voices). Für ein Lernprojekt vertretbar, aber kein Trivial-Edit.
+- Neue Params: Pan pro OSC (−1..+1), Unison-Stereo-Spread (verteilt Detune-Voices übers Panorama).
+- **Aufwand realistisch ★★★★** (nicht ★★ wie Pseudo-Stereo). Eigenes größeres Vorhaben;
+  Schritt A bleibt danach als globaler WIDTH-Regler nützlich.
+- Der separate Eintrag **„Stereo-Panning – pro Oszillator L/R"** unten = genau dieser Schritt B.
 
 ---
 

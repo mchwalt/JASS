@@ -264,7 +264,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                     {"DRIVE", "SYM", "MIX"}),
       bitcrushPanel(p.getAPVTS(), "BITCRUSH", juce::Colour(0xff2dd4bf),
                     "bitcrushOn", {"bitcrushBits", "bitcrushRate", "bitcrushMix"},
-                    {"BITS", "RATE", "MIX"})
+                    {"BITS", "RATE", "MIX"}),
+      stereoPanel(p.getAPVTS(), "STEREO", juce::Colour(0xff818cf8),
+                  "stereoOn", {"stereoWidth", "stereoTime"}, {"WIDTH", "TIME"})
 {
     setLookAndFeel(&lnf);
 
@@ -391,6 +393,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(karplusPanel);
     addAndMakeVisible(wavefoldPanel);
     addAndMakeVisible(bitcrushPanel);
+    addAndMakeVisible(stereoPanel);
 
     // LFO
     auto cyan = juce::Colour(0xff22d3ee);
@@ -707,6 +710,9 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawSection(chorusPanel.getBounds().expanded(2));
     drawSection(reverbPanel.getBounds().expanded(2));
 
+    // Stereo width panel lives in the header (left of Master), framed like the rest.
+    drawSection(stereoPanel.getBounds().expanded(2));
+
     // Zone separator headers: bold label on the left + a divider rule across.
     auto drawZoneHeader = [&](juce::Rectangle<int> bounds, const juce::String& text, juce::Colour col)
     {
@@ -740,6 +746,8 @@ void SynthyEditor::resized()
     auto masterArea = headerRow.removeFromRight(100);
     masterLabel.setBounds(masterArea.removeFromTop(14));
     masterKnob.setBounds(masterArea);
+    // STEREO width panel sits just left of Master (final stage of the chain).
+    stereoPanel.setBounds(headerRow.removeFromRight(150).reduced(4, 2));
     // Center: SYNTHY title (top) + current-preset name (below)
     auto centerArea = headerRow;
     g_titleBounds = centerArea.removeFromTop(centerArea.getHeight() - 18);

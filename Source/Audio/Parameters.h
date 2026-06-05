@@ -53,6 +53,11 @@ namespace Parameters
         constexpr const char* bitcrushRate = "bitcrushRate";
         constexpr const char* bitcrushMix  = "bitcrushMix";
 
+        // Stereo width (pseudo-stereo master stage; mono engine -> stereo)
+        constexpr const char* stereoOn    = "stereoOn";
+        constexpr const char* stereoWidth = "stereoWidth";
+        constexpr const char* stereoTime  = "stereoTime";
+
         // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
         constexpr const char* subOn     = "subOn";
         constexpr const char* subWave   = "subWave";
@@ -229,6 +234,11 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subWave, 1), "Sub Wave", juce::StringArray{"Sine", "Square"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subOctave, 1), "Sub Octave", juce::StringArray{"-1 Oct", "-2 Oct"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::subLevel, 1), "Sub Level", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+
+        // Stereo width (pseudo-stereo master stage)
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::stereoOn, 1), "Stereo On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoWidth, 1), "Stereo Width", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoTime, 1), "Stereo Time", juce::NormalisableRange<float>(1.0f, 30.0f, 0.1f), 12.0f));
 
         // Master
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
