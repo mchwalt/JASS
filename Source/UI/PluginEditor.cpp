@@ -679,8 +679,8 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // active generators with full ADSR per note, transposed relative to C4).
     keyboard = std::make_unique<juce::MidiKeyboardComponent>(
         processor.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard);
-    keyboard->setAvailableRange(36, 96);   // C2 .. C7
-    keyboard->setKeyWidth(20.0f);
+    keyboard->setAvailableRange(21, 108);  // A0 .. C8 (full 88-key piano)
+    keyboard->setKeyWidth(20.0f);          // overridden in resized() to fill the row width
     keyboard->setKeyPressBaseOctave(kbBaseOctave);
     keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
@@ -711,8 +711,27 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     };
     dropFocus(*this);
 
-    // setSize must be LAST so resized() sees all components
-    setSize(820, 1432);
+    // setSize must be LAST so resized() sees all components. The two-column
+    // body fits a 1520x945 design canvas (see resized()).
+    constexpr int kDesignW = 1520, kDesignH = 945;
+    setSize(kDesignW, kDesignH);
+
+    // --- Auto-fit ---------------------------------------------------------
+    // Backup for displays whose usable area is still smaller than the design
+    // canvas (e.g. 1366x768 laptops): scale the WHOLE editor down via a
+    // transform. The standalone window sizes itself from
+    // getLocalArea(editor, ...) which honours the transform, so the window
+    // shrinks to match. Proportions stay intact; we never scale above 1.0.
+    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    {
+        const auto ua = disp->userBounds;        // excludes the taskbar
+        const double chrome = 90.0;              // title bar + a little breathing room
+        const double sH = (ua.getHeight() - chrome) / (double) kDesignH;
+        const double sW =  ua.getWidth()           / (double) kDesignW;
+        const double scale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
+        if (scale < 0.999)
+            setTransform(juce::AffineTransform::scale((float) scale));
+    }
 
     // Drive the OSC FREQ-knob display (played frequency).
     startTimerHz(30);
@@ -886,16 +905,36 @@ void SynthyEditor::resized()
     auto centerArea = headerRow;
     g_titleBounds = centerArea.removeFromTop(centerArea.getHeight() - 18);
     presetNameLabel.setBounds(centerArea);
-    area.removeFromTop(4);
+    area.removeFromTop(8);
 
     // ============================================================
-    // ZONE 1: GENERATORS (sound sources)
+    // Two-column body: the header (above) plus the visualisation and
+    // keyboard (below) stay full width; the three zones split into a
+    // GENERATORS column on the left and a MODULATION + PROCESSING
+    // column on the right. This trades the tall single stack for a
+    // wider, shorter window that fits short displays (e.g. 1920x1200).
     // ============================================================
-    genHeaderBounds = area.removeFromTop(24);
-    area.removeFromTop(2);
+
+    // Reserve the full-width footer (visualisation + keyboard) first so
+    // the columns only consume the middle band.
+    auto kbRow  = area.removeFromBottom(72).reduced(3, 0);
+    area.removeFromBottom(6);
+    auto vizRow = area.removeFromBottom(150).reduced(3, 0);
+    area.removeFromBottom(8);
+
+    const int colGap = 16;
+    auto leftCol  = area.removeFromLeft((area.getWidth() - colGap) / 2);
+    area.removeFromLeft(colGap);
+    auto rightCol = area;
+
+    // ============================================================
+    // LEFT COLUMN — ZONE 1: GENERATORS (sound sources)
+    // ============================================================
+    genHeaderBounds = leftCol.removeFromTop(24);
+    leftCol.removeFromTop(2);
 
     // Oscillators with MIX MODE wired between OSC 1 & 2, and "+" before OSC 3.
-    auto oscRow = area.removeFromTop(165);
+    auto oscRow = leftCol.removeFromTop(165);
     const int mixW = 90, plusW = 34;
     int oscW = (oscRow.getWidth() - mixW - plusW) / 3;
     osc1.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
@@ -908,10 +947,10 @@ void SynthyEditor::resized()
     osc2.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
     mixPlusLabel.setBounds(oscRow.removeFromLeft(plusW));
     osc3.setBounds(oscRow.reduced(3));
-    area.removeFromTop(6);
+    leftCol.removeFromTop(6);
 
     // Noise | Sub Osc | Karplus (String)
-    auto genRow = area.removeFromTop(150);
+    auto genRow = leftCol.removeFromTop(150);
     int genW = genRow.getWidth() / 4;
 
     auto noiseArea = genRow.removeFromLeft(genW).reduced(3);
@@ -937,10 +976,10 @@ void SynthyEditor::resized()
         juce::jmin(80, subArea.getWidth()), subArea.getHeight()));
 
     karplusPanel.setBounds(genRow.reduced(3)); // remaining two columns (4 knobs)
-    area.removeFromTop(6);
+    leftCol.removeFromTop(6);
 
-    // Wavetable (full width)
-    auto wtRow = area.removeFromTop(124).reduced(3, 0);
+    // Wavetable (full column width)
+    auto wtRow = leftCol.removeFromTop(124).reduced(3, 0);
     wtBounds = wtRow;
     auto wtTop = wtRow.removeFromTop(22);
     wtEnableBtn.setBounds(wtTop.removeFromLeft(50));
@@ -964,15 +1003,14 @@ void SynthyEditor::resized()
     wtVoicesKnob.setBounds(wk4);
     wtDetuneLabel.setBounds(wtRow.removeFromTop(14));
     wtDetuneKnob.setBounds(wtRow);
-    area.removeFromTop(10);
 
     // ============================================================
-    // ZONE 2: MODULATION (ADSR + LFO)
+    // RIGHT COLUMN — ZONE 2: MODULATION (ADSR + LFO + Arp)
     // ============================================================
-    modHeaderBounds = area.removeFromTop(24);
-    area.removeFromTop(2);
+    modHeaderBounds = rightCol.removeFromTop(24);
+    rightCol.removeFromTop(2);
 
-    auto modRow = area.removeFromTop(150);
+    auto modRow = rightCol.removeFromTop(150);
     auto adsrArea = modRow.removeFromLeft(modRow.getWidth() / 2).reduced(3);
     adsrBounds = adsrArea;
     adsrTitle.setBounds(adsrArea.removeFromTop(20));
@@ -1001,10 +1039,10 @@ void SynthyEditor::resized()
     lfoRateKnob.setBounds(lfoKnob1);
     lfoDepthLabel.setBounds(lfoArea.removeFromTop(14));
     lfoDepthKnob.setBounds(lfoArea);
-    area.removeFromTop(6);
+    rightCol.removeFromTop(6);
 
     // Arpeggiator row: [ON + title | MODE] left, then RATE / OCT / GATE knobs.
-    auto arpArea = area.removeFromTop(96).reduced(3);
+    auto arpArea = rightCol.removeFromTop(96).reduced(3);
     arpBounds = arpArea;
     auto arpTop = arpArea.removeFromTop(22);
     arpEnableBtn.setBounds(arpTop.removeFromLeft(50));
@@ -1023,16 +1061,16 @@ void SynthyEditor::resized()
     arpOctavesKnob.setBounds(ak2);
     arpGateLabel.setBounds(arpArea.removeFromTop(14));
     arpGateKnob.setBounds(arpArea);
-    area.removeFromTop(10);
+    rightCol.removeFromTop(10);
 
     // ============================================================
-    // ZONE 3: PROCESSING (filter + shapers + effects)
+    // RIGHT COLUMN — ZONE 3: PROCESSING (filter + shapers + effects)
     // ============================================================
-    procHeaderBounds = area.removeFromTop(24);
-    area.removeFromTop(2);
+    procHeaderBounds = rightCol.removeFromTop(24);
+    rightCol.removeFromTop(2);
 
     // Filter | Distortion
-    auto fdRow = area.removeFromTop(145);
+    auto fdRow = rightCol.removeFromTop(145);
     auto filterArea = fdRow.removeFromLeft(fdRow.getWidth() / 2).reduced(3);
     filterBounds = filterArea;
     filterTitle.setBounds(filterArea.removeFromTop(20));
@@ -1054,29 +1092,33 @@ void SynthyEditor::resized()
     distDriveKnob.setBounds(dLeft);
     distMixLabel.setBounds(distArea.removeFromTop(14));
     distMixKnob.setBounds(distArea);
-    area.removeFromTop(6);
+    rightCol.removeFromTop(6);
 
     // Wavefold | Bitcrush | Delay | Chorus | Reverb
-    auto fxRow = area.removeFromTop(120);
+    auto fxRow = rightCol.removeFromTop(120);
     int fxW = fxRow.getWidth() / 5;
     wavefoldPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     bitcrushPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     delayPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     chorusPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     reverbPanel.setBounds(fxRow.reduced(3));
-    area.removeFromTop(8);
 
-    // ===== Visualization — Oscilloscope | Spectrum =====
-    auto vizRow = area.removeFromTop(150).reduced(3, 0);
+    // ===== Footer: Visualisation (scope | spectrum) + Keyboard, full width =====
     if (waveformDisplay)
         waveformDisplay->setBounds(vizRow.removeFromLeft(vizRow.getWidth() / 2).withTrimmedRight(3));
     if (spectrumDisplay)
         spectrumDisplay->setBounds(vizRow.withTrimmedLeft(3));
 
-    area.removeFromTop(6);
-
-    // ===== Keyboard (full width) =====
-    auto kbRow = area.removeFromTop(72).reduced(3, 0);
     if (keyboard)
+    {
         keyboard->setBounds(kbRow.reduced(2));
+        // Spread the configured range across the full row width instead of
+        // leaving blank space to the right: size each key so all white keys
+        // in the range exactly fill the keyboard.
+        int whiteKeys = 0;
+        for (int n = keyboard->getRangeStart(); n <= keyboard->getRangeEnd(); ++n)
+            if (! juce::MidiMessage::isMidiNoteBlack(n)) ++whiteKeys;
+        if (whiteKeys > 0)
+            keyboard->setKeyWidth((float) keyboard->getWidth() / (float) whiteKeys);
+    }
 }
