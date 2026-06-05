@@ -842,13 +842,25 @@ void SynthyEditor::timerCallback()
 
     // Live modulation rings: route the current LFO value to whichever knob(s) the
     // LFO targets (0 Off, 1 Frequency, 2 Amplitude, 3 FilterCutoff); 0 elsewhere.
+    // Only ANIMATE knobs whose module is actually active — a disabled OSC or a
+    // bypassed filter isn't sounding, so showing a moving ring there is misleading.
+    auto& apvts = processor.getAPVTS();
     float lfo = processor.getLfoDisplayValue();
-    int target = (int) *processor.getAPVTS().getRawParameterValue("lfoTarget");
-    float freqMod = (target == 1) ? lfo : 0.0f;
-    float ampMod  = (target == 2) ? lfo : 0.0f;
-    osc1.setFreqMod(freqMod); osc2.setFreqMod(freqMod); osc3.setFreqMod(freqMod);
-    osc1.setAmpMod(ampMod);   osc2.setAmpMod(ampMod);   osc3.setAmpMod(ampMod);
-    cutoffKnob.setModAmount((target == 3) ? lfo : 0.0f);
+    int target = (int) *apvts.getRawParameterValue("lfoTarget");
+    bool freqT = (target == 1), ampT = (target == 2);
+
+    auto applyOsc = [&](OscillatorPanel& osc, const char* onId)
+    {
+        bool on = *apvts.getRawParameterValue(onId) > 0.5f;
+        osc.setFreqMod((freqT && on) ? lfo : 0.0f);
+        osc.setAmpMod ((ampT  && on) ? lfo : 0.0f);
+    };
+    applyOsc(osc1, "osc1On");
+    applyOsc(osc2, "osc2On");
+    applyOsc(osc3, "osc3On");
+
+    bool filterOn = (int) *apvts.getRawParameterValue("filterType") != 0;  // 0 = Off
+    cutoffKnob.setModAmount((target == 3 && filterOn) ? lfo : 0.0f);
 
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.
