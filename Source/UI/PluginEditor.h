@@ -133,9 +133,6 @@ private:
     // Bitcrusher (reuses EffectPanel: ON toggle + BITS/RATE/MIX knobs)
     EffectPanel bitcrushPanel;
 
-    // Stereo width (reuses EffectPanel: ON toggle + WIDTH/TIME knobs)
-    EffectPanel stereoPanel;
-
     // Karplus-Strong (reuses EffectPanel: ON toggle + knobs)
     EffectPanel karplusPanel;
 
@@ -174,6 +171,16 @@ private:
     juce::Label masterLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> masterAttach;
 
+    // Stereo width (header, inline next to Master). Built inline rather than as an
+    // EffectPanel so its WIDTH/TIME knobs get the full header height and render at
+    // the same Medium size as Master (the EffectPanel's title row squashed them).
+    juce::Label stereoTitle;
+    juce::ToggleButton stereoOnBtn;
+    SynthySlider stereoWidthKnob, stereoTimeKnob;
+    juce::Label stereoWidthLabel, stereoTimeLabel;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> stereoOnAttach;
+    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> stereoWidthAttach, stereoTimeAttach;
+
     // Preset save/load (shared .synthy JSON format) + randomize + reset
     juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" }, resetBtn { "RESET" };
     std::unique_ptr<juce::FileChooser> presetChooser;
@@ -193,7 +200,7 @@ private:
     juce::Slider& setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 
     // Layout bounds for paint()
-    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds;
+    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds, stereoBounds;
     // Zone separator headers (GENERATORS / MODULATION / PROCESSING)
     juce::Rectangle<int> genHeaderBounds, modHeaderBounds, procHeaderBounds;
 

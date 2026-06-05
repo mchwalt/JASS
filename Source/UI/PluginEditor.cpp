@@ -264,9 +264,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                     {"DRIVE", "SYM", "MIX"}),
       bitcrushPanel(p.getAPVTS(), "BITCRUSH", juce::Colour(0xff2dd4bf),
                     "bitcrushOn", {"bitcrushBits", "bitcrushRate", "bitcrushMix"},
-                    {"BITS", "RATE", "MIX"}),
-      stereoPanel(p.getAPVTS(), "STEREO", juce::Colour(0xff818cf8),
-                  "stereoOn", {"stereoWidth", "stereoTime"}, {"WIDTH", "TIME"})
+                    {"BITS", "RATE", "MIX"})
 {
     setLookAndFeel(&lnf);
 
@@ -393,7 +391,6 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(karplusPanel);
     addAndMakeVisible(wavefoldPanel);
     addAndMakeVisible(bitcrushPanel);
-    addAndMakeVisible(stereoPanel);
 
     // LFO
     auto cyan = juce::Colour(0xff22d3ee);
@@ -430,6 +427,32 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     masterKnob.setColour(juce::Slider::rotarySliderFillColourId, gold);
     masterAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "masterVol", masterKnob);
+
+    // Stereo width (inline in the header next to Master)
+    auto stereoCol = juce::Colour(0xff818cf8);
+    stereoTitle.setText("STEREO", juce::dontSendNotification);
+    stereoTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+    stereoTitle.setColour(juce::Label::textColourId, stereoCol);
+    stereoTitle.setJustificationType(juce::Justification::centred);
+    addAndMakeVisible(stereoTitle);
+
+    stereoOnBtn.setButtonText("ON");
+    stereoOnBtn.setColour(juce::ToggleButton::tickColourId, stereoCol);
+    addAndMakeVisible(stereoOnBtn);
+    stereoOnAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
+        p.getAPVTS(), "stereoOn", stereoOnBtn);
+
+    for (auto* k : { &stereoWidthKnob, &stereoTimeKnob })
+    {
+        k->setColour(juce::Slider::thumbColourId, stereoCol);
+        k->setColour(juce::Slider::rotarySliderFillColourId, stereoCol);
+    }
+    setupKnob(stereoWidthKnob, stereoWidthLabel, "WIDTH");
+    setupKnob(stereoTimeKnob,  stereoTimeLabel,  "TIME");
+    stereoWidthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getAPVTS(), "stereoWidth", stereoWidthKnob);
+    stereoTimeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
+        p.getAPVTS(), "stereoTime", stereoTimeKnob);
 
     // Preset Save / Load (shared .synthy JSON)
     addAndMakeVisible(saveBtn);
@@ -615,8 +638,26 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     juce::Component::SafePointer<juce::MidiKeyboardComponent> kbPtr(keyboard.get());
     juce::MessageManager::callAsync([kbPtr]() mutable { if (kbPtr) kbPtr->grabKeyboardFocus(); });
 
-    // Keep keyboard focus available so z / x (octave shift) reach keyPressed.
-    setWantsKeyboardFocus(true);
+    // The editor itself must NOT grab keyboard focus either (a click on the empty
+    // background would otherwise steal it from the keyboard). z / x still reach our
+    // keyPressed via event bubbling up from the focused keyboard component.
+    setWantsKeyboardFocus(false);
+
+    // Stop every knob/toggle/combo from grabbing keyboard focus when clicked, so
+    // the on-screen keyboard keeps focus and the computer keys keep playing notes
+    // even WHILE the user is tweaking parameters. (The keyboard keeps its focus;
+    // a slider's right-click value box still grabs focus on demand for typing.)
+    std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)
+    {
+        for (auto* child : parent.getChildren())
+        {
+            if (child == keyboard.get())
+                continue;   // the keyboard MUST keep keyboard focus
+            child->setWantsKeyboardFocus(false);
+            dropFocus(*child);
+        }
+    };
+    dropFocus(*this);
 
     // setSize must be LAST so resized() sees all components
     setSize(820, 1330);
@@ -721,8 +762,8 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawSection(chorusPanel.getBounds().expanded(2));
     drawSection(reverbPanel.getBounds().expanded(2));
 
-    // Stereo width panel lives in the header (left of Master), framed like the rest.
-    drawSection(stereoPanel.getBounds().expanded(2));
+    // Stereo width controls live in the header (left of Master), framed like the rest.
+    drawSection(stereoBounds.expanded(2));
 
     // Zone separator headers: bold label on the left + a divider rule across.
     auto drawZoneHeader = [&](juce::Rectangle<int> bounds, const juce::String& text, juce::Colour col)
@@ -757,8 +798,20 @@ void SynthyEditor::resized()
     auto masterArea = headerRow.removeFromRight(100);
     masterLabel.setBounds(masterArea.removeFromTop(14));
     masterKnob.setBounds(masterArea);
-    // STEREO width panel sits just left of Master (final stage of the chain).
-    stereoPanel.setBounds(headerRow.removeFromRight(150).reduced(4, 2));
+    // STEREO inline left of Master: title + ON stacked on the left, then the
+    // WIDTH/TIME knobs at full header height so they match the Master knob size.
+    auto stereoArea = headerRow.removeFromRight(200);
+    stereoBounds = stereoArea;
+    auto stTitleCol = stereoArea.removeFromLeft(56);
+    stereoTitle.setBounds(stTitleCol.removeFromTop(20));
+    stTitleCol.removeFromTop(6);
+    stereoOnBtn.setBounds(stTitleCol.removeFromTop(24).reduced(6, 0));
+    auto stKnobW = stereoArea.getWidth() / 2;
+    auto stWCol = stereoArea.removeFromLeft(stKnobW);
+    stereoWidthLabel.setBounds(stWCol.removeFromTop(14));
+    stereoWidthKnob.setBounds(stWCol);
+    stereoTimeLabel.setBounds(stereoArea.removeFromTop(14));
+    stereoTimeKnob.setBounds(stereoArea);
     // Center: SYNTHY title (top) + current-preset name (below)
     auto centerArea = headerRow;
     g_titleBounds = centerArea.removeFromTop(centerArea.getHeight() - 18);
