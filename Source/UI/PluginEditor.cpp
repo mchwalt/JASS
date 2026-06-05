@@ -447,6 +447,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
             if (f == juce::File{}) return;
             if (! f.hasFileExtension("synthy")) f = f.withFileExtension("synthy");
             PresetIO::saveToFile(processor.getAPVTS(), f, f.getFileNameWithoutExtension());
+            processor.markPresetClean();   // current state now matches the saved file
             setPresetName(f.getFileNameWithoutExtension());
         });
     };
@@ -460,6 +461,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
             auto f = fc.getResult();
             if (f == juce::File{}) return;
             PresetIO::loadFromFile(processor.getAPVTS(), f);
+            processor.markPresetClean();   // current state now matches the loaded file
             setPresetName(f.getFileNameWithoutExtension());
         });
     };
@@ -630,20 +632,29 @@ void SynthyEditor::timerCallback()
     osc2.setPlayedRatio(ratio);
     osc3.setPlayedRatio(ratio);
 
-    // The shared LiveState is re-loaded asynchronously after construction; keep
-    // the header label in sync with the processor's (restored) preset name.
-    if (auto pn = processor.getCurrentPresetName(); pn != shownPresetName)
+    // Keep the header label in sync: it reacts both to the (async-restored)
+    // preset name and to live edits flipping the "modified" flag.
+    updatePresetLabel();
+}
+
+// A loaded-and-untouched preset shows its name; once any parameter changes
+// (and until the user saves) it's an unsaved working state → "Current State".
+void SynthyEditor::updatePresetLabel()
+{
+    auto text = processor.isPresetModified()
+                  ? juce::String("Current State")
+                  : ("Preset: " + processor.getCurrentPresetName());
+    if (text != shownLabel)
     {
-        shownPresetName = pn;
-        presetNameLabel.setText("Preset: " + pn, juce::dontSendNotification);
+        shownLabel = text;
+        presetNameLabel.setText(text, juce::dontSendNotification);
     }
 }
 
 void SynthyEditor::setPresetName(const juce::String& name)
 {
     processor.setCurrentPresetName(name);   // keep the processor (LiveState) in sync
-    shownPresetName = name;
-    presetNameLabel.setText("Preset: " + name, juce::dontSendNotification);
+    updatePresetLabel();
 }
 
 void SynthyEditor::refreshBankSelector()

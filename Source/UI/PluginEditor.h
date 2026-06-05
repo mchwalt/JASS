@@ -178,8 +178,9 @@ private:
     juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" }, resetBtn { "RESET" };
     std::unique_ptr<juce::FileChooser> presetChooser;
     juce::Label presetNameLabel;                 // shows the currently loaded preset
-    juce::String shownPresetName;                // last value pushed to the label (timer sync)
+    juce::String shownLabel;                     // last text pushed to the label (change-detect)
     void setPresetName(const juce::String& name);
+    void updatePresetLabel();                    // composes "Preset: X" / "Current State"
 
     // Oscilloscope + Spectrum
     std::unique_ptr<WaveformDisplay> waveformDisplay;

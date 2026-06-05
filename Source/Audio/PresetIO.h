@@ -79,12 +79,15 @@ namespace PresetIO
     namespace ID = Parameters::ID;
 
     // ── Export ──
-    inline juce::var toVar(APVTS& a, const juce::String& name)
+    // `modified` flags an unsaved working state (only meaningful for LiveState;
+    // a freshly saved named preset is by definition unmodified).
+    inline juce::var toVar(APVTS& a, const juce::String& name, bool modified = false)
     {
         using namespace detail;
         auto* root = new juce::DynamicObject();
         root->setProperty("FormatVersion", kFormatVersion);
         root->setProperty("Name", name);
+        root->setProperty("Modified", modified);
 
         juce::Array<juce::var> oscs;
         for (int o = 1; o <= 3; ++o)
@@ -175,9 +178,9 @@ namespace PresetIO
         return juce::var(root);
     }
 
-    inline bool saveToFile(APVTS& a, const juce::File& file, const juce::String& name)
+    inline bool saveToFile(APVTS& a, const juce::File& file, const juce::String& name, bool modified = false)
     {
-        return file.replaceWithText(juce::JSON::toString(toVar(a, name), false));
+        return file.replaceWithText(juce::JSON::toString(toVar(a, name, modified), false));
     }
 
     // ── Import ──
@@ -304,5 +307,14 @@ namespace PresetIO
         if (v.isObject() && v.hasProperty("Name"))
             return v["Name"].toString();
         return {};
+    }
+
+    // Reads the "Modified" flag (unsaved working state). False if absent/unreadable.
+    inline bool modifiedFromFile(const juce::File& file)
+    {
+        if (! file.existsAsFile())
+            return false;
+        auto v = juce::JSON::parse(file.loadFileAsString());
+        return v.isObject() && (bool) v.getProperty("Modified", false);
     }
 }

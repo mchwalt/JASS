@@ -21,6 +21,7 @@ SynthyProcessor::SynthyProcessor()
         PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
         if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
             currentPresetName = n;
+        restoreModifiedState(PresetIO::modifiedFromFile(PresetIO::liveStateFile()));
         apvts.state.addListener(this);
         startTimer(1500);
 
@@ -31,6 +32,7 @@ SynthyProcessor::SynthyProcessor()
             PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
             if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
                 currentPresetName = n;
+            restoreModifiedState(PresetIO::modifiedFromFile(PresetIO::liveStateFile()));
         });
     }
 }
@@ -81,14 +83,22 @@ void SynthyProcessor::timerCallback()
 
 void SynthyProcessor::saveLiveState()
 {
-    // Persist the active preset name so it (and the patch) come back on restart.
-    PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), currentPresetName);
+    // Persist the active preset name + modified flag so the patch (and whether it
+    // was an unsaved working state) come back on restart.
+    PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), currentPresetName, isPresetModified());
 }
 
 void SynthyProcessor::randomize()
 {
     using namespace Parameters;
     auto& rng = juce::Random::getSystemRandom();
+
+    // STEREO and MASTER VOLUME are global "mastering" choices, not part of the
+    // sound design → RANDOM must leave them untouched. Snapshot now, restore after.
+    const float keepStereoOn    = *apvts.getRawParameterValue(ID::stereoOn);
+    const float keepStereoWidth = *apvts.getRawParameterValue(ID::stereoWidth);
+    const float keepStereoTime  = *apvts.getRawParameterValue(ID::stereoTime);
+    const float keepMasterVol   = *apvts.getRawParameterValue(ID::masterVol);
 
     // Random value for every parameter...
     for (auto* p : getParameters())
@@ -111,8 +121,7 @@ void SynthyProcessor::randomize()
     if (*apvts.getRawParameterValue(ID::oscAmp(1)) < 0.2f)
         set(ID::oscAmp(1), 0.3f + rng.nextFloat() * 0.5f);
 
-    // Keep a sane master volume, sustain (drone is heard) and a not-too-slow attack.
-    set(ID::masterVol, 0.4f + rng.nextFloat() * 0.35f);
+    // Keep a sane sustain (drone is heard) and a not-too-slow attack.
     set(ID::sustain,   0.6f + rng.nextFloat() * 0.4f);
     set(ID::attack,    rng.nextFloat() * 0.5f);
 
@@ -126,10 +135,15 @@ void SynthyProcessor::randomize()
     set(ID::bitcrushRate, (float) rng.nextInt(juce::Range<int>(1, 9)));   // 1..8x
     set(ID::subLevel,     0.3f + rng.nextFloat() * 0.4f);                 // 0.3..0.7
     set(ID::subOctave,    (float) rng.nextInt(juce::Range<int>(0, 2)));   // -1/-2 only
-    set(ID::stereoWidth,  0.3f + rng.nextFloat() * 0.5f);                 // 0.3..0.8 (not extreme)
-    set(ID::stereoTime,   3.0f + rng.nextFloat() * 9.0f);                // 3..12 ms
+
+    // Restore the global settings the dice roll overwrote (see snapshot above).
+    set(ID::stereoOn,    keepStereoOn);
+    set(ID::stereoWidth, keepStereoWidth);
+    set(ID::stereoTime,  keepStereoTime);
+    set(ID::masterVol,   keepMasterVol);
 
     currentPresetName = "Random";
+    markPresetClean();   // a fresh random patch is its own "clean" state
 }
 
 void SynthyProcessor::resetToDefault()
@@ -144,6 +158,37 @@ void SynthyProcessor::resetToDefault()
 
     autoPlayEnabled.store(true);
     currentPresetName = "Init";
+    markPresetClean();
+}
+
+// --- Preset "modified" tracking (value-compare against a clean snapshot) ---
+
+void SynthyProcessor::markPresetClean()
+{
+    cleanSnapshot.clear();
+    for (auto* p : getParameters())
+        cleanSnapshot.push_back(p->getValue());
+}
+
+bool SynthyProcessor::isPresetModified() const
+{
+    auto& params = getParameters();
+    if (cleanSnapshot.size() != (size_t) params.size())
+        return true;   // no baseline (e.g. restored as a modified working state)
+    for (int i = 0; i < params.size(); ++i)
+        if (std::abs(params[i]->getValue() - cleanSnapshot[(size_t) i]) > 1.0e-6f)
+            return true;
+    return false;
+}
+
+void SynthyProcessor::restoreModifiedState(bool modified)
+{
+    // On LiveState load: a clean state gets a matching baseline; a modified
+    // working state leaves the baseline empty so isPresetModified() stays true.
+    if (modified)
+        cleanSnapshot.clear();
+    else
+        markPresetClean();
 }
 
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)

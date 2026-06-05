@@ -35,6 +35,7 @@ sound at identical parameters.
 {
   "FormatVersion": 1,
   "Name": "Init",
+  "Modified": false,          // C++ LiveState only: true = unsaved working state (header shows "Current State")
   "Oscillators": [            // exactly 3
     {
       "Enabled": false,

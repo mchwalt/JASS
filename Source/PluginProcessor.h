@@ -57,6 +57,16 @@ public:
     juce::String getCurrentPresetName() const { return currentPresetName; }
     void setCurrentPresetName(const juce::String& n) { currentPresetName = n; }
 
+    // "Modified since last load/save?" → the header shows "Current State" instead
+    // of the (now stale) preset name. Determined by comparing the live parameter
+    // values against a snapshot taken at the last clean point (load/save/random/
+    // reset). Done by value-compare rather than a change-listener because APVTS
+    // delivers value-tree change callbacks asynchronously, which would race the
+    // "clear after load" and leave the flag permanently set.
+    bool isPresetModified() const;
+    void markPresetClean();                       // snapshot current values as the clean baseline
+    void restoreModifiedState(bool modified);     // on LiveState load: clean baseline, or force "modified"
+
 private:
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;
@@ -82,6 +92,7 @@ private:
     // Shared live-state persistence (see PresetIO::liveStateFile)
     juce::String currentPresetName { "Init" };   // restored from LiveState on start
     std::atomic<bool> liveDirty { false };
+    std::vector<float> cleanSnapshot;             // param values at last load/save (empty = "modified")
     void timerCallback() override;
     void valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&) override { liveDirty = true; }
     void saveLiveState();
