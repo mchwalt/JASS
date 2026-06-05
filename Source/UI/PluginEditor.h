@@ -221,6 +221,14 @@ private:
 
     juce::Slider& setupKnob(juce::Slider& knob, juce::Label& label, const juce::String& text);
 
+    // Per-module "↺" reset buttons for the inline modules (OSC and EffectPanel
+    // components carry their own). initResetButton wires + styles + shows one in
+    // a single line — the shared mechanism behind every inline module reset.
+    void initResetButton(juce::TextButton& btn, juce::Colour colour,
+                         juce::StringArray paramIds, std::function<void()> afterReset = {});
+    juce::TextButton adsrResetBtn, lfoResetBtn, arpResetBtn,
+                     filterResetBtn, distResetBtn, stereoResetBtn, masterResetBtn;
+
     // Layout bounds for paint()
     juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds, stereoBounds, arpBounds;
     // Zone separator headers (GENERATORS / MODULATION / PROCESSING)

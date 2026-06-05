@@ -315,26 +315,38 @@ juce::Slider& SynthyEditor::setupKnob(juce::Slider& knob, juce::Label& label,
     return knob;
 }
 
+void SynthyEditor::initResetButton(juce::TextButton& btn, juce::Colour colour,
+                                   juce::StringArray paramIds, std::function<void()> afterReset)
+{
+    styleResetButton(btn, colour);
+    btn.onClick = [this, paramIds, afterReset]
+    {
+        resetParamsToDefault(processor.getAPVTS(), paramIds);
+        if (afterReset) afterReset();
+    };
+    addAndMakeVisible(btn);
+}
+
 SynthyEditor::SynthyEditor(SynthyProcessor& p)
     : AudioProcessorEditor(&p), processor(p),
       osc1(p.getAPVTS(), 1, juce::Colour(0xff40c0ff)),
       osc2(p.getAPVTS(), 2, juce::Colour(0xffff6b9d)),
       osc3(p.getAPVTS(), 3, juce::Colour(0xffc084fc)),
       delayPanel(p.getAPVTS(), "DELAY", juce::Colour(0xff38bdf8),
-                 "delayOn", {"delayTime", "delayFeedback", "delayMix"}, {"TIME", "FDBK", "MIX"}),
+                 "delayOn", {"delayTime", "delayFeedback", "delayMix"}, {"TIME", "FDBK", "MIX"}, {}, true),
       chorusPanel(p.getAPVTS(), "CHORUS", juce::Colour(0xffa78bfa),
-                  "chorusOn", {"chorusRate", "chorusDepth", "chorusMix"}, {"RATE", "DEPTH", "MIX"}),
+                  "chorusOn", {"chorusRate", "chorusDepth", "chorusMix"}, {"RATE", "DEPTH", "MIX"}, {}, true),
       reverbPanel(p.getAPVTS(), "REVERB", juce::Colour(0xfffb7185),
-                  "reverbOn", {"reverbRoom", "reverbDamp", "reverbMix"}, {"ROOM", "DAMP", "MIX"}),
+                  "reverbOn", {"reverbRoom", "reverbDamp", "reverbMix"}, {"ROOM", "DAMP", "MIX"}, {}, true),
       karplusPanel(p.getAPVTS(), "STRING (KARPLUS)", juce::Colour(0xff34d399),
                    "karplusOn", {"karplusFreq", "karplusAmp", "karplusDamping", "karplusStretch"},
                    {"FREQ", "AMP", "DAMP", "STR"}, {}, /*withReset*/ true),
       wavefoldPanel(p.getAPVTS(), "WAVEFOLD", juce::Colour(0xfffbbf24),
                     "wavefoldOn", {"wavefoldDrive", "wavefoldSymmetry", "wavefoldMix"},
-                    {"DRIVE", "SYM", "MIX"}),
+                    {"DRIVE", "SYM", "MIX"}, {}, true),
       bitcrushPanel(p.getAPVTS(), "BITCRUSH", juce::Colour(0xff2dd4bf),
                     "bitcrushOn", {"bitcrushBits", "bitcrushRate", "bitcrushMix"},
-                    {"BITS", "RATE", "MIX"})
+                    {"BITS", "RATE", "MIX"}, {}, true)
 {
     setLookAndFeel(&lnf);
 
@@ -409,6 +421,8 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     susAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "sustain", sustainKnob);
     relAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "release", releaseKnob);
 
+    initResetButton(adsrResetBtn, green, {"attack", "decay", "sustain", "release"});
+
     // Filter
     filterTitle.setText("FILTER", juce::dontSendNotification);
     filterTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -430,6 +444,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 
     cutAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "filterCutoff", cutoffKnob);
     resoAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(p.getAPVTS(), "filterReso", resoKnob);
+
+    // filterType excluded (its "Off" = bypass) — reset must not disable the filter.
+    initResetButton(filterResetBtn, orange, {"filterCutoff", "filterReso"});
 
     // Distortion (inline)
     auto distRed = juce::Colour(0xffef4444);
@@ -453,6 +470,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     distMixKnob.setColour(juce::Slider::rotarySliderFillColourId, distRed);
     distMixAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "distortionMix", distMixKnob);
+
+    // distortionType excluded (its "Off" = bypass) — reset must not disable it.
+    initResetButton(distResetBtn, distRed, {"distortionDrive", "distortionMix"});
 
     // Effects
     addAndMakeVisible(delayPanel);
@@ -491,6 +511,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     lfoDepthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "lfoDepth", lfoDepthKnob);
 
+    // lfoTarget excluded (its "Off" = no modulation) — reset keeps the routing.
+    initResetButton(lfoResetBtn, cyan, {"lfoWave", "lfoRate", "lfoDepth"});
+
     // Arpeggiator (MODULATION zone)
     arpTitle.setText("ARPEGGIATOR", juce::dontSendNotification);
     arpTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
@@ -524,12 +547,17 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     arpGateAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "arpGate", arpGateKnob);
 
+    // arpOn excluded — reset must not switch the arpeggiator off.
+    initResetButton(arpResetBtn, cyan, {"arpRate", "arpMode", "arpOctaves", "arpGate"});
+
     // Master
     auto gold = juce::Colour(0xffffd700);
     setupKnob(masterKnob, masterLabel, "MASTER").setColour(juce::Slider::thumbColourId, gold);
     masterKnob.setColour(juce::Slider::rotarySliderFillColourId, gold);
     masterAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "masterVol", masterKnob);
+
+    initResetButton(masterResetBtn, gold, {"masterVol"});
 
     // Stereo width (inline in the header next to Master)
     auto stereoCol = juce::Colour(0xff818cf8);
@@ -556,6 +584,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         p.getAPVTS(), "stereoWidth", stereoWidthKnob);
     stereoTimeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "stereoTime", stereoTimeKnob);
+
+    // stereoOn excluded — reset must not switch stereo off.
+    initResetButton(stereoResetBtn, stereoCol, {"stereoWidth", "stereoTime"});
 
     // Preset Save / Load (shared .synthy JSON)
     addAndMakeVisible(saveBtn);
@@ -627,10 +658,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 
     // noiseType doubles as the on/off (its "Off" entry), so it's excluded —
     // a reset must not silence the noise source; only AMP is reset.
-    styleResetButton(noiseResetBtn, noiseGrey);
-    noiseResetBtn.onClick = [this]
-        { resetParamsToDefault(processor.getAPVTS(), {"noiseAmp"}); };
-    addAndMakeVisible(noiseResetBtn);
+    initResetButton(noiseResetBtn, noiseGrey, {"noiseAmp"});
 
     // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
     auto subBlue = juce::Colour(0xff60a5fa);
@@ -661,10 +689,8 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     subLevelAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "subLevel", subLevelKnob);
 
-    styleResetButton(subResetBtn, subBlue);
-    subResetBtn.onClick = [this]   // subOn excluded — reset must not switch it off
-        { resetParamsToDefault(processor.getAPVTS(), {"subWave", "subOctave", "subLevel"}); };
-    addAndMakeVisible(subResetBtn);
+    // subOn excluded — reset must not switch it off.
+    initResetButton(subResetBtn, subBlue, {"subWave", "subOctave", "subLevel"});
 
     // Wavetable
     auto wtPink = juce::Colour(0xfff472b6);
@@ -738,15 +764,12 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     for (auto* k : { &wtPositionKnob, &wtFreqKnob, &wtAmpKnob, &wtVoicesKnob, &wtDetuneKnob })
         k->setKnobDiameter(KnobSize::Small);
 
-    styleResetButton(wtResetBtn, wtPink);
-    wtResetBtn.onClick = [this]   // wavetableOn excluded — reset must not switch it off
-    {
-        resetParamsToDefault(processor.getAPVTS(),
-            {"wavetableBank", "wavetablePosition", "wavetableFreq",
-             "wavetableAmp", "wavetableUniVoices", "wavetableUniDetune"});
-        refreshBankSelector();   // wtBankSelector is manually synced, not an attachment
-    };
-    addAndMakeVisible(wtResetBtn);
+    // wavetableOn excluded — reset must not switch it off. The bank combo is
+    // manually synced (no attachment), so refresh it after the reset.
+    initResetButton(wtResetBtn, wtPink,
+        {"wavetableBank", "wavetablePosition", "wavetableFreq",
+         "wavetableAmp", "wavetableUniVoices", "wavetableUniDetune"},
+        [this] { refreshBankSelector(); });
 
     // On-screen keyboard (shares the processor's MidiKeyboardState → plays the
     // active generators with full ADSR per note, transposed relative to C4).
@@ -958,7 +981,9 @@ void SynthyEditor::resized()
     randomBtn.setBounds(row2.removeFromLeft(row2.getWidth() / 2).reduced(3, 2));
     resetBtn.setBounds(row2.reduced(3, 2));
     auto masterArea = headerRow.removeFromRight(100);
-    masterLabel.setBounds(masterArea.removeFromTop(14));
+    auto masterLabelRow = masterArea.removeFromTop(14);
+    masterResetBtn.setBounds(masterLabelRow.removeFromRight(20));
+    masterLabel.setBounds(masterLabelRow);
     masterKnob.setBounds(masterArea);
     // STEREO inline left of Master: title + ON stacked on the left, then the
     // WIDTH/TIME knobs at full header height so they match the Master knob size.
@@ -966,8 +991,10 @@ void SynthyEditor::resized()
     stereoBounds = stereoArea;
     auto stTitleCol = stereoArea.removeFromLeft(56);
     stereoTitle.setBounds(stTitleCol.removeFromTop(20));
-    stTitleCol.removeFromTop(6);
-    stereoOnBtn.setBounds(stTitleCol.removeFromTop(24).reduced(6, 0));
+    stTitleCol.removeFromTop(3);
+    stereoOnBtn.setBounds(stTitleCol.removeFromTop(22).reduced(6, 0));
+    stTitleCol.removeFromTop(2);
+    stereoResetBtn.setBounds(stTitleCol.removeFromTop(18).reduced(14, 0));
     auto stKnobW = stereoArea.getWidth() / 2;
     auto stWCol = stereoArea.removeFromLeft(stKnobW);
     stereoWidthLabel.setBounds(stWCol.removeFromTop(14));
@@ -1090,7 +1117,9 @@ void SynthyEditor::resized()
     auto modRow = rightCol.removeFromTop(150);
     auto adsrArea = modRow.removeFromLeft(modRow.getWidth() / 2).reduced(3);
     adsrBounds = adsrArea;
-    adsrTitle.setBounds(adsrArea.removeFromTop(20));
+    auto adsrTitleRow = adsrArea.removeFromTop(20);
+    adsrResetBtn.setBounds(adsrTitleRow.removeFromRight(22).reduced(1));
+    adsrTitle.setBounds(adsrTitleRow);
     int knobW = adsrArea.getWidth() / 4;
     auto a1 = adsrArea.removeFromLeft(knobW);
     atkLabel.setBounds(a1.removeFromTop(14));
@@ -1106,7 +1135,9 @@ void SynthyEditor::resized()
 
     auto lfoArea = modRow.reduced(3);
     lfoBounds = lfoArea;
-    lfoTitle.setBounds(lfoArea.removeFromTop(20));
+    auto lfoTitleRow = lfoArea.removeFromTop(20);
+    lfoResetBtn.setBounds(lfoTitleRow.removeFromRight(22).reduced(1));
+    lfoTitle.setBounds(lfoTitleRow);
     auto lfoSelectors = lfoArea.removeFromTop(28);
     lfoWaveSelector.setBounds(lfoSelectors.removeFromLeft(lfoSelectors.getWidth() / 2).reduced(4, 2));
     lfoTargetSelector.setBounds(lfoSelectors.reduced(4, 2));
@@ -1123,6 +1154,7 @@ void SynthyEditor::resized()
     arpBounds = arpArea;
     auto arpTop = arpArea.removeFromTop(22);
     arpEnableBtn.setBounds(arpTop.removeFromLeft(50));
+    arpResetBtn.setBounds(arpTop.removeFromRight(22).reduced(1));
     arpTitle.setBounds(arpTop.removeFromLeft(150));
     arpArea.removeFromTop(2);
     // Left: MODE selector; right: three knobs.
@@ -1150,7 +1182,9 @@ void SynthyEditor::resized()
     auto fdRow = rightCol.removeFromTop(145);
     auto filterArea = fdRow.removeFromLeft(fdRow.getWidth() / 2).reduced(3);
     filterBounds = filterArea;
-    filterTitle.setBounds(filterArea.removeFromTop(20));
+    auto filterTitleRow = filterArea.removeFromTop(20);
+    filterResetBtn.setBounds(filterTitleRow.removeFromRight(22).reduced(1));
+    filterTitle.setBounds(filterTitleRow);
     filterType.setBounds(filterArea.removeFromTop(24).reduced(20, 0));
     filterArea.removeFromTop(4);
     auto fLeft = filterArea.removeFromLeft(filterArea.getWidth() / 2);
@@ -1161,7 +1195,9 @@ void SynthyEditor::resized()
 
     auto distArea = fdRow.reduced(3);
     distBounds = distArea;
-    distTitle.setBounds(distArea.removeFromTop(20));
+    auto distTitleRow = distArea.removeFromTop(20);
+    distResetBtn.setBounds(distTitleRow.removeFromRight(22).reduced(1));
+    distTitle.setBounds(distTitleRow);
     distTypeSelector.setBounds(distArea.removeFromTop(24).reduced(20, 0));
     distArea.removeFromTop(4);
     auto dLeft = distArea.removeFromLeft(distArea.getWidth() / 2);
