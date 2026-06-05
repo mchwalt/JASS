@@ -67,7 +67,7 @@ sound at identical parameters.
   "SubLevel": 0.5,             // 0..1
   "StereoEnabled": false,      // pseudo-stereo master stage (mono engine -> wide stereo)
   "StereoWidth": 0.5,          // 0..1  (0 = mono, higher = wider)
-  "StereoTime": 12.0,          // 1..30 ms comb/Haas delay
+  "StereoTime": 12.0,          // 1..15 ms comb/Haas delay
   "LfoWaveform": "Sine",       // Sine | Triangle | Square | Sawtooth
   "LfoTarget": "Off",          // Off | Frequency | Amplitude | FilterCutoff
   "LfoRate": 2.0, "LfoDepth": 0.5,

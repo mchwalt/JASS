@@ -127,7 +127,7 @@ void SynthyProcessor::randomize()
     set(ID::subLevel,     0.3f + rng.nextFloat() * 0.4f);                 // 0.3..0.7
     set(ID::subOctave,    (float) rng.nextInt(juce::Range<int>(0, 2)));   // -1/-2 only
     set(ID::stereoWidth,  0.3f + rng.nextFloat() * 0.5f);                 // 0.3..0.8 (not extreme)
-    set(ID::stereoTime,   3.0f + rng.nextFloat() * 22.0f);               // 3..25 ms
+    set(ID::stereoTime,   3.0f + rng.nextFloat() * 9.0f);                // 3..12 ms
 
     currentPresetName = "Random";
 }

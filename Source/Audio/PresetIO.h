@@ -133,7 +133,7 @@ namespace PresetIO
 
         root->setProperty("StereoEnabled", rawB(a, ID::stereoOn));
         root->setProperty("StereoWidth",   rawF(a, ID::stereoWidth));
-        root->setProperty("StereoTime",    rawF(a, ID::stereoTime));
+        root->setProperty("StereoTime",    rawF(a, ID::stereoTime));  // 1..15 ms
 
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   rawChoice(a, ID::lfoTarget, kLfoTarget));

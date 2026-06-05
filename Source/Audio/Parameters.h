@@ -238,7 +238,7 @@ namespace Parameters
         // Stereo width (pseudo-stereo master stage)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::stereoOn, 1), "Stereo On", false));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoWidth, 1), "Stereo Width", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoTime, 1), "Stereo Time", juce::NormalisableRange<float>(1.0f, 30.0f, 0.1f), 12.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoTime, 1), "Stereo Time", juce::NormalisableRange<float>(1.0f, 15.0f, 0.1f), 12.0f));
 
         // Master
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));

@@ -18,8 +18,8 @@
 // L + R = 2*mono exactly -> the effect is perfectly MONO-COMPATIBLE (it fully
 // cancels when summed to mono, no comb-filter colouration on a mono system).
 // WIDTH maps to g (0 = untouched mono, higher = wider); TIME sets the comb
-// spacing: short (~1-5 ms) = shimmering width, long (~10-30 ms) = Haas-style
-// room. Runs once on the summed buffer in processBlock, NOT per voice.
+// spacing: short (~1-5 ms) = shimmering width, longer (~8-15 ms) = light
+// Haas-style room. Runs once on the summed buffer in processBlock, NOT per voice.
 class StereoWidth
 {
 public:
@@ -74,7 +74,7 @@ public:
     }
 
 private:
-    static constexpr double kMaxTimeMs = 30.0;
+    static constexpr double kMaxTimeMs = 15.0;
     std::vector<float> delayLine;
     int writePos = 0;
     double sr = 44100.0;
