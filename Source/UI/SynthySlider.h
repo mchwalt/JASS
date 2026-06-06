@@ -1,13 +1,14 @@
 #pragma once
 #include <JuceHeader.h>
 
-// The whole UI uses exactly three knob diameters so every panel looks
-// consistent. The LookAndFeel caps each knob's drawn size to its category.
+// Every module uses ONE knob diameter (Small) so the whole UI is consistent
+// and the compact half-height modules fit. The LookAndFeel caps each knob's
+// drawn size to this; the larger values are kept only for reference.
 namespace KnobSize
 {
-    constexpr int Large  = 74;  // focal knobs (ADSR)
-    constexpr int Medium = 56;  // the default for almost everything
-    constexpr int Small  = 46;  // tight rows (Wavetable)
+    constexpr int Large  = 74;
+    constexpr int Medium = 56;
+    constexpr int Small  = 46;  // the single standard size for all modules
 }
 
 class SynthySlider : public juce::Slider
@@ -88,7 +89,7 @@ public:
     }
 
 private:
-    int knobDiameter = KnobSize::Medium;
+    int knobDiameter = KnobSize::Small;   // single standard size for all modules
     double wheelStep = 0.0;   // 0 = use the parameter's own interval
     float modAmount = 0.0f;   // live LFO modulation for the ring (-1..+1)
 };

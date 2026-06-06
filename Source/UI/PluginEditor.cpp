@@ -175,9 +175,6 @@ OscillatorPanel::OscillatorPanel(juce::AudioProcessorValueTreeState& apvts,
     uniDetuneAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         apvts, prefix + "UniDetune", uniDetuneKnob);
 
-    // Four knobs in a narrow panel → Small
-    for (auto* k : { &freqKnob, &ampKnob, &uniVoicesKnob, &uniDetuneKnob })
-        k->setKnobDiameter(KnobSize::Small);
 }
 
 void OscillatorPanel::setPlayedRatio(double ratio)
@@ -300,6 +297,57 @@ void EffectPanel::resized()
     }
 }
 
+// --- EnvelopeDisplay ---
+
+void EnvelopeDisplay::paint(juce::Graphics& g)
+{
+    auto b = getLocalBounds().toFloat().reduced(2.0f);
+    const float left = b.getX(), right = b.getRight();
+    const float top = b.getY(), bottom = b.getBottom();
+    const float w = b.getWidth(), h = b.getHeight();
+
+    const float a = pA ? pA->load() : 0.0f;
+    const float d = pD ? pD->load() : 0.0f;
+    const float s = juce::jlimit(0.0f, 1.0f, pS ? pS->load() : 0.0f);
+    const float r = pR ? pR->load() : 0.0f;
+
+    // A fixed-width sustain hold; the rest of the width is split between A/D/R
+    // proportional to their durations (so the SHAPE always fills the strip).
+    const float sustainW = w * 0.22f;
+    const float adrW = w - sustainW;
+    const float sum = a + d + r;
+    const float aw = (sum < 1.0e-4f) ? adrW / 3.0f : adrW * (a / sum);
+    const float dw = (sum < 1.0e-4f) ? adrW / 3.0f : adrW * (d / sum);
+    const float rw = (sum < 1.0e-4f) ? adrW / 3.0f : adrW * (r / sum);
+
+    const float susY = bottom - s * h;
+    const float xPeak = left + aw;
+    const float xSusStart = xPeak + dw;
+    const float xSusEnd = xSusStart + sustainW;
+    const float xEnd = xSusEnd + rw;
+
+    juce::Path curve;
+    curve.startNewSubPath(left, bottom);   // note-on at zero
+    curve.lineTo(xPeak, top);              // attack → peak
+    curve.lineTo(xSusStart, susY);         // decay → sustain level
+    curve.lineTo(xSusEnd, susY);           // sustain hold
+    curve.lineTo(xEnd, bottom);            // release → zero
+
+    // Soft fill under the curve, then the stroked line on top.
+    juce::Path fill = curve;
+    fill.lineTo(left, bottom);
+    fill.closeSubPath();
+    g.setColour(col.withAlpha(0.14f));
+    g.fillPath(fill);
+
+    g.setColour(col.withAlpha(0.9f));
+    g.strokePath(curve, juce::PathStrokeType(1.6f));
+
+    // Baseline.
+    g.setColour(col.withAlpha(0.25f));
+    g.drawLine(left, bottom, right, bottom, 1.0f);
+}
+
 // --- SynthyEditor ---
 
 juce::Slider& SynthyEditor::setupKnob(juce::Slider& knob, juce::Label& label,
@@ -332,6 +380,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
       osc1(p.getAPVTS(), 1, juce::Colour(0xff40c0ff)),
       osc2(p.getAPVTS(), 2, juce::Colour(0xffff6b9d)),
       osc3(p.getAPVTS(), 3, juce::Colour(0xffc084fc)),
+      adsrEnvDisplay(p.getAPVTS(), juce::Colour(0xff4ade80)),
       delayPanel(p.getAPVTS(), "DELAY", juce::Colour(0xff38bdf8),
                  "delayOn", {"delayTime", "delayFeedback", "delayMix"}, {"TIME", "FDBK", "MIX"}, {}, true),
       chorusPanel(p.getAPVTS(), "CHORUS", juce::Colour(0xffa78bfa),
@@ -393,6 +442,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     adsrTitle.setColour(juce::Label::textColourId, juce::Colour(0xff4ade80));
     adsrTitle.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(adsrTitle);
+    addAndMakeVisible(adsrEnvDisplay);   // ADSR curve preview (above the knobs)
 
     auto green = juce::Colour(0xff4ade80);
     setupKnob(attackKnob, atkLabel, "ATK").setColour(juce::Slider::thumbColourId, green);
@@ -403,12 +453,6 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     sustainKnob.setColour(juce::Slider::rotarySliderFillColourId, green);
     setupKnob(releaseKnob, relLabel, "REL").setColour(juce::Slider::thumbColourId, green);
     releaseKnob.setColour(juce::Slider::rotarySliderFillColourId, green);
-
-    // ADSR are the focal knobs → Large
-    attackKnob.setKnobDiameter(KnobSize::Large);
-    decayKnob.setKnobDiameter(KnobSize::Large);
-    sustainKnob.setKnobDiameter(KnobSize::Large);
-    releaseKnob.setKnobDiameter(KnobSize::Large);
 
     // Time knobs have a 1 ms automation interval but want ~10 ms wheel steps
     // (fine 10 ms / coarse 100 ms) over their wide 0..5 s range.
@@ -769,10 +813,6 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     wtDetuneAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
         p.getAPVTS(), "wavetableUniDetune", wtDetuneKnob);
 
-    // Wavetable packs five knobs into one row → Small
-    for (auto* k : { &wtPositionKnob, &wtFreqKnob, &wtAmpKnob, &wtVoicesKnob, &wtDetuneKnob })
-        k->setKnobDiameter(KnobSize::Small);
-
     // wavetableOn excluded — reset must not switch it off. The bank combo is
     // manually synced (no attachment), so refresh it after the reset.
     initResetButton(wtResetBtn, wtPink,
@@ -816,9 +856,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     };
     dropFocus(*this);
 
-    // setSize must be LAST so resized() sees all components. The two-column
-    // body fits a 1520x945 design canvas (see resized()).
-    constexpr int kDesignW = 1520, kDesignH = 945;
+    // setSize must be LAST so resized() sees all components. The rack-grid body
+    // fits a 1520x1015 design canvas (see resized()): the taller right tower is
+    // 4.5 U + two zone headers, plus the full-width header and footer.
+    constexpr int kDesignW = 1520, kDesignH = 1015;
     setSize(kDesignW, kDesignH);
 
     // --- Auto-fit ---------------------------------------------------------
@@ -1048,6 +1089,12 @@ void SynthyEditor::resized()
     area.removeFromLeft(colGap);
     auto rightCol = area;
 
+    // Rack grid: each tower stacks "inserts" whose height is a multiple of one
+    // rack unit U. Normal module = 1U, focal (OSC row, ADSR) = 1.5U.
+    const int U   = 130;        // one rack unit (Bauhöhe)
+    const int U1  = U;          // 1   U
+    const int U15 = (U * 3) / 2; // 1.5 U = 195
+
     // ============================================================
     // LEFT COLUMN — ZONE 1: GENERATORS (sound sources)
     // ============================================================
@@ -1055,7 +1102,7 @@ void SynthyEditor::resized()
     leftCol.removeFromTop(2);
 
     // Oscillators with MIX MODE wired between OSC 1 & 2, and "+" before OSC 3.
-    auto oscRow = leftCol.removeFromTop(165);
+    auto oscRow = leftCol.removeFromTop(U15);   // 1.5 U (focal)
     const int mixW = 90, plusW = 34;
     int oscW = (oscRow.getWidth() - mixW - plusW) / 3;
     osc1.setBounds(oscRow.removeFromLeft(oscW).reduced(3));
@@ -1071,7 +1118,7 @@ void SynthyEditor::resized()
     leftCol.removeFromTop(6);
 
     // Noise | Sub Osc | Karplus (String)
-    auto genRow = leftCol.removeFromTop(150);
+    auto genRow = leftCol.removeFromTop(U1);    // 1 U
     int genW = genRow.getWidth() / 4;
 
     auto noiseArea = genRow.removeFromLeft(genW).reduced(3);
@@ -1103,7 +1150,7 @@ void SynthyEditor::resized()
     leftCol.removeFromTop(6);
 
     // Wavetable (full column width)
-    auto wtRow = leftCol.removeFromTop(124).reduced(3, 0);
+    auto wtRow = leftCol.removeFromTop(U1).reduced(3, 0);   // 1 U
     wtBounds = wtRow;
     auto wtTop = wtRow.removeFromTop(22);
     wtEnableBtn.setBounds(wtTop.removeFromLeft(50));
@@ -1135,12 +1182,16 @@ void SynthyEditor::resized()
     modHeaderBounds = rightCol.removeFromTop(24);
     rightCol.removeFromTop(2);
 
-    auto modRow = rightCol.removeFromTop(150);
+    auto modRow = rightCol.removeFromTop(U15);   // 1.5 U (focal: ADSR + LFO)
+
+    // ADSR (left half): title + curve preview + 4 knobs.
     auto adsrArea = modRow.removeFromLeft(modRow.getWidth() / 2).reduced(3);
     adsrBounds = adsrArea;
     auto adsrTitleRow = adsrArea.removeFromTop(20);
     adsrResetBtn.setBounds(adsrTitleRow.removeFromRight(22).reduced(1));
     adsrTitle.setBounds(adsrTitleRow);
+    adsrEnvDisplay.setBounds(adsrArea.removeFromTop(40).reduced(2, 1));
+    adsrArea.removeFromTop(2);
     int knobW = adsrArea.getWidth() / 4;
     auto a1 = adsrArea.removeFromLeft(knobW);
     atkLabel.setBounds(a1.removeFromTop(14));
@@ -1154,6 +1205,7 @@ void SynthyEditor::resized()
     relLabel.setBounds(adsrArea.removeFromTop(14));
     releaseKnob.setBounds(adsrArea);
 
+    // LFO (right half, full height) — knobs at the standard size.
     auto lfoArea = modRow.reduced(3);
     lfoBounds = lfoArea;
     auto lfoTitleRow = lfoArea.removeFromTop(20);
@@ -1170,15 +1222,15 @@ void SynthyEditor::resized()
     lfoDepthKnob.setBounds(lfoArea);
     rightCol.removeFromTop(6);
 
-    // Arpeggiator row: [ON + title | MODE] left, then RATE / OCT / GATE knobs.
-    auto arpArea = rightCol.removeFromTop(96).reduced(3);
+    // Arpeggiator: a single (half-width) field; the right half stays free.
+    auto arpRow = rightCol.removeFromTop(U1);    // 1 U
+    auto arpArea = arpRow.removeFromLeft(arpRow.getWidth() / 2).reduced(3);
     arpBounds = arpArea;
     auto arpTop = arpArea.removeFromTop(22);
     arpEnableBtn.setBounds(arpTop.removeFromLeft(50));
     arpResetBtn.setBounds(arpTop.removeFromRight(22).reduced(1));
     arpTitle.setBounds(arpTop.removeFromLeft(150));
     arpArea.removeFromTop(2);
-    // Left: MODE selector; right: three knobs.
     int arpColW = arpArea.getWidth() / 4;
     auto modeCol = arpArea.removeFromLeft(arpColW + 30);
     arpModeSelector.setBounds(modeCol.withSizeKeepingCentre(modeCol.getWidth() - 8, 26));
@@ -1199,8 +1251,8 @@ void SynthyEditor::resized()
     procHeaderBounds = rightCol.removeFromTop(24);
     rightCol.removeFromTop(2);
 
-    // Filter | Distortion
-    auto fdRow = rightCol.removeFromTop(145);
+    // Filter | Distortion — knobs at the standard size.
+    auto fdRow = rightCol.removeFromTop(U1);     // 1 U
     auto filterArea = fdRow.removeFromLeft(fdRow.getWidth() / 2).reduced(3);
     filterBounds = filterArea;
     auto filterTitleRow = filterArea.removeFromTop(20);
@@ -1229,7 +1281,7 @@ void SynthyEditor::resized()
     rightCol.removeFromTop(6);
 
     // Wavefold | Bitcrush | Delay | Chorus | Reverb
-    auto fxRow = rightCol.removeFromTop(120);
+    auto fxRow = rightCol.removeFromTop(U1);     // 1 U
     int fxW = fxRow.getWidth() / 5;
     wavefoldPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));
     bitcrushPanel.setBounds(fxRow.removeFromLeft(fxW).reduced(3));

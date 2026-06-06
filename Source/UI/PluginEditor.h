@@ -76,6 +76,43 @@ private:
     void resized() override;
 };
 
+// A compact ADSR curve preview: attack ramp → decay to the sustain level →
+// sustain hold → release tail. The A/D/R segment widths are drawn proportional
+// to their durations (always filling the strip), the sustain segment is a fixed
+// hold, and the sustain knob sets the hold height. Self-contained: it polls the
+// four envelope params and only repaints when one of them moves.
+class EnvelopeDisplay : public juce::Component, private juce::Timer
+{
+public:
+    EnvelopeDisplay(juce::AudioProcessorValueTreeState& apvts, juce::Colour colour)
+        : col(colour)
+    {
+        pA = apvts.getRawParameterValue("attack");
+        pD = apvts.getRawParameterValue("decay");
+        pS = apvts.getRawParameterValue("sustain");
+        pR = apvts.getRawParameterValue("release");
+        startTimerHz(20);
+    }
+    ~EnvelopeDisplay() override { stopTimer(); }
+
+    void paint(juce::Graphics&) override;
+
+private:
+    void timerCallback() override
+    {
+        const float a = pA->load(), d = pD->load(), s = pS->load(), r = pR->load();
+        if (a != lA || d != lD || s != lS || r != lR)
+        {
+            lA = a; lD = d; lS = s; lR = r;
+            repaint();
+        }
+    }
+
+    std::atomic<float> *pA = nullptr, *pD = nullptr, *pS = nullptr, *pR = nullptr;
+    float lA = -1, lD = -1, lS = -1, lR = -1;
+    juce::Colour col;
+};
+
 class SynthyEditor : public juce::AudioProcessorEditor,
                      private juce::Timer
 {
@@ -103,6 +140,7 @@ private:
 
     // ADSR
     juce::Label adsrTitle;
+    EnvelopeDisplay adsrEnvDisplay;
     SynthySlider attackKnob, decayKnob, sustainKnob, releaseKnob;
     juce::Label atkLabel, decLabel, susLabel, relLabel;
     std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment>
