@@ -23,6 +23,9 @@ target_sources(JASS PRIVATE
     # UI
     Source/UI/PluginEditor.cpp
 
+    # UI rack framework
+    Source/UI/rack/ModuleFrame.cpp
+
     # Audio engine
     Source/Audio/SynthVoice.cpp
     Source/Audio/SynthSound.cpp
