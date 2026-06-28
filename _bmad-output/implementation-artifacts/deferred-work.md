@@ -1,5 +1,12 @@
 # Deferred Work
 
+## Deferred from: code review of story 1-2-module-frame (2026-06-28)
+
+- **resized() grid overflow for spanning cells** — a `Display` with `slots>1` can force a wrap that pushes a later row below the body's bottom edge; `row` is never clamped to `nRows`, and `nRows` is computed from `bodySlots(desc.body)` (which counts a skipped null-`Display`), overcounting rows. The body-grid is provisional per dev notes; resolve with exact `Wc`/`Hu` tuning in Story 1.3. (The suspected double column-advance was verified NOT to be a bug.)
+- **Unguarded attachment construction against a bad paramId** — `Slider/ComboBox/ButtonAttachment` + the enable attachment dereference `getParameter(id)` with no null check (unlike `doReset()`/`enableValue`). Matches existing convention; debug `jassert` catches typos. Add a graceful skip/validation when descriptors become authored data (Story 1.5).
+- **Combo dynamic-provider edge cases** — an empty-returning provider leaves a bound but item-less ComboBox; the provider is polled once at build time and `Action/FileAction.refreshes` is never consumed, so dependent combos won't refresh after a load. Wire in Story 1.5.
+- **AC5 in-app visual verification** — the "renders correctly in the running app (header + body + dim)" clause was not confirmed (no Rack yet). Verify during Story 1.3 integration.
+
 ## Deferred from: code review of story 1-1-module-descriptor-types (2026-06-28)
 
 - **Over-capacity body is silent in release** — `assertFitsClass` is a debug-only `jassert` returning `void`; in release an over-capacity descriptor has no signal. Handle gracefully where layout consumes capacity (Rack, Story 1.3).

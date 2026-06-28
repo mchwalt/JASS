@@ -4,7 +4,7 @@ baseline_commit: db8a1dfd5b0865749618b71419c51472a777fd5b
 
 # Story 1.2: ModuleFrame renders a descriptor
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -151,3 +151,17 @@ claude-opus-4-8[1m] (Claude Opus 4.8, 1M context)
 ### Change Log
 
 - 2026-06-28 — Story 1.2 implemented: `ModuleFrame` renders any `ModuleDescriptor` (uniform header + body slot-grid), owns its APVTS attachments, dims body when disabled, resets `resetParams` on ↺. Added to CMake. Verified by clean Release build (temp consumer-check compiled then removed). Visual confirmation deferred to Story 1.3 (Rack). Status → review.
+
+## Review Findings
+
+_Code review 2026-06-28 (3 layers: Blind Hunter, Edge Case Hunter, Acceptance Auditor). Triaged: 1 decision-needed (resolved → patch), 3 patch, 4 deferred, 3 dismissed._
+
+**Decision resolved (2026-06-28):** the ↺ reset button belongs in EVERY module (AC1 wins over Task 2). Reset semantics: restore **all** of the module's parameters to factory defaults, **except the enable flag**.
+
+- [x] [Review][Patch] FIXED — Reset button always shown + "reset all params except enable" (body-derived). `↺` now built unconditionally; `doReset()` iterates `desc.body`, resets each `Knob`/`Combo`/`Toggle` `paramId`, skipping `desc.enableParam`. `resetParams` field now unused (flag for removal in Story 1.5). [Source/UI/rack/ModuleFrame.cpp buildHeader()/doReset()/resized()]
+- [x] [Review][Patch] FIXED — AC3 constant header geometry. `resized()` now reserves the reset slot (20px) and the enable slot (24px) unconditionally; the enable slot stays reserved even without a toggle, so the title region is identical across all modules. [Source/UI/rack/ModuleFrame.cpp resized()]
+- [x] [Review][Patch] FIXED — FileChooser re-entrancy. New `fileChooserActive` flag guards re-entrant FileAction clicks; the chooser is no longer destroyed mid-callback (flag cleared in the completion lambda). [Source/UI/rack/ModuleFrame.cpp buildBody() FileAction + ModuleFrame.h]
+- [x] [Review][Defer] resized() grid overflow for spanning cells [Source/UI/rack/ModuleFrame.cpp resized()] — deferred to Story 1.3 (body-grid is provisional). A `Display` with `slots>1` can force a wrap that pushes a later row below the body's bottom edge (`row` is never clamped to `nRows`); and `nRows` is derived from `bodySlots(desc.body)`, which counts a skipped null-`Display` that was never placed, overcounting rows. NOTE: the suspected "double column-advance" was checked and is NOT a bug — after a `col>=nCols` reset the pre-wrap cannot re-fire (`span ≤ nCols`).
+- [x] [Review][Defer] Attachment construction against a non-existent paramId crashes [Source/UI/rack/ModuleFrame.cpp buildBody()/buildHeader()] — deferred. `Slider/ComboBox/ButtonAttachment` and the enable attachment dereference `getParameter(id)` with no null guard (unlike `doReset()`/`enableValue`, which are guarded). Matches existing JUCE/editor convention; a debug `jassert` catches typos. Becomes relevant when descriptors are authored as data (Story 1.5) — consider a graceful skip then.
+- [x] [Review][Defer] Combo dynamic-provider edge cases [Source/UI/rack/ModuleFrame.cpp buildBody() Combo] — deferred to Story 1.5. A provider returning an empty `StringArray` leaves a bound but item-less ComboBox; the provider is polled only once at build time and `Action/FileAction.refreshes` are never read, so dependent combos won't refresh.
+- [x] [Review][Defer] AC5 in-app visual verification not performed — deferred to Story 1.3 (Rack integration). Build-clean portion of AC5 is met; the "renders correctly in the running app" clause was honestly not confirmed (no Rack/placement exists yet).
