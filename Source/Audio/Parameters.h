@@ -32,11 +32,13 @@ namespace Parameters
         constexpr const char* release   = "release";
 
         // Filter
+        constexpr const char* filterOn     = "filterOn";
         constexpr const char* filterType   = "filterType";
         constexpr const char* filterCutoff = "filterCutoff";
         constexpr const char* filterReso   = "filterReso";
 
         // Distortion
+        constexpr const char* distortionOn    = "distortionOn";
         constexpr const char* distortionType  = "distortionType";
         constexpr const char* distortionDrive = "distortionDrive";
         constexpr const char* distortionMix   = "distortionMix";
@@ -84,6 +86,7 @@ namespace Parameters
         constexpr const char* chorusMix   = "chorusMix";
 
         // LFO
+        constexpr const char* lfoOn     = "lfoOn";
         constexpr const char* lfoWave   = "lfoWave";
         constexpr const char* lfoRate   = "lfoRate";
         constexpr const char* lfoDepth  = "lfoDepth";
@@ -96,6 +99,7 @@ namespace Parameters
         constexpr const char* reverbMix  = "reverbMix";
 
         // Noise
+        constexpr const char* noiseOn   = "noiseOn";
         constexpr const char* noiseType = "noiseType";
         constexpr const char* noiseAmp  = "noiseAmp";
 
@@ -176,12 +180,14 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::release, 1), "Release", timeRange, 1.0f));
 
         // Filter
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::filterType, 1), "Filter Type", juce::StringArray{"Off", "Lowpass", "Highpass"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::filterOn, 1), "Filter On", false));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::filterType, 1), "Filter Type", juce::StringArray{"Lowpass", "Highpass"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterCutoff, 1), "Filter Cutoff", juce::NormalisableRange<float>(20.0f, 10000.0f, 1.0f, 0.3f), 550.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterReso, 1), "Filter Resonance", juce::NormalisableRange<float>(0.1f, 10.0f, 0.01f), 0.707f));
 
         // Distortion
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::distortionType, 1), "Distortion Type", juce::StringArray{"Off", "SoftClip", "HardClip", "Foldback"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::distortionOn, 1), "Distortion On", false));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::distortionType, 1), "Distortion Type", juce::StringArray{"SoftClip", "HardClip", "Foldback"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::distortionDrive, 1), "Distortion Drive", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::distortionMix, 1), "Distortion Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
 
@@ -213,10 +219,12 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoWave, 1), "LFO Wave", juce::StringArray{"Sine", "Triangle", "Square", "Sawtooth"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoRate, 1), "LFO Rate", juce::NormalisableRange<float>(0.1f, 20.0f, 0.1f), 2.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoDepth, 1), "LFO Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget, 1), "LFO Target", juce::StringArray{"Off", "Frequency", "Amplitude", "Filter Cutoff"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::lfoOn, 1), "LFO On", false));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget, 1), "LFO Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff"}, 0));
 
         // Noise
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::noiseType, 1), "Noise Type", juce::StringArray{"Off", "White", "Pink"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::noiseOn, 1), "Noise On", false));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::noiseType, 1), "Noise Type", juce::StringArray{"White", "Pink"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::noiseAmp, 1), "Noise Amount", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
         // Karplus-Strong
@@ -295,11 +303,17 @@ namespace Parameters
         env.setSustain(*apvts.getRawParameterValue(ID::sustain));
         env.setRelease(*apvts.getRawParameterValue(ID::release));
 
-        filter.setType(static_cast<FilterType>(static_cast<int>(*apvts.getRawParameterValue(ID::filterType))));
+        // The choice params no longer carry an "Off" entry — a separate <x>On bool gates
+        // them. When on, the choice index maps to the enum +1 (the enum keeps its Off=0).
+        const bool filterOn = *apvts.getRawParameterValue(ID::filterOn) > 0.5f;
+        filter.setType(filterOn ? static_cast<FilterType>(static_cast<int>(*apvts.getRawParameterValue(ID::filterType)) + 1)
+                                 : FilterType::Off);
         filter.setCutoff(*apvts.getRawParameterValue(ID::filterCutoff));
         filter.setResonance(*apvts.getRawParameterValue(ID::filterReso));
 
-        distortion.type  = static_cast<DistortionType>(static_cast<int>(*apvts.getRawParameterValue(ID::distortionType)));
+        const bool distortionOn = *apvts.getRawParameterValue(ID::distortionOn) > 0.5f;
+        distortion.type  = distortionOn ? static_cast<DistortionType>(static_cast<int>(*apvts.getRawParameterValue(ID::distortionType)) + 1)
+                                        : DistortionType::Off;
         distortion.drive = *apvts.getRawParameterValue(ID::distortionDrive);
         distortion.mix   = *apvts.getRawParameterValue(ID::distortionMix);
 
@@ -331,9 +345,13 @@ namespace Parameters
         lfo.setWaveform(static_cast<LFOWaveform>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoWave))));
         lfo.setRate(*apvts.getRawParameterValue(ID::lfoRate));
         lfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
-        lfo.setTarget(static_cast<LFOTarget>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoTarget))));
+        const bool lfoOn = *apvts.getRawParameterValue(ID::lfoOn) > 0.5f;
+        lfo.setTarget(lfoOn ? static_cast<LFOTarget>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoTarget)) + 1)
+                            : LFOTarget::Off);
 
-        noise.setType(static_cast<NoiseType>(static_cast<int>(*apvts.getRawParameterValue(ID::noiseType))));
+        const bool noiseOn = *apvts.getRawParameterValue(ID::noiseOn) > 0.5f;
+        noise.setType(noiseOn ? static_cast<NoiseType>(static_cast<int>(*apvts.getRawParameterValue(ID::noiseType)) + 1)
+                              : NoiseType::Off);
         noise.setAmplitude(*apvts.getRawParameterValue(ID::noiseAmp));
 
         karplus.setEnabled(*apvts.getRawParameterValue(ID::karplusOn) > 0.5f);

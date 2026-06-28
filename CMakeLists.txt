@@ -25,6 +25,8 @@ target_sources(JASS PRIVATE
 
     # UI rack framework
     Source/UI/rack/ModuleFrame.cpp
+    Source/UI/rack/Rack.cpp
+    Source/UI/rack/SynthyLookAndFeel.cpp
 
     # Audio engine
     Source/Audio/SynthVoice.cpp

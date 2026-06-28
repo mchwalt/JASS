@@ -70,6 +70,25 @@ namespace PresetIO
             setRaw(a, id, (float) (idx >= 0 ? idx : fallback));
         }
 
+        // Filter/Distortion/LFO/Noise used to fold their bypass into the choice's "Off"
+        // entry; now a separate <on> bool gates them. The on-DISK format is UNCHANGED for
+        // C# compatibility: "Off" is still written when disabled. `names` is the full
+        // canonical list incl. "Off" at index 0; the live choice param holds the trimmed
+        // list, so its index maps to names[index + 1].
+        inline juce::String choiceOrOff(APVTS& a, const juce::String& onId, const juce::String& typeId, const juce::StringArray& names)
+        {
+            if (! rawB(a, onId)) return names[0];               // disabled → "Off"
+            int i = rawI(a, typeId) + 1;
+            return juce::isPositiveAndBelow(i, names.size()) ? names[i] : names[0];
+        }
+        inline void setChoiceOrOff(APVTS& a, const juce::String& onId, const juce::String& typeId, const juce::StringArray& names, const juce::var& v)
+        {
+            int idx = names.indexOf(v.toString());
+            if (idx < 0) return;                                // field missing/unknown → keep state
+            if (idx == 0) { setRaw(a, onId, 0.0f); }            // "Off" → disabled (type kept as-is)
+            else { setRaw(a, onId, 1.0f); setRaw(a, typeId, (float) (idx - 1)); }
+        }
+
         // JSON readers with fallback to the current value (missing fields keep state).
         inline double jnum (const juce::var& o, const char* k, double def) { return o.hasProperty(k) ? (double) o[k] : def; }
         inline bool   jbool(const juce::var& o, const char* k, bool def)   { return o.hasProperty(k) ? (bool)   o[k] : def; }
@@ -112,11 +131,11 @@ namespace PresetIO
         root->setProperty("Sustain", rawF(a, ID::sustain));
         root->setProperty("Release", rawF(a, ID::release));
 
-        root->setProperty("FilterType",      rawChoice(a, ID::filterType, kFilterType));
+        root->setProperty("FilterType",      choiceOrOff(a, ID::filterOn, ID::filterType, kFilterType));
         root->setProperty("FilterCutoff",    rawF(a, ID::filterCutoff));
         root->setProperty("FilterResonance", rawF(a, ID::filterReso));
 
-        root->setProperty("DistortionType",  rawChoice(a, ID::distortionType, kDistortion));
+        root->setProperty("DistortionType",  choiceOrOff(a, ID::distortionOn, ID::distortionType, kDistortion));
         root->setProperty("DistortionDrive", rawF(a, ID::distortionDrive));
         root->setProperty("DistortionMix",   rawF(a, ID::distortionMix));
 
@@ -146,7 +165,7 @@ namespace PresetIO
         root->setProperty("ArpGate",    rawF(a, ID::arpGate));
 
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
-        root->setProperty("LfoTarget",   rawChoice(a, ID::lfoTarget, kLfoTarget));
+        root->setProperty("LfoTarget",   choiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
         root->setProperty("LfoDepth",    rawF(a, ID::lfoDepth));
 
@@ -171,7 +190,7 @@ namespace PresetIO
         root->setProperty("KarplusDamping",   rawF(a, ID::karplusDamping));
         root->setProperty("KarplusStretch",   rawF(a, ID::karplusStretch));
 
-        root->setProperty("NoiseType",      rawChoice(a, ID::noiseType, kNoiseType));
+        root->setProperty("NoiseType",      choiceOrOff(a, ID::noiseOn, ID::noiseType, kNoiseType));
         root->setProperty("NoiseAmplitude", rawF(a, ID::noiseAmp));
 
         root->setProperty("WavetableEnabled",      rawB(a, ID::wavetableOn));
@@ -228,11 +247,11 @@ namespace PresetIO
         setRaw(a, ID::sustain, (float) jnum(v, "Sustain", rawF(a, ID::sustain)));
         setRaw(a, ID::release, (float) jnum(v, "Release", rawF(a, ID::release)));
 
-        setChoice(a, ID::filterType, kFilterType, v["FilterType"], rawI(a, ID::filterType));
+        setChoiceOrOff(a, ID::filterOn, ID::filterType, kFilterType, v["FilterType"]);
         setRaw(a, ID::filterCutoff, (float) jnum(v, "FilterCutoff",    rawF(a, ID::filterCutoff)));
         setRaw(a, ID::filterReso,   (float) jnum(v, "FilterResonance", rawF(a, ID::filterReso)));
 
-        setChoice(a, ID::distortionType, kDistortion, v["DistortionType"], rawI(a, ID::distortionType));
+        setChoiceOrOff(a, ID::distortionOn, ID::distortionType, kDistortion, v["DistortionType"]);
         setRaw(a, ID::distortionDrive, (float) jnum(v, "DistortionDrive", rawF(a, ID::distortionDrive)));
         setRaw(a, ID::distortionMix,   (float) jnum(v, "DistortionMix",   rawF(a, ID::distortionMix)));
 
@@ -263,7 +282,7 @@ namespace PresetIO
         setRaw   (a, ID::arpGate,    (float) jnum(v, "ArpGate", rawF(a, ID::arpGate)));
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
-        setChoice(a, ID::lfoTarget, kLfoTarget, v["LfoTarget"],   rawI(a, ID::lfoTarget));
+        setChoiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget, v["LfoTarget"]);
         setRaw(a, ID::lfoRate,  (float) jnum(v, "LfoRate",  rawF(a, ID::lfoRate)));
         setRaw(a, ID::lfoDepth, (float) jnum(v, "LfoDepth", rawF(a, ID::lfoDepth)));
 
@@ -288,7 +307,7 @@ namespace PresetIO
         setRaw(a, ID::karplusDamping, (float) jnum(v, "KarplusDamping",   rawF(a, ID::karplusDamping)));
         setRaw(a, ID::karplusStretch, (float) jnum(v, "KarplusStretch",   rawF(a, ID::karplusStretch)));
 
-        setChoice(a, ID::noiseType, kNoiseType, v["NoiseType"], rawI(a, ID::noiseType));
+        setChoiceOrOff(a, ID::noiseOn, ID::noiseType, kNoiseType, v["NoiseType"]);
         setRaw(a, ID::noiseAmp, (float) jnum(v, "NoiseAmplitude", rawF(a, ID::noiseAmp)));
 
         setRaw(a, ID::wavetableOn,        jbool(v, "WavetableEnabled", rawB(a, ID::wavetableOn)) ? 1.f : 0.f);

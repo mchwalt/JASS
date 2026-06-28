@@ -1,6 +1,7 @@
 #include "PluginEditor.h"
 #include "../DSP/WavetableBank.h"
 #include "../Audio/PresetIO.h"
+#include "../Audio/Parameters.h"   // Parameters::ID for the Story-1.3 sample rack
 
 namespace
 {
@@ -22,72 +23,28 @@ namespace
         b.setColour(juce::TextButton::buttonColourId, c.withAlpha(0.25f));
         b.setColour(juce::TextButton::textColourOffId, c);
     }
-}
 
-// --- LookAndFeel ---
-
-SynthyLookAndFeel::SynthyLookAndFeel()
-{
-    setColour(juce::Slider::rotarySliderFillColourId, juce::Colour(0xff40c0ff));
-    setColour(juce::Slider::rotarySliderOutlineColourId, juce::Colour(0xff2a2a2a));
-    setColour(juce::Slider::thumbColourId, juce::Colour(0xff40c0ff));
-    setColour(juce::Label::textColourId, juce::Colour(0xffaaaaaa));
-    setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff2a2a4a));
-    setColour(juce::ComboBox::textColourId, juce::Colours::white);
-}
-
-void SynthyLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
-                                          float sliderPos, float rotaryStartAngle,
-                                          float rotaryEndAngle, juce::Slider& slider)
-{
-    auto bounds = juce::Rectangle<int>(x, y, width, height).toFloat().reduced(4.0f);
-    auto radius = juce::jmin(bounds.getWidth(), bounds.getHeight()) / 2.0f;
-    // Cap to the slider's knob-size category so the whole UI uses just three sizes.
-    if (auto* ss = dynamic_cast<SynthySlider*>(&slider))
-        radius = juce::jmin(radius, ss->getKnobDiameter() / 2.0f);
-    auto centreX = bounds.getCentreX();
-    auto centreY = bounds.getCentreY();
-    auto angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
-
-    // Outer ring
-    g.setColour(juce::Colour(0xff555555));
-    g.drawEllipse(centreX - radius, centreY - radius, radius * 2, radius * 2, 2.0f);
-
-    // Inner circle
-    g.setColour(juce::Colour(0xff3a3a3a));
-    g.fillEllipse(centreX - radius * 0.8f, centreY - radius * 0.8f,
-                  radius * 1.6f, radius * 1.6f);
-
-    // Live modulation ring (Vital-style): an arc just outside the knob that
-    // extends from the set value towards where the LFO is currently pushing it.
-    if (auto* ss = dynamic_cast<SynthySlider*>(&slider))
+    // TEMP (Story 1.3): a stand-in for a real graphical display, used so the sample
+    // rack can exercise the Display body-element path. Removed with the sample
+    // population in Story 1.5.
+    struct SampleDisplayPlaceholder : juce::Component
     {
-        float mod = ss->getModAmount();
-        if (std::abs(mod) > 0.003f)
+        explicit SampleDisplayPlaceholder(juce::String t) : text(std::move(t)) {}
+        void paint(juce::Graphics& g) override
         {
-            auto sweep = rotaryEndAngle - rotaryStartAngle;
-            auto target = juce::jlimit(rotaryStartAngle, rotaryEndAngle, angle + mod * sweep);
-            auto ringR = radius + 5.0f;
-            juce::Path arc;
-            arc.addCentredArc(centreX, centreY, ringR, ringR, 0.0f,
-                              juce::jmin(angle, target), juce::jmax(angle, target), true);
-            g.setColour(juce::Colour(0xff22d3ee).withAlpha(0.45f));   // MODULATION cyan (subtle)
-            g.strokePath(arc, juce::PathStrokeType(1.6f, juce::PathStrokeType::curved,
-                                                   juce::PathStrokeType::rounded));
+            g.fillAll(juce::Colour(0xff070809));
+            g.setColour(juce::Colour(0xff3a414c));
+            g.drawRect(getLocalBounds());
+            g.setColour(juce::Colour(0xff7e8794));
+            g.setFont(juce::FontOptions(11.0f));
+            g.drawText(text, getLocalBounds(), juce::Justification::centred);
         }
-    }
-
-    // Indicator line
-    auto lineLength = radius * 0.6f;
-    auto lineX = centreX + lineLength * std::sin(angle);
-    auto lineY = centreY - lineLength * std::cos(angle);
-    auto thumbColour = slider.findColour(juce::Slider::thumbColourId);
-    g.setColour(thumbColour);
-    g.drawLine(centreX, centreY, lineX, lineY, 3.0f);
-
-    // Center dot
-    g.fillEllipse(centreX - 4, centreY - 4, 8, 8);
+        juce::String text;
+    };
 }
+
+// SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
+// the rack framework owns the single shared look.
 
 // --- OscillatorPanel ---
 
@@ -474,7 +431,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     filterTitle.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(filterTitle);
 
-    filterType.addItemList({"Off", "Lowpass", "Highpass"}, 1);
+    filterType.addItemList({"Lowpass", "Highpass"}, 1);   // "Off" is now the separate filterOn enable
     addAndMakeVisible(filterType);
     filterTypeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getAPVTS(), "filterType", filterType);
@@ -496,7 +453,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     initResetButton(filterResetBtn, orange, {"filterReso"}, [this]
     {
         auto& a = processor.getAPVTS();
-        const bool highpass = (int) *a.getRawParameterValue("filterType") == 2;  // 0 Off, 1 LP, 2 HP
+        const bool highpass = (int) *a.getRawParameterValue("filterType") == 1;  // 0 LP, 1 HP
         if (auto* p = a.getParameter("filterCutoff"))
             p->setValueNotifyingHost(p->convertTo0to1(highpass ? 150.0f : 550.0f));
     });
@@ -509,7 +466,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     distTitle.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(distTitle);
 
-    distTypeSelector.addItemList({"Off", "Soft Clip", "Hard Clip", "Foldback"}, 1);
+    distTypeSelector.addItemList({"Soft Clip", "Hard Clip", "Foldback"}, 1);   // "Off" is now the separate distortionOn enable
     addAndMakeVisible(distTypeSelector);
     distTypeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getAPVTS(), "distortionType", distTypeSelector);
@@ -548,7 +505,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     lfoWaveAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getAPVTS(), "lfoWave", lfoWaveSelector);
 
-    lfoTargetSelector.addItemList({"Off", "Frequency", "Amplitude", "Filter Cutoff"}, 1);
+    lfoTargetSelector.addItemList({"Frequency", "Amplitude", "Filter Cutoff"}, 1);   // "Off" is now the separate lfoOn enable
     addAndMakeVisible(lfoTargetSelector);
     lfoTargetAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getAPVTS(), "lfoTarget", lfoTargetSelector);
@@ -603,43 +560,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // arpOn excluded — reset must not switch the arpeggiator off.
     initResetButton(arpResetBtn, cyan, {"arpRate", "arpMode", "arpOctaves", "arpGate"});
 
-    // Master
-    auto gold = juce::Colour(0xffffd700);
-    setupKnob(masterKnob, masterLabel, "MASTER").setColour(juce::Slider::thumbColourId, gold);
-    masterKnob.setColour(juce::Slider::rotarySliderFillColourId, gold);
-    masterAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        p.getAPVTS(), "masterVol", masterKnob);
-
-    initResetButton(masterResetBtn, gold, {"masterVol"});
-
-    // Stereo width (inline in the header next to Master)
-    auto stereoCol = juce::Colour(0xff818cf8);
-    stereoTitle.setText("STEREO", juce::dontSendNotification);
-    stereoTitle.setFont(juce::FontOptions(13.0f, juce::Font::bold));
-    stereoTitle.setColour(juce::Label::textColourId, stereoCol);
-    stereoTitle.setJustificationType(juce::Justification::centred);
-    addAndMakeVisible(stereoTitle);
-
-    stereoOnBtn.setButtonText("ON");
-    stereoOnBtn.setColour(juce::ToggleButton::tickColourId, stereoCol);
-    addAndMakeVisible(stereoOnBtn);
-    stereoOnAttach = std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment>(
-        p.getAPVTS(), "stereoOn", stereoOnBtn);
-
-    for (auto* k : { &stereoWidthKnob, &stereoTimeKnob })
-    {
-        k->setColour(juce::Slider::thumbColourId, stereoCol);
-        k->setColour(juce::Slider::rotarySliderFillColourId, stereoCol);
-    }
-    setupKnob(stereoWidthKnob, stereoWidthLabel, "WIDTH");
-    setupKnob(stereoTimeKnob,  stereoTimeLabel,  "TIME");
-    stereoWidthAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        p.getAPVTS(), "stereoWidth", stereoWidthKnob);
-    stereoTimeAttach = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment>(
-        p.getAPVTS(), "stereoTime", stereoTimeKnob);
-
-    // stereoOn excluded — reset must not switch stereo off.
-    initResetButton(stereoResetBtn, stereoCol, {"stereoWidth", "stereoTime"});
+    // Master + Stereo are no longer header chrome: they live as rack modules in the
+    // MASTER BUS zone (see buildSampleRack), so the old inline header controls were
+    // removed (PROTOTYPE for FR14 → rack modules; to be formalised via correct-course).
 
     // Preset Save / Load (shared .synthy JSON)
     addAndMakeVisible(saveBtn);
@@ -685,9 +608,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init"); };
 
     // Current-preset display
-    presetNameLabel.setFont(juce::FontOptions(11.0f, juce::Font::bold));
-    presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xff888888));
-    presetNameLabel.setJustificationType(juce::Justification::centred);
+    presetNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
+    presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xffaab3c0));
+    presetNameLabel.setJustificationType(juce::Justification::centredLeft);
     addAndMakeVisible(presetNameLabel);
     setPresetName(processor.getCurrentPresetName());   // restored from LiveState
 
@@ -699,7 +622,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     noiseTitle.setJustificationType(juce::Justification::centred);
     addAndMakeVisible(noiseTitle);
 
-    noiseTypeSelector.addItemList({"Off", "White", "Pink"}, 1);
+    noiseTypeSelector.addItemList({"White", "Pink"}, 1);   // "Off" is now the separate noiseOn enable
     addAndMakeVisible(noiseTypeSelector);
     noiseTypeAttach = std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment>(
         p.getAPVTS(), "noiseType", noiseTypeSelector);
@@ -844,6 +767,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // the on-screen keyboard keeps focus and the computer keys keep playing notes
     // even WHILE the user is tweaking parameters. (The keyboard keeps its focus;
     // a slider's right-click value box still grabs focus on demand for typing.)
+    // Story 1.3: stand up the sample rack BEFORE dropFocus so its controls are also
+    // excluded from grabbing keyboard focus.
+    buildSampleRack();
+
     std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)
     {
         for (auto* child : parent.getChildren())
@@ -856,10 +783,18 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     };
     dropFocus(*this);
 
-    // setSize must be LAST so resized() sees all components. The rack-grid body
-    // fits a 1520x1015 design canvas (see resized()): the taller right tower is
-    // 4.5 U + two zone headers, plus the full-width header and footer.
-    constexpr int kDesignW = 1520, kDesignH = 1015;
+    // setSize must be LAST so resized() sees all components. Story 1.3: width stays at
+    // the original 1520; the HEIGHT is derived from the rack's actual content so the
+    // full rack (incl. the Scope + Spectrum L displays at the bottom) always fits
+    // without scrolling. The auto-fit below scales the whole editor down on smaller
+    // displays. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
+    constexpr int kDesignW   = 1520;
+    constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
+    constexpr int kBodyBottom = 72;   // keyboard band (matches resized())
+    constexpr int kMargin     = 12;   // getLocalBounds().reduced(12)
+    const int rackW = kDesignW - 2 * kMargin;
+    const int rackH = sampleRack ? sampleRack->preferredHeight(rackW) : 800;
+    const int kDesignH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
     setSize(kDesignW, kDesignH);
 
     // --- Auto-fit ---------------------------------------------------------
@@ -891,13 +826,14 @@ void SynthyEditor::timerCallback()
     osc3.setPlayedRatio(ratio);
 
     // Live modulation rings: route the current LFO value to whichever knob(s) the
-    // LFO targets (0 Off, 1 Frequency, 2 Amplitude, 3 FilterCutoff); 0 elsewhere.
-    // Only ANIMATE knobs whose module is actually active — a disabled OSC or a
-    // bypassed filter isn't sounding, so showing a moving ring there is misleading.
+    // LFO targets (0 Frequency, 1 Amplitude, 2 FilterCutoff), but only when the LFO is
+    // enabled (lfoOn). Only ANIMATE knobs whose module is actually active — a disabled
+    // OSC or a bypassed filter isn't sounding, so showing a moving ring there is misleading.
     auto& apvts = processor.getAPVTS();
     float lfo = processor.getLfoDisplayValue();
+    bool lfoActive = *apvts.getRawParameterValue("lfoOn") > 0.5f;
     int target = (int) *apvts.getRawParameterValue("lfoTarget");
-    bool freqT = (target == 1), ampT = (target == 2);
+    bool freqT = lfoActive && (target == 0), ampT = lfoActive && (target == 1);
 
     auto applyOsc = [&](OscillatorPanel& osc, const char* onId)
     {
@@ -909,8 +845,8 @@ void SynthyEditor::timerCallback()
     applyOsc(osc2, "osc2On");
     applyOsc(osc3, "osc3On");
 
-    bool filterOn = (int) *apvts.getRawParameterValue("filterType") != 0;  // 0 = Off
-    cutoffKnob.setModAmount((target == 3 && filterOn) ? lfo : 0.0f);
+    bool filterOn = *apvts.getRawParameterValue("filterOn") > 0.5f;
+    cutoffKnob.setModAmount((lfoActive && target == 2 && filterOn) ? lfo : 0.0f);
 
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.
@@ -971,11 +907,11 @@ void SynthyEditor::paint(juce::Graphics& g)
     // Title: big "J A S S" with the full name as a small subtitle beneath it.
     {
         auto titleArea = g_titleBounds;
-        auto subArea = titleArea.removeFromBottom(13);
-        g.setFont(juce::FontOptions(28.0f, juce::Font::bold));
+        auto subArea = titleArea.removeFromBottom(20);
+        g.setFont(juce::FontOptions(26.0f, juce::Font::bold));
         g.setColour(juce::Colour(0xff40c0ff));
         g.drawText("J A S S", titleArea, juce::Justification::centred);
-        g.setFont(juce::FontOptions(10.0f));
+        g.setFont(juce::FontOptions(13.0f));
         g.setColour(juce::Colour(0xff8899aa));
         g.drawText("Just Another Simple Synthesizer", subArea, juce::Justification::centred);
     }
@@ -1009,9 +945,6 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawSection(chorusPanel.getBounds().expanded(2));
     drawSection(reverbPanel.getBounds().expanded(2));
 
-    // Stereo width controls live in the header (left of Master), framed like the rest.
-    drawSection(stereoBounds.expanded(2));
-
     // Zone separator headers: bold label on the left + a divider rule across.
     auto drawZoneHeader = [&](juce::Rectangle<int> bounds, const juce::String& text, juce::Colour col)
     {
@@ -1029,44 +962,139 @@ void SynthyEditor::paint(juce::Graphics& g)
     drawZoneHeader(procHeaderBounds, "PROCESSING", juce::Colour(0xfffb923c));
 }
 
+void SynthyEditor::buildSampleRack()
+{
+    // TEMP (Story 1.3): a throwaway population to verify the grid engine, zone headers
+    // and shared look at the fixed 1920×1200 target. It mirrors the mockup census
+    // (≈10×S, 6×M, 4×L) and binds REAL Parameters::ID values so the frames' APVTS
+    // attachments resolve. Story 1.5 replaces this with the real module descriptors.
+    using namespace rack;
+    auto& apvts = processor.getAPVTS();
+    // MASTER BUS is the top row (first zone), then the three main zones below it.
+    sampleRack = std::make_unique<Rack>(apvts, Rack::kDefaultCols,
+        std::vector<Rack::Zone>{ Rack::Zone::MasterBus, Rack::Zone::Generators,
+                                 Rack::Zone::Modulation, Rack::Zone::Processing });
+
+    namespace P = Parameters::ID;
+
+    // small builders to keep the descriptor list readable
+    auto K = [](juce::String id, juce::String lbl) { return Knob{ std::move(id), std::move(lbl) }; };
+    auto C = [](juce::String id, juce::String lbl, juce::StringArray items)
+             { return Combo{ std::move(id), std::move(lbl), std::move(items) }; };
+
+    auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
+                   juce::String enableParam, std::vector<BodyElement> body)
+    {
+        ModuleDescriptor d;
+        d.sizeClass = sc; d.title = std::move(title); d.type = type;
+        d.enableParam = std::move(enableParam); d.body = std::move(body);
+        sampleRack->addModule(zone, std::move(d));
+    };
+    auto display = [&](juce::String label, int slots)
+    {
+        auto* c = sampleOwned.add(new SampleDisplayPlaceholder(std::move(label)));
+        return Display{ c, slots };
+    };
+
+    const juce::StringArray waves { "Saw", "Square", "Sine", "Triangle" };
+
+    // ---- MASTER BUS (top row; PROTOTYPE: decisions A+B) ----
+    // Stereo becomes a normal module whose Enable IS stereoOn (no special-case header
+    // chrome); Master is the new XS class (a single knob). Demonstrates "everything is a
+    // module" before we formalise FR14 / the XS size class via correct-course.
+    add(Rack::Zone::MasterBus, SizeClass::XS, ModuleType::Processor, "STEREO", P::stereoOn,
+        { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
+    add(Rack::Zone::MasterBus, SizeClass::XS, ModuleType::Processor, "MASTER", {},
+        { K(P::masterVol, "VOL") });
+
+    // ---- GENERATORS ----
+    for (int i = 1; i <= 3; ++i)
+        add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator,
+            "OSC " + juce::String(i), P::oscOn(i),
+            { C(P::oscWave(i), "WAVE", waves), K(P::oscFreq(i), "FREQ"),
+              K(P::oscAmp(i), "AMP"), K(P::oscUniVoices(i), "VOICES"),
+              K(P::oscUniDetune(i), "DETUNE") });
+
+    add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "SUB", P::subOn,
+        { C(P::subWave, "WAVE", { "Sine", "Square" }), K(P::subLevel, "LEVEL") });
+    add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "NOISE", P::noiseOn,
+        { C(P::noiseType, "TYPE", { "White", "Pink" }), K(P::noiseAmp, "AMP") });
+    add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "KARPLUS", P::karplusOn,
+        { Action{ "PLUCK", [] {}, {} }, K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
+          K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR") });
+    add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "WAVETABLE", P::wavetableOn,
+        { FileAction{ "LOAD WAV", [](juce::File) {}, {} },
+          K(P::wavetablePosition, "POS"), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
+          K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") });
+    add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "MIX MODE", {},
+        { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }), Caption{ "OSC 1 <-> 2" } });
+
+    // ---- MODULATION ----
+    add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", {},
+        { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
+          display("ADSR", 4) });
+    add(Rack::Zone::Modulation, SizeClass::M, ModuleType::Modulator, "LFO", P::lfoOn,
+        { C(P::lfoWave, "WAVE", waves),
+          C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff" }),
+          K(P::lfoRate, "RATE"), K(P::lfoDepth, "DEPTH") });
+    add(Rack::Zone::Modulation, SizeClass::M, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
+        { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
+          K(P::arpRate, "RATE"), K(P::arpOctaves, "OCT"), K(P::arpGate, "GATE") });
+
+    // ---- PROCESSING ----
+    // FILTER: TYPE combo + CUTOFF + RESO (= 4 slots, like DISTORTION) → M (4 cols) so the
+    // combo isn't cramped. (Exact width tuning deferred to next session.)
+    add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "FILTER", P::filterOn,
+        { C(P::filterType, "TYPE", { "Lowpass", "Highpass" }),
+          K(P::filterCutoff, "CUTOFF"), K(P::filterReso, "RESO") });
+    // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
+    add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "DISTORTION", P::distortionOn,
+        { C(P::distortionType, "TYPE", { "SoftClip", "HardClip", "Foldback" }),
+          K(P::distortionDrive, "DRIVE"), K(P::distortionMix, "MIX") });
+    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "WAVEFOLD", P::wavefoldOn,
+        { K(P::wavefoldDrive, "DRIVE"), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
+    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "BITCRUSH", P::bitcrushOn,
+        { K(P::bitcrushBits, "BITS"), K(P::bitcrushRate, "RATE"), K(P::bitcrushMix, "MIX") });
+    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "CHORUS", P::chorusOn,
+        { K(P::chorusRate, "RATE"), K(P::chorusDepth, "DEPTH"), K(P::chorusMix, "MIX") });
+    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "DELAY", P::delayOn,
+        { K(P::delayTime, "TIME"), K(P::delayFeedback, "FB"), K(P::delayMix, "MIX") });
+    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "REVERB", P::reverbOn,
+        { K(P::reverbRoom, "ROOM"), K(P::reverbDamp, "DAMP"), K(P::reverbMix, "MIX") });
+    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", {},
+        { display("SCOPE", 12) });
+    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "SPECTRUM", {},
+        { display("SPECTRUM", 12) });
+
+    // Added LAST so the opaque rack covers the legacy body; the header chrome and
+    // keyboard sit in their own bands and stay live.
+    addAndMakeVisible(*sampleRack);
+}
+
 void SynthyEditor::resized()
 {
     auto area = getLocalBounds().reduced(12);
 
-    // ===== Header — Save/Load/Random/Reset left, Title+Preset center, Master right =====
-    auto headerRow = area.removeFromTop(88);
-    auto leftBtns = headerRow.removeFromLeft(150);
+    // ===== Header — Save/Load/Random/Reset left, Title + Current State center =====
+    // (Master + Stereo moved out of the header into the MASTER BUS rack zone.) The header
+    // is kept compact; the freed space gives the title + preset name room to breathe.
+    auto headerRow = area.removeFromTop(64);
+    // The title is centred over the FULL header width so "J A S S" sits in the true middle
+    // of the window; the left cluster only overlays the left edge, clear of the centred text.
+    g_titleBounds = headerRow;
+    // Left cluster: the Save/Load/Random/Reset buttons AND the current-preset name belong
+    // together (the preset name is about what was loaded/saved). Buttons in a 2x2 block
+    // with "Current State" beside them.
+    auto leftGroup = headerRow.removeFromLeft(340);
+    auto leftBtns = leftGroup.removeFromLeft(150);
     auto row1 = leftBtns.removeFromTop(30);
     saveBtn.setBounds(row1.removeFromLeft(row1.getWidth() / 2).reduced(3, 2));
     loadBtn.setBounds(row1.reduced(3, 2));
     auto row2 = leftBtns.removeFromTop(30);
     randomBtn.setBounds(row2.removeFromLeft(row2.getWidth() / 2).reduced(3, 2));
     resetBtn.setBounds(row2.reduced(3, 2));
-    auto masterArea = headerRow.removeFromRight(100);
-    auto masterLabelRow = masterArea.removeFromTop(14);
-    masterResetBtn.setBounds(masterLabelRow.removeFromRight(20));
-    masterLabel.setBounds(masterLabelRow);
-    masterKnob.setBounds(masterArea);
-    // STEREO inline left of Master: title + ON stacked on the left, then the
-    // WIDTH/TIME knobs at full header height so they match the Master knob size.
-    auto stereoArea = headerRow.removeFromRight(200);
-    stereoBounds = stereoArea;
-    auto stTitleCol = stereoArea.removeFromLeft(56);
-    stereoTitle.setBounds(stTitleCol.removeFromTop(20));
-    stTitleCol.removeFromTop(3);
-    stereoOnBtn.setBounds(stTitleCol.removeFromTop(22).reduced(6, 0));
-    stTitleCol.removeFromTop(2);
-    stereoResetBtn.setBounds(stTitleCol.removeFromTop(18).reduced(14, 0));
-    auto stKnobW = stereoArea.getWidth() / 2;
-    auto stWCol = stereoArea.removeFromLeft(stKnobW);
-    stereoWidthLabel.setBounds(stWCol.removeFromTop(14));
-    stereoWidthKnob.setBounds(stWCol);
-    stereoTimeLabel.setBounds(stereoArea.removeFromTop(14));
-    stereoTimeKnob.setBounds(stereoArea);
-    // Center: SYNTHY title (top) + current-preset name (below)
-    auto centerArea = headerRow;
-    g_titleBounds = centerArea.removeFromTop(centerArea.getHeight() - 18);
-    presetNameLabel.setBounds(centerArea);
+    leftGroup.removeFromLeft(10);
+    presetNameLabel.setBounds(leftGroup);   // grouped with the load/save controls
     area.removeFromTop(8);
 
     // ============================================================
@@ -1306,5 +1334,16 @@ void SynthyEditor::resized()
             if (! juce::MidiMessage::isMidiNoteBlack(n)) ++whiteKeys;
         if (whiteKeys > 0)
             keyboard->setKeyWidth((float) keyboard->getWidth() / (float) whiteKeys);
+    }
+
+    // Story 1.3: the sample rack covers the body band (below the header row, above the
+    // keyboard). It is opaque, so it hides the legacy panels beneath while the header
+    // chrome and keyboard keep their own bands. (Real descriptors replace it in 1.5.)
+    if (sampleRack)
+    {
+        auto rb = getLocalBounds().reduced(12);
+        rb.removeFromTop(64 + 8);    // header row + gap (mirrors the header band above)
+        rb.removeFromBottom(72);     // keyboard band
+        sampleRack->setBounds(rb);
     }
 }

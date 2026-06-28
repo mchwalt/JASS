@@ -12,9 +12,23 @@
 // no parameter definitions, no APVTS ownership here — pure UI-layer data.
 namespace rack
 {
-    enum class SizeClass  { S, M, L };                              // 1x1, 2x1, 2x2 (cols x units)
+    enum class SizeClass  { XS, S, M, L, XL };                      // 12-col grid spans: 2x1, 3x1, 4x1, 4x2, 6x2
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff }; // for live LFO rings (AD-8)
+
+    // Desaturated identity tints (FR6), matching the rack mockup. The single source
+    // of the type→colour map, shared by ModuleFrame (top edge / reset tint) and the
+    // Rack (zone-header hue) so the palette is defined exactly once.
+    inline juce::Colour typeColour (ModuleType t) noexcept
+    {
+        switch (t)
+        {
+            case ModuleType::Generator: return juce::Colour (0xff5e9b96);
+            case ModuleType::Modulator: return juce::Colour (0xff9384b6);
+            case ModuleType::Processor: return juce::Colour (0xff6f86ad);
+        }
+        return juce::Colour (0xff6f86ad);
+    }
 
     // --- Body-element vocabulary (AD-4) -----------------------------------
 
@@ -106,9 +120,15 @@ namespace rack
     {
         switch (c)
         {
-            case SizeClass::S: return { 1, 1,  3, KnobSize::Small };
-            case SizeClass::M: return { 2, 1,  6, KnobSize::Small }; // uniform knob for now (AD-3)
-            case SizeClass::L: return { 2, 2, 12, KnobSize::Small };
+            // PROTOTYPE: column spans on the refined 12-column grid (cols × units). Decoupled
+            // from knob size — the body fills the module width from its CONTENT (see
+            // ModuleFrame::resized). slotCapacity is now only a generous debug guard, not a
+            // layout driver. To be formalised in AD-2 via correct-course.
+            case SizeClass::XS: return { 2, 1,  4, KnobSize::Small };  // 1–2 controls
+            case SizeClass::S:  return { 3, 1,  6, KnobSize::Small };  // 3–4 controls
+            case SizeClass::M:  return { 4, 1,  8, KnobSize::Small };  // 5–6 controls
+            case SizeClass::L:  return { 4, 2, 16, KnobSize::Small };  // knobs + curve display (ADSR)
+            case SizeClass::XL: return { 6, 2, 24, KnobSize::Small };  // wide visualisers (scope/spectrum)
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };

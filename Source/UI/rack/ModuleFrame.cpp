@@ -4,17 +4,7 @@ namespace rack
 {
     namespace
     {
-        // Desaturated identity tints, matching the rack mockup (Generator/Modulator/Processor).
-        juce::Colour typeColour (ModuleType t)
-        {
-            switch (t)
-            {
-                case ModuleType::Generator: return juce::Colour (0xff5e9b96);
-                case ModuleType::Modulator: return juce::Colour (0xff9384b6);
-                case ModuleType::Processor: return juce::Colour (0xff6f86ad);
-            }
-            return juce::Colour (0xff6f86ad);
-        }
+        // typeColour() is shared from ModuleDescriptor.h (single source of the palette).
 
         juce::Label* makeCaption (juce::OwnedArray<juce::Label>& store, const juce::String& text)
         {
@@ -79,6 +69,10 @@ namespace rack
             {
                 auto* s = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
                 s->setKnobDiameter (knobD);
+                // No value box in the rack: the caption below IS the label, and a value
+                // box would steal the vertical room the fixed-size knob needs (right-click
+                // still pops the value box for typing — see SynthySlider::mouseDown).
+                s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
                 addAndMakeVisible (*s);
                 sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
                     apvts, k->paramId, *s));
@@ -95,7 +89,9 @@ namespace rack
                 addAndMakeVisible (*box);
                 comboAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
                     apvts, c->paramId, *box));
-                cells.push_back ({ box, makeCaption (ownedCaptions, c->label), 1 });
+                // A combo needs more width than a knob to show its item text — give it
+                // two internal slots so the dropdown isn't cramped/truncated.
+                cells.push_back ({ box, makeCaption (ownedCaptions, c->label), 2 });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
             }
             else if (auto* t = std::get_if<Toggle> (&el))
@@ -185,17 +181,37 @@ namespace rack
         // enable slot stays reserved even when a module has no toggle — so titles and
         // ↺ buttons line up across the whole rack.
         auto header = r.removeFromTop (kHeaderH).reduced (4, 2);
-        resetBtn.setBounds (header.removeFromRight (20));
+        // The enable toggle sits at the FAR top-right; the reset ↺ directly to its left.
+        // Both slots are reserved unconditionally so header geometry is identical across
+        // every module (a module without an enable just leaves that slot empty).
         auto enableSlot = header.removeFromRight (24);
         if (enableBtn != nullptr)
             enableBtn->setBounds (enableSlot);
+        resetBtn.setBounds (header.removeFromRight (20));
         titleLabel.setBounds (header);
 
         // --- body slot grid (the single body-layout site) ---
         auto body = r.reduced (5, 4);
         const auto spec = sizeClassSpec (desc.sizeClass);
-        const int nCols = juce::jmax (1, spec.cols * 3);
-        const int total = juce::jmax (1, bodySlots (desc.body));
+
+        // The body fills the module width from its CONTENT, decoupled from the grid column
+        // span AND from the knob size (PROTOTYPE): lay the content slots (combo=2, display=N,
+        // else 1) across `units` rows. nCols is derived so the cells fill the full width with
+        // no trailing empty cells — the cause of the old "module doesn't use its space" look.
+        const int units = juce::jmax (1, spec.units);
+        int rawTotal = 0;
+        for (auto& cell : cells)
+            rawTotal += juce::jmax (1, cell.slots);
+        rawTotal = juce::jmax (1, rawTotal);
+        const int nCols = juce::jmax (1, (rawTotal + units - 1) / units);   // ceil(rawTotal / units)
+
+        // Row count from the cells we actually place (sum of their clamped spans), NOT
+        // from bodySlots(desc.body): a skipped null-Display would inflate the count and
+        // leave a phantom gap. (deferred 1.2 review item)
+        int total = 0;
+        for (auto& cell : cells)
+            total += juce::jlimit (1, nCols, cell.slots);
+        total = juce::jmax (1, total);
         const int nRows = (total + nCols - 1) / nCols;
         const int cellW = body.getWidth()  / nCols;
         const int cellH = body.getHeight() / juce::jmax (1, nRows);
@@ -206,19 +222,43 @@ namespace rack
             const int span = juce::jlimit (1, nCols, cell.slots);
             if (col + span > nCols) { col = 0; ++row; }
 
+            // Never lay a (spanning) cell out below the body's bottom edge: bound the
+            // row to the grid we sized for. (deferred 1.2 review item)
+            const int placeRow = juce::jmin (row, nRows - 1);
             juce::Rectangle<int> cellR (body.getX() + col * cellW,
-                                        body.getY() + row * cellH,
+                                        body.getY() + placeRow * cellH,
                                         cellW * span, cellH);
 
-            if (cell.caption != nullptr)   // knob/combo: widget on top, caption below
+            if (cell.caption != nullptr)   // knob/combo: widget + caption as ONE centred group
             {
                 auto cr = cellR.reduced (2);
-                cell.caption->setBounds (cr.removeFromBottom (12));
-                cell.widget->setBounds (cr);
+                const int capH = 12;
+                const bool isKnob = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                const int wH = isKnob ? (KnobSize::Small + 8) : kComboH;
+                // Centre the widget+caption block vertically so the caption sits DIRECTLY
+                // under its widget — never floating to the bottom of a tall (e.g. L) cell.
+                const int top = juce::jmax (cr.getY(), cr.getCentreY() - (wH + capH) / 2);
+
+                if (isKnob)
+                    // ONE fixed knob size everywhere (AD-3), CENTRED in its cell — never
+                    // stretched. Centring keeps knobs evenly distributed when cells are wide.
+                    cell.widget->setBounds (cr.getCentreX() - wH / 2, top, wH, wH);
+                else
+                    // Combo: short (half-height) + wide (2 slots), LEFT-aligned.
+                    cell.widget->setBounds (cr.getX(), top, cr.getWidth(), wH);
+
+                cell.caption->setBounds (cr.getX(), top + wH, cr.getWidth(), capH);
             }
             else if (cell.widget != nullptr)
             {
-                cell.widget->setBounds (cellR.reduced (2));
+                auto cr = cellR.reduced (2);
+                if (dynamic_cast<juce::Button*> (cell.widget) != nullptr)
+                    // Toggle / Action / FileAction button: fixed height, capped width,
+                    // centred — so it never stretches to fill a tall (e.g. L) cell.
+                    cell.widget->setBounds (cr.withSizeKeepingCentre (juce::jmin (cr.getWidth(), kButtonW),
+                                                                      juce::jmin (cr.getHeight(), kButtonH)));
+                else
+                    cell.widget->setBounds (cr);   // static Caption text fills the cell
             }
 
             col += span;
