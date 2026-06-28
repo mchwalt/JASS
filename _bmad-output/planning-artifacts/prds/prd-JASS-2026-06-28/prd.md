@@ -75,7 +75,7 @@ The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of mod
 - **FR7.** A module's enabled/bypassed state is shown by one consistent rule across all modules: when disabled, the module **body is dimmed** (reduced opacity) while the header stays fully lit, and the enable toggle is the single source of truth for the state. Modules without an on/off are always shown lit.
 
 ### FR Group C — Standard Sizes & Rack Layout
-- **FR8.** Exactly **3 size classes** (S/M/L) exist; every module is assigned one. Adding a fourth is out of scope.
+- **FR8.** Size classes live in a single data-driven table; **3 are defined and in use (S/M/L)** and every module is assigned one. The set is extensible by one table entry (a 4th class is anticipated but not implemented now) — never by per-module custom sizing.
 - **FR9.** The rack arranges modules on a **fixed grid** of rack-units × columns; modules align to the grid with consistent gutters. No module overlaps a grid boundary.
 - **FR10.** **Zone headers** (GENERATORS / MODULATION / PROCESSING) separate the three groups and span the rack width.
 - **FR11.** Graphical displays — **oscilloscope, spectrum, ADSR-envelope curve** — are themselves modules (size **L**) within the rack, not specially-placed exceptions.
@@ -83,7 +83,7 @@ The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of mod
 ### FR Group D — Migration & Header
 - **FR12.** All existing modules are re-expressed on the framework: OSC 1–3, Sub, Noise, Karplus, Wavetable, ADSR, LFO, Arpeggiator, Filter, Distortion, Wavefolder, Bitcrusher, Chorus, Delay, Reverb, Stereo, Master — plus Mix-Mode and the display modules.
 - **FR13.** No existing control, parameter binding, or behavior is dropped in migration; the played-frequency FREQ display and Mix-Mode coupling between OSCs are preserved.
-- **FR14.** The **global header** (preset SAVE / LOAD / RANDOM / RESET, preset-name / "Current State" indicator) and the **on-screen keyboard** remain as fixed chrome (restyled to match the rack) outside the module grid — they are not rack modules.
+- **FR14.** The **global header** (preset SAVE / LOAD / RANDOM / RESET, preset-name / "Current State" indicator, plus the master-bus **Master volume** and **Stereo** width/time) and the **on-screen keyboard** remain as fixed chrome (restyled to match the rack) outside the module grid — they are not rack modules.
 
 ## 7. Non-Functional Requirements
 - **NFR1 — Maintainability:** no module defines its own `resized()` geometry; layout is data-driven via the framework. This is the primary engineering win and a success gate.

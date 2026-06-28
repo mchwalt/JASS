@@ -1,0 +1,594 @@
+<title>JASS — Rack UI Mockup</title>
+<meta name="description" content="Layout mockup of the unified 19-inch rack UI for the JASS synthesizer — module framework, S/M/L size classes, 8-column grid.">
+<style>
+  :root{
+    /* chosen neutrals — cool anthracite instrument panel, not pure black */
+    --ground:#15181d;
+    --rail:#0f1115;
+    --panel:#272c34;
+    --panel-hi:#2f353f;
+    --panel-lo:#1f242b;
+    --groove:#0c0e11;
+    --ink:#cfd4dc;          /* screened label */
+    --ink-dim:#7e8794;
+    --ink-faint:#525a66;
+    /* type-tag hues — desaturated, used as thin identity only */
+    --gen:#5e9b96;
+    --mod:#9384b6;
+    --proc:#6f86ad;
+    /* one warm accent: active state + modulation rings */
+    --accent:#e0a83f;
+    --accent-soft:#e0a83f55;
+    --edge:#000;
+    --hair:#ffffff10;
+    --label-face:"Eurostile","Bahnschrift","DIN Alternate",ui-sans-serif,system-ui,sans-serif;
+    --data-face:ui-monospace,"Cascadia Mono","Consolas",monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:
+      radial-gradient(120% 80% at 50% -10%, #20242b 0%, var(--ground) 55%, #0f1116 100%);
+    color:var(--ink);
+    font-family:var(--label-face);
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1180px;margin:0 auto;padding:28px 18px 56px;}
+
+  /* ---- intro / legend ---- */
+  .intro{margin:6px 2px 22px;}
+  .intro h1{font-size:13px;letter-spacing:.42em;text-transform:uppercase;
+    color:var(--ink-dim);font-weight:600;margin:0 0 6px;}
+  .intro p{font-family:ui-sans-serif,system-ui,sans-serif;font-size:13.5px;
+    line-height:1.6;color:var(--ink-dim);max-width:64ch;margin:0;}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin-top:14px;
+    font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint);}
+  .legend b{color:var(--ink-dim);font-weight:600;}
+  .chip{display:inline-flex;align-items:center;gap:6px;}
+  .chip i{width:11px;height:11px;border-radius:2px;display:inline-block;}
+
+  /* ---- the rack frame ---- */
+  .rack{position:relative;background:
+      linear-gradient(180deg,#191d23,#13161b);
+    border-radius:10px;padding:16px 30px;
+    box-shadow:0 22px 60px -22px #000, inset 0 1px 0 #ffffff0c, inset 0 0 0 1px #ffffff08;}
+  /* 19" rack ears with screws */
+  .rack::before,.rack::after{content:"";position:absolute;top:10px;bottom:10px;width:14px;
+    background:linear-gradient(90deg,#2a2f37,#171a1f);border-radius:4px;
+    box-shadow:inset 0 0 0 1px #ffffff0a;}
+  .rack::before{left:8px}.rack::after{right:8px}
+  .screw{position:absolute;width:8px;height:8px;border-radius:50%;
+    background:radial-gradient(circle at 35% 30%,#5a626d,#1c2026 70%);
+    box-shadow:0 1px 1px #000, inset 0 0 0 1px #0008;z-index:3;}
+  .screw::after{content:"";position:absolute;inset:2px;border-top:1px solid #0009;transform:rotate(28deg);}
+  .s1{left:9px;top:13px}.s2{right:9px;top:13px}.s3{left:9px;bottom:13px}.s4{right:9px;bottom:13px}
+
+  /* ---- global header chrome ---- */
+  .chrome{display:flex;align-items:center;flex-wrap:wrap;gap:12px 14px;padding:10px 8px 14px;
+    border-bottom:1px solid var(--hair);margin-bottom:14px;}
+  .brand{font-size:22px;letter-spacing:.3em;font-weight:700;color:var(--ink);
+    text-shadow:0 1px 0 #000;}
+  .brand small{display:block;font-size:8.5px;letter-spacing:.26em;color:var(--ink-faint);
+    margin-top:2px;font-weight:600;}
+  .preset{font-family:var(--data-face);font-size:12px;color:var(--accent);
+    background:var(--groove);border:1px solid #0008;border-radius:4px;
+    padding:7px 12px;box-shadow:inset 0 1px 3px #000;letter-spacing:.04em;}
+  .preset b{color:var(--ink-faint);font-weight:400;}
+  .spacer{flex:1}
+  .btn{font-family:var(--label-face);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-dim);background:linear-gradient(180deg,var(--panel-hi),var(--panel-lo));
+    border:1px solid #0007;border-radius:4px;padding:8px 12px;cursor:default;
+    box-shadow:inset 0 1px 0 #ffffff0f,0 1px 2px #0006;}
+  .btn:hover{color:var(--ink)}
+  /* global master controls living in the header chrome (not the rack grid) */
+  .hsep{width:1px;align-self:stretch;background:var(--hair);margin:0 2px;}
+  .hgrp{display:flex;align-items:center;gap:10px;padding:0 4px;}
+  .hgrp .glabel{font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-faint);
+    writing-mode:vertical-rl;transform:rotate(180deg);}
+  .hgrp .ctl .lbl{font-size:7px}
+
+  /* ---- zone separators ---- */
+  .zone{grid-column:1/-1;display:flex;align-items:center;gap:12px;
+    margin:8px 2px 2px;font-size:10.5px;letter-spacing:.34em;text-transform:uppercase;}
+  .zone span{color:var(--ink-dim);font-weight:600;}
+  .zone .ln{flex:1;height:1px;background:linear-gradient(90deg,var(--zc,#4446),transparent);}
+  .zone .dot{width:7px;height:7px;border-radius:2px;background:var(--zc,#666);}
+
+  /* ---- module grid ---- */
+  .grid{display:grid;grid-template-columns:repeat(8,1fr);
+    grid-auto-rows:84px;gap:9px;grid-auto-flow:row dense;}
+  .m{position:relative;background:
+      linear-gradient(180deg,var(--panel-hi),var(--panel));
+    border:1px solid #00000080;border-radius:7px;overflow:hidden;
+    box-shadow:inset 0 1px 0 #ffffff0d, 0 2px 6px -2px #0008;
+    display:flex;flex-direction:column;
+    /* identity: thin top edge in the zone hue */
+    border-top:2px solid var(--tag,#555);}
+  .m.s{grid-column:span 1;grid-row:span 1}
+  .m.m{grid-column:span 2;grid-row:span 1}
+  .m.l{grid-column:span 2;grid-row:span 2}
+  .m.off{opacity:1}
+  .m.off .body{opacity:.32;filter:saturate(.4)}      /* AD-5 / FR7: body dims, header stays lit */
+
+  .hd{display:flex;align-items:center;gap:6px;height:22px;flex:0 0 auto;
+    padding:0 7px;background:linear-gradient(180deg,#ffffff0b,#0000);
+    border-bottom:1px solid #00000055;}
+  .hd .t{font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink);
+    font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .hd .sp{flex:1}
+  /* enable toggle */
+  .led{width:9px;height:9px;border-radius:50%;background:var(--groove);
+    box-shadow:inset 0 0 0 1px #000,0 0 0 1px #ffffff10;}
+  .on .led{background:radial-gradient(circle at 40% 35%,#ffd98a,var(--accent) 60%,#7a5410);
+    box-shadow:0 0 7px var(--accent-soft),inset 0 0 0 1px #0006;}
+  .rst{font-family:var(--data-face);font-size:11px;color:var(--ink-faint);
+    line-height:1;cursor:default;}
+  .rst:hover{color:var(--ink-dim)}
+
+  .body{flex:1;display:flex;align-items:center;justify-content:space-around;
+    gap:4px;padding:6px 7px;min-height:0;}
+  .body.wrap2{flex-wrap:wrap;align-content:center;}
+
+  /* ---- a control cell ---- */
+  .ctl{display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0;}
+  .ctl .lbl{font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);
+    white-space:nowrap;}
+  .ctl .val{font-family:var(--data-face);font-size:8px;color:var(--ink-dim);
+    font-variant-numeric:tabular-nums;}
+
+  /* knob — single uniform size (AD-3) */
+  .knob{--d:33px;width:var(--d);height:var(--d);border-radius:50%;position:relative;
+    background:
+      radial-gradient(circle at 50% 38%,#3c434e,#22262d 62%,#15181d 100%);
+    box-shadow:0 2px 4px #0008, inset 0 1px 0 #ffffff14, inset 0 -3px 6px #0008;}
+  .knob::before{content:"";position:absolute;inset:5px;border-radius:50%;
+    background:repeating-conic-gradient(from 0deg,#0000 0 14deg,#ffffff06 14deg 15deg);} /* knurl */
+  .knob .ind{position:absolute;left:50%;top:5px;width:2px;height:30%;
+    background:linear-gradient(#ffe1a0,var(--accent));border-radius:2px;
+    transform-origin:50% calc(100% + 4px);transform:translateX(-50%) rotate(var(--a,-40deg));
+    box-shadow:0 0 4px var(--accent-soft);}
+  /* live modulation ring (AD-8) */
+  .knob.mod{box-shadow:0 2px 4px #0008, inset 0 1px 0 #ffffff14, inset 0 -3px 6px #0008,
+      0 0 0 2px #0006;}
+  .knob.mod .ring{position:absolute;inset:-5px;border-radius:50%;
+    background:conic-gradient(from -130deg,var(--accent) 0deg,var(--accent) var(--m,90deg),#0000 var(--m,90deg));
+    -webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 3px),#000 calc(100% - 3px));
+            mask:radial-gradient(farthest-side,#0000 calc(100% - 3px),#000 calc(100% - 3px));
+    animation:pulse 2.4s ease-in-out infinite;}
+  @keyframes pulse{0%,100%{opacity:.55}50%{opacity:1}}
+
+  /* combo / select look */
+  .sel{font-family:var(--data-face);font-size:8.5px;color:var(--ink);background:var(--groove);
+    border:1px solid #0008;border-radius:3px;padding:4px 6px;min-width:54px;text-align:center;
+    box-shadow:inset 0 1px 2px #000;position:relative;}
+  .sel::after{content:"▾";position:absolute;right:5px;top:50%;transform:translateY(-50%);
+    color:var(--ink-faint);font-size:7px;}
+  .sel.dyn{border-style:dashed;border-color:#ffffff22;}
+  /* action / file buttons */
+  .act{font-family:var(--label-face);font-size:8px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--accent);background:#0000;border:1px solid var(--accent-soft);border-radius:3px;
+    padding:5px 8px;box-shadow:inset 0 0 8px #e0a83f12;}
+  .cap{font-size:7.5px;letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase;}
+
+  /* displays */
+  .disp{flex:1;align-self:stretch;background:
+      linear-gradient(180deg,#0a0d10,#070809);border:1px solid #0008;border-radius:4px;
+    box-shadow:inset 0 2px 8px #000;display:block;}
+  .disp svg{display:block;width:100%;height:100%;}
+
+  /* ---- keyboard chrome ---- */
+  .kb{margin-top:16px;height:74px;background:linear-gradient(180deg,#1a1e24,#0f1216);
+    border:1px solid #0008;border-radius:6px;display:flex;padding:8px 10px;gap:0;
+    box-shadow:inset 0 2px 8px #000;position:relative;overflow:hidden;}
+  .keys{display:flex;flex:1;position:relative;}
+  .wk{flex:1;background:linear-gradient(180deg,#e9ecf0,#c3c8d0);border:1px solid #0006;
+    border-radius:0 0 3px 3px;margin-right:1px;box-shadow:inset 0 -3px 4px #0002;}
+  .bk{position:absolute;top:0;width:calc(100%/52*0.62);height:60%;
+    background:linear-gradient(180deg,#2a2f37,#0d0f12);border-radius:0 0 2px 2px;
+    box-shadow:0 2px 3px #0009;z-index:2;}
+  .foot{margin-top:18px;text-align:center;font-size:10px;letter-spacing:.16em;
+    text-transform:uppercase;color:var(--ink-faint);}
+  .foot b{color:var(--ink-dim);font-weight:600}
+
+  /* ---- display-width comparison ---- */
+  .compare{margin-top:38px;border-top:1px solid var(--hair);padding-top:24px;}
+  .compare h2{font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-dim);
+    margin:0 0 6px;font-weight:600;}
+  .compare .sub{font-family:ui-sans-serif,system-ui,sans-serif;font-size:13px;line-height:1.55;
+    color:var(--ink-faint);max-width:64ch;margin:0 0 20px;}
+  .opt{margin-bottom:20px;}
+  .opt .cap2{display:flex;align-items:center;gap:10px;margin-bottom:8px;
+    font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-dim);}
+  .opt .cap2 b{color:var(--ink);font-weight:600;}
+  .tag{font-size:8.5px;letter-spacing:.1em;padding:2px 8px;border-radius:3px;}
+  .tag.good{color:#9bd6a0;background:#9bd6a015;border:1px solid #9bd6a033;}
+  .tag.warn{color:var(--accent);background:#e0a83f12;border:1px solid #e0a83f33;}
+  .opt .note{font-family:ui-sans-serif,system-ui,sans-serif;font-size:11.5px;color:var(--ink-faint);
+    margin-top:8px;}
+  .mini{display:grid;grid-template-columns:repeat(8,1fr);grid-auto-rows:46px;gap:6px;
+    grid-auto-flow:row dense;}
+  .cell{border-radius:5px;border:1px solid #0007;border-top:2px solid var(--ct,#4a505a);
+    background:linear-gradient(180deg,var(--panel-hi),var(--panel));
+    display:flex;align-items:center;justify-content:center;text-align:center;
+    font-size:7.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);
+    box-shadow:inset 0 1px 0 #ffffff0a;overflow:hidden;}
+  .cell.ghost{opacity:.34;}
+  .cell.d2{grid-column:span 2;grid-row:span 2;--ct:var(--proc);color:var(--ink-dim);}
+  .cell.d3{grid-column:span 3;grid-row:span 2;--ct:var(--proc);color:var(--ink-dim);}
+  .cell.gap{grid-column:span 2;grid-row:span 2;border:1px dashed #e0a83f66;border-top:1px dashed #e0a83f66;
+    background:#e0a83f08;color:var(--accent);font-size:7px;padding:4px;}
+  .cell .dispmini{width:100%;height:100%;display:flex;flex-direction:column;}
+  .cell .dispmini svg{flex:1;width:100%;height:auto;display:block;}
+  .cell .dispmini .cl{font-size:7px;letter-spacing:.14em;padding:3px 0 1px;color:var(--ink-dim);}
+
+  @media (prefers-reduced-motion:reduce){.knob.mod .ring{animation:none;opacity:.85}}
+  @media (max-width:720px){.wrap{padding:18px 8px}.rack{padding:14px 22px}
+    .grid{grid-auto-rows:120px}}
+</style>
+
+<div class="wrap">
+  <div class="intro">
+    <h1>JASS · Unified Rack UI — Layout Mockup</h1>
+    <p>Every module is one <b>ModuleFrame</b> built from a declarative descriptor: a uniform header
+    (title · enable LED · reset ↺) over a body of controls or a display, placed by the rack on a
+    fixed 8-column grid. Three size classes only — this is the first-pass class assignment for all
+    ~20 modules, to judge fit on a 1920×1200 window and the "from one mold" feel before any C++.</p>
+    <div class="legend">
+      <span class="chip"><i style="background:var(--gen)"></i><b>Generators</b></span>
+      <span class="chip"><i style="background:var(--mod)"></i><b>Modulation</b></span>
+      <span class="chip"><i style="background:var(--proc)"></i><b>Processing</b></span>
+      <span class="chip"><b>S</b> 1×1</span>
+      <span class="chip"><b>M</b> 2×1</span>
+      <span class="chip"><b>L</b> 2×2</span>
+      <span class="chip"><i style="background:var(--accent)"></i>active / mod-ring</span>
+    </div>
+  </div>
+
+  <div class="rack">
+    <span class="screw s1"></span><span class="screw s2"></span>
+    <span class="screw s3"></span><span class="screw s4"></span>
+
+    <!-- global header chrome (outside the grid — FR14) -->
+    <div class="chrome">
+      <div class="brand">JASS<small>Just Another Simple Synth</small></div>
+      <div class="preset"><b>PRESET</b> · Current State *</div>
+      <div class="btn">Save</div><div class="btn">Load</div>
+      <div class="btn">Random</div><div class="btn">Reset</div>
+      <div class="spacer"></div>
+      <!-- global Stereo + Master live up here in the chrome, not in the rack grid -->
+      <div class="hgrp" title="Stereo">
+        <span class="glabel">Stereo</span>
+        <div class="ctl"><div class="knob" style="--d:30px;--a:30deg"><div class="ind"></div></div><div class="lbl">Width</div></div>
+        <div class="ctl"><div class="knob" style="--d:30px;--a:-30deg"><div class="ind"></div></div><div class="lbl">Time</div></div>
+        <span class="led" style="align-self:flex-start;margin-top:4px"></span>
+      </div>
+      <div class="hsep"></div>
+      <div class="hgrp" title="Master">
+        <div class="ctl"><div class="knob" style="--d:36px;--a:35deg"><div class="ind"></div></div><div class="lbl">Master</div></div>
+      </div>
+    </div>
+
+    <div class="grid">
+
+      <!-- ================= GENERATORS ================= -->
+      <div class="zone" style="--zc:var(--gen)"><span class="dot"></span><span>Generators</span><span class="ln"></span></div>
+
+      <!-- OSC 1 — M, FREQ shows played frequency + mod ring -->
+      <div class="m m on" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">OSC 1</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">Saw</div><div class="lbl">Wave</div></div>
+          <div class="ctl"><div class="knob mod" style="--a:30deg"><div class="ring" style="--m:120deg"></div><div class="ind"></div></div><div class="lbl">Freq</div><div class="val">261 Hz</div></div>
+          <div class="ctl"><div class="knob" style="--a:-10deg"><div class="ind"></div></div><div class="lbl">Amp</div></div>
+          <div class="ctl"><div class="knob" style="--a:-60deg"><div class="ind"></div></div><div class="lbl">Voices</div></div>
+          <div class="ctl"><div class="knob" style="--a:-30deg"><div class="ind"></div></div><div class="lbl">Detune</div></div>
+        </div>
+      </div>
+
+      <!-- OSC 2 — M -->
+      <div class="m m on" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">OSC 2</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">Square</div><div class="lbl">Wave</div></div>
+          <div class="ctl"><div class="knob" style="--a:70deg"><div class="ind"></div></div><div class="lbl">Freq</div><div class="val">523 Hz</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Amp</div></div>
+          <div class="ctl"><div class="knob" style="--a:-40deg"><div class="ind"></div></div><div class="lbl">Voices</div></div>
+          <div class="ctl"><div class="knob" style="--a:20deg"><div class="ind"></div></div><div class="lbl">Detune</div></div>
+        </div>
+      </div>
+
+      <!-- OSC 3 — M, disabled (shows dimmed body, header lit) -->
+      <div class="m m off" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">OSC 3</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">Sine</div><div class="lbl">Wave</div></div>
+          <div class="ctl"><div class="knob" style="--a:-80deg"><div class="ind"></div></div><div class="lbl">Freq</div><div class="val">130 Hz</div></div>
+          <div class="ctl"><div class="knob" style="--a:-10deg"><div class="ind"></div></div><div class="lbl">Amp</div></div>
+          <div class="ctl"><div class="knob" style="--a:-60deg"><div class="ind"></div></div><div class="lbl">Voices</div></div>
+          <div class="ctl"><div class="knob" style="--a:-30deg"><div class="ind"></div></div><div class="lbl">Detune</div></div>
+        </div>
+      </div>
+
+      <!-- SUB — S -->
+      <div class="m s on" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">Sub</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">Sine</div><div class="lbl">Wave</div></div>
+          <div class="ctl"><div class="knob" style="--a:-40deg"><div class="ind"></div></div><div class="lbl">Level</div></div>
+        </div>
+      </div>
+
+      <!-- NOISE — S -->
+      <div class="m s off" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">Noise</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">White</div><div class="lbl">Type</div></div>
+          <div class="ctl"><div class="knob" style="--a:-70deg"><div class="ind"></div></div><div class="lbl">Amp</div></div>
+        </div>
+      </div>
+
+      <!-- KARPLUS — M, with PLUCK action -->
+      <div class="m m off" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">Karplus</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="act">Pluck</div><div class="lbl">Trig</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Freq</div></div>
+          <div class="ctl"><div class="knob" style="--a:-20deg"><div class="ind"></div></div><div class="lbl">Amp</div></div>
+          <div class="ctl"><div class="knob" style="--a:40deg"><div class="ind"></div></div><div class="lbl">Damp</div></div>
+          <div class="ctl"><div class="knob" style="--a:10deg"><div class="ind"></div></div><div class="lbl">Stretch</div></div>
+        </div>
+      </div>
+
+      <!-- WAVETABLE — L (overflowed M, promoted) : LOAD WAV + dynamic bank + 5 knobs -->
+      <div class="m l off" style="--tag:var(--gen)">
+        <div class="hd"><span class="led"></span><span class="t">Wavetable</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body wrap2">
+          <div class="ctl"><div class="act">Load WAV</div><div class="lbl">File</div></div>
+          <div class="ctl"><div class="sel dyn">Basic</div><div class="lbl">Bank</div></div>
+          <div class="ctl"><div class="knob" style="--a:-30deg"><div class="ind"></div></div><div class="lbl">Pos</div></div>
+          <div class="ctl"><div class="knob" style="--a:20deg"><div class="ind"></div></div><div class="lbl">Freq</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Amp</div></div>
+          <div class="ctl"><div class="knob" style="--a:-50deg"><div class="ind"></div></div><div class="lbl">Voices</div></div>
+          <div class="ctl"><div class="knob" style="--a:30deg"><div class="ind"></div></div><div class="lbl">Detune</div></div>
+        </div>
+      </div>
+
+      <!-- MIX MODE — S (own module, couples to OSCs only via APVTS — AD-9) -->
+      <div class="m s on" style="--tag:var(--gen)">
+        <div class="hd"><span class="t">Mix Mode</span><span class="sp"></span></div>
+        <div class="body" style="flex-direction:column;gap:6px">
+          <div class="sel">Additive</div>
+          <div class="cap">OSC 1 ↔ 2</div>
+        </div>
+      </div>
+
+      <!-- ================= MODULATION ================= -->
+      <div class="zone" style="--zc:var(--mod)"><span class="dot"></span><span>Modulation</span><span class="ln"></span></div>
+
+      <!-- ADSR — L : 4 knobs + envelope Display -->
+      <div class="m l on" style="--tag:var(--mod)">
+        <div class="hd"><span class="t">Envelope · ADSR</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body" style="flex-direction:column;gap:8px;align-items:stretch">
+          <div style="display:flex;justify-content:space-around;gap:4px">
+            <div class="ctl"><div class="knob" style="--a:-50deg"><div class="ind"></div></div><div class="lbl">Atk</div></div>
+            <div class="ctl"><div class="knob" style="--a:-20deg"><div class="ind"></div></div><div class="lbl">Dec</div></div>
+            <div class="ctl"><div class="knob" style="--a:20deg"><div class="ind"></div></div><div class="lbl">Sus</div></div>
+            <div class="ctl"><div class="knob" style="--a:40deg"><div class="ind"></div></div><div class="lbl">Rel</div></div>
+          </div>
+          <div class="disp" style="height:42px">
+            <svg viewBox="0 0 240 46" preserveAspectRatio="none">
+              <polyline points="0,44 38,6 90,24 165,24 240,44" fill="none" stroke="#e0a83f" stroke-width="1.6"/>
+              <polyline points="0,44 38,6 90,24 165,24 240,44" fill="#e0a83f18" stroke="none"
+                style="fill-rule:nonzero"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- LFO — M -->
+      <div class="m m on" style="--tag:var(--mod)">
+        <div class="hd"><span class="t">LFO</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">Sine</div><div class="lbl">Wave</div></div>
+          <div class="ctl"><div class="sel">Cutoff</div><div class="lbl">Target</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Rate</div></div>
+          <div class="ctl"><div class="knob" style="--a:30deg"><div class="ind"></div></div><div class="lbl">Depth</div></div>
+        </div>
+      </div>
+
+      <!-- ARP — M -->
+      <div class="m m off" style="--tag:var(--mod)">
+        <div class="hd"><span class="led"></span><span class="t">Arpeggiator</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">Up/Down</div><div class="lbl">Mode</div></div>
+          <div class="ctl"><div class="knob" style="--a:-10deg"><div class="ind"></div></div><div class="lbl">Rate</div></div>
+          <div class="ctl"><div class="knob" style="--a:-50deg"><div class="ind"></div></div><div class="lbl">Oct</div></div>
+          <div class="ctl"><div class="knob" style="--a:20deg"><div class="ind"></div></div><div class="lbl">Gate</div></div>
+        </div>
+      </div>
+
+      <!-- ================= PROCESSING ================= -->
+      <div class="zone" style="--zc:var(--proc)"><span class="dot"></span><span>Processing</span><span class="ln"></span></div>
+
+      <!-- FILTER — S, CUTOFF mod ring -->
+      <div class="m s on" style="--tag:var(--proc)">
+        <div class="hd"><span class="t">Filter</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="knob mod" style="--a:0deg"><div class="ring" style="--m:200deg"></div><div class="ind"></div></div><div class="lbl">Cutoff</div></div>
+          <div class="ctl"><div class="knob" style="--a:-50deg"><div class="ind"></div></div><div class="lbl">Reso</div></div>
+        </div>
+      </div>
+
+      <!-- DISTORTION — S -->
+      <div class="m s on" style="--tag:var(--proc)">
+        <div class="hd"><span class="t">Distortion</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="sel">SoftClip</div><div class="lbl">Type</div></div>
+          <div class="ctl"><div class="knob" style="--a:10deg"><div class="ind"></div></div><div class="lbl">Drive</div></div>
+        </div>
+      </div>
+
+      <!-- WAVEFOLD — S -->
+      <div class="m s off" style="--tag:var(--proc)">
+        <div class="hd"><span class="led"></span><span class="t">Wavefold</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="knob" style="--a:-30deg"><div class="ind"></div></div><div class="lbl">Drive</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Sym</div></div>
+          <div class="ctl"><div class="knob" style="--a:40deg"><div class="ind"></div></div><div class="lbl">Mix</div></div>
+        </div>
+      </div>
+
+      <!-- BITCRUSH — S -->
+      <div class="m s off" style="--tag:var(--proc)">
+        <div class="hd"><span class="led"></span><span class="t">Bitcrush</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="knob" style="--a:-20deg"><div class="ind"></div></div><div class="lbl">Bits</div></div>
+          <div class="ctl"><div class="knob" style="--a:30deg"><div class="ind"></div></div><div class="lbl">Rate</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Mix</div></div>
+        </div>
+      </div>
+
+      <!-- CHORUS — S -->
+      <div class="m s off" style="--tag:var(--proc)">
+        <div class="hd"><span class="led"></span><span class="t">Chorus</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="knob" style="--a:-10deg"><div class="ind"></div></div><div class="lbl">Rate</div></div>
+          <div class="ctl"><div class="knob" style="--a:20deg"><div class="ind"></div></div><div class="lbl">Depth</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Mix</div></div>
+        </div>
+      </div>
+
+      <!-- DELAY — S -->
+      <div class="m s on" style="--tag:var(--proc)">
+        <div class="hd"><span class="led"></span><span class="t">Delay</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Time</div></div>
+          <div class="ctl"><div class="knob" style="--a:-40deg"><div class="ind"></div></div><div class="lbl">Fb</div></div>
+          <div class="ctl"><div class="knob" style="--a:-60deg"><div class="ind"></div></div><div class="lbl">Mix</div></div>
+        </div>
+      </div>
+
+      <!-- REVERB — S -->
+      <div class="m s on" style="--tag:var(--proc)">
+        <div class="hd"><span class="led"></span><span class="t">Reverb</span><span class="sp"></span><span class="rst">↺</span></div>
+        <div class="body">
+          <div class="ctl"><div class="knob" style="--a:50deg"><div class="ind"></div></div><div class="lbl">Room</div></div>
+          <div class="ctl"><div class="knob" style="--a:0deg"><div class="ind"></div></div><div class="lbl">Damp</div></div>
+          <div class="ctl"><div class="knob" style="--a:-40deg"><div class="ind"></div></div><div class="lbl">Mix</div></div>
+        </div>
+      </div>
+
+      <!-- SCOPE — L (display only) -->
+      <div class="m l on" style="--tag:var(--proc)">
+        <div class="hd"><span class="t">Oscilloscope</span><span class="sp"></span></div>
+        <div class="body">
+          <div class="disp">
+            <svg viewBox="0 0 240 90" preserveAspectRatio="none">
+              <line x1="0" y1="45" x2="240" y2="45" stroke="#ffffff10"/>
+              <polyline fill="none" stroke="#5e9b96" stroke-width="1.5"
+                points="0,45 15,18 30,45 45,72 60,45 75,18 90,45 105,72 120,45 135,18 150,45 165,72 180,45 195,18 210,45 225,72 240,45"/>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <!-- SPECTRUM — L (display only) -->
+      <div class="m l on" style="--tag:var(--proc)">
+        <div class="hd"><span class="t">Spectrum</span><span class="sp"></span></div>
+        <div class="body">
+          <div class="disp">
+            <svg viewBox="0 0 240 90" preserveAspectRatio="none">
+              <g fill="#6f86ad">
+                <rect x="6"  y="20" width="10" height="70"/><rect x="22" y="40" width="10" height="50"/>
+                <rect x="38" y="14" width="10" height="76"/><rect x="54" y="52" width="10" height="38"/>
+                <rect x="70" y="34" width="10" height="56"/><rect x="86" y="60" width="10" height="30"/>
+                <rect x="102" y="46" width="10" height="44"/><rect x="118" y="66" width="10" height="24"/>
+                <rect x="134" y="56" width="10" height="34"/><rect x="150" y="72" width="10" height="18"/>
+                <rect x="166" y="64" width="10" height="26"/><rect x="182" y="76" width="10" height="14"/>
+                <rect x="198" y="70" width="10" height="20"/><rect x="214" y="80" width="10" height="10"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+    </div><!-- /grid -->
+
+    <!-- on-screen keyboard chrome (FR14) -->
+    <div class="kb">
+      <div class="keys" id="keys"></div>
+    </div>
+  </div><!-- /rack -->
+
+  <div class="foot">
+    First-pass layout · <b>8-column grid</b> · compact unit (header + 1 knob row) · 10×S · 6×M(2col) ·
+    4×L(2×2, displays) · Stereo + Master in the header chrome · tune exact <b>Wc / Hu</b> in code
+  </div>
+
+  <!-- ============ display-width comparison ============ -->
+  <div class="compare">
+    <h2>Oscilloscope + Spectrum — how wide?</h2>
+    <p class="sub">Both are display-only modules. The question is footprint width. The whole layout
+    rests on having only three size classes, so the real cost of "wider" is a fourth class.</p>
+
+    <div class="opt">
+      <div class="cap2"><b>Option A</b> — Scope + Spectrum side by side, each a standard <b>L (2×2)</b>
+        <span class="tag good">recommended · stays 3 classes</span></div>
+      <div class="mini">
+        <div class="cell d2"><div class="dispmini">
+          <svg viewBox="0 0 120 40" preserveAspectRatio="none"><line x1="0" y1="20" x2="120" y2="20" stroke="#ffffff10"/>
+            <polyline fill="none" stroke="#5e9b96" stroke-width="1.4" points="0,20 10,6 20,20 30,34 40,20 50,6 60,20 70,34 80,20 90,6 100,20 110,34 120,20"/></svg>
+          <div class="cl">Scope</div></div></div>
+        <div class="cell d2"><div class="dispmini">
+          <svg viewBox="0 0 120 40" preserveAspectRatio="none"><g fill="#6f86ad">
+            <rect x="4" y="10" width="6" height="30"/><rect x="14" y="20" width="6" height="20"/><rect x="24" y="6" width="6" height="34"/>
+            <rect x="34" y="24" width="6" height="16"/><rect x="44" y="16" width="6" height="24"/><rect x="54" y="28" width="6" height="12"/>
+            <rect x="64" y="22" width="6" height="18"/><rect x="74" y="30" width="6" height="10"/><rect x="84" y="26" width="6" height="14"/>
+            <rect x="94" y="32" width="6" height="8"/><rect x="104" y="29" width="6" height="11"/></g></svg>
+          <div class="cl">Spectrum</div></div></div>
+        <div class="cell ghost">Module</div><div class="cell ghost">Module</div>
+        <div class="cell ghost">Module</div><div class="cell ghost">Module</div>
+        <div class="cell ghost">Module</div><div class="cell ghost">Module</div>
+      </div>
+      <div class="note">→ Reads as one 4-column visualization band, yet each display is just an ordinary L.
+        No new rules, perfect grid alignment.</div>
+    </div>
+
+    <div class="opt">
+      <div class="cap2"><b>Option B</b> — each display widened to <b>3 columns</b>
+        <span class="tag warn">needs a 4th size class</span></div>
+      <div class="mini">
+        <div class="cell d3"><div class="dispmini">
+          <svg viewBox="0 0 180 40" preserveAspectRatio="none"><line x1="0" y1="20" x2="180" y2="20" stroke="#ffffff10"/>
+            <polyline fill="none" stroke="#5e9b96" stroke-width="1.4" points="0,20 15,6 30,20 45,34 60,20 75,6 90,20 105,34 120,20 135,6 150,20 165,34 180,20"/></svg>
+          <div class="cl">Scope · 3 cols</div></div></div>
+        <div class="cell d3"><div class="dispmini">
+          <svg viewBox="0 0 180 40" preserveAspectRatio="none"><g fill="#6f86ad">
+            <rect x="6" y="10" width="9" height="30"/><rect x="21" y="20" width="9" height="20"/><rect x="36" y="6" width="9" height="34"/>
+            <rect x="51" y="24" width="9" height="16"/><rect x="66" y="16" width="9" height="24"/><rect x="81" y="28" width="9" height="12"/>
+            <rect x="96" y="22" width="9" height="18"/><rect x="111" y="30" width="9" height="10"/><rect x="126" y="26" width="9" height="14"/>
+            <rect x="141" y="32" width="9" height="8"/><rect x="156" y="29" width="9" height="11"/></g></svg>
+          <div class="cl">Spectrum · 3 cols</div></div></div>
+        <div class="cell gap">2-col remainder<br>breaks the rhythm</div>
+      </div>
+      <div class="note">→ More display width, but 3 cols fits neither S/M/L, so it forces a new "wide" class,
+        and 6 cols of displays leave an awkward 2-column gap. This is the special-case logic we set out to kill.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // build a simple two-octave keyboard purely for the chrome impression
+  const keys=document.getElementById('keys');
+  const blackAfter=[0,1,3,4,5];   // C,D,F,G,A within an octave (index of white key)
+  const octaves=3, whitePerOct=7;
+  const totalWhite=octaves*whitePerOct+1;
+  for(let i=0;i<totalWhite;i++){const w=document.createElement('div');w.className='wk';keys.appendChild(w);}
+  // black keys positioned over the white-key boundaries
+  const wWidth=100/totalWhite;
+  for(let o=0;o<octaves;o++){
+    blackAfter.forEach(idx=>{
+      const pos=o*whitePerOct+idx;
+      const b=document.createElement('div');b.className='bk';
+      b.style.left=(pos+1)*wWidth - (wWidth*0.31) + '%';
+      keys.appendChild(b);
+    });
+  }
+</script>
