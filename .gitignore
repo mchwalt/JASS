@@ -9,6 +9,11 @@
 # Local Claude settings
 .claude/settings.local.json
 
+# BMAD: global install — Kern liegt unter ~/.claude/bmad-core, hier nur als Junction;
+# Skills liegen global unter ~/.claude/skills. Nicht ins Repo tracken.
+/_bmad
+/.claude/skills/
+
 # OS junk
 Thumbs.db
 .DS_Store
