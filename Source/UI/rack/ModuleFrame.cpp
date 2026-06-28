@@ -58,16 +58,15 @@ namespace rack
                 apvts, desc.enableParam, *enableBtn));
         }
 
-        if (! desc.resetParams.empty())
-        {
-            resetBtn.setButtonText (juce::String::fromUTF8 ("\xE2\x86\xBA"));   // ↺
-            resetBtn.setTooltip ("Reset this module to default");
-            auto c = typeColour (desc.type);
-            resetBtn.setColour (juce::TextButton::buttonColourId, c.withAlpha (0.25f));
-            resetBtn.setColour (juce::TextButton::textColourOffId, c);
-            resetBtn.onClick = [this] { doReset(); };
-            addAndMakeVisible (resetBtn);
-        }
+        // Reset belongs in EVERY module header (uniform anatomy): it restores all of
+        // the module's parameters to their factory defaults, except the enable flag.
+        resetBtn.setButtonText (juce::String::fromUTF8 ("\xE2\x86\xBA"));   // ↺
+        resetBtn.setTooltip ("Reset this module to default");
+        auto c = typeColour (desc.type);
+        resetBtn.setColour (juce::TextButton::buttonColourId, c.withAlpha (0.25f));
+        resetBtn.setColour (juce::TextButton::textColourOffId, c);
+        resetBtn.onClick = [this] { doReset(); };
+        addAndMakeVisible (resetBtn);
     }
 
     void ModuleFrame::buildBody()
@@ -120,13 +119,17 @@ namespace rack
                 auto cb = fa->onChoose;
                 btn->onClick = [this, cb]
                 {
+                    if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
+                        return;              // (prevents destroying the in-flight chooser mid-callback)
+                    fileChooserActive = true;
                     fileChooser = std::make_unique<juce::FileChooser> ("Select a file");
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                        [cb] (const juce::FileChooser& fc)
+                        [this, cb] (const juce::FileChooser& fc)
                         {
                             auto f = fc.getResult();
                             if (cb && f.existsAsFile()) cb (f);
+                            fileChooserActive = false;   // dialog closed — allow the next open
                         });
                 };
                 addAndMakeVisible (*btn);
@@ -151,9 +154,25 @@ namespace rack
 
     void ModuleFrame::doReset()
     {
-        for (const auto& id : desc.resetParams)
+        // Reset ALL of the module's parameters to their factory defaults, EXCEPT the
+        // enable flag. The body is the single source of truth for which params the
+        // module owns (every Knob/Combo/Toggle carries its paramId), so we derive the
+        // reset set from it — this can never drift out of sync with the module's
+        // controls the way a hand-maintained list would.
+        auto resetId = [this] (const juce::String& id)
+        {
+            if (id.isEmpty() || id == desc.enableParam)
+                return;
             if (auto* p = apvts.getParameter (id))
                 p->setValueNotifyingHost (p->getDefaultValue());
+        };
+
+        for (const auto& el : desc.body)
+        {
+            if (auto* k = std::get_if<Knob>   (&el)) resetId (k->paramId);
+            else if (auto* c = std::get_if<Combo>  (&el)) resetId (c->paramId);
+            else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
+        }
     }
 
     void ModuleFrame::resized()
@@ -161,11 +180,15 @@ namespace rack
         auto r = getLocalBounds();
 
         // --- header strip ---
+        // Reserve the right-side slots UNCONDITIONALLY so the title region is identical
+        // in every module (uniform header geometry): reset is always present, and the
+        // enable slot stays reserved even when a module has no toggle — so titles and
+        // ↺ buttons line up across the whole rack.
         auto header = r.removeFromTop (kHeaderH).reduced (4, 2);
-        if (! desc.resetParams.empty())
-            resetBtn.setBounds (header.removeFromRight (20));
+        resetBtn.setBounds (header.removeFromRight (20));
+        auto enableSlot = header.removeFromRight (24);
         if (enableBtn != nullptr)
-            enableBtn->setBounds (header.removeFromRight (24));
+            enableBtn->setBounds (enableSlot);
         titleLabel.setBounds (header);
 
         // --- body slot grid (the single body-layout site) ---

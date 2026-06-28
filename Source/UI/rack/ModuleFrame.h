@@ -50,6 +50,7 @@ namespace rack
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ComboBoxAttachment>> comboAtt;
         std::vector<std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment>>   buttonAtt;
         std::unique_ptr<juce::FileChooser> fileChooser;
+        bool fileChooserActive = false;   // guards re-entrant FileAction clicks while a dialog is open
 
         std::atomic<float>* enableValue = nullptr;   // raw value of the enable param (nullptr => always-on)
         bool dimmed = false;
