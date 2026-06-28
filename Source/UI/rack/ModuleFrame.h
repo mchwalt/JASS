@@ -56,6 +56,9 @@ namespace rack
         bool dimmed = false;
 
         static constexpr int kHeaderH = 22;
+        static constexpr int kComboH  = 22;   // combo box: short (half-height), wide, left-aligned
+        static constexpr int kButtonW = 90;   // Action/FileAction/Toggle button: capped width
+        static constexpr int kButtonH = 26;   //   …and fixed height (never stretched to the cell)
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (ModuleFrame)
     };

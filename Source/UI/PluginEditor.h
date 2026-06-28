@@ -4,15 +4,8 @@
 #include "SynthySlider.h"
 #include "WaveformDisplay.h"
 #include "SpectrumDisplay.h"
-
-class SynthyLookAndFeel : public juce::LookAndFeel_V4
-{
-public:
-    SynthyLookAndFeel();
-    void drawRotarySlider(juce::Graphics&, int x, int y, int width, int height,
-                          float sliderPosProportional, float rotaryStartAngle,
-                          float rotaryEndAngle, juce::Slider&) override;
-};
+#include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
+#include "rack/Rack.h"
 
 class OscillatorPanel : public juce::Component
 {
@@ -226,20 +219,8 @@ private:
     std::unique_ptr<juce::FileChooser> wtFileChooser;
     void refreshBankSelector();             // repopulate combo from the shared store
 
-    // Master
-    SynthySlider masterKnob;
-    juce::Label masterLabel;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> masterAttach;
-
-    // Stereo width (header, inline next to Master). Built inline rather than as an
-    // EffectPanel so its WIDTH/TIME knobs get the full header height and render at
-    // the same Medium size as Master (the EffectPanel's title row squashed them).
-    juce::Label stereoTitle;
-    juce::ToggleButton stereoOnBtn;
-    SynthySlider stereoWidthKnob, stereoTimeKnob;
-    juce::Label stereoWidthLabel, stereoTimeLabel;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::ButtonAttachment> stereoOnAttach;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> stereoWidthAttach, stereoTimeAttach;
+    // Master + Stereo are now rack modules in the MASTER BUS zone (see buildSampleRack),
+    // not inline header chrome — the old members were removed (PROTOTYPE for FR14).
 
     // Preset save/load (shared .synthy JSON format) + randomize + reset
     juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" }, resetBtn { "RESET" };
@@ -265,12 +246,21 @@ private:
     void initResetButton(juce::TextButton& btn, juce::Colour colour,
                          juce::StringArray paramIds, std::function<void()> afterReset = {});
     juce::TextButton adsrResetBtn, lfoResetBtn, arpResetBtn,
-                     filterResetBtn, distResetBtn, stereoResetBtn, masterResetBtn;
+                     filterResetBtn, distResetBtn;
 
     // Layout bounds for paint()
-    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds, stereoBounds, arpBounds;
+    juce::Rectangle<int> g_titleBounds, adsrBounds, lfoBounds, filterBounds, distBounds, noiseBounds, wtBounds, subBounds, arpBounds;
     // Zone separator headers (GENERATORS / MODULATION / PROCESSING)
     juce::Rectangle<int> genHeaderBounds, modHeaderBounds, procHeaderBounds;
+
+    // TEMP (Story 1.3): a throwaway sample rack population that exercises the grid
+    // engine, the three zone headers and the shared look. It is drawn ON TOP of the
+    // legacy body (added last, opaque) so the new rack is what you see, while the
+    // header chrome + keyboard stay live. Replaced by the real module descriptors in
+    // Story 1.5 — see buildSampleRack().
+    std::unique_ptr<rack::Rack> sampleRack;
+    juce::OwnedArray<juce::Component> sampleOwned;   // owns placeholder Display components
+    void buildSampleRack();
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyEditor)
 };

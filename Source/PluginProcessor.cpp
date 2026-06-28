@@ -218,7 +218,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     for (int i = 1; i <= 3; ++i)
         if (*apvts.getRawParameterValue(Parameters::ID::oscOn(i)) > 0.5f) mask |= (1u << i);
     if (*apvts.getRawParameterValue(Parameters::ID::karplusOn)  > 0.5f) mask |= (1u << 4);
-    if (*apvts.getRawParameterValue(Parameters::ID::noiseType)  > 0.5f) mask |= (1u << 5);
+    if (*apvts.getRawParameterValue(Parameters::ID::noiseOn)    > 0.5f) mask |= (1u << 5);
     if (*apvts.getRawParameterValue(Parameters::ID::wavetableOn) > 0.5f) mask |= (1u << 6);
     if (*apvts.getRawParameterValue(Parameters::ID::subOn)      > 0.5f) mask |= (1u << 7);
 
@@ -320,7 +320,9 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         uiLfo.setRate(*apvts.getRawParameterValue(ID::lfoRate));
         uiLfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
         uiLfo.setWaveform((LFOWaveform)(int) *apvts.getRawParameterValue(ID::lfoWave));
-        uiLfo.setTarget((LFOTarget)(int) *apvts.getRawParameterValue(ID::lfoTarget));
+        const bool lfoOn = *apvts.getRawParameterValue(ID::lfoOn) > 0.5f;
+        uiLfo.setTarget(lfoOn ? (LFOTarget)((int) *apvts.getRawParameterValue(ID::lfoTarget) + 1)
+                              : LFOTarget::Off);
         float v = 0.0f;
         for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
             v = uiLfo.process();
