@@ -64,7 +64,7 @@ Der **LiveState** wird beim Start geladen und bei jeder Änderung (debounced ~1,
 Beenden gespeichert. So kannst du C# Synthy schließen, C++ Synthy öffnen — und arbeitest mit
 denselben Einstellungen weiter (ideal für A/B-Klangvergleiche bei identischen Parametern).
 
-Details & vollständiges Schema: **[`Synthy_Preset_Format.md`](Synthy_Preset_Format.md)**.
+Details & vollständiges Schema: **[`Synthy_Preset_Format.md`](docs/Synthy_Preset_Format.md)**.
 
 ## Bauen & Starten
 
@@ -114,8 +114,8 @@ Source/
 
 ## Weitere Doku
 
-- **[`Feature_Ideas.md`](Feature_Ideas.md)** — Roadmap: erledigt & geplant, inkl. neuer Ideen
-- **[`Synthy_Preset_Format.md`](Synthy_Preset_Format.md)** — Spezifikation des `.synthy`-Formats
-- **[`Synth_Cheatsheet.md`](Synth_Cheatsheet.md)** — Referenz zu Surge XT / Helm / Odin 2 (Recherche)
-- **[`CPP_Synth_Entwicklung_Uebersicht.md`](CPP_Synth_Entwicklung_Uebersicht.md)** — Recherche zu C++-Frameworks
-- **[`REAPER_Keybindings_Cheatsheet.md`](REAPER_Keybindings_Cheatsheet.md)** — REAPER-Shortcuts fürs Plugin-Testing
+- **[`Feature_Ideas.md`](docs/Feature_Ideas.md)** — Roadmap: erledigt & geplant, inkl. neuer Ideen
+- **[`Synthy_Preset_Format.md`](docs/Synthy_Preset_Format.md)** — Spezifikation des `.synthy`-Formats
+- **[`Synth_Cheatsheet.md`](docs/Synth_Cheatsheet.md)** — Referenz zu Surge XT / Helm / Odin 2 (Recherche)
+- **[`CPP_Synth_Entwicklung_Uebersicht.md`](docs/CPP_Synth_Entwicklung_Uebersicht.md)** — Recherche zu C++-Frameworks
+- **[`REAPER_Keybindings_Cheatsheet.md`](docs/REAPER_Keybindings_Cheatsheet.md)** — REAPER-Shortcuts fürs Plugin-Testing
