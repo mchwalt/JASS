@@ -10,6 +10,25 @@ SynthyLookAndFeel::SynthyLookAndFeel()
     setColour(juce::ComboBox::textColourId, juce::Colours::white);
 }
 
+juce::Font SynthyLookAndFeel::getLabelFont (juce::Label& label)
+{
+    // The module title keeps its own bold emphasis; every other label (captions,
+    // slider value boxes) renders at the one uniform UI size.
+    if (label.getComponentID() == "moduleTitle")
+        return juce::Font (juce::FontOptions (kUiFontSize + 1.0f, juce::Font::bold));
+    return juce::Font (juce::FontOptions (kUiFontSize));
+}
+
+juce::Font SynthyLookAndFeel::getComboBoxFont (juce::ComboBox&)
+{
+    return juce::Font (juce::FontOptions (kUiFontSize));
+}
+
+juce::Font SynthyLookAndFeel::getPopupMenuFont()
+{
+    return juce::Font (juce::FontOptions (kUiFontSize));
+}
+
 void SynthyLookAndFeel::drawRotarySlider(juce::Graphics& g, int x, int y, int width, int height,
                                           float sliderPos, float rotaryStartAngle,
                                           float rotaryEndAngle, juce::Slider& slider)

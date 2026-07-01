@@ -47,9 +47,9 @@ namespace rack
         static constexpr int kDefaultCols = 12;   // refined proportional grid (was 8); a pure
                                                   // layout raster, independent of knob size
         static constexpr int kGutter      = 10;   // uniform gutter between cells
-        static constexpr int kHu          = 100;  // one rack-unit row height (L spans 2).
-                                                  // Sized so a 1-unit body fits the fixed
-                                                  // 46px knob + caption without shrinking.
+        static constexpr int kHu          = 124;  // one rack-unit row height (L spans 2).
+                                                  // Sized so a 1-unit body fits name caption +
+                                                  // 46px knob + value box without shrinking.
         static constexpr int kZoneHeaderH = 28;   // full-width zone separator band
         static constexpr int kPad         = 8;    // inner padding around the grid
 

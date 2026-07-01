@@ -10,7 +10,8 @@ namespace rack
         {
             auto* l = store.add (new juce::Label ({}, text));
             l->setJustificationType (juce::Justification::centred);
-            l->setFont (juce::FontOptions (10.0f));
+            // Font comes from SynthyLookAndFeel::getLabelFont (the one uniform UI size);
+            // no per-label size here so captions match the value boxes and combos.
             l->setInterceptsMouseClicks (false, false);
             return l;
         }
@@ -45,7 +46,7 @@ namespace rack
     {
         titleLabel.setText (desc.title, juce::dontSendNotification);
         titleLabel.setJustificationType (juce::Justification::centredLeft);
-        titleLabel.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+        titleLabel.setComponentID ("moduleTitle");   // SynthyLookAndFeel gives this its bold font
         addAndMakeVisible (titleLabel);
 
         if (desc.enableParam.isNotEmpty())
@@ -77,10 +78,14 @@ namespace rack
             {
                 auto* s = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
                 s->setKnobDiameter (knobD);
-                // No value box in the rack: the caption below IS the label, and a value
-                // box would steal the vertical room the fixed-size knob needs (right-click
-                // still pops the value box for typing — see SynthySlider::mouseDown).
-                s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
+                // Anatomy: NAME caption ABOVE the knob, numeric VALUE box BELOW it (like the
+                // legacy/C# UI) — the value read-out is existing behaviour and must survive the
+                // migration (FR13). The box is editable in place (double-click) and shows the
+                // parameter's unit suffix when it declares one.
+                s->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 16);
+                if (auto* rp = apvts.getParameter (k->paramId))
+                    if (const auto unit = rp->getLabel(); unit.isNotEmpty())
+                        s->setTextValueSuffix (" " + unit);
                 addAndMakeVisible (*s);
 
                 // A knob with a FULLY-set display-transform pair is DECOUPLED from its
@@ -272,25 +277,32 @@ namespace rack
                                         body.getY() + placeRow * cellH,
                                         cellW * span, cellH);
 
-            if (cell.caption != nullptr)   // knob/combo: widget + caption as ONE centred group
+            if (cell.caption != nullptr)   // knob/combo: NAME caption on top, widget below
             {
                 auto cr = cellR.reduced (2);
-                const int capH = 12;
+                const int capH = 15;   // fits the uniform 13pt caption font
                 const bool isKnob = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
-                const int wH = isKnob ? (KnobSize::Small + 8) : kComboH;
-                // Centre the widget+caption block vertically so the caption sits DIRECTLY
-                // under its widget — never floating to the bottom of a tall (e.g. L) cell.
-                const int top = juce::jmax (cr.getY(), cr.getCentreY() - (wH + capH) / 2);
+                // A knob's widget height includes its value box (TextBoxBelow, 16px); a combo
+                // is just the short box. Name sits ABOVE, so the block is caption + widget.
+                const int wH = isKnob ? (KnobSize::Small + 8 + 16) : kComboH;
+                const int blockH = capH + wH;
+                // Centre the caption+widget block vertically so the name sits DIRECTLY above
+                // its widget — never floating to the top of a tall (e.g. L) cell.
+                const int top = juce::jmax (cr.getY(), cr.getCentreY() - blockH / 2);
+
+                cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);   // NAME on top
 
                 if (isKnob)
-                    // ONE fixed knob size everywhere (AD-3), CENTRED in its cell — never
-                    // stretched. Centring keeps knobs evenly distributed when cells are wide.
-                    cell.widget->setBounds (cr.getCentreX() - wH / 2, top, wH, wH);
+                {
+                    // ONE fixed knob size everywhere (AD-3), CENTRED — the slider draws the
+                    // rotary in its top square and the value box in the bottom 14 px. Width
+                    // a touch wider than the knob so the value text isn't truncated.
+                    const int sw = juce::jmin (cr.getWidth(), 62);
+                    cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
+                }
                 else
-                    // Combo: short (half-height) + wide (2 slots), LEFT-aligned.
-                    cell.widget->setBounds (cr.getX(), top, cr.getWidth(), wH);
-
-                cell.caption->setBounds (cr.getX(), top + wH, cr.getWidth(), capH);
+                    // Combo: short (half-height) + wide (2 slots), LEFT-aligned, under its name.
+                    cell.widget->setBounds (cr.getX(), top + capH, cr.getWidth(), wH);
             }
             else if (cell.widget != nullptr)
             {
