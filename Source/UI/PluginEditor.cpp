@@ -848,6 +848,15 @@ void SynthyEditor::timerCallback()
     bool filterOn = *apvts.getRawParameterValue("filterOn") > 0.5f;
     cutoffKnob.setModAmount((lfoActive && target == 2 && filterOn) ? lfo : 0.0f);
 
+    // Same live feed drives the new rack (AD-8): ONE timer, rack fans out to its frames.
+    // ModTarget has a +1 offset vs the raw lfoTarget (ModTarget::None = 0; raw 0 = Frequency).
+    if (sampleRack)
+    {
+        const rack::ModTarget activeT = lfoActive ? static_cast<rack::ModTarget>(target + 1)
+                                                  : rack::ModTarget::None;
+        sampleRack->updateLiveFeed(lfoActive, activeT, lfo, ratio);
+    }
+
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.
     updatePresetLabel();
@@ -981,6 +990,19 @@ void SynthyEditor::buildSampleRack()
     auto K = [](juce::String id, juce::String lbl) { return Knob{ std::move(id), std::move(lbl) }; };
     auto C = [](juce::String id, juce::String lbl, juce::StringArray items)
              { return Combo{ std::move(id), std::move(lbl), std::move(items) }; };
+    // Story 1.4 (verification wiring; folded into the real descriptors in 1.5/2.2):
+    // a knob tagged as an LFO ring target …
+    auto Kmod = [](juce::String id, juce::String lbl, ModTarget mt)
+             { Knob k{ std::move(id), std::move(lbl) }; k.modTarget = mt; return k; };
+    // … and a FREQ knob with the played-frequency display transform (base × ratio).
+    auto Kfreq = [](juce::String id, juce::String lbl)
+             {
+                 Knob k{ std::move(id), std::move(lbl) };
+                 k.modTarget    = ModTarget::Frequency;
+                 k.toDisplay    = [](double base,  double ratio) { return base  * ratio; };
+                 k.fromDisplay  = [](double shown, double ratio) { return shown / ratio; };
+                 return k;
+             };
 
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
                    juce::String enableParam, std::vector<BodyElement> body)
@@ -1011,8 +1033,8 @@ void SynthyEditor::buildSampleRack()
     for (int i = 1; i <= 3; ++i)
         add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator,
             "OSC " + juce::String(i), P::oscOn(i),
-            { C(P::oscWave(i), "WAVE", waves), K(P::oscFreq(i), "FREQ"),
-              K(P::oscAmp(i), "AMP"), K(P::oscUniVoices(i), "VOICES"),
+            { C(P::oscWave(i), "WAVE", waves), Kfreq(P::oscFreq(i), "FREQ"),
+              Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
               K(P::oscUniDetune(i), "DETUNE") });
 
     add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "SUB", P::subOn,
@@ -1046,7 +1068,7 @@ void SynthyEditor::buildSampleRack()
     // combo isn't cramped. (Exact width tuning deferred to next session.)
     add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "FILTER", P::filterOn,
         { C(P::filterType, "TYPE", { "Lowpass", "Highpass" }),
-          K(P::filterCutoff, "CUTOFF"), K(P::filterReso, "RESO") });
+          Kmod(P::filterCutoff, "CUTOFF", ModTarget::FilterCutoff), K(P::filterReso, "RESO") });
     // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
     add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "DISTORTION", P::distortionOn,
         { C(P::distortionType, "TYPE", { "SoftClip", "HardClip", "Foldback" }),

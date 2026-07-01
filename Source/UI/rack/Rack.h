@@ -6,12 +6,13 @@
 
 namespace rack
 {
-    // The Rack owns ALL module placement on a fixed 8-column × rack-unit grid (AD-2)
+    // The Rack owns ALL module placement on a fixed 12-column × rack-unit grid (AD-2)
     // and is the SINGLE site of frame-outer-rectangle geometry (NFR1): no module
     // computes its own bounds. It builds and owns one ModuleFrame per descriptor,
-    // groups them into the three zones (each preceded by a full-width zone header),
-    // and sets the one shared SynthyLookAndFeel (AD-7) that every frame and control
-    // beneath it inherits. Modulation-ring lookup (AD-8) is added in Story 1.4.
+    // groups them into zones (each preceded by a full-width zone header), and sets the
+    // one shared SynthyLookAndFeel (AD-7) that every frame and control beneath it
+    // inherits. It also fans the live feed (LFO value + played ratio) out to its frames
+    // for modulation rings + display transforms (AD-8, Story 1.4).
     class Rack : public juce::Component
     {
     public:
@@ -32,6 +33,11 @@ namespace rack
 
         void resized() override;            // THE placement + zone-header layout site
         void paint (juce::Graphics&) override;
+
+        // Fan the live feed out to every frame (AD-8): the single editor timer reads the
+        // processor's LFO atomic + active target + played ratio and calls this once per
+        // tick. Each frame gates rings by its own enable and refreshes its transform knobs.
+        void updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio);
 
         // Total stacked height the current population needs at `width` — lets the
         // editor size/verify the fixed window without scrolling (AC4).

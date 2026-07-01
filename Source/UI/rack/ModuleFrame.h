@@ -22,11 +22,21 @@ namespace rack
         void paint (juce::Graphics&) override;
         void paintOverChildren (juce::Graphics&) override;
 
+        // Push the current live feed (read by the ONE editor timer, AD-8) into this
+        // frame's knobs: animate modulation rings on knobs whose modTarget matches the
+        // LFO's active target (gated by this module's enable), and refresh any
+        // display-transform knob (FREQ = base × played ratio). No audio-thread work —
+        // just applies values already read from the processor's atomics.
+        void updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio);
+
     private:
         void timerCallback() override;
         void buildHeader();
         void buildBody();
         void doReset();
+
+        // A module with no enable param is always-on (Master, ADSR, Mix-Mode).
+        bool moduleEnabled() const noexcept { return enableValue == nullptr || enableValue->load() >= 0.5f; }
 
         struct Cell
         {
@@ -54,6 +64,18 @@ namespace rack
 
         std::atomic<float>* enableValue = nullptr;   // raw value of the enable param (nullptr => always-on)
         bool dimmed = false;
+
+        // --- live-feed targets (Story 1.4) ---
+        // Knobs carrying a modTarget: their ring is animated by updateLiveFeed when the
+        // LFO targets that destination and the module is enabled.
+        struct RingKnob { SynthySlider* slider; ModTarget target; };
+        // Display-transform knobs are DECOUPLED from their param (no SliderAttachment):
+        // they show toDisplay(base, ratio) and write fromDisplay(shown, ratio) back.
+        struct XformKnob { SynthySlider* slider; juce::String paramId;
+                           std::function<double(double,double)> toDisplay, fromDisplay; };
+        std::vector<RingKnob>  ringKnobs;
+        std::vector<XformKnob> xformKnobs;
+        double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back
 
         static constexpr int kHeaderH = 22;
         static constexpr int kComboH  = 22;   // combo box: short (half-height), wide, left-aligned

@@ -151,6 +151,12 @@ namespace rack
         layout (getWidth(), /*apply*/ true);
     }
 
+    void Rack::updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio)
+    {
+        for (auto* f : frames)
+            f->updateLiveFeed (lfoOn, activeTarget, lfoValue, playedRatio);
+    }
+
     void Rack::paint (juce::Graphics& g)
     {
         g.fillAll (juce::Colour (0xff15181d));   // rack ground (matches mockup --ground)
