@@ -50,6 +50,7 @@ _This file contains critical rules and patterns that AI agents must follow when 
 - **Shared on-disk location is deliberately still `Synthy`:** `%AppData%\Roaming\Synthy\` (presets in `\Presets`, live state in `LiveState.synthy`). Do NOT rename to "JASS" — it would break interop and lose users' state. (Only the product/display/CMake name is "JASS"; class names, the `.synthy` format, and the AppData folder intentionally keep the "Synthy" name.)
 - **`LiveState.synthy` is auto-loaded on start and auto-saved on change by BOTH apps** (for A/B testing between C# and C++). It also persists `currentPresetName` and the "modified" flag.
 - **`kFormatVersion = 1`.** If the schema changes, bump it and handle older versions on load — never silently misread.
+- **Enable-split (rack-UI, 2026-07-01):** LFO / Noise / Filter / Distortion each got a dedicated APVTS enable bool (`lfoOn` / `noiseOn` / `filterOn` / `distortionOn`), appended (append-only, no ID renamed). `"Off"` was removed from those four choice combos. **The `.synthy` format is unchanged** — `"Off"` is still the on-disk disabled marker, mapped to/from the bool via `PresetIO::choiceOrOff` / `setChoiceOrOff` (no `kFormatVersion` bump). C# Synthy still owes the matching UI/model change (see `deferred-work.md`).
 - **State save/load goes through `getStateInformation`/`setStateInformation`** (host) AND the shared `.synthy` files (cross-app). Keep both paths in sync when adding params.
 
 ### Code Quality, Style & Naming

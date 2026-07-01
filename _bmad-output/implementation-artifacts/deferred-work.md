@@ -19,10 +19,14 @@ toggle from (and serialising it back to) the `"Off"` string in the shared format
 C#-side UI/model work; no format change needed. (Raised while prototyping the rack-UI
 "everything is a module" pass — these four now have header enables like every other module.)
 
-## Prototype decisions pending formalization — run correct-course (2026-06-28)
+## ✅ FORMALIZED 2026-07-01 — Prototype decisions (was: pending correct-course)
+
+Formalized via `sprint-change-proposal-2026-07-01.md` (approved). PRD, Architecture Spine and
+Epics were updated to match the built code (edits A–N). The three decisions below are now
+ADOPTED spec, not prototype. **The C# Synthy enable-mirror ToDo (top of this file) stays open.**
 
 These were prototyped in the throwaway sample rack (built on top of Story 1.3) to see them
-working; they revise the PRD/architecture and must be formalised before they leave prototype:
+working; they revised the PRD/architecture and are now formalised:
 
 - **FR14 revised — Stereo + Master are now rack modules**, not header chrome. They live in a
   new **MASTER BUS** zone (top row of the main rack, right-aligned). The legacy header

@@ -35,17 +35,19 @@ Layer → location:
 - **Prevents:** per-module bespoke layout code — the divergence that produced the inconsistent UI.
 - **Rule:** every module is expressed as a `ModuleDescriptor` rendered by the single `ModuleFrame`. No module subclass carries its own layout. Adding/editing a module is a data change, not a new component.
 
-### AD-2 — The Rack owns all placement on a fixed grid `[ADOPTED]`
+### AD-2 — The Rack owns all placement on a fixed 12-column grid `[ADOPTED]`
 - **Binds:** rack + every module (FR8–FR10, NFR1).
-- **Prevents:** modules choosing incompatible sizes/positions; scattered `resized()` math.
-- **Rule:** layout is a fixed grid of columns × rack-units (column width `Wc`, unit height `Hu`, uniform gutters). A module declares **only** its size class — **S = 1×1**, **M = 2×1**, **L = 2×2** (columns × units) — and occupies whole grid multiples. All `resized()` geometry lives solely in the rack layout engine; no module computes its own bounds. `Wc`/`Hu`/column-count are seed (see Deferred), pinned in the mockup. The unit height is **compact** = header + one knob row, so S/M span 1 unit and L spans 2 (a 1:2 height ratio).
-- **The size-class set is a single data-driven table** `class → { cols, units, slotCapacity, knobSize }`; today `{ S, M, L }`. A new class is added by appending **one table row** — never by per-module custom dimensions; a module always picks an existing class. A **4th class is anticipated** (e.g. a wide-display `W` spanning >2 columns) and the table is designed to accept it, but it is not defined until a module first needs it (see Deferred).
-- **Body-slot capacity is fixed per class** so two modules of the same class lay out identically: **S = 3 slots, M = 6 slots, L = 12 slots** (a Knob / Combo / Toggle / Action / FileAction = 1 slot; a `Display` declares the slot count it spans). The frame asserts `usedSlots(body) ≤ capacity(sizeClass)` at construction; a module that overflows its class must be promoted (e.g. Wavetable → L). Slot counts are seed-tunable in the mockup.
+- **Prevents:** modules choosing incompatible sizes/positions; scattered `resized()` math; layout coupled to knob diameter.
+- **Rule:** layout is a fixed **12-column proportional grid** × rack-units (unit height `Hu`, uniform gutters) — a pure raster **decoupled from knob size**. A module declares **only** its size class, which is a **column span**: **XS = 2×1, S = 3×1, M = 4×1, L = 4×2, XL = 6×2** (cols × units). A module occupies whole grid multiples. All `resized()` geometry lives solely in the rack layout engine; no module computes its own bounds. The unit height is **compact** = header + one knob row, so XS/S/M span 1 unit and L/XL span 2 (a 1:2 height ratio).
+- **`ModuleFrame` body derives its internal column count from CONTENT**, not from the size class or knob diameter: `nCols = ceil(contentSlots / units)`, knobs centred, body filling the module width. (This replaced the earlier `cols×3` scheme that coupled layout to the knob diameter.)
+- **The size-class set is a single data-driven table** `class → { cols, units, slotCapacity, knobSize }`; today `{ XS, S, M, L, XL }`. A new class is added by appending **one table row** — never by per-module custom dimensions; a module always picks an existing class.
+- **`slotCapacity` is now a generous debug guard, not the layout driver.** The frame still `jassert`s `usedSlots(body) ≤ slotCapacity(sizeClass)` at construction to catch a wildly over-stuffed descriptor, but layout flows from content (`nCols` above), not from a fixed per-class slot count. A module that genuinely needs more room picks a larger class (e.g. Wavetable → L, scope/spectrum → XL).
 
 ### AD-3 — Single uniform knob size (provisional)
 - **Binds:** all knobs across all size classes (FR2).
 - **Prevents:** inconsistent control sizing between modules.
 - **Rule:** one knob diameter for every module regardless of size class. **Revisit:** if large modules read as empty/unimportant, switch to per-size-class knob sizes (S→Small, M→Medium, L→Medium/Large).
+- **Note (AD-2 12-col decoupling):** since the grid raster is now independent of knob diameter (AD-2), per-size knob sizes would be a purely **cosmetic** choice — they no longer drive layout, lowering the risk this revisit ever needs to fire.
 
 ### AD-4 — Fixed module descriptor + control vocabulary `[ADOPTED]`
 - **Binds:** all modules (FR3, FR4).
@@ -78,7 +80,7 @@ Layer → location:
 ### AD-9 — Cross-module coupling only through shared APVTS `[ADOPTED]`
 - **Binds:** Mix-Mode and the three OSCs (FR13); any future inter-module dependency.
 - **Prevents:** one module holding a reference to another (Mix-Mode reaching into OSC1/2/3) — a coupling the descriptor can't see.
-- **Rule:** Mix-Mode is its own module (size **S**: a `Combo` + a `Label` caption). Its effect on how OSC 1/2/3 combine flows **only** through the shared `mixMode` APVTS param read by the audio engine — OSC descriptors carry no knowledge of it, and no module references another module. All cross-module state rides shared params.
+- **Rule:** Mix-Mode is its own module (size **XS**: a `Combo` + a `Caption`). Its effect on how OSC 1/2/3 combine flows **only** through the shared `mixMode` APVTS param read by the audio engine — OSC descriptors carry no knowledge of it, and no module references another module. All cross-module state rides shared params.
 
 ### Dependency direction
 
@@ -127,7 +129,7 @@ Source/UI/
   PluginEditor.h/.cpp     # builds descriptors, owns Rack + fixed chrome (preset header, keyboard)
 ```
 
-Fixed chrome stays in `PluginEditor`, outside the rack grid (FR14): preset SAVE/LOAD/RANDOM/RESET, preset-name indicator, on-screen keyboard, **and the global Master volume + Stereo (width/time)** — these are master-bus controls, not rack modules, and live in the top header. `EnvelopeDisplay` moves into `rack/` or stays a display component — either is fine; it is consumed as a `Display`.
+Fixed chrome stays in `PluginEditor`, outside the rack grid (FR14): preset SAVE/LOAD/RANDOM/RESET, centred title, preset-name / "Current State" indicator (in the Save/Load cluster), and the on-screen keyboard. **Master volume + Stereo (width/time + enable) are rack module descriptors** in a dedicated **MASTER BUS** zone (top row of the rack, right-aligned), not header chrome — consistent with AD-1 ("every module from one mold"). `EnvelopeDisplay` moves into `rack/` or stays a display component — either is fine; it is consumed as a `Display`.
 
 ## Capability → Architecture Map
 
@@ -147,3 +149,4 @@ Fixed chrome stays in `PluginEditor`, outside the rack grid (FR14): preset SAVE/
 - **Fourth size class (wide-display `W`)** — the class table (AD-2) is built to accept it; define the row when a module first needs >2-column display width. Not implemented now.
 - **VST3 editor parity** — same editor should render in VST3; validate after standalone (NFR4), not a blocker.
 - **Resizable / DPI-scalable rack** — out of scope; fixed target window for now.
+- **Module identity + mutable placement (drag-drop / within-zone reorder enabler)** — a future feature (Feature_Ideas, potential Epic 4) wants drag-and-drop of modules between zones and visual reordering *within* a zone. Today a module's zone is passed extrinsically to `Rack::addModule(zone, desc)` and within-zone order is insertion order; `typeTag` is per-module **identity/colour only** (it must NOT change when a module is moved — dragging Reverb into GENERATORS keeps it a Processor). To enable this without a painful retrofit, **bake these into descriptors during migration (Stories 1.5 / 2.x / 3.1):** (1) a **stable module id** per descriptor so a saved custom layout can be reattached; (2) an explicit **default zone/group** recorded per module (kept distinct from `typeTag`); (3) the Rack layout expressed as an **ordered placement data-model** (`id → { zone, position }`) that is editable and persistable, rather than raw insertion order. Persistence of the custom layout follows the show/hide state decision (standard Synthy param vs separate rack-config). The drag interaction itself is deferred to the later feature; only the id + explicit zone are cheap-now groundwork.

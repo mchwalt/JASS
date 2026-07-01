@@ -95,7 +95,7 @@ Migrate the MODULATION zone (ADSR + envelope display, LFO, Arpeggiator) and the 
 **FRs covered:** FR11 (display modules realized), FR12 (modulation + processing + displays), FR13 (preservation incl. filter-cutoff mod ring).
 
 ### Epic 3: Header Chrome & Final Integration
-Build the fixed header chrome (preset SAVE / LOAD / RANDOM / RESET, preset-name / "Current State" indicator, master-bus Master volume + Stereo width/time) and restyle the on-screen keyboard to match the rack; remove all legacy per-module layout code from the editor; validate VST3 parity.
+Build the fixed header chrome (preset SAVE / LOAD / RANDOM / RESET, centred title, preset-name / "Current State" indicator) and migrate Master + Stereo as rack modules in the MASTER BUS zone; restyle the on-screen keyboard to match the rack; remove all legacy per-module layout code (incl. the old header Master/Stereo controls) from the editor; validate VST3 parity.
 **FRs covered:** FR14, NFR4, final NFR1 confirmation.
 
 ## Epic 1: Rack Foundation & Generator Modules
@@ -113,8 +113,10 @@ So that every module can later be expressed as data instead of bespoke layout co
 **Given** the new `Source/UI/rack/ModuleDescriptor.h`
 **When** the project builds
 **Then** `ModuleDescriptor { sizeClass, title, typeTag, enableParam?, resetParams[], body[] }` and the `BodyElement` variants exist — `Knob{paramId,label,displayTransform?,modTarget?}`, `Combo{paramId,label,items:static|dynamicProvider}`, `Toggle`, `Action{label,onClick,refreshes?}`, `FileAction{label,onChoose,refreshes?}`, `Label`, `Display{component,slots}`
-**And** a size-class table maps each class to `{cols, units, slotCapacity, knobSize}` with S=1×1/3, M=2×1/6, L=2×2/12 defined, and adding a class is a single table entry
-**And** a build-time assertion helper rejects a descriptor whose body exceeds its class slot capacity.
+**And** a size-class table maps each class to `{cols, units, slotCapacity, knobSize}` on the 12-column grid with XS=2×1, S=3×1, M=4×1, L=4×2, XL=6×2 defined, and adding a class is a single table entry
+**And** a build-time assertion helper rejects a descriptor whose body wildly exceeds its class slot capacity (a generous debug guard; layout itself derives column count from content, not from slotCapacity).
+
+_(Reconciled 2026-07-01 via correct-course: implemented with the XS–XL 12-column model, not the original S/M/L 1×1/2×1/2×2. Story remains done.)_
 
 ### Story 1.2: ModuleFrame renders a descriptor
 
@@ -141,8 +143,8 @@ So that modules align consistently and the layout lives in exactly one place (NF
 
 **Given** a set of S/M/L modules handed to the `Rack`
 **When** the editor lays out
-**Then** each module occupies whole grid multiples (S=1×1, M=2×1, L=2×2) with uniform gutters and no module overlaps a grid boundary
-**And** the GENERATORS / MODULATION / PROCESSING zone headers span the rack width and separate the groups
+**Then** each module occupies whole grid multiples on the 12-column grid (XS=2×1, S=3×1, M=4×1, L=4×2, XL=6×2) with uniform gutters and no module overlaps a grid boundary
+**And** the MASTER BUS / GENERATORS / MODULATION / PROCESSING zone headers span the rack width and separate the groups
 **And** a single `SynthyLookAndFeel` is set once by the rack and applies to all modules
 **And** the full rack fits the fixed target window (~1920×1200) without scrolling.
 
@@ -218,24 +220,27 @@ So that the visualizations are first-class, consistent parts of the rack.
 
 **Given** the `Display` body-element mechanism
 **When** JASS is playing
-**Then** the Oscilloscope and Spectrum render live as size-L modules placed side by side (forming a 4-column display band)
+**Then** the Oscilloscope and Spectrum render live as size-XL modules placed side by side (forming a display band)
 **And** each reuses its existing display component (`WaveformDisplay` / `SpectrumDisplay`) and repaints only on meaningful change (NFR5).
+
+_Decision (2026-07-01): the display modules get **no dedicated VISUALIZATION zone header** — a header for just two passive visualisers would cost a full row of vertical space in the fixed window for no navigation benefit. They read as a display band by form + placement alone. Zones stay MASTER BUS / GENERATORS / MODULATION / PROCESSING._
 
 ## Epic 3: Header Chrome & Final Integration
 
 Build the fixed chrome, remove the legacy layout code, and validate the plugin build — finishing the redesign.
 
-### Story 3.1: Global header chrome
+### Story 3.1: Global header chrome + MASTER BUS modules
 
 As a JASS player,
-I want preset controls and the master-bus controls in a fixed top header,
-So that global actions sit apart from the per-module rack.
+I want preset controls in a fixed top header and the Master + Stereo controls as rack modules in a MASTER BUS zone,
+So that global preset actions sit apart from the rack while Master/Stereo follow the same "one mold" as every other module.
 
 **Acceptance Criteria:**
 
 **Given** the redesigned editor
 **When** JASS opens
-**Then** the header shows SAVE / LOAD / RANDOM / RESET, the preset-name / "Current State" indicator, the Master volume knob and the Stereo (width/time + enable) controls, outside the module grid
+**Then** the header shows SAVE / LOAD / RANDOM / RESET, a centred title, and the preset-name / "Current State" indicator (in the Save/Load cluster), outside the module grid — the legacy header Master/Stereo controls are gone
+**And** Master and Stereo are **rack module descriptors in the MASTER BUS zone** (top row, right-aligned), built on the framework like every other module
 **And** all preset actions work as before and the "Current State" indicator still reflects unsaved changes
 **And** Master and Stereo are bound to their existing params (no audio behavior change).
 
@@ -261,7 +266,7 @@ So that the "no per-module resized()" invariant is actually true and the cobbled
 **Acceptance Criteria:**
 
 **Given** every module now runs on the framework
-**When** the legacy `OscillatorPanel`, reused `EffectPanel` and inline per-module layout / scattered `*Attachment` members are deleted
+**When** the legacy `OscillatorPanel`, reused `EffectPanel`, inline per-module layout / scattered `*Attachment` members, and the old header Master/Stereo controls (now MASTER BUS modules) are deleted
 **Then** the project builds cleanly with JUCE warning flags on
 **And** no module defines its own `resized()` layout geometry (layout lives only in the rack engine)
 **And** the editor is functionally identical to before the cleanup.
