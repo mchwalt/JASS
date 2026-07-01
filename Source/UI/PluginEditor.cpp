@@ -1030,26 +1030,34 @@ void SynthyEditor::buildSampleRack()
         { K(P::masterVol, "VOL") });
 
     // ---- GENERATORS ----
-    for (int i = 1; i <= 3; ++i)
+    auto addOsc = [&](int i)
+    {
         add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator,
             "OSC " + juce::String(i), P::oscOn(i),
             { C(P::oscWave(i), "WAVE", waves), Kfreq(P::oscFreq(i), "FREQ"),
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
               K(P::oscUniDetune(i), "DETUNE") });
+    };
+    // MIX MODE (XS, half-width) sits BETWEEN OSC 1 and OSC 2 — it couples OSC 1<->2, so it
+    // reads as the connector between them. Row-major packing then puts OSC 3 on row 2 and
+    // (after Sub+Noise) Karplus on row 3.
+    addOsc(1);
+    add(Rack::Zone::Generators, SizeClass::XS, ModuleType::Generator, "MIX MODE", {},
+        { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }) });
+    addOsc(2);
+    addOsc(3);
 
     add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "SUB", P::subOn,
         { C(P::subWave, "WAVE", { "Sine", "Square" }), K(P::subLevel, "LEVEL") });
     add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "NOISE", P::noiseOn,
         { C(P::noiseType, "TYPE", { "White", "Pink" }), K(P::noiseAmp, "AMP") });
-    add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "KARPLUS", P::karplusOn,
+    add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
         { Action{ "PLUCK", [] {}, {} }, K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR") });
     add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "WAVETABLE", P::wavetableOn,
         { FileAction{ "LOAD WAV", [](juce::File) {}, {} },
           K(P::wavetablePosition, "POS"), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
           K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") });
-    add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "MIX MODE", {},
-        { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }), Caption{ "OSC 1 <-> 2" } });
 
     // ---- MODULATION ----
     add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", {},
