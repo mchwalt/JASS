@@ -82,7 +82,7 @@ namespace rack
                 // legacy/C# UI) — the value read-out is existing behaviour and must survive the
                 // migration (FR13). The box is editable in place (double-click) and shows the
                 // parameter's unit suffix when it declares one.
-                s->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 16);
+                s->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 14);
                 if (auto* rp = apvts.getParameter (k->paramId))
                     if (const auto unit = rp->getLabel(); unit.isNotEmpty())
                         s->setTextValueSuffix (" " + unit);
@@ -163,6 +163,7 @@ namespace rack
                     if (onClick) onClick();
                     for (const auto& id : refreshes) refreshCombo (id);   // declarative combo refresh
                 };
+                actionButtons.push_back (btn);   // so a shortcut (e.g. spacebar) can trigger it
                 addAndMakeVisible (*btn);
                 cells.push_back ({ btn, nullptr, 1 });
             }
@@ -294,11 +295,11 @@ namespace rack
             if (cell.caption != nullptr)   // knob/combo: NAME caption on top, widget below
             {
                 auto cr = cellR.reduced (2);
-                const int capH = 15;   // fits the uniform 13pt caption font
+                const int capH = 13;   // fits the uniform 13pt caption font
                 const bool isKnob = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
-                // A knob's widget height includes its value box (TextBoxBelow, 16px); a combo
+                // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
                 // is just the short box. Name sits ABOVE, so the block is caption + widget.
-                const int wH = isKnob ? (KnobSize::Small + 8 + 16) : kComboH;
+                const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
                 const int blockH = capH + wH;
                 // Centre the caption+widget block vertically so the name sits DIRECTLY above
                 // its widget — never floating to the top of a tall (e.g. L) cell.
@@ -410,5 +411,11 @@ namespace rack
             if (auto* raw = apvts.getRawParameterValue (paramId))
                 dc.box->setSelectedId ((int) raw->load() + 1, juce::dontSendNotification);
         }
+    }
+
+    void ModuleFrame::clickFirstAction()
+    {
+        if (! actionButtons.empty() && actionButtons.front() != nullptr)
+            actionButtons.front()->triggerClick();   // press animation + fires onClick
     }
 }

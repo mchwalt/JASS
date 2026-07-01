@@ -12,7 +12,7 @@
 // no parameter definitions, no APVTS ownership here — pure UI-layer data.
 namespace rack
 {
-    enum class SizeClass  { XS, S, M, L, XL };                      // 12-col grid spans: 2x1, 3x1, 4x1, 4x2, 6x2
+    enum class SizeClass  { XXS, XS, S, M, L, XL };                 // 12-col grid spans: 1x1, 2x1, 3x1, 4x1, 4x2, 6x2
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff }; // for live LFO rings (AD-8)
 
@@ -126,6 +126,7 @@ namespace rack
             // from knob size — the body fills the module width from its CONTENT (see
             // ModuleFrame::resized). slotCapacity is now only a generous debug guard, not a
             // layout driver. To be formalised in AD-2 via correct-course.
+            case SizeClass::XXS:return { 1, 1,  2, KnobSize::Small };  // single control (Master VOL, Mix-Mode)
             case SizeClass::XS: return { 2, 1,  4, KnobSize::Small };  // 1–2 controls
             case SizeClass::S:  return { 3, 1,  6, KnobSize::Small };  // 3–4 controls
             case SizeClass::M:  return { 4, 1,  8, KnobSize::Small };  // 5–6 controls

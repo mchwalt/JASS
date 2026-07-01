@@ -39,6 +39,10 @@ namespace rack
         // tick. Each frame gates rings by its own enable and refreshes its transform knobs.
         void updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio);
 
+        // Find a module frame by its descriptor id (nullptr if none). Lets the editor reach a
+        // specific module — e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button.
+        ModuleFrame* moduleById (const juce::String& id);
+
         // Total stacked height the current population needs at `width` — lets the
         // editor size/verify the fixed window without scrolling (AC4).
         int preferredHeight (int width) const;
@@ -47,7 +51,7 @@ namespace rack
         static constexpr int kDefaultCols = 12;   // refined proportional grid (was 8); a pure
                                                   // layout raster, independent of knob size
         static constexpr int kGutter      = 10;   // uniform gutter between cells
-        static constexpr int kHu          = 124;  // one rack-unit row height (L spans 2).
+        static constexpr int kHu          = 114;  // one rack-unit row height (L spans 2).
                                                   // Sized so a 1-unit body fits name caption +
                                                   // 46px knob + value box without shrinking.
         static constexpr int kZoneHeaderH = 28;   // full-width zone separator band
