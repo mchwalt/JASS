@@ -77,6 +77,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Live-Modulations-Anzeige** | animierte Ringe zeigen LFO/Env-Bewegung | ★★★ | ★★★★★ |
 | **Tempo-Sync** | LFO & Delay an BPM koppeln (1/4, 1/8, Triolen) | ★★ | ★★★★ |
 | **Step-Sequencer** | eigenes Pattern-Modul | ★★★ | ★★★★ |
+| **Rack-Customization (Show/Hide + Drag&Drop)** | Module/Zonen wegklappen; Module per Drag&Drop zwischen Zonen bewegen; visuell innerhalb einer Zone umsortieren (siehe Detail unten) | ★★★★ | ★★★★★ |
 | ~~Arpeggiator~~ | ✅ umgesetzt (C++) – Up/Down/UpDown/Random, Rate/Octaves/Gate | – | – |
 | **WAV-Export / Recording** | aufnehmen, was man spielt | ★★ | ★★★ |
 | **MIDI-Learn** | Knöpfe an Hardware-Controller binden | ★★★ | ★★★★ |
@@ -105,6 +106,40 @@ anzufassen. Das deckt ~80 % des wahrnehmbaren Effekts für ~20 % Aufwand.
 - **Aufwand realistisch ★★★★** (nicht ★★ wie Pseudo-Stereo). Eigenes größeres Vorhaben;
   Schritt A bleibt danach als globaler WIDTH-Regler nützlich.
 - Der separate Eintrag **„Stereo-Panning – pro Oszillator L/R"** unten = genau dieser Schritt B.
+
+---
+
+## 🧩 Rack-Customization: Show/Hide + Drag&Drop (Post-Rack-Umbau, ★★★★)
+
+Sammel-Vorhaben (2026-07-01), am besten als eigenes **„Epic 4: Rack-Customization"** *nach* dem
+laufenden Rack-Umbau (Epics 1–3) — es baut genau auf dem Rack-Layout-Modell (AD-2) auf.
+
+**Teil 1 — Module & Zonen ein-/ausblenden.** Selten genutzte Module und ganze Zonen
+(GEN/MOD/PROC/MASTER BUS) wegklappen → Rack entrümpeln, Platz sparen. Damit entfällt auch das
+Platz-Argument gegen zusätzliche Zonen (z.B. eine VISUALIZATION-Zone für Scope/Spectrum).
+Architektonisch billig: `visible`-Flag pro Modul + „im Layout überspringen".
+
+**Teil 2 — Drag&Drop + Verschieben.** Module per Drag&Drop **zwischen** Zonen bewegen **und**
+visuell **innerhalb** einer Zone umsortieren. Voraussetzung dafür sind Enabler, die man schon
+**während der Migration billig mit-einbaut** (später teuer nachzurüsten — siehe Spine „Deferred"):
+- **Stabile Modul-ID** je Deskriptor → gespeichertes Custom-Layout wieder zuordenbar.
+- **Explizite (Default-)Zone/Gruppe am Modul** (heute nur am Call-Site `Rack::addModule(zone,…)`),
+  **getrennt** von `typeTag` (Identität/Farbe) — Reverb nach GENERATORS ziehen macht es *nicht*
+  zum Generator.
+- **Rack-Layout als geordnetes Daten-Modell** (`id → {zone, position}`) statt Einfüge-Reihenfolge;
+  Verschieben = Edit an diesem Modell.
+
+**Wie persistieren/schalten (User-Präferenz, gilt für Show/Hide *und* Layout):**
+1. **Bevorzugt: über Standard-Synthy-Parameter** (APVTS je Modul). Nutzt bestehende Infrastruktur
+   (Attachment, Persistenz, `.synthy`). **Interop-safe**, da rückwärtskompatibel (fehlende Felder =
+   Defaults, siehe Cross-Projekt), append-only, kein `kFormatVersion`-Bump. Nachteil: View-/Layout-
+   State erscheint als automatisierbare DAW-Parameter → in eigene Param-Gruppe, klar getrennt vom Klang.
+2. **Fallback: separate Rack-Config** (eigene UI-Prefs-Datei / Host-State-Blob, **nicht** `.synthy`),
+   wenn man View-/Layout-State bewusst aus dem Klang-Preset heraushalten will.
+
+**Offene Design-Fragen:** (a) Fenster fix + Rack packt nach, oder Fenster schrumpft beim Ausblenden?
+(b) Sichtbarkeit/Layout pro Preset oder global? (c) Affordance: Collapse-Button am Zonen-Header,
+Hide-Toggle + Drag-Handle pro Modul.
 
 ---
 
