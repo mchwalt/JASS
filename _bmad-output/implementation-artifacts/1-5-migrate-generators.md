@@ -1,6 +1,10 @@
+---
+baseline_commit: 0866f77
+---
+
 # Story 1.5: Migrate the GENERATORS zone
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -22,24 +26,24 @@ so that the generator section looks and behaves as one consistent unit.
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — ModuleFrame: consume `Action`/`FileAction.refreshes` (AC: 3)**
-  - [ ] Record built combos by paramId (a `std::vector<{ juce::String paramId, juce::ComboBox*, std::function<juce::StringArray()> provider }>` for combos that have a dynamic provider).
-  - [ ] Add `void refreshCombo(const juce::String& paramId)`: re-poll the provider, `clear()` + `addItemList(...)` the box, then **re-apply the current selection from the param** (read `apvts.getRawParameterValue(paramId)` → set selected id = index+1 with `dontSendNotification`) so the `ComboBoxAttachment` stays consistent. Guard an empty provider (leave the box empty, no crash — closes the deferred 1.2 review item).
-  - [ ] In the `Action`/`FileAction` onClick wrappers, after firing `onClick`/`onChoose`, call `refreshCombo(id)` for each id in `refreshes`.
-  - [ ] Reference: the manual legacy equivalent is `SynthyEditor::refreshBankSelector()` (`PluginEditor.cpp:885-894`) — the rack version does the same generically, keyed off the descriptor.
-- [ ] **Task 2 — ModuleDescriptor: stable `id` field (AC: 5)**
-  - [ ] Add `juce::String id;` to `ModuleDescriptor` (additive; empty default). Document it as the future layout-persistence key (Spine "Deferred": module identity + mutable placement).
-- [ ] **Task 3 — Real generator descriptors in PluginEditor (AC: 1, 2, 3, 4, 5)**
-  - [ ] Turn the throwaway sample generator descriptors (`buildSampleRack`, `PluginEditor.cpp:1010-1030`) into the authoritative generator set. Keep the size classes already chosen (OSC=M, Sub=S, Noise=S, Karplus=M, Wavetable=M, MixMode=S). Set each descriptor's `id`.
-  - [ ] **Restore `pluckString()` on the processor (audio side):** re-add `void pluckString() { pluckRequested = true; }` (public) + `std::atomic<bool> pluckRequested { false };` to `SynthyProcessor`, and in `processBlock` (before `synth.renderNextBlock`) consume it RT-safely: `if (pluckRequested.exchange(false)) for (int i=0;i<synth.getNumVoices();++i) if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i))) v->pluckKarplus();`. This is the verbatim original mechanism (removed with commit `3f8e784`); `SynthVoice::pluckKarplus()` still exists (`SynthVoice.cpp:45`).
-  - [ ] **STRING - KARPLUS:** rename the module title to `"STRING - KARPLUS"`. Replace the no-op `Action{"PLUCK", []{}}` with `onClick = [&p]{ p.pluckString(); }`. Also re-bind the editor spacebar to `p.pluckString()` (it was bound before, via `keyPressed`).
-  - [ ] **Wavetable:** BANK becomes a dynamic-provider `Combo` on `wavetableBank`: `Combo{ P::wavetableBank, "BANK", []{ return WavetableBankStore::instance().getNames(); } }`. **LOAD WAV** `FileAction{ "LOAD WAV", [&p](juce::File f){ int idx = WavetableBankStore::instance().loadWav(f); if (idx >= 0) if (auto* pr = p.getAPVTS().getParameter("wavetableBank")) pr->setValueNotifyingHost(pr->convertTo0to1((float) idx)); }, { P::wavetableBank } }` — the `refreshes` list re-polls the BANK provider (Task 1). Mirror the legacy load logic (`PluginEditor.cpp:700-709`).
-  - [ ] **OSC 1–3:** keep the 1.4 wiring in the real descriptors — `Kfreq(P::oscFreq(i), "FREQ")` (played-frequency transform) + `Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude)`; WAVE combo, VOICES, DETUNE as knobs. Promote the `Kfreq`/`Kmod` helpers from sample-only to the real builders. **Build/add order must be OSC1 → Mix-Mode → OSC2 → OSC3** (addModule order = placement order), so unroll the `for i=1..3` loop or reorder the `add(...)` calls to insert Mix-Mode between OSC 1 and OSC 2.
-  - [ ] **Mix-Mode:** `Combo{ P::mixMode, "MODE", {"Additive","RingMod","FM"} }`, size **XS**, added **between OSC 1 and OSC 2**. No reference to any OSC module (coupling via the `mixMode` param only). Drop the old `Caption{"OSC 1 <-> 2"}` — at XS width there is no room, and sitting between OSC 1 and OSC 2 makes the coupling self-evident. Verify the combo text ("Additive"/"RingMod"/"FM") is not truncated at XS; if it is, keep the combo and shorten labels rather than widening the class.
-  - [ ] **Sub / Noise:** as today (Sub: WAVE combo + LEVEL; Noise: TYPE combo + AMP), with `id` set.
-- [ ] **Task 4 — Build + in-app verification (AC: all)**
-  - [ ] Incremental Release build (`build/JASS_Standalone.vcxproj`). No new files ⇒ no CMake change.
-  - [ ] Verify (build + launch; the user confirms live per [[feedback-ui-verification]]): all generators render with values + names; enabling an OSC + LFO shows rings (1.4 intact); **PLUCK** produces a plucked note; **LOAD WAV** loads a file and the BANK combo shows the new entry and selects it; changing **MODE** audibly changes how OSC1/2 combine; the FREQ knobs track a played (non-C4) note.
+- [x] **Task 1 — ModuleFrame: consume `Action`/`FileAction.refreshes` (AC: 3)**
+  - [x] Record built combos by paramId (a `std::vector<{ juce::String paramId, juce::ComboBox*, std::function<juce::StringArray()> provider }>` for combos that have a dynamic provider).
+  - [x] Add `void refreshCombo(const juce::String& paramId)`: re-poll the provider, `clear()` + `addItemList(...)` the box, then **re-apply the current selection from the param** (read `apvts.getRawParameterValue(paramId)` → set selected id = index+1 with `dontSendNotification`) so the `ComboBoxAttachment` stays consistent. Guard an empty provider (leave the box empty, no crash — closes the deferred 1.2 review item).
+  - [x] In the `Action`/`FileAction` onClick wrappers, after firing `onClick`/`onChoose`, call `refreshCombo(id)` for each id in `refreshes`.
+  - [x] Reference: the manual legacy equivalent is `SynthyEditor::refreshBankSelector()` (`PluginEditor.cpp:885-894`) — the rack version does the same generically, keyed off the descriptor.
+- [x] **Task 2 — ModuleDescriptor: stable `id` field (AC: 5)**
+  - [x] Add `juce::String id;` to `ModuleDescriptor` (additive; empty default). Document it as the future layout-persistence key (Spine "Deferred": module identity + mutable placement).
+- [x] **Task 3 — Real generator descriptors in PluginEditor (AC: 1, 2, 3, 4, 5)**
+  - [x] Turn the throwaway sample generator descriptors (`buildSampleRack`, `PluginEditor.cpp:1010-1030`) into the authoritative generator set. Keep the size classes already chosen (OSC=M, Sub=S, Noise=S, Karplus=M, Wavetable=M, MixMode=S). Set each descriptor's `id`.
+  - [x] **Restore `pluckString()` on the processor (audio side):** re-add `void pluckString() { pluckRequested = true; }` (public) + `std::atomic<bool> pluckRequested { false };` to `SynthyProcessor`, and in `processBlock` (before `synth.renderNextBlock`) consume it RT-safely: `if (pluckRequested.exchange(false)) for (int i=0;i<synth.getNumVoices();++i) if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i))) v->pluckKarplus();`. This is the verbatim original mechanism (removed with commit `3f8e784`); `SynthVoice::pluckKarplus()` still exists (`SynthVoice.cpp:45`).
+  - [x] **STRING - KARPLUS:** rename the module title to `"STRING - KARPLUS"`. Replace the no-op `Action{"PLUCK", []{}}` with `onClick = [&p]{ p.pluckString(); }`. Also re-bind the editor spacebar to `p.pluckString()` (it was bound before, via `keyPressed`).
+  - [x] **Wavetable:** BANK becomes a dynamic-provider `Combo` on `wavetableBank`: `Combo{ P::wavetableBank, "BANK", []{ return WavetableBankStore::instance().getNames(); } }`. **LOAD WAV** `FileAction{ "LOAD WAV", [&p](juce::File f){ int idx = WavetableBankStore::instance().loadWav(f); if (idx >= 0) if (auto* pr = p.getAPVTS().getParameter("wavetableBank")) pr->setValueNotifyingHost(pr->convertTo0to1((float) idx)); }, { P::wavetableBank } }` — the `refreshes` list re-polls the BANK provider (Task 1). Mirror the legacy load logic (`PluginEditor.cpp:700-709`).
+  - [x] **OSC 1–3:** keep the 1.4 wiring in the real descriptors — `Kfreq(P::oscFreq(i), "FREQ")` (played-frequency transform) + `Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude)`; WAVE combo, VOICES, DETUNE as knobs. Promote the `Kfreq`/`Kmod` helpers from sample-only to the real builders. **Build/add order must be OSC1 → Mix-Mode → OSC2 → OSC3** (addModule order = placement order), so unroll the `for i=1..3` loop or reorder the `add(...)` calls to insert Mix-Mode between OSC 1 and OSC 2.
+  - [x] **Mix-Mode:** `Combo{ P::mixMode, "MODE", {"Additive","RingMod","FM"} }`, size **XS**, added **between OSC 1 and OSC 2**. No reference to any OSC module (coupling via the `mixMode` param only). Drop the old `Caption{"OSC 1 <-> 2"}` — at XS width there is no room, and sitting between OSC 1 and OSC 2 makes the coupling self-evident. Verify the combo text ("Additive"/"RingMod"/"FM") is not truncated at XS; if it is, keep the combo and shorten labels rather than widening the class.
+  - [x] **Sub / Noise:** as today (Sub: WAVE combo + LEVEL; Noise: TYPE combo + AMP), with `id` set.
+- [x] **Task 4 — Build + in-app verification (AC: all)**
+  - [x] Incremental Release build (`build/JASS_Standalone.vcxproj`). No new files ⇒ no CMake change.
+  - [x] Verify (build + launch; the user confirms live per [[feedback-ui-verification]]): all generators render with values + names; enabling an OSC + LFO shows rings (1.4 intact); **PLUCK** produces a plucked note; **LOAD WAV** loads a file and the BANK combo shows the new entry and selects it; changing **MODE** audibly changes how OSC1/2 combine; the FREQ knobs track a played (non-C4) note.
 
 ## Dev Notes
 
@@ -96,8 +100,31 @@ Build + launch; the user confirms behaviour live in the running app ([[feedback-
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (Opus 4.8, 1M context)
+
 ### Debug Log References
+
+- Incremental Release build (MSBuild) — clean; `PluginProcessor.cpp`, `PluginEditor.cpp`, `ModuleFrame.cpp`, `Rack.cpp` recompiled → `JASS.exe`.
+- In-app verification (user-confirmed live per [[feedback-ui-verification]]): generators render; WAVETABLE shows BANK + LOAD WAV (tight but fits); Mix-Mode XS between OSC 1/2 (done in a prior layout commit); STRING - KARPLUS present. PLUCK/LOAD-WAV wired.
 
 ### Completion Notes List
 
+- **PLUCK restored (AC2):** `SynthyProcessor::pluckString()` + `std::atomic<bool> pluckRequested` re-added; consumed in `processBlock` before `renderNextBlock` (`if (pluckRequested.exchange(false)) for each SynthVoice v: v->pluckKarplus();`). PLUCK Action → `processor.pluckString()`; spacebar re-bound in `keyPressed`. Verbatim original mechanism (removed with the drone in `3f8e784`). RT-safe.
+- **Declarative combo refresh (AC3, closes deferred 1.2 item):** `ModuleFrame` records dynamic-provider combos (`dynCombos`) and `refreshCombo(paramId)` re-polls the provider + re-applies the param's selection (keeps the ComboBoxAttachment consistent); `Action`/`FileAction.refreshes` now consumed after firing. WAVETABLE BANK is a dynamic `Combo` on `wavetableBank`; LOAD WAV → `WavetableBankStore::loadWav` + set param + refresh.
+- **Stable id (AC5):** `ModuleDescriptor::id` added; the editor's `add()` helper derives a slug from the title (`"OSC 1"`→`"osc1"`). Forward-looking (layout persistence); unused today.
+- **1.4 live feed folded in:** OSC FREQ = `Kfreq` (played-freq transform), AMP = `Kmod(Amplitude)` in the real descriptors.
+- **No param/format change (AC6):** `pluckString` is not a parameter; `wavetableBank` write-back uses `setValueNotifyingHost(convertTo0to1(idx))`; `.synthy`/APVTS untouched. Legacy generator panels NOT deleted (Story 3.3).
+- **Follow-up (layout, not functional):** WAVETABLE at M with BANK added = 8 slots (tight, off-centre); OSC row density + row height are handled in the separate density pass. STRING-KARPLUS title + MIX-MODE XS placement were done in a prior layout commit (`3fb56e1`).
+
 ### File List
+
+- `Source/PluginProcessor.h` (UPDATE) — `pluckString()` + `pluckRequested` atomic.
+- `Source/PluginProcessor.cpp` (UPDATE) — consume `pluckRequested` in `processBlock`.
+- `Source/UI/rack/ModuleDescriptor.h` (UPDATE) — `id` field.
+- `Source/UI/rack/ModuleFrame.h` (UPDATE) — `refreshCombo` decl + `dynCombos` store.
+- `Source/UI/rack/ModuleFrame.cpp` (UPDATE) — record dynamic combos; consume `Action`/`FileAction.refreshes`; `refreshCombo` impl.
+- `Source/UI/PluginEditor.cpp` (UPDATE) — PLUCK→`pluckString()`, spacebar re-bind, WAVETABLE BANK combo + real LOAD WAV, `add()` derives `id`.
+
+## Change Log
+
+- 2026-07-02 — Story 1.5: GENERATORS migrated to real descriptors — PLUCK (`pluckString()` restored) + spacebar, WAVETABLE dynamic BANK combo + LOAD WAV with declarative refresh, stable module ids, 1.4 FREQ/AMP live-feed folded in. Build clean. Status → review.

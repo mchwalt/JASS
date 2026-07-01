@@ -97,6 +97,8 @@ namespace rack
     struct ModuleDescriptor
     {
         SizeClass    sizeClass {};
+        juce::String id;                          // stable slug (e.g. "osc1") — future layout key
+                                                  // for show/hide + drag-drop (ARCHITECTURE Deferred)
         juce::String title;
         ModuleType   type {};
         juce::String enableParam;                 // empty => always-on (Master, ADSR, Mix-Mode)

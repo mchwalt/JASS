@@ -35,6 +35,11 @@ namespace rack
         void buildBody();
         void doReset();
 
+        // Re-poll a dynamic-provider combo's items (after an Action/FileAction that lists
+        // it in .refreshes fired), then re-apply the param's current selection so the
+        // ComboBoxAttachment stays consistent (AD-4 declarative combo refresh).
+        void refreshCombo (const juce::String& paramId);
+
         // A module with no enable param is always-on (Master, ADSR, Mix-Mode).
         bool moduleEnabled() const noexcept { return enableValue == nullptr || enableValue->load() >= 0.5f; }
 
@@ -76,6 +81,11 @@ namespace rack
         std::vector<RingKnob>  ringKnobs;
         std::vector<XformKnob> xformKnobs;
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back
+
+        // Combos built from a dynamic provider (e.g. the Wavetable bank list). Recorded so
+        // an Action/FileAction can re-poll them declaratively via refreshCombo (Story 1.5).
+        struct DynCombo { juce::String paramId; juce::ComboBox* box; std::function<juce::StringArray()> provider; };
+        std::vector<DynCombo> dynCombos;
 
         static constexpr int kHeaderH = 22;
         static constexpr int kComboH  = 22;   // combo box: short (half-height), wide, left-aligned

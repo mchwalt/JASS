@@ -906,6 +906,12 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
             keyboard->setKeyPressBaseOctave(kbBaseOctave);
         return true;
     }
+    // Spacebar re-plucks the Karplus string (same action as the PLUCK button).
+    if (key == juce::KeyPress::spaceKey)
+    {
+        processor.pluckString();
+        return true;
+    }
     return false;
 }
 
@@ -1008,7 +1014,11 @@ void SynthyEditor::buildSampleRack()
                    juce::String enableParam, std::vector<BodyElement> body)
     {
         ModuleDescriptor d;
-        d.sizeClass = sc; d.title = std::move(title); d.type = type;
+        d.sizeClass = sc; d.type = type;
+        // Stable slug from the title (e.g. "OSC 1" -> "osc1") — the future layout key for
+        // show/hide + drag-drop (ARCHITECTURE Deferred). Derived once here so every module gets one.
+        d.id = title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
+        d.title = std::move(title);
         d.enableParam = std::move(enableParam); d.body = std::move(body);
         sampleRack->addModule(zone, std::move(d));
     };
@@ -1052,10 +1062,21 @@ void SynthyEditor::buildSampleRack()
     add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "NOISE", P::noiseOn,
         { C(P::noiseType, "TYPE", { "White", "Pink" }), K(P::noiseAmp, "AMP") });
     add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
-        { Action{ "PLUCK", [] {}, {} }, K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
+        { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
+          K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR") });
     add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "WAVETABLE", P::wavetableOn,
-        { FileAction{ "LOAD WAV", [](juce::File) {}, {} },
+        { Combo{ P::wavetableBank, "BANK",
+                 std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
+          FileAction{ "LOAD WAV",
+                      [this] (juce::File f)
+                      {
+                          int idx = WavetableBankStore::instance().loadWav(f);
+                          if (idx >= 0)
+                              if (auto* pr = processor.getAPVTS().getParameter(P::wavetableBank))
+                                  pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
+                      },
+                      { juce::String(P::wavetableBank) } },   // refresh the BANK combo after load
           K(P::wavetablePosition, "POS"), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
           K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") });
 

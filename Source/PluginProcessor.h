@@ -42,6 +42,11 @@ public:
     juce::MidiKeyboardState& getKeyboardState() { return keyboardState; }
     WaveformCapture& getWaveformCapture() { return waveformCapture; }
 
+    // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
+    // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
+    // from the message thread).
+    void pluckString() { pluckRequested = true; }
+
     // Randomize all parameters (with guards so the result stays audible).
     void randomize();
 
@@ -85,6 +90,7 @@ private:
     Arpeggiator arp;
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
     bool autoNoteOn = false;
+    std::atomic<bool> pluckRequested { false };   // set by pluckString(), consumed in processBlock
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON
     // when a sound generator is (re)activated. No user-facing parameter. The drone
