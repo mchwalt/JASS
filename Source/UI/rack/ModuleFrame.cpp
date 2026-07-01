@@ -133,7 +133,10 @@ namespace rack
                 if (auto* statik = std::get_if<juce::StringArray> (&c->items))
                     box->addItemList (*statik, 1);
                 else if (auto* provider = std::get_if<std::function<juce::StringArray()>> (&c->items))
+                {
                     if (*provider) box->addItemList ((*provider)(), 1);
+                    dynCombos.push_back ({ c->paramId, box, *provider });   // re-pollable via refreshCombo
+                }
                 addAndMakeVisible (*box);
                 comboAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
                     apvts, c->paramId, *box));
@@ -153,15 +156,22 @@ namespace rack
             else if (auto* act = std::get_if<Action> (&el))
             {
                 auto* btn = static_cast<juce::TextButton*> (ownedWidgets.add (new juce::TextButton (act->label)));
-                btn->onClick = act->onClick;
+                auto onClick   = act->onClick;
+                auto refreshes = act->refreshes;
+                btn->onClick = [this, onClick, refreshes]
+                {
+                    if (onClick) onClick();
+                    for (const auto& id : refreshes) refreshCombo (id);   // declarative combo refresh
+                };
                 addAndMakeVisible (*btn);
                 cells.push_back ({ btn, nullptr, 1 });
             }
             else if (auto* fa = std::get_if<FileAction> (&el))
             {
                 auto* btn = static_cast<juce::TextButton*> (ownedWidgets.add (new juce::TextButton (fa->label)));
-                auto cb = fa->onChoose;
-                btn->onClick = [this, cb]
+                auto cb        = fa->onChoose;
+                auto refreshes = fa->refreshes;
+                btn->onClick = [this, cb, refreshes]
                 {
                     if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
                         return;              // (prevents destroying the in-flight chooser mid-callback)
@@ -169,10 +179,14 @@ namespace rack
                     fileChooser = std::make_unique<juce::FileChooser> ("Select a file");
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                        [this, cb] (const juce::FileChooser& fc)
+                        [this, cb, refreshes] (const juce::FileChooser& fc)
                         {
                             auto f = fc.getResult();
-                            if (cb && f.existsAsFile()) cb (f);
+                            if (cb && f.existsAsFile())
+                            {
+                                cb (f);
+                                for (const auto& id : refreshes) refreshCombo (id);   // re-list bank combo
+                            }
                             fileChooserActive = false;   // dialog closed — allow the next open
                         });
                 };
@@ -378,6 +392,23 @@ namespace rack
                 continue;
             if (auto* raw = apvts.getRawParameterValue (xk.paramId))
                 xk.slider->setValue (xk.toDisplay ((double) raw->load(), er), juce::dontSendNotification);
+        }
+    }
+
+    void ModuleFrame::refreshCombo (const juce::String& paramId)
+    {
+        for (auto& dc : dynCombos)
+        {
+            if (dc.paramId != paramId || dc.box == nullptr || ! dc.provider)
+                continue;
+
+            dc.box->clear (juce::dontSendNotification);
+            dc.box->addItemList (dc.provider(), 1);   // item ids are 1-based (index + 1)
+
+            // Re-apply the param's current selection so the ComboBoxAttachment and the box
+            // don't drift after we repopulated the items (clearing doesn't touch the param).
+            if (auto* raw = apvts.getRawParameterValue (paramId))
+                dc.box->setSelectedId ((int) raw->load() + 1, juce::dontSendNotification);
         }
     }
 }

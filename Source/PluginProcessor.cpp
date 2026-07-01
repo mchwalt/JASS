@@ -306,6 +306,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
                 v->setPluckEnabled(false);
 
+    // Manual PLUCK (button / spacebar): re-excite the Karplus string on every voice.
+    // RT-safe — the atomic flag is set on the message thread and consumed here.
+    if (pluckRequested.exchange(false))
+        for (int i = 0; i < synth.getNumVoices(); ++i)
+            if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+                v->pluckKarplus();
+
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
 
     if (droneJustTriggered)
