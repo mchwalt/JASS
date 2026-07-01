@@ -14,6 +14,14 @@ namespace rack
             l->setInterceptsMouseClicks (false, false);
             return l;
         }
+
+        // Mirror a parameter's (float) range onto a (double) Slider so a decoupled
+        // display-transform knob spans and skews exactly like its param (Story 1.4).
+        juce::NormalisableRange<double> toDoubleRange (const juce::NormalisableRange<float>& r)
+        {
+            return { (double) r.start, (double) r.end, (double) r.interval,
+                     (double) r.skew, r.symmetricSkew };
+        }
     }
 
     ModuleFrame::ModuleFrame (juce::AudioProcessorValueTreeState& a, ModuleDescriptor d)
@@ -74,8 +82,43 @@ namespace rack
                 // still pops the value box for typing — see SynthySlider::mouseDown).
                 s->setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
                 addAndMakeVisible (*s);
-                sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-                    apvts, k->paramId, *s));
+
+                // A knob with a FULLY-set display-transform pair is DECOUPLED from its
+                // param (AD-4): it shows a derived value (base × ratio) and writes the
+                // base back on edit. A missing OR half-set pair => normal bound knob.
+                const bool hasXform = (k->toDisplay != nullptr && k->fromDisplay != nullptr);
+                if (hasXform)
+                {
+                    // Mirror the param's range/skew so the decoupled knob feels identical.
+                    if (auto* rp = apvts.getParameter (k->paramId))
+                        s->setNormalisableRange (toDoubleRange (rp->getNormalisableRange()));
+
+                    const auto id       = k->paramId;
+                    const auto fromDisp = k->fromDisplay;
+                    s->onValueChange = [this, s, id, fromDisp]
+                    {
+                        if (auto* p = apvts.getParameter (id))
+                        {
+                            // ratio<=0 (no note) or disabled module => identity, no bad write-back.
+                            const double er   = (moduleEnabled() && liveRatio > 0.0) ? liveRatio : 1.0;
+                            const double base = fromDisp (s->getValue(), er);
+                            p->setValueNotifyingHost (p->convertTo0to1 ((float) base));
+                        }
+                    };
+                    // Initialise the display from the current base (before the first live tick).
+                    if (auto* raw = apvts.getRawParameterValue (id))
+                        s->setValue ((double) raw->load(), juce::dontSendNotification);
+                    xformKnobs.push_back ({ s, id, k->toDisplay, k->fromDisplay });
+                }
+                else
+                {
+                    sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+                        apvts, k->paramId, *s));
+                }
+
+                if (k->modTarget != ModTarget::None)
+                    ringKnobs.push_back ({ s, k->modTarget });
+
                 cells.push_back ({ s, makeCaption (ownedCaptions, k->label), 1 });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
             }
@@ -300,5 +343,29 @@ namespace rack
         if (enableValue == nullptr) return;
         const bool off = enableValue->load() < 0.5f;
         if (off != dimmed) { dimmed = off; repaint(); }
+    }
+
+    void ModuleFrame::updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio)
+    {
+        const bool en = moduleEnabled();
+
+        // Modulation rings: only the enabled module whose knob matches the active LFO
+        // target shows the moving ring; every other ring knob is driven to 0. The
+        // SynthySlider itself repaints only on a meaningful change (NFR5).
+        for (auto& rk : ringKnobs)
+            rk.slider->setModAmount ((lfoOn && en && rk.target == activeTarget) ? lfoValue : 0.0f);
+
+        // Display transforms: show base × ratio. Guard (AD-4): a disabled module or a
+        // non-positive ratio (no note sounding) => identity, so we never divide a stale
+        // ratio nor corrupt the base param.
+        liveRatio = playedRatio;
+        const double er = (en && playedRatio > 0.0) ? playedRatio : 1.0;
+        for (auto& xk : xformKnobs)
+        {
+            if (xk.slider->isMouseButtonDown())   // don't fight the user mid-drag
+                continue;
+            if (auto* raw = apvts.getRawParameterValue (xk.paramId))
+                xk.slider->setValue (xk.toDisplay ((double) raw->load(), er), juce::dontSendNotification);
+        }
     }
 }
