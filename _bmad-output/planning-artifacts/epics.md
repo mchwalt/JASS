@@ -225,6 +225,8 @@ So that the visualizations are first-class, consistent parts of the rack.
 
 _Decision (2026-07-01): the display modules get **no dedicated VISUALIZATION zone header** — a header for just two passive visualisers would cost a full row of vertical space in the fixed window for no navigation benefit. They read as a display band by form + placement alone. Zones stay MASTER BUS / GENERATORS / MODULATION / PROCESSING._
 
+_Requirement (2026-07-02, restore C# features): (a) the Oscilloscope module gets a **selectable time-base / zoom** (1 / 2 / 5 / 10 / 25 ms) as a Combo + a **left-side ms scale** (axis ticks + labels in `WaveformDisplay::paint`); displayed samples = `ms × sampleRate/1000`. (b) the **Spectrum** module gets its own **scale** too (frequency axis, and level/dB axis, drawn in `SpectrumDisplay::paint`). Both are pure UI/drawing, no audio change._
+
 ## Epic 3: Header Chrome & Final Integration
 
 Build the fixed chrome, remove the legacy layout code, and validate the plugin build — finishing the redesign.
