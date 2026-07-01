@@ -906,10 +906,14 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
             keyboard->setKeyPressBaseOctave(kbBaseOctave);
         return true;
     }
-    // Spacebar re-plucks the Karplus string (same action as the PLUCK button).
+    // Spacebar re-plucks the Karplus string. Trigger the actual PLUCK button so it
+    // visibly presses too (its onClick calls pluckString); fall back to the direct call.
     if (key == juce::KeyPress::spaceKey)
     {
-        processor.pluckString();
+        if (auto* f = sampleRack ? sampleRack->moduleById("stringkarplus") : nullptr)
+            f->clickFirstAction();
+        else
+            processor.pluckString();
         return true;
     }
     return false;
@@ -1036,13 +1040,13 @@ void SynthyEditor::buildSampleRack()
     // module" before we formalise FR14 / the XS size class via correct-course.
     add(Rack::Zone::MasterBus, SizeClass::XS, ModuleType::Processor, "STEREO", P::stereoOn,
         { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
-    add(Rack::Zone::MasterBus, SizeClass::XS, ModuleType::Processor, "MASTER", {},
+    add(Rack::Zone::MasterBus, SizeClass::XXS, ModuleType::Processor, "MASTER", {},
         { K(P::masterVol, "VOL") });
 
     // ---- GENERATORS ----
     auto addOsc = [&](int i)
     {
-        add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator,
+        add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator,
             "OSC " + juce::String(i), P::oscOn(i),
             { C(P::oscWave(i), "WAVE", waves), Kfreq(P::oscFreq(i), "FREQ"),
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
@@ -1052,7 +1056,7 @@ void SynthyEditor::buildSampleRack()
     // reads as the connector between them. Row-major packing then puts OSC 3 on row 2 and
     // (after Sub+Noise) Karplus on row 3.
     addOsc(1);
-    add(Rack::Zone::Generators, SizeClass::XS, ModuleType::Generator, "MIX MODE", {},
+    add(Rack::Zone::Generators, SizeClass::XXS, ModuleType::Generator, "MIX MODE", {},
         { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }) });
     addOsc(2);
     addOsc(3);

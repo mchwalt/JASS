@@ -157,6 +157,14 @@ namespace rack
             f->updateLiveFeed (lfoOn, activeTarget, lfoValue, playedRatio);
     }
 
+    ModuleFrame* Rack::moduleById (const juce::String& id)
+    {
+        for (auto* f : frames)
+            if (f != nullptr && f->moduleId() == id)
+                return f;
+        return nullptr;
+    }
+
     void Rack::paint (juce::Graphics& g)
     {
         g.fillAll (juce::Colour (0xff15181d));   // rack ground (matches mockup --ground)
