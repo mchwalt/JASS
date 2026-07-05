@@ -134,18 +134,24 @@ public:
         g.setColour(juce::Colour(0xff333355));
         g.drawRoundedRectangle(leftMargin, topMargin, plotW, plotH, 0.0f, 1.0f);
 
-        // Title
-        g.setColour(juce::Colour(0xff555555));
-        g.setFont(juce::FontOptions(10.0f));
-        g.drawText("SPECTRUM", static_cast<int>(leftMargin + 4), 4, 100, 14,
-                   juce::Justification::centredLeft);
+        // Title (suppressed in the rack — the module header already shows it)
+        if (showTitle)
+        {
+            g.setColour(juce::Colour(0xff555555));
+            g.setFont(juce::FontOptions(10.0f));
+            g.drawText("SPECTRUM", static_cast<int>(leftMargin + 4), 4, 100, 14,
+                       juce::Justification::centredLeft);
+        }
     }
 
     void setSampleRate(double sr) { sampleRate = static_cast<float>(sr); }
+    void setShowTitle(bool b) { showTitle = b; repaint(); }
 
 private:
     void timerCallback() override
     {
+        // Track the engine's real sample rate (bin→Hz mapping); set from prepareToPlay.
+        sampleRate = static_cast<float>(captureRef.getSampleRate());
         captureRef.updateSnapshot();
         computeFFT();
         repaint();
@@ -188,6 +194,7 @@ private:
 
     std::vector<float> smoothedMagnitudes;
     float sampleRate = 44100.0f;
+    bool showTitle = true;   // false in the rack (module header carries the title)
 
     static constexpr float minFreq = 30.0f;
     static constexpr float maxFreq = 16000.0f;

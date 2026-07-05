@@ -24,23 +24,6 @@ namespace
         b.setColour(juce::TextButton::textColourOffId, c);
     }
 
-    // TEMP (Story 1.3): a stand-in for a real graphical display, used so the sample
-    // rack can exercise the Display body-element path. Removed with the sample
-    // population in Story 1.5.
-    struct SampleDisplayPlaceholder : juce::Component
-    {
-        explicit SampleDisplayPlaceholder(juce::String t) : text(std::move(t)) {}
-        void paint(juce::Graphics& g) override
-        {
-            g.fillAll(juce::Colour(0xff070809));
-            g.setColour(juce::Colour(0xff3a414c));
-            g.drawRect(getLocalBounds());
-            g.setColour(juce::Colour(0xff7e8794));
-            g.setFont(juce::FontOptions(11.0f));
-            g.drawText(text, getLocalBounds(), juce::Justification::centred);
-        }
-        juce::String text;
-    };
 }
 
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
@@ -1026,11 +1009,6 @@ void SynthyEditor::buildSampleRack()
         d.enableParam = std::move(enableParam); d.body = std::move(body);
         sampleRack->addModule(zone, std::move(d));
     };
-    auto display = [&](juce::String label, int slots)
-    {
-        auto* c = sampleOwned.add(new SampleDisplayPlaceholder(std::move(label)));
-        return Display{ c, slots };
-    };
 
     // OSC WAVE items MUST match the oscWave param's choice ORDER — the ComboBoxAttachment
     // maps by index, so a different order mislabels every waveform (same class of bug as the
@@ -1146,10 +1124,20 @@ void SynthyEditor::buildSampleRack()
         { K(P::delayTime, "TIME"), K(P::delayFeedback, "FB"), K(P::delayMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "REVERB", P::reverbOn,
         { K(P::reverbRoom, "ROOM"), K(P::reverbDamp, "DAMP"), K(P::reverbMix, "MIX") });
+    // Real visualizers (own instances, separate from the legacy ones behind the rack —
+    // one-parent rule). setShowTitle(false): the module header already shows the title.
+    // Sharing the one WaveformCapture across instances is safe (updateSnapshot is idempotent
+    // per frame). Sample rate reaches them via the capture (set in prepareToPlay).
+    auto* scope = new WaveformDisplay(processor.getWaveformCapture());
+    scope->setShowTitle(false);
+    sampleOwned.add(scope);
     add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", {},
-        { display("SCOPE", 12) });
+        { Display{ scope, 12 } });
+    auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
+    spec->setShowTitle(false);
+    sampleOwned.add(spec);
     add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "SPECTRUM", {},
-        { display("SPECTRUM", 12) });
+        { Display{ spec, 12 } });
 
     // Added LAST so the opaque rack covers the legacy body; the header chrome and
     // keyboard sit in their own bands and stay live.

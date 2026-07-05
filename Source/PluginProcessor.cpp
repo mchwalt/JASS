@@ -206,6 +206,9 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     uiLfo.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     arpHeldScratch.reserve(128);
+
+    // Feed the real sample rate to the scope/spectrum displays (ms-window + bin→Hz).
+    waveformCapture.setSampleRate(sampleRate);
 }
 
 void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiBuffer& midiMessages)

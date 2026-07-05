@@ -89,7 +89,7 @@ public:
 
         // Waveform
         auto& samples = captureRef.getSnapshot();
-        int displaySamples = static_cast<int>(timeRangeMs / 1000.0 * 44100.0);
+        int displaySamples = static_cast<int>(timeRangeMs / 1000.0 * captureRef.getSampleRate());
         int samplesToShow = std::min(displaySamples, static_cast<int>(samples.size()));
 
         if (samplesToShow > 1)
@@ -114,12 +114,17 @@ public:
         g.setColour(juce::Colour(0xff333355));
         g.drawRoundedRectangle(leftMargin, topMargin, plotW, plotH, 0.0f, 1.0f);
 
-        // Title
-        g.setColour(juce::Colour(0xff555555));
-        g.setFont(juce::FontOptions(10.0f));
-        g.drawText("OSCILLOSCOPE", static_cast<int>(leftMargin + 4), 4, 100, 14,
-                   juce::Justification::centredLeft);
+        // Title (suppressed in the rack — the module header already shows it)
+        if (showTitle)
+        {
+            g.setColour(juce::Colour(0xff555555));
+            g.setFont(juce::FontOptions(10.0f));
+            g.drawText("OSCILLOSCOPE", static_cast<int>(leftMargin + 4), 4, 100, 14,
+                       juce::Justification::centredLeft);
+        }
     }
+
+    void setShowTitle(bool b) { showTitle = b; repaint(); }
 
 private:
     void timerCallback() override { captureRef.updateSnapshot(); repaint(); }
@@ -136,4 +141,5 @@ private:
     juce::Colour strokeColour;
     juce::ComboBox zoomBox;
     double timeRangeMs = 10.0;
+    bool showTitle = true;   // false in the rack (module header carries the title)
 };
