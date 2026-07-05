@@ -37,6 +37,8 @@ public:
     WavetableOscillator& getWavetable() { return wavetable; }
     Oscillator& getSubOsc() { return subOsc; }
     int& getSubOctaveRef() { return subOctave; }
+    bool& getAdsrOnRef() { return adsrOn; }
+    bool& getMixModeOnRef() { return mixModeOn; }
 
     // Re-pluck the Karplus string at the voice's current (transposed) pitch.
     void pluckKarplus();
@@ -62,6 +64,8 @@ private:
     WavetableOscillator wavetable;
 
     MixMode mixMode = MixMode::Additive;
+    bool adsrOn = true;      // false => envelope bypassed (constant gain) — Story 2.4
+    bool mixModeOn = true;   // false => oscillators summed additively regardless of mixMode
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

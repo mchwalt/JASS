@@ -121,6 +121,12 @@ namespace Parameters
 
         // Master
         constexpr const char* masterVol = "masterVol";
+
+        // Module enables for the formerly always-on modules (Story 2.4). Append-only,
+        // default TRUE so existing users/presets are unchanged until toggled.
+        constexpr const char* masterOn  = "masterOn";
+        constexpr const char* adsrOn    = "adsrOn";
+        constexpr const char* mixModeOn = "mixModeOn";
     }
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
@@ -270,6 +276,12 @@ namespace Parameters
         // Master
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
+        // Module enables for the formerly always-on modules (Story 2.4). Default TRUE
+        // (on) so behaviour is unchanged until the user toggles; append-only.
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::masterOn,  1), "Master On",   true));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::adsrOn,    1), "Envelope On", true));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Mix Mode On", true));
+
         return { params.begin(), params.end() };
     }
 
@@ -282,9 +294,13 @@ namespace Parameters
                               ChorusEffect& chorus, ReverbEffect& reverb,
                               LFO& lfo, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
-                              MixMode& mixMode, Oscillator& subOsc, int& subOctave)
+                              MixMode& mixMode, Oscillator& subOsc, int& subOctave,
+                              bool& adsrOn, bool& mixModeOn)
     {
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
+        // Behavioural gates (Story 2.4): ADSR off => bypass envelope; Mix-Mode off => additive.
+        adsrOn    = *apvts.getRawParameterValue(ID::adsrOn)    > 0.5f;
+        mixModeOn = *apvts.getRawParameterValue(ID::mixModeOn) > 0.5f;
 
         for (int o = 0; o < 3; ++o)
         {

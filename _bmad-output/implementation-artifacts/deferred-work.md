@@ -1,5 +1,20 @@
 # Deferred Work
 
+## ToDo — C# Synthy must mirror the new module enables MasterOn/AdsrOn/MixModeOn (2026-07-05, Story 2.4)
+
+JASS (C++) gave the three formerly always-on modules real enable bools: **`masterOn`, `adsrOn`,
+`mixModeOn`** (APVTS, default true). They serialise to the shared `.synthy` format as new fields
+**`MasterOn` / `AdsrOn` / `MixModeOn`** (PascalCase, like the other `…On`/`…Enabled` fields).
+
+Back-compat is by **missing field ⇒ enabled**: JASS reads them via `jbool(v, "…", rawB(a, ID::…))`
+so an old preset (or a preset written by the current C# app) that lacks the fields loads all three
+as ON — exactly the previous always-on behaviour. No `kFormatVersion` bump.
+
+**C# action required:** add `MasterOn`/`AdsrOn`/`MixModeOn` to the C# `Preset` class (bool, default
+**true**, treat missing as true) and surface the enable toggles in the C# UI (Master mute, ADSR
+bypass, Mix-Mode → additive). Pure C#-side work; the format is already compatible.
+
+
 ## ✅ RESOLVED 2026-07-05 — OSC WAVE combo item order mismatched the `oscWave` param
 
 The rack shared `const juce::StringArray waves { "Saw", "Square", "Sine", "Triangle" }` for the

@@ -21,7 +21,7 @@ FR1: A single module framework defines the uniform anatomy every module renders 
 FR2: The framework renders one consistent control style for knobs, combo boxes, toggles, and labels across all modules (one knob diameter per size class, consistent label placement and spacing).
 FR3: Each module is defined declaratively (size class, title, type tag, optional enable param, reset param set, ordered body list). The control vocabulary covers: Knob (with optional display transform), Combo (static or dynamically-populated items), Toggle, Action/trigger button (e.g. PLUCK), FileAction button (e.g. LOAD WAV), Label, Display.
 FR4: The framework preserves all current per-module affordances generically: reset ↺, enable toggle, live modulation rings, right-click value entry, shift-fine / wheel-step, and a per-knob display-value transform (FREQ shows played frequency = base × ratio, writing base back on edit).
-FR5: Every module shows a title, an enable/bypass control (where applicable), a reset ↺, and its controls. Modules with no on/off (Master, ADSR, Mix-Mode) omit the toggle but keep identical header geometry.
+FR5: Every module shows a title, an enable toggle, a reset ↺, and its controls, with identical header geometry. _(Revised 2026-07-05, Story 2.4: EVERY module has an enable toggle — including the formerly always-on Master, ADSR and Mix-Mode, which gained real `masterOn`/`adsrOn`/`mixModeOn` params (default on). The enabler's value source may be a user param, a derived predicate (Mix-Mode = osc1&&osc2 for its dim state), or static; the toggle is always present.)_
 FR6: Each module carries a consistent type/color tag (Generator / Modulator / Processor) within a minimal palette.
 FR7: Enabled/bypassed state is unambiguous and consistent: disabled ⇒ body dimmed, header lit; the enable toggle is the single source of truth; always-on modules stay lit.
 FR8: Size classes live in a single data-driven table; 3 are defined and in use (S/M/L), each module assigned one. The set is extensible by one table entry (a 4th class anticipated, not implemented now) — never by per-module custom sizing.
@@ -228,6 +228,25 @@ So that the visualizations are first-class, consistent parts of the rack.
 _Decision (2026-07-01): the display modules get **no dedicated VISUALIZATION zone header** — a header for just two passive visualisers would cost a full row of vertical space in the fixed window for no navigation benefit. They read as a display band by form + placement alone. Zones stay MASTER BUS / GENERATORS / MODULATION / PROCESSING._
 
 _Requirement (2026-07-02, restore C# features): (a) the Oscilloscope module gets a **selectable time-base / zoom** (1 / 2 / 5 / 10 / 25 ms) as a Combo + a **left-side ms scale** (axis ticks + labels in `WaveformDisplay::paint`); displayed samples = `ms × sampleRate/1000`. (b) the **Spectrum** module gets its own **scale** too (frequency axis, and level/dB axis, drawn in `SpectrumDisplay::paint`). Both are pure UI/drawing, no audio change._
+
+### Story 2.4: Universal module enablers (Master / ADSR / Mix-Mode overridable)
+
+_Added 2026-07-05 (mid-sprint change, user-directed). Makes the enabler truly universal: the three formerly always-on modules gain real, user-overridable enable params._
+
+As a JASS player,
+I want every module — including Master, the ADSR envelope, and Mix-Mode — to have a real on/off enable,
+So that the rack has one uniform anatomy and I can actually bypass those modules.
+
+**Acceptance Criteria:**
+
+**Given** the rack framework
+**When** JASS opens
+**Then** Master, ENVELOPE-ADSR and MIX MODE show interactive enable toggles bound to new `masterOn`/`adsrOn`/`mixModeOn` params (default on)
+**And** Master off = muted output, ADSR off = envelope bypassed (constant gain), Mix-Mode off = plain additive OSC sum
+**And** Mix-Mode's effective lit state = `mixModeOn && osc1On && osc2On` (the derived condition dims it; the audio additive-fallback keys off `mixModeOn` only)
+**And** the three new bools round-trip through `.synthy` append-only (missing field = enabled), so old presets and the C# app are unaffected (NFR3 softened; C# mirror owed — see deferred-work).
+
+_Revises FR5/FR7 (every module has an enabler) and softens NFR3 (append-only format extension), consistent with the 2026-07-01 enable-split precedent._
 
 ## Epic 3: Header Chrome & Final Integration
 
