@@ -1085,11 +1085,18 @@ void SynthyEditor::buildSampleRack()
           K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") });
 
     // ---- MODULATION ----
+    // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
+    // curve), a Display body element (AD-5). Owned by sampleOwned like the placeholders so
+    // its lifetime matches the existing pattern; a separate instance from the legacy
+    // adsrEnvDisplay (a Component has only one parent, and the legacy panel still owns that).
     add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", {},
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
-          display("ADSR", 4) });
+          Display{ sampleOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
+    // LFO WAVE must list the lfoWave param's OWN choices in order — the ComboBoxAttachment
+    // maps by index, so the shared `waves` array (a different order) would mislabel every
+    // waveform (Story 2.1 AC3).
     add(Rack::Zone::Modulation, SizeClass::M, ModuleType::Modulator, "LFO", P::lfoOn,
-        { C(P::lfoWave, "WAVE", waves),
+        { C(P::lfoWave, "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
           C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff" }),
           K(P::lfoRate, "RATE"), K(P::lfoDepth, "DEPTH") });
     add(Rack::Zone::Modulation, SizeClass::M, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
