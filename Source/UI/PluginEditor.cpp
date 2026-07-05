@@ -442,13 +442,15 @@ void SynthyEditor::buildSampleRack()
     // per frame). Sample rate reaches them via the capture (set in prepareToPlay).
     auto* scope = new WaveformDisplay(processor.getWaveformCapture());
     scope->setShowTitle(false);
+    scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
     sampleOwned.add(scope);
-    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", {},
+    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
         { Display{ scope, 12 } });
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
     spec->setShowTitle(false);
+    spec->setEnableSource(apvts.getRawParameterValue(P::spectrumOn));   // spectrumOn off => freeze+blank
     sampleOwned.add(spec);
-    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "SPECTRUM", {},
+    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
         { Display{ spec, 12 } });
 
     // Added LAST so the opaque rack covers the legacy body; the header chrome and

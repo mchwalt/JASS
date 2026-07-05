@@ -92,7 +92,7 @@ public:
         int displaySamples = static_cast<int>(timeRangeMs / 1000.0 * captureRef.getSampleRate());
         int samplesToShow = std::min(displaySamples, static_cast<int>(samples.size()));
 
-        if (samplesToShow > 1)
+        if (isOn() && samplesToShow > 1)
         {
             juce::Path path;
             float xStep = plotW / static_cast<float>(samplesToShow - 1);
@@ -126,8 +126,26 @@ public:
 
     void setShowTitle(bool b) { showTitle = b; repaint(); }
 
+    // Optional enable source (the module's APVTS enable, e.g. scopeOn). When off, the
+    // display freezes + blanks its trace (so the module enabler truly switches it off,
+    // not just dims). Polled read-only, like EnvelopeDisplay reads its params.
+    void setEnableSource(std::atomic<float>* p) { enableSrc = p; }
+
 private:
-    void timerCallback() override { captureRef.updateSnapshot(); repaint(); }
+    bool isOn() const { return enableSrc == nullptr || enableSrc->load() >= 0.5f; }
+
+    void timerCallback() override
+    {
+        const bool on = isOn();
+        if (! on)
+        {
+            if (wasOn) { wasOn = false; repaint(); }   // blank once when switched off
+            return;                                    // frozen while off — no capture/repaint
+        }
+        wasOn = true;
+        captureRef.updateSnapshot();
+        repaint();
+    }
 
     void updateTimeRange()
     {
@@ -142,4 +160,6 @@ private:
     juce::ComboBox zoomBox;
     double timeRangeMs = 10.0;
     bool showTitle = true;   // false in the rack (module header carries the title)
+    std::atomic<float>* enableSrc = nullptr;   // optional module-enable source (scopeOn)
+    bool wasOn = true;
 };
