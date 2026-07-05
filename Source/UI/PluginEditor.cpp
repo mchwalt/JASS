@@ -396,9 +396,8 @@ void SynthyEditor::buildSampleRack()
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
-    // curve), a Display body element (AD-5). Owned by sampleOwned like the placeholders so
-    // its lifetime matches the existing pattern; a separate instance from the legacy
-    // adsrEnvDisplay (a Component has only one parent, and the legacy panel still owns that).
+    // curve), a Display body element (AD-5), owned by sampleOwned so its lifetime is tied
+    // to the editor.
     add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ sampleOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
