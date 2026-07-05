@@ -104,9 +104,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             filter.setCutoff(std::clamp(baseCutoff * factor, 20.0, 10000.0));
         }
 
-        // Mix oscillators according to the mix mode
+        // Mix oscillators according to the mix mode. When Mix-Mode is disabled (Story 2.4)
+        // the OSCs are summed plainly, regardless of the selected mode.
         float mixedSample = 0.0f;
-        if (mixMode == MixMode::FM)
+        if (mixModeOn && mixMode == MixMode::FM)
         {
             // FM: OSC1 modulates OSC2's frequency, OSC3 additive
             float modulator = oscillators[0].nextSample();
@@ -115,7 +116,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             float s2 = oscillators[2].nextSample();
             mixedSample = carrier + s2;
         }
-        else if (mixMode == MixMode::RingMod)
+        else if (mixModeOn && mixMode == MixMode::RingMod)
         {
             // Ring: OSC1 × OSC2 + OSC3
             float s0 = oscillators[0].nextSample();
@@ -146,8 +147,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // Filter
         mixedSample = filter.process(mixedSample);
 
-        // Envelope
-        mixedSample *= envelope.process();
+        // Envelope. Always advance the ADSR state (so toggling mid-note doesn't glitch);
+        // when disabled (Story 2.4) bypass it with constant gain 1.0.
+        const float envGain = envelope.process();
+        mixedSample *= (adsrOn ? envGain : 1.0f);
 
         // Effects
         mixedSample = distortion.process(mixedSample);

@@ -1043,7 +1043,7 @@ void SynthyEditor::buildSampleRack()
     // module" before we formalise FR14 / the XS size class via correct-course.
     add(Rack::Zone::MasterBus, SizeClass::XS, ModuleType::Processor, "STEREO", P::stereoOn,
         { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
-    add(Rack::Zone::MasterBus, SizeClass::XXS, ModuleType::Processor, "MASTER", {},
+    add(Rack::Zone::MasterBus, SizeClass::XXS, ModuleType::Processor, "MASTER", P::masterOn,
         { K(P::masterVol, "VOL") });
 
     // ---- GENERATORS ----
@@ -1069,7 +1069,11 @@ void SynthyEditor::buildSampleRack()
         ModuleDescriptor mix;
         mix.sizeClass = SizeClass::XXS; mix.type = ModuleType::Generator;
         mix.id = "mixmode"; mix.title = "MIX MODE";
+        mix.enableParam = P::mixModeOn;   // real user enable (off => additive, Story 2.4)
         mix.body = { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }) };
+        // Effective lit = mixModeOn AND (osc1 && osc2): the interactive toggle is the user's
+        // enable; the predicate additionally dims when the coupling is meaningless (a UI cue,
+        // not an audio gate — the audio additive-fallback keys off mixModeOn only).
         mix.enabledWhen = [o1, o2] { return o1->load() >= 0.5f && o2->load() >= 0.5f; };
         sampleRack->addModule(Rack::Zone::Generators, std::move(mix));
     }
@@ -1104,7 +1108,7 @@ void SynthyEditor::buildSampleRack()
     // curve), a Display body element (AD-5). Owned by sampleOwned like the placeholders so
     // its lifetime matches the existing pattern; a separate instance from the legacy
     // adsrEnvDisplay (a Component has only one parent, and the legacy panel still owns that).
-    add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", {},
+    add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ sampleOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
     // LFO WAVE must list the lfoWave param's OWN choices in order — the ComboBoxAttachment

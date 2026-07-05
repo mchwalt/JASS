@@ -257,7 +257,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getLFO(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getMixMode(),
-                                     voice->getSubOsc(), voice->getSubOctaveRef());
+                                     voice->getSubOsc(), voice->getSubOctaveRef(),
+                                     voice->getAdsrOnRef(), voice->getMixModeOnRef());
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {
@@ -348,7 +349,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     stereoWidth.timeMs  = *apvts.getRawParameterValue(Parameters::ID::stereoTime);
     stereoWidth.process(buffer);
 
-    buffer.applyGain(*apvts.getRawParameterValue(Parameters::ID::masterVol));
+    // Master volume — gated by masterOn (Story 2.4): off => silent output.
+    const bool  masterOn   = *apvts.getRawParameterValue(Parameters::ID::masterOn) > 0.5f;
+    const float masterGain = masterOn ? apvts.getRawParameterValue(Parameters::ID::masterVol)->load() : 0.0f;
+    buffer.applyGain(masterGain);
 }
 
 void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
