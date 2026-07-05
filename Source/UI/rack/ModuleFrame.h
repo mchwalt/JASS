@@ -47,8 +47,10 @@ namespace rack
         // ComboBoxAttachment stays consistent (AD-4 declarative combo refresh).
         void refreshCombo (const juce::String& paramId);
 
-        // A module with no enable param is always-on (Master, ADSR, Mix-Mode).
-        bool moduleEnabled() const noexcept { return enableValue == nullptr || enableValue->load() >= 0.5f; }
+        // Enabled/lit if: a derived predicate (desc.enabledWhen) says so; else the enable
+        // param is on; else (no enable param, no predicate) always-on (Master, ADSR).
+        bool moduleEnabled() const { return desc.enabledWhen ? desc.enabledWhen()
+                                                             : (enableValue == nullptr || enableValue->load() >= 0.5f); }
 
         struct Cell
         {

@@ -104,6 +104,15 @@ namespace rack
         juce::String enableParam;                 // empty => always-on (Master, ADSR, Mix-Mode)
         std::vector<juce::String> resetParams;    // the reset (↺) writes these defaults to APVTS
         std::vector<BodyElement>  body;
+
+        // Optional DERIVED active/dimmed state. When set, the module's enabled (lit) vs
+        // dimmed state is computed from this predicate instead of a single enableParam —
+        // e.g. Mix-Mode is active only when OSC1 AND OSC2 are enabled. The predicate must
+        // read shared APVTS params only (AD-9), never reference another module object. It
+        // does NOT add a header toggle (that is still enableParam's job); it only drives the
+        // dim overlay + moduleEnabled(). If both enableParam and enabledWhen are set,
+        // enabledWhen wins.
+        std::function<bool()> enabledWhen;
     };
 
     // --- Size-class table (AD-2) ------------------------------------------
