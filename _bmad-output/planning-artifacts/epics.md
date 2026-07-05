@@ -206,9 +206,11 @@ So that the processing section is consistent and complete.
 
 **Given** the rack framework
 **When** JASS opens
-**Then** Filter, Distortion, Wavefolder, Bitcrusher, Chorus, Delay and Reverb appear in the PROCESSING zone as uniform S modules
+**Then** Filter, Distortion, Wavefolder, Bitcrusher, Chorus, Delay and Reverb appear in the PROCESSING zone
 **And** the Filter cutoff knob shows its modulation ring when the LFO targets FilterCutoff (via `modTarget`)
 **And** every control is bound, the per-voice signal-chain order is unchanged, and the final [-1,1] clamp / RT rules are respected (NFR2).
+
+_(Reconciled 2026-07-05 via Story 2.2: sizing is content-driven, not "uniform S". FILTER and DISTORTION are **M** (each carries a TYPE combo + two knobs); WAVEFOLD/BITCRUSH/CHORUS/DELAY/REVERB are **S** (three knobs). Consistent with the correct-course AD-2 revision that decoupled layout from a fixed per-class slot count.)_
 
 ### Story 2.3: Add the graphical display modules
 

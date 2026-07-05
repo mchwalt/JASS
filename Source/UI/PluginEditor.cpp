@@ -1110,8 +1110,12 @@ void SynthyEditor::buildSampleRack()
         { C(P::filterType, "TYPE", { "Lowpass", "Highpass" }),
           Kmod(P::filterCutoff, "CUTOFF", ModTarget::FilterCutoff), K(P::filterReso, "RESO") });
     // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
+    // DISTORTION TYPE: display text is cosmetic ("Soft Clip"/"Hard Clip" read better) — the
+    // ComboBoxAttachment maps by INDEX, so the canonical param/.synthy strings stay
+    // "SoftClip"/"HardClip" (project-context: UI display may differ from the interop string).
+    // Order/count MUST match distortionType's choices exactly, or the index mapping breaks.
     add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "DISTORTION", P::distortionOn,
-        { C(P::distortionType, "TYPE", { "SoftClip", "HardClip", "Foldback" }),
+        { C(P::distortionType, "TYPE", { "Soft Clip", "Hard Clip", "Foldback" }),
           K(P::distortionDrive, "DRIVE"), K(P::distortionMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "WAVEFOLD", P::wavefoldOn,
         { K(P::wavefoldDrive, "DRIVE"), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
