@@ -51,7 +51,13 @@ public:
     const std::vector<float>& getSnapshot() const { return snapshot; }
     int getLength() const { return displayLen; }
 
+    // Sample rate for the display side (scope ms-window, spectrum bin→Hz). Set from
+    // prepareToPlay; read by the displays. Plain atomic — no audio-behaviour impact.
+    void setSampleRate(double sr) { sampleRate.store(sr); }
+    double getSampleRate() const { return sampleRate.load(); }
+
 private:
+    std::atomic<double> sampleRate { 44100.0 };
     int displayLen;
     int ringSize;
     std::vector<float> ring;
