@@ -1,7 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
 #include "../PluginProcessor.h"
-#include "SynthySlider.h"
 #include "WaveformDisplay.h"
 #include "SpectrumDisplay.h"
 #include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
