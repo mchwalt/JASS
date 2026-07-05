@@ -1,5 +1,19 @@
 # Deferred Work
 
+## ToDo — OSC WAVE combo item order mismatches the `oscWave` param (raised in Story 2.1, 2026-07-05)
+
+The rack shares one `const juce::StringArray waves { "Saw", "Square", "Sine", "Triangle" }`
+(`PluginEditor.cpp`, `buildSampleRack`) for the OSC WAVE combos. But `oscWave`'s param choices
+are `{ "Sine", "Sawtooth", "Square", "Triangle" }` (`Parameters.h:148`). A `ComboBoxAttachment`
+maps by **index** (item _i_ ↔ choice _i_), so the OSC WAVE combos display the wrong waveform
+label for the selected value (e.g. "Saw" at index 0 actually selects choice 0 = "Sine").
+
+Story 2.1 fixed the **LFO** WAVE combo (its own separate defect) but deliberately left the OSC
+combos alone (scope = MODULATION). **Follow-up for a Story 1.5 patch:** list `oscWave`'s own
+choices in order for the OSC WAVE combos. Ideal long-term fix: drive every choice-combo's item
+list from the param's own `getAllValueStrings()` so a combo can never drift from its param.
+Pure UI/descriptor change; no param/format impact.
+
 ## ToDo — C# Synthy must mirror the LFO/NOISE/FILTER/DISTORTION enable change (2026-06-28)
 
 JASS (C++) split the bypass out of four choice params into their own enable toggle:
