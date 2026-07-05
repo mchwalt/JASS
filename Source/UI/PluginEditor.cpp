@@ -1032,7 +1032,10 @@ void SynthyEditor::buildSampleRack()
         return Display{ c, slots };
     };
 
-    const juce::StringArray waves { "Saw", "Square", "Sine", "Triangle" };
+    // OSC WAVE items MUST match the oscWave param's choice ORDER — the ComboBoxAttachment
+    // maps by index, so a different order mislabels every waveform (same class of bug as the
+    // LFO-WAVE fix in Story 2.1). oscWave = { Sine, Sawtooth, Square, Triangle } (Parameters.h).
+    const juce::StringArray waves { "Sine", "Sawtooth", "Square", "Triangle" };
 
     // ---- MASTER BUS (top row; PROTOTYPE: decisions A+B) ----
     // Stereo becomes a normal module whose Enable IS stereoOn (no special-case header
@@ -1056,8 +1059,20 @@ void SynthyEditor::buildSampleRack()
     // reads as the connector between them. Row-major packing then puts OSC 3 on row 2 and
     // (after Sub+Noise) Karplus on row 3.
     addOsc(1);
-    add(Rack::Zone::Generators, SizeClass::XXS, ModuleType::Generator, "MIX MODE", {},
-        { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }) });
+    {
+        // MIX MODE couples OSC1<->OSC2 (it sits between them). It is only meaningful when
+        // BOTH are on, so it shows as active/lit only then and dims otherwise. The derived
+        // enable reads the shared osc1On/osc2On params (AD-9) — it holds NO reference to the
+        // OSC modules; the atomics are grabbed once (stable for the APVTS lifetime).
+        auto* o1 = apvts.getRawParameterValue (P::oscOn (1));
+        auto* o2 = apvts.getRawParameterValue (P::oscOn (2));
+        ModuleDescriptor mix;
+        mix.sizeClass = SizeClass::XXS; mix.type = ModuleType::Generator;
+        mix.id = "mixmode"; mix.title = "MIX MODE";
+        mix.body = { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }) };
+        mix.enabledWhen = [o1, o2] { return o1->load() >= 0.5f && o2->load() >= 0.5f; };
+        sampleRack->addModule(Rack::Zone::Generators, std::move(mix));
+    }
     addOsc(2);
     addOsc(3);
 

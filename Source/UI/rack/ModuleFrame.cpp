@@ -33,10 +33,14 @@ namespace rack
         buildBody();
 
         if (desc.enableParam.isNotEmpty())
-        {
             enableValue = apvts.getRawParameterValue (desc.enableParam);
-            dimmed = (enableValue != nullptr && enableValue->load() < 0.5f);
-            startTimerHz (20);   // poll-and-repaint-on-change (mirrors EnvelopeDisplay)
+
+        // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
+        // dynamic active state — either a single enable param or a derived predicate.
+        if (enableValue != nullptr || desc.enabledWhen)
+        {
+            dimmed = ! moduleEnabled();
+            startTimerHz (20);
         }
     }
 
@@ -49,12 +53,23 @@ namespace rack
         titleLabel.setComponentID ("moduleTitle");   // SynthyLookAndFeel gives this its bold font
         addAndMakeVisible (titleLabel);
 
+        // EVERY module shows an enabler toggle (uniform anatomy: enabler + reset on all).
+        // Its VALUE source varies: a real enable param (interactive), a derived predicate
+        // (e.g. Mix-Mode = osc1&&osc2), or static-on (Master/ADSR, currently always enabled).
+        enableBtn = std::make_unique<juce::ToggleButton>();
+        addAndMakeVisible (*enableBtn);
         if (desc.enableParam.isNotEmpty())
         {
-            enableBtn = std::make_unique<juce::ToggleButton>();
-            addAndMakeVisible (*enableBtn);
             buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
                 apvts, desc.enableParam, *enableBtn));
+        }
+        else
+        {
+            // No enable param yet: the toggle DISPLAYS the module's active state (static-on
+            // or derived) and is non-interactive for now. Making these user-overridable is a
+            // planned follow-up (needs a real APVTS param + off-semantics per module).
+            enableBtn->setToggleState (moduleEnabled(), juce::dontSendNotification);
+            enableBtn->setInterceptsMouseClicks (false, false);
         }
 
         // Reset belongs in EVERY module header (uniform anatomy): it restores all of
@@ -367,8 +382,12 @@ namespace rack
 
     void ModuleFrame::timerCallback()
     {
-        if (enableValue == nullptr) return;
-        const bool off = enableValue->load() < 0.5f;
+        if (enableValue == nullptr && ! desc.enabledWhen) return;
+        const bool en = moduleEnabled();
+        // A derived (predicate) enabler has no attachment — keep its display toggle in sync.
+        if (enableValue == nullptr && enableBtn != nullptr)
+            enableBtn->setToggleState (en, juce::dontSendNotification);
+        const bool off = ! en;
         if (off != dimmed) { dimmed = off; repaint(); }
     }
 

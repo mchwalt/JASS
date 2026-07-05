@@ -1,18 +1,17 @@
 # Deferred Work
 
-## ToDo — OSC WAVE combo item order mismatches the `oscWave` param (raised in Story 2.1, 2026-07-05)
+## ✅ RESOLVED 2026-07-05 — OSC WAVE combo item order mismatched the `oscWave` param
 
-The rack shares one `const juce::StringArray waves { "Saw", "Square", "Sine", "Triangle" }`
-(`PluginEditor.cpp`, `buildSampleRack`) for the OSC WAVE combos. But `oscWave`'s param choices
-are `{ "Sine", "Sawtooth", "Square", "Triangle" }` (`Parameters.h:148`). A `ComboBoxAttachment`
-maps by **index** (item _i_ ↔ choice _i_), so the OSC WAVE combos display the wrong waveform
-label for the selected value (e.g. "Saw" at index 0 actually selects choice 0 = "Sine").
+The rack shared `const juce::StringArray waves { "Saw", "Square", "Sine", "Triangle" }` for the
+OSC WAVE combos, but `oscWave`'s param choices are `{ "Sine", "Sawtooth", "Square", "Triangle" }`
+(`Parameters.h:148`). Because a `ComboBoxAttachment` maps by **index**, 3 of 4 OSC WAVE labels
+were wrong (selecting "Saw" actually produced a Sine, etc.) — the same class of bug as the LFO
+WAVE defect fixed in Story 2.1.
 
-Story 2.1 fixed the **LFO** WAVE combo (its own separate defect) but deliberately left the OSC
-combos alone (scope = MODULATION). **Follow-up for a Story 1.5 patch:** list `oscWave`'s own
-choices in order for the OSC WAVE combos. Ideal long-term fix: drive every choice-combo's item
-list from the param's own `getAllValueStrings()` so a combo can never drift from its param.
-Pure UI/descriptor change; no param/format impact.
+**Fix:** the `waves` array (now OSC-only after 2.1 inlined the LFO list) was re-ordered to match
+`oscWave` = `{ "Sine", "Sawtooth", "Square", "Triangle" }`, with a comment. Pure UI/descriptor
+change; no param/format impact. (Ideal long-term: drive every choice-combo's item list from the
+param's own `getAllValueStrings()` so a combo can never drift — noted, not built.)
 
 ## ToDo — C# Synthy must mirror the LFO/NOISE/FILTER/DISTORTION enable change (2026-06-28)
 
