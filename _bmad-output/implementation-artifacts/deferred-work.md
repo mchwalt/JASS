@@ -1,18 +1,16 @@
 # Deferred Work
 
-## ToDo — C# Synthy must mirror the new module enables MasterOn/AdsrOn/MixModeOn (2026-07-05, Story 2.4)
+## ✅ RESOLVED 2026-07-06 — C# Synthy mirrored the new module enables MasterOn/AdsrOn/MixModeOn (Story 2.4)
 
 JASS (C++) gave the three formerly always-on modules real enable bools: **`masterOn`, `adsrOn`,
-`mixModeOn`** (APVTS, default true). They serialise to the shared `.synthy` format as new fields
-**`MasterOn` / `AdsrOn` / `MixModeOn`** (PascalCase, like the other `…On`/`…Enabled` fields).
+`mixModeOn`** (APVTS, default true), serialised to the shared `.synthy` as `MasterOn`/`AdsrOn`/`MixModeOn`.
 
-Back-compat is by **missing field ⇒ enabled**: JASS reads them via `jbool(v, "…", rawB(a, ID::…))`
-so an old preset (or a preset written by the current C# app) that lacks the fields loads all three
-as ON — exactly the previous always-on behaviour. No `kFormatVersion` bump.
-
-**C# action required:** add `MasterOn`/`AdsrOn`/`MixModeOn` to the C# `Preset` class (bool, default
-**true**, treat missing as true) and surface the enable toggles in the C# UI (Master mute, ADSR
-bypass, Mix-Mode → additive). Pure C#-side work; the format is already compatible.
+**Done in the C# Synthy** (`D:\Projects\C#\Synthesizer\Synthy\`, separate local git repo): added the three
+`bool` fields (default true) to the `Preset` class — System.Text.Json keeps the initializer for a
+missing field ⇒ reads as ON (back-compat, no FormatVersion bump); added `MasterOn`/`AdsrOn`/`MixModeOn`
+to `SynthEngine` with the semantics (Master off = mute, ADSR off = bypass envelope w/ constant gain,
+Mix-Mode off = additive) + VM properties + BuildPreset/ApplyPreset round-trip + three UI checkboxes
+(Master header, ADSR header, MIX header). Full parity incl. audio. Build clean.
 
 
 ## ✅ RESOLVED 2026-07-05 — OSC WAVE combo item order mismatched the `oscWave` param
@@ -28,24 +26,20 @@ WAVE defect fixed in Story 2.1.
 change; no param/format impact. (Ideal long-term: drive every choice-combo's item list from the
 param's own `getAllValueStrings()` so a combo can never drift — noted, not built.)
 
-## ToDo — C# Synthy must mirror the LFO/NOISE/FILTER/DISTORTION enable change (2026-06-28)
+## ✅ RESOLVED 2026-07-06 — C# Synthy mirrored the LFO/NOISE/FILTER/DISTORTION enable-split
 
-JASS (C++) split the bypass out of four choice params into their own enable toggle:
-**LFO, NOISE, FILTER, DISTORTION** each got a dedicated `<x>On` bool, and `"Off"` was
-removed from their comboboxes (`lfoTarget`→{Frequency,Amplitude,FilterCutoff},
-`noiseType`→{White,Pink}, `filterType`→{Lowpass,Highpass},
-`distortionType`→{SoftClip,HardClip,Foldback}).
+JASS (C++) split the bypass out of four choice params into their own enable toggle
+(LFO/NOISE/FILTER/DISTORTION), dropping `"Off"` from the combos; the shared `.synthy` stays
+unchanged (`"Off"` remains the on-disk disabled marker).
 
-**The shared `.synthy` format is UNCHANGED** (no version bump): `"Off"` is still written
-to/read from `NoiseType`/`LfoTarget`/`FilterType`/`DistortionType` as the disabled marker
-(JASS maps it to/from the new on-flag in `PresetIO::choiceOrOff` / `setChoiceOrOff`). So
-existing presets and the current C# app keep loading correctly.
-
-**C# action required:** mirror the *UI/model* change in the C# app — add an enable toggle
-for LFO/Noise/Filter/Distortion and drop the `"Off"` entry from those combos, deriving the
-toggle from (and serialising it back to) the `"Off"` string in the shared format. Pure
-C#-side UI/model work; no format change needed. (Raised while prototyping the rack-UI
-"everything is a module" pass — these four now have header enables like every other module.)
+**Done in the C# Synthy** (separate local git repo): kept `Off` in the enums (it is the format
+value + the DSP's off-check) but dropped it from the four ViewModel combo item-sources; added
+`LfoEnabled`/`NoiseEnabled`/`FilterEnabled`/`DistortionEnabled` bools whose setters drive the
+engine enum = `Enabled ? selectedValue : Off`; combo props now default to the first real value.
+Serialisation mirrors C++ `choiceOrOff`/`setChoiceOrOff`: BuildPreset writes `Off` when disabled,
+ApplyPreset sets `Enabled = value != Off` and only assigns the combo when non-Off (preserves the
+last real choice). Four UI checkboxes added (Filter/Distortion/LFO headers + Noise header). No
+`.synthy`/format change. Build clean.
 
 ## ✅ FORMALIZED 2026-07-01 — Prototype decisions (was: pending correct-course)
 
