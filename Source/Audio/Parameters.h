@@ -127,6 +127,11 @@ namespace Parameters
         constexpr const char* masterOn  = "masterOn";
         constexpr const char* adsrOn    = "adsrOn";
         constexpr const char* mixModeOn = "mixModeOn";
+
+        // Display enables (Oscilloscope / Spectrum). UI-only (dim the display when off);
+        // still real APVTS params so every module has a working enabler. Append-only, default true.
+        constexpr const char* scopeOn    = "scopeOn";
+        constexpr const char* spectrumOn = "spectrumOn";
     }
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
@@ -281,6 +286,8 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::masterOn,  1), "Master On",   true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::adsrOn,    1), "Envelope On", true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Mix Mode On", true));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::scopeOn,    1), "Scope On",    true));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
 
         return { params.begin(), params.end() };
     }

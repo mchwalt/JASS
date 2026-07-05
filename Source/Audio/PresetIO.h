@@ -127,6 +127,8 @@ namespace PresetIO
         root->setProperty("MasterOn",     rawB(a, ID::masterOn));      // Story 2.4 (append-only; missing => on)
         root->setProperty("MixMode",      rawChoice(a, ID::mixMode, kMixMode));
         root->setProperty("MixModeOn",    rawB(a, ID::mixModeOn));
+        root->setProperty("ScopeOn",      rawB(a, ID::scopeOn));       // display enables (append-only; missing => on)
+        root->setProperty("SpectrumOn",   rawB(a, ID::spectrumOn));
 
         root->setProperty("AdsrOn",  rawB(a, ID::adsrOn));   // Story 2.4 (append-only; missing => on)
         root->setProperty("Attack",  rawF(a, ID::attack));
@@ -246,6 +248,8 @@ namespace PresetIO
         setRaw   (a, ID::masterOn,  jbool(v, "MasterOn",  rawB(a, ID::masterOn))  ? 1.f : 0.f);   // Story 2.4; missing => keep default (on)
         setChoice(a, ID::mixMode, kMixMode, v["MixMode"], rawI(a, ID::mixMode));
         setRaw   (a, ID::mixModeOn, jbool(v, "MixModeOn", rawB(a, ID::mixModeOn)) ? 1.f : 0.f);
+        setRaw   (a, ID::scopeOn,    jbool(v, "ScopeOn",    rawB(a, ID::scopeOn))    ? 1.f : 0.f);   // missing => on
+        setRaw   (a, ID::spectrumOn, jbool(v, "SpectrumOn", rawB(a, ID::spectrumOn)) ? 1.f : 0.f);
 
         setRaw(a, ID::adsrOn,  jbool(v, "AdsrOn", rawB(a, ID::adsrOn)) ? 1.f : 0.f);   // Story 2.4; missing => keep default (on)
         setRaw(a, ID::attack,  (float) jnum(v, "Attack",  rawF(a, ID::attack)));

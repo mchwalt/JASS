@@ -117,7 +117,7 @@ public:
             }
         }
 
-        if (pathStarted)
+        if (isOn() && pathStarted)
         {
             g.setColour(strokeColour.withAlpha(0.15f));
             juce::Path filled(path);
@@ -147,9 +147,20 @@ public:
     void setSampleRate(double sr) { sampleRate = static_cast<float>(sr); }
     void setShowTitle(bool b) { showTitle = b; repaint(); }
 
+    // Optional enable source (module's APVTS enable, e.g. spectrumOn). Off => freeze + blank.
+    void setEnableSource(std::atomic<float>* p) { enableSrc = p; }
+
 private:
+    bool isOn() const { return enableSrc == nullptr || enableSrc->load() >= 0.5f; }
+
     void timerCallback() override
     {
+        if (! isOn())
+        {
+            if (wasOn) { wasOn = false; repaint(); }   // blank once when switched off
+            return;                                    // frozen while off — no FFT/repaint
+        }
+        wasOn = true;
         // Track the engine's real sample rate (bin→Hz mapping); set from prepareToPlay.
         sampleRate = static_cast<float>(captureRef.getSampleRate());
         captureRef.updateSnapshot();
@@ -195,6 +206,8 @@ private:
     std::vector<float> smoothedMagnitudes;
     float sampleRate = 44100.0f;
     bool showTitle = true;   // false in the rack (module header carries the title)
+    std::atomic<float>* enableSrc = nullptr;   // optional module-enable source (spectrumOn)
+    bool wasOn = true;
 
     static constexpr float minFreq = 30.0f;
     static constexpr float maxFreq = 16000.0f;

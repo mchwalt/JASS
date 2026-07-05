@@ -53,34 +53,49 @@ namespace rack
         titleLabel.setComponentID ("moduleTitle");   // SynthyLookAndFeel gives this its bold font
         addAndMakeVisible (titleLabel);
 
-        // EVERY module shows an enabler toggle (uniform anatomy: enabler + reset on all).
-        // Its VALUE source varies: a real enable param (interactive), a derived predicate
-        // (e.g. Mix-Mode = osc1&&osc2), or static-on (Master/ADSR, currently always enabled).
-        enableBtn = std::make_unique<juce::ToggleButton>();
-        addAndMakeVisible (*enableBtn);
+        // The enabler toggle is shown only when the module HAS an enable source: a real
+        // enable param (interactive) or a derived predicate (read-only, shows the computed
+        // state, e.g. a Mix-Mode-style osc1&&osc2). A module with NEITHER — a pure passive
+        // display like the Scope/Spectrum — shows no toggle (there is nothing to enable).
+        // Header geometry stays uniform: resized() reserves the enable slot unconditionally.
         if (desc.enableParam.isNotEmpty())
         {
+            enableBtn = std::make_unique<juce::ToggleButton>();
+            addAndMakeVisible (*enableBtn);
             buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
                 apvts, desc.enableParam, *enableBtn));
         }
-        else
+        else if (desc.enabledWhen)
         {
-            // No enable param yet: the toggle DISPLAYS the module's active state (static-on
-            // or derived) and is non-interactive for now. Making these user-overridable is a
-            // planned follow-up (needs a real APVTS param + off-semantics per module).
+            // Derived-only enabler (no user param): read-only display of the computed state.
+            enableBtn = std::make_unique<juce::ToggleButton>();
+            addAndMakeVisible (*enableBtn);
             enableBtn->setToggleState (moduleEnabled(), juce::dontSendNotification);
             enableBtn->setInterceptsMouseClicks (false, false);
         }
 
-        // Reset belongs in EVERY module header (uniform anatomy): it restores all of
-        // the module's parameters to their factory defaults, except the enable flag.
-        resetBtn.setButtonText (juce::String::fromUTF8 ("\xE2\x86\xBA"));   // ↺
-        resetBtn.setTooltip ("Reset this module to default");
-        auto c = typeColour (desc.type);
-        resetBtn.setColour (juce::TextButton::buttonColourId, c.withAlpha (0.25f));
-        resetBtn.setColour (juce::TextButton::textColourOffId, c);
-        resetBtn.onClick = [this] { doReset(); };
-        addAndMakeVisible (resetBtn);
+        // Reset ↺ is shown only when the module has resettable parameters (a Knob/Combo/
+        // Toggle bound to a paramId). A pure passive display (Scope/Spectrum) has none, so
+        // it gets no reset — matching its lack of an enabler. (resized() still reserves the
+        // slot so header geometry stays uniform.)
+        const bool hasResettableParams = std::any_of (desc.body.begin(), desc.body.end(),
+            [] (const BodyElement& el)
+            {
+                if (auto* k = std::get_if<Knob>   (&el)) return k->paramId.isNotEmpty();
+                if (auto* c = std::get_if<Combo>  (&el)) return c->paramId.isNotEmpty();
+                if (auto* t = std::get_if<Toggle> (&el)) return t->paramId.isNotEmpty();
+                return false;
+            });
+        if (hasResettableParams)
+        {
+            resetBtn.setButtonText (juce::String::fromUTF8 ("\xE2\x86\xBA"));   // ↺
+            resetBtn.setTooltip ("Reset this module to default");
+            auto c = typeColour (desc.type);
+            resetBtn.setColour (juce::TextButton::buttonColourId, c.withAlpha (0.25f));
+            resetBtn.setColour (juce::TextButton::textColourOffId, c);
+            resetBtn.onClick = [this] { doReset(); };
+            addAndMakeVisible (resetBtn);
+        }
     }
 
     void ModuleFrame::buildBody()
