@@ -32,6 +32,14 @@ FR12: All existing modules are re-expressed on the framework: OSC 1–3, Sub, No
 FR13: No existing control, parameter binding, or behavior is dropped in migration; the played-frequency FREQ display and the Mix-Mode coupling between OSCs are preserved.
 FR14: The global header (preset SAVE / LOAD / RANDOM / RESET, preset-name / "Current State" indicator, the master-bus Master volume and Stereo width/time) and the on-screen keyboard remain as fixed chrome outside the module grid.
 
+_Epic 4 — Rack Customization (added 2026-07-10):_
+FR15: The user can show or hide individual modules; a hidden module is removed from the layout (not merely dimmed) and the rest re-pack. Hiding is UI-only — a hidden module's parameters and audio processing are unaffected.
+FR16: The user can show or hide an entire zone (with its zone header) as a unit.
+FR17: The user can move a module to a different zone via drag & drop; the module keeps its identity/type tag, only its placement changes.
+FR18: The user can reorder modules within a zone via drag & drop.
+FR19: The customized layout (per-module visibility, zone assignment, position/order) persists with the preset and restores on load; a single "reset layout" affordance restores the built-in default without touching audio parameters.
+FR20: Every module has a stable identity and a declared default zone so the default layout is reproducible and a customized layout is a delta against it.
+
 ### NonFunctional Requirements
 
 NFR1: Maintainability — no module defines its own `resized()` geometry; layout is data-driven via the framework. Primary engineering win and a success gate.
@@ -39,6 +47,7 @@ NFR2: Audio-thread safety — UI-only; must not violate the project's real-time 
 NFR3: No state/format impact — parameter IDs, APVTS layout, and the `.synthy` preset format are untouched.
 NFR4: VST3 parity — the same editor should render correctly as the VST3 plugin editor; to be validated (currently untested). Not a launch blocker.
 NFR5: Performance — repaint cost stays at or below today's; modulation rings, scope, and spectrum repaint only on meaningful change.
+NFR6: Layout persistence is append-only & interop-safe (Epic 4) — the custom layout is stored as append-only standard APVTS params in `.synthy`; no format-version bump, no existing ID renamed/reordered; a preset lacking the layout params (older build or the C# app) loads with the built-in default layout (missing ⇒ default).
 
 ### Additional Requirements
 
@@ -55,6 +64,12 @@ _From the Architecture Spine (AD-1…AD-9) and project-context.md — implementa
 - **Cross-module coupling only through shared APVTS**; Mix-Mode is its own S module. (AD-9)
 - **`PluginEditor`** builds the descriptors and owns the Rack + fixed chrome; `WaveformDisplay` / `SpectrumDisplay` / `EnvelopeDisplay` are reused as `Display` components.
 - **Inherited constraints (binding):** APVTS is the single source of truth; parameter IDs/order in `Parameters.h` never change; no allocation/locking on the audio thread; UI↔audio via `std::atomic`; the "Synthy" naming (`.synthy`, `%AppData%\Synthy`, class names) is kept.
+
+_Epic 4 additions (AD-10…AD-12):_
+
+- **Ordered layout model is the single source of truth (AD-10):** `RackLayout = [ { id, zone, position, visible } ]` keyed by the descriptor's stable `id`. Show/hide, move and reorder mutate **only** this model, then the rack re-runs the single `layout()` packing path — no component computes its own bounds (NFR1 holds dynamically). **Default zone + default order move onto the `ModuleDescriptor`** (off the `addModule` call-site); default layout is reproducible from descriptors, custom layout is a delta. `typeTag` stays identity/colour and never changes on move.
+- **Persistence is append-only, interop-safe, default-on-missing (AD-11):** `RackLayout` serializes as append-only standard APVTS params in `.synthy`; no `kFormatVersion` bump; missing ⇒ built-in default (mirrors the `MasterOn/AdsrOn/MixModeOn` back-compat pattern); C# ignores until it mirrors. "Reset layout" restores descriptor defaults, touches no audio param.
+- **Width fixed, height auto-fits (AD-12):** window width stays 1520 px; after any layout mutation the rack recomputes `preferredHeight(width)` from the visible modules and the editor re-applies `setSize`. Automatic, not user-drag/zoom.
 
 ### UX Design Requirements
 
@@ -81,6 +96,13 @@ NFR2: All epics — audio-thread safety (constraint)
 NFR3: All epics — no param-ID / APVTS / .synthy impact (constraint)
 NFR4: Epic 3 — VST3 parity validation
 NFR5: Epic 1 (repaint discipline) / All epics
+FR15: Epic 4 — show/hide individual modules
+FR16: Epic 4 — show/hide entire zones
+FR17: Epic 4 — drag & drop modules between zones
+FR18: Epic 4 — reorder modules within a zone
+FR19: Epic 4 — persist custom layout + reset layout
+FR20: Epic 4 — stable id + declared default zone on descriptor (foundation)
+NFR6: Epic 4 — append-only, interop-safe layout persistence
 
 ## Epic List
 
@@ -97,6 +119,10 @@ Migrate the MODULATION zone (ADSR + envelope display, LFO, Arpeggiator) and the 
 ### Epic 3: Header Chrome & Final Integration
 Build the fixed header chrome (preset SAVE / LOAD / RANDOM / RESET, centred title, preset-name / "Current State" indicator) and migrate Master + Stereo as rack modules in the MASTER BUS zone; restyle the on-screen keyboard to match the rack; remove all legacy per-module layout code (incl. the old header Master/Stereo controls) from the editor; validate VST3 parity.
 **FRs covered:** FR14, NFR4, final NFR1 confirmation.
+
+### Epic 4: Rack Customization
+Let the user tailor the rack: show/hide individual modules and whole zones, drag modules between zones, and reorder within a zone — with the customized layout persisted in the preset and resettable to the built-in default. Built foundation-first: introduce an ordered `RackLayout` data model (with default zone/order moved onto the descriptor) as the single source of truth, wire persistence, then layer the two interaction features on top. The window height auto-fits the visible modules.
+**FRs covered:** FR15, FR16, FR17, FR18, FR19, FR20, NFR6 (and NFR1 held dynamically).
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -306,3 +332,68 @@ So that the rack UI is confirmed to work as a plugin, not only standalone.
 **When** it is loaded in REAPER v7.65
 **Then** the rack editor renders and operates identically to the standalone (modules, controls, displays, rings)
 **And** any divergence from the standalone is recorded as a follow-up (NFR4; not a launch blocker).
+
+## Epic 4: Rack Customization
+
+Layer user-tailorable layout on top of the unified rack. Foundation first (ordered layout model + persistence), then the two interactions (show/hide, drag & drop). No audio feature, DSP, parameter-ID or preset-format-structure change — only append-only layout params. Verification for every story = clean build + the running app (no unit-test framework); the built-in default layout must be byte-for-byte unchanged until the user customizes.
+
+### Story 4.1: Ordered RackLayout model + descriptor-declared default zone/order
+
+As a JASS developer,
+I want the rack to render from one ordered `RackLayout` data model (with each module's default zone and order declared on its descriptor),
+So that later customization features (show/hide, drag & drop, persistence) all mutate a single authoritative model instead of relying on implicit insertion order.
+
+**Acceptance Criteria:**
+
+**Given** the current rack (zone passed to `Rack::addModule(zone, desc)`, within-zone order = insertion order, no visibility concept)
+**When** the model is introduced
+**Then** each `ModuleDescriptor` declares its **default zone** and **default order** (moved off the `addModule` call-site), keyed by its existing stable `id`
+**And** the rack builds a `RackLayout = [ { id, zone, position, visible } ]` from those defaults and **renders exclusively from that model** (placement flows model → `layout()`; nothing reads insertion order anymore)
+**And** `layout()` remains the single packing path (AD-2/NFR1): no component computes its own bounds
+**And** `typeTag` stays identity/colour only (unchanged by the refactor)
+**And** the app is visually **identical** to before — this is a pure internal refactor with no user-visible change, and no audio/param/format impact (NFR1, NFR2, NFR3).
+
+### Story 4.2: Persist the custom layout to `.synthy` (append-only) + reset layout
+
+As a JASS player,
+I want my customized rack layout saved in the preset and restorable to the default,
+So that a layout I set up survives save/load and I can always get back to the stock arrangement.
+
+**Acceptance Criteria:**
+
+**Given** the `RackLayout` model from Story 4.1
+**When** a preset is saved and reloaded
+**Then** the layout (per-module `zone`, `position`, `visible`) round-trips via **append-only standard APVTS params** in `.synthy`, with **no `kFormatVersion` bump** and no existing ID renamed/reordered (NFR6)
+**And** a preset lacking the layout params — one written by an older build or the C# app — loads with the **built-in default layout** (missing ⇒ default), and the C# app still loads the preset unaffected
+**And** a **"reset layout"** affordance restores the descriptor-default layout **without touching any audio parameter**
+**And** the audio engine, parameter values and existing `.synthy` fields are otherwise untouched (NFR2, NFR3).
+
+### Story 4.3: Show / hide modules and zones (auto-fit height)
+
+As a JASS player,
+I want to hide modules I don't use and hide whole zones,
+So that I can pare the rack down to just what I'm working with.
+
+**Acceptance Criteria:**
+
+**Given** the layout model + persistence (Stories 4.1–4.2)
+**When** I hide an individual module
+**Then** it is **removed** from the layout (not merely dimmed per FR7) and the remaining modules **re-pack** to close the gap, while the module's parameters and audio processing keep running (a hidden Filter still filters)
+**And** I can show or hide an **entire zone** (with its zone header) as a unit
+**And** after any show/hide the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (rack recomputes `preferredHeight`, editor re-applies `setSize`; the small-display auto-fit-down still applies) (AD-12)
+**And** the visibility state persists via Story 4.2 and a re-shown module returns to its place with all bindings intact.
+
+### Story 4.4: Drag & drop between zones + reorder within a zone
+
+As a JASS player,
+I want to drag modules between zones and reorder them within a zone,
+So that I can arrange the rack the way I think about my signal flow.
+
+**Acceptance Criteria:**
+
+**Given** the layout model + persistence + show/hide (Stories 4.1–4.3)
+**When** I drag a module to a different zone
+**Then** it moves there and the layout model updates (`zone` + `position`), both source and target zones re-pack, and the module keeps its identity/type tag (dragging Reverb into GENERATORS keeps it a Processor — it does not become a generator)
+**And** I can **reorder** modules within a zone by dragging, updating `position` in the model
+**And** all drag operations mutate **only the `RackLayout` model** and re-run the single `layout()` path (no ad-hoc bounds; NFR1)
+**And** the resulting arrangement persists via Story 4.2, and every moved module's controls, bindings, rings and displays remain fully functional (NFR2, NFR3).

@@ -2,7 +2,7 @@
 title: "JASS Standalone UI — Unified 19\" Rack Layout"
 status: final
 created: 2026-06-28
-updated: 2026-06-28
+updated: 2026-07-10
 ---
 
 # JASS Standalone UI — Unified 19" Rack Layout (PRD)
@@ -26,7 +26,7 @@ This PRD covers a **UI-only redesign**: re-cast every sound source, modulator, f
 - No new audio features or DSP modules. (One append-only exception: four enable bools were added so LFO/Noise/Filter/Distortion get a real header enable — see NFR3.)
 - No change to the preset format or existing parameter IDs, and no audio-engine rework.
 - No theming system / multiple skins (single minimal look).
-- No resizable/zoomable editor: the rack targets a fixed window (resizing may come later).
+- No **user-resizable or zoomable** editor: the window width is fixed and the rack is not zoomable. (Epic 4 adds layout customization; as a consequence the window **height** auto-fits the currently visible modules — this is automatic, not a user-drag-resize.)
 
 ## 3. Success Criteria
 
@@ -87,12 +87,22 @@ The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of mod
 - **FR13.** No existing control, parameter binding, or behavior is dropped in migration; the played-frequency FREQ display and Mix-Mode coupling between OSCs are preserved.
 - **FR14.** The **global header** (preset SAVE / LOAD / RANDOM / RESET, centred title, preset-name / "Current State" indicator in the Save/Load cluster) and the **on-screen keyboard** remain as fixed chrome (restyled to match the rack) outside the module grid. **Master volume and Stereo (width/time + enable) are themselves rack modules** in a dedicated **MASTER BUS** zone (top row of the rack, right-aligned) — consistent with "every module from one mold". The legacy header Master/Stereo controls are removed.
 
+### FR Group E — Rack Customization (Epic 4)
+_(New capability, layered on the unified rack. The user tailors which modules are shown and where they sit; a customized layout persists with the preset and can be reset to the built-in default.)_
+- **FR15.** The user can **show or hide individual modules**. A hidden module is removed from the rack layout (not merely dimmed per FR7) and the remaining modules **re-pack** to close the gap. Hiding is a **UI concern only**: the module's parameters and audio processing are unaffected — a hidden Filter still filters.
+- **FR16.** The user can **show or hide an entire zone** (and its zone header) as a unit.
+- **FR17.** The user can **move a module to a different zone** via drag & drop. The module keeps its identity/type tag (FR6); only its placement changes.
+- **FR18.** The user can **reorder modules within a zone** (drag & drop / reposition). Placement order is otherwise the module's declared default.
+- **FR19.** The **customized layout** — per-module visibility, zone assignment, and position/order — **persists with the preset** and restores on load. A single **"reset layout"** affordance restores the built-in default layout without touching audio parameters.
+- **FR20.** Every module has a **stable identity** and a **declared default zone** so the default layout is reproducible and any customized layout is expressed as a delta against it. (The stable per-module id already exists; the default zone moves from the rack call-site onto the module.)
+
 ## 7. Non-Functional Requirements
 - **NFR1 — Maintainability:** no module defines its own `resized()` geometry; layout is data-driven via the framework. This is the primary engineering win and a success gate.
 - **NFR2 — Audio-thread safety:** the redesign is UI-only and must not violate the project's real-time rules (no allocation/locking on the audio thread; UI↔audio handoff stays via the existing `std::atomic` channels and APVTS attachments).
 - **NFR3 — No format impact; one append-only param change:** the `.synthy` on-disk preset format is **untouched** and interop with the C# app is preserved. The redesign added **four append-only enable bools** to the APVTS (`filterOn`, `distortionOn`, `lfoOn`, `noiseOn`) so those four modules gain a real header enable like every other module — the sole parameter change. It is append-only (no existing ID renamed or reordered), and `"Off"` remains the on-disk disabled marker, mapped via `PresetIO::choiceOrOff`. No `kFormatVersion` bump.
 - **NFR4 — VST3 parity:** the same editor should render correctly as the VST3 plugin editor; to be **validated** (currently untested). Not a launch blocker.
 - **NFR5 — Performance:** repaint cost stays at or below today's (modulation rings, scope, spectrum continue to repaint only on meaningful change).
+- **NFR6 — Layout persistence is append-only & interop-safe (Epic 4):** the customized rack layout (FR19) is stored as **append-only standard APVTS parameters** in the existing `.synthy` preset — no format-version bump, no existing ID renamed or reordered, and a preset written by an older build (or the C# app) loads with the **built-in default layout** (missing ⇒ default). The C# app ignores the new params until it chooses to mirror them.
 
 ## 8. Open Questions
 _(For the architecture phase — not blockers for this PRD.)_
@@ -100,4 +110,4 @@ _(For the architecture phase — not blockers for this PRD.)_
 - **OQ2.** Per-module size-class assignment: which of the ~20 modules is S, M, or L (a first-pass mapping will accompany the architecture/epics).
 
 ## 9. Out of Scope
-New audio features or DSP; preset-format changes; renaming existing parameter IDs; multiple themes/skins; resizable/zoomable editor; renaming the internal "Synthy" identifiers. (The four append-only enable bools of NFR3 are the one sanctioned parameter addition.)
+New audio features or DSP; preset-format **structure** changes (a version bump or reordered/renamed IDs); renaming existing parameter IDs; multiple themes/skins; a **user-resizable or zoomable** editor; renaming the internal "Synthy" identifiers. (Sanctioned append-only parameter additions: the four enable bools of NFR3, plus the Epic 4 layout params of NFR6.) **In scope as of Epic 4:** show/hide of modules and zones, drag & drop between zones, reordering within a zone, and persisting that layout (FR15–FR20).

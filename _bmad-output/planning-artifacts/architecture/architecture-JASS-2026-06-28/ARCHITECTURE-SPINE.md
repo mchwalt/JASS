@@ -7,8 +7,8 @@ paradigm: 'Declarative, data-driven component composition (descriptor → Module
 scope: 'The JASS standalone/VST3 editor UI: the module framework, the rack grid, and the invariants every module shares. UI-only.'
 status: final
 created: '2026-06-28'
-updated: '2026-06-28'
-binds: [PRD prd-JASS-2026-06-28 FR1–FR14, NFR1–NFR5]
+updated: '2026-07-10'
+binds: [PRD prd-JASS-2026-06-28 FR1–FR20, NFR1–NFR6]
 sources: ['prd-JASS-2026-06-28/prd.md', 'project-context.md']
 companions: []
 ---
@@ -82,11 +82,28 @@ Layer → location:
 - **Prevents:** one module holding a reference to another (Mix-Mode reaching into OSC1/2/3) — a coupling the descriptor can't see.
 - **Rule:** Mix-Mode is its own module (size **XS**: a `Combo` + a `Caption`). Its effect on how OSC 1/2/3 combine flows **only** through the shared `mixMode` APVTS param read by the audio engine — OSC descriptors carry no knowledge of it, and no module references another module. All cross-module state rides shared params.
 
+### AD-10 — Ordered layout model is the single source of truth for placement (Epic 4)
+- **Binds:** the rack and every Epic-4 feature — show/hide, move-between-zones, reorder-within-zone, persistence (FR15–FR20).
+- **Prevents:** each feature keeping its own private view of order/visibility (today placement is *implicit*: a module's zone is passed to `Rack::addModule(zone, desc)` and within-zone order is raw insertion order, with no visibility concept) — the divergence that makes drag-drop, hide, and load fight each other.
+- **Rule:** the rack renders from **one ordered data model** `RackLayout = [ { id, zone, position, visible } ]` keyed by the module's stable `id` (AD-4 descriptor id, shipped in Story 1.5). Show/hide, move, and reorder mutate **only this model**; the rack then re-runs the **single `layout()` packing path** (AD-2) to re-pack — no component computes its own bounds, so NFR1 still holds in the dynamic case. Each module declares its **default zone and default order on the `ModuleDescriptor`** (moved off the `addModule` call-site); the built-in default layout is reproducible from descriptors alone, and a customized layout is a **delta** against it. `typeTag` remains **identity/colour only** and never changes when a module moves (dragging Reverb into GENERATORS keeps it a Processor — AD-9 spirit).
+
+### AD-11 — Layout persistence is append-only, interop-safe, default-on-missing (Epic 4)
+- **Binds:** preset serialization (FR19, NFR6); extends the inherited NFR3 format-integrity constraint.
+- **Prevents:** a format fork — a layout store that breaks `.synthy` round-trip with older builds or the C# app.
+- **Rule:** the custom `RackLayout` serializes as **append-only standard APVTS parameters** in the existing `.synthy` preset. **No `kFormatVersion` bump; no existing ID renamed or reordered.** A preset lacking the layout params (older build, or the C# app) loads with the **built-in default layout** (missing ⇒ default), mirroring the `MasterOn/AdsrOn/MixModeOn` back-compat pattern. The C# app ignores the new params until it chooses to mirror them. **"Reset layout"** restores the descriptor defaults into the model and touches **no audio parameter**.
+
+### AD-12 — Width fixed, height auto-fits the visible rack (Epic 4)
+- **Binds:** the editor ↔ rack sizing boundary (NFR6; narrows PRD non-goal).
+- **Prevents:** the editor and rack disagreeing on who owns height after modules are hidden/shown.
+- **Rule:** window **width stays fixed** (1520 px). After any layout mutation the rack recomputes `preferredHeight(width)` from the **visible** modules and the editor re-applies `setSize` (the auto-fit-down transform still applies on small displays). This is **automatic**, not a user-drag or zoom — the "no user-resizable/zoomable editor" non-goal is narrowed to *width-fixed, height-auto*, DPI/zoom still deferred.
+
 ### Dependency direction
 
 ```mermaid
 graph TD
     PE[PluginEditor: builds descriptors, owns chrome] --> RACK[Rack: grid layout + module lookup]
+    LAYOUT[RackLayout model: ordered id to zone/position/visible] -.drives placement.-> RACK
+    APVTS -.load/save missing=default.-> LAYOUT
     RACK --> MF[ModuleFrame]
     MF --> DESC[ModuleDescriptor / BodyElement types]
     MF --> CTRL[Controls: SynthySlider, Combo, Toggle, buttons]
@@ -121,7 +138,7 @@ Source/UI/
   rack/
     ModuleDescriptor.h    # descriptor + BodyElement variant types
     ModuleFrame.h/.cpp    # renders one descriptor: uniform header + body flow
-    Rack.h/.cpp           # grid layout engine + zone headers + modTarget lookup
+    Rack.h/.cpp           # grid layout engine + zone headers + modTarget lookup + RackLayout model (Epic 4)
     SynthyLookAndFeel.*   # the single shared look (moved out of PluginEditor)
   SynthySlider.h          # standard knob (existing)
   WaveformDisplay.h       # reused as Display{component} (existing)
@@ -140,6 +157,8 @@ Fixed chrome stays in `PluginEditor`, outside the rack grid (FR14): preset SAVE/
 | Standard sizes & rack layout (FR8–FR11) | `rack/Rack` | AD-2, AD-5 |
 | Migration & header (FR12–FR14) | per-module descriptors in `PluginEditor`; chrome in `PluginEditor` | AD-1, AD-4 |
 | Maintainability / RT / state (NFR1–NFR3) | rack engine; inherited constraints | AD-2, AD-6, conventions |
+| Rack customization: show/hide, drag-drop, reorder (FR15–FR18, FR20) | `RackLayout` model + `Rack` (mutate model → re-run `layout()`); default zone/order on `ModuleDescriptor` | AD-10, AD-2 |
+| Layout persistence + reset (FR19, NFR6) | `RackLayout` ↔ append-only `.synthy` params; editor height auto-fit | AD-11, AD-12 |
 
 ## Deferred
 
@@ -148,5 +167,6 @@ Fixed chrome stays in `PluginEditor`, outside the rack grid (FR14): preset SAVE/
 - **Per-size-class knob sizes** — only if AD-3's uniform-size attempt fails (its revisit condition).
 - **Fourth size class (wide-display `W`)** — the class table (AD-2) is built to accept it; define the row when a module first needs >2-column display width. Not implemented now.
 - **VST3 editor parity** — same editor should render in VST3; validate after standalone (NFR4), not a blocker.
-- **Resizable / DPI-scalable rack** — out of scope; fixed target window for now.
-- **Module identity + mutable placement (drag-drop / within-zone reorder enabler)** — a future feature (Feature_Ideas, potential Epic 4) wants drag-and-drop of modules between zones and visual reordering *within* a zone. Today a module's zone is passed extrinsically to `Rack::addModule(zone, desc)` and within-zone order is insertion order; `typeTag` is per-module **identity/colour only** (it must NOT change when a module is moved — dragging Reverb into GENERATORS keeps it a Processor). To enable this without a painful retrofit, **bake these into descriptors during migration (Stories 1.5 / 2.x / 3.1):** (1) a **stable module id** per descriptor so a saved custom layout can be reattached; (2) an explicit **default zone/group** recorded per module (kept distinct from `typeTag`); (3) the Rack layout expressed as an **ordered placement data-model** (`id → { zone, position }`) that is editable and persistable, rather than raw insertion order. Persistence of the custom layout follows the show/hide state decision (standard Synthy param vs separate rack-config). The drag interaction itself is deferred to the later feature; only the id + explicit zone are cheap-now groundwork.
+- **DPI-scalable / zoomable rack** — still deferred. As of Epic 4 the window **height** auto-fits the visible modules (AD-12); **width stays fixed** and there is no user zoom/DPI scaling.
+- **Module identity + mutable placement — ✅ REALIZED by Epic 4 (AD-10/11/12).** The former groundwork landed as planned: (1) stable module `id` shipped in Story 1.5; (2) explicit default zone + (3) ordered placement model are now **AD-10** (`RackLayout = id → { zone, position, visible }`), with persistence decided as append-only `.synthy` params (**AD-11**). The drag/show-hide interaction and reset are Epic 4's stories. `typeTag` stays identity/colour and never changes on move.
+- **C# app layout mirror** — the C# Synthy ignores the new layout params (AD-11 back-compat); mirroring the customization UI/serialization is a separate follow-up (tracked in `deferred-work.md`), not part of this epic.
