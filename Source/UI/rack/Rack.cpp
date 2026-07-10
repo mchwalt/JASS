@@ -72,14 +72,26 @@ namespace rack
         repaint();
     }
 
+    void Rack::driveEnable (const juce::String& id, bool on)
+    {
+        if (const auto* p = placedById (id); p != nullptr && p->frame != nullptr)
+        {
+            const auto pid = p->frame->enableParamId();
+            if (pid.isNotEmpty())
+                if (auto* param = apvts.getParameter (pid))
+                    param->setValueNotifyingHost (on ? 1.0f : 0.0f);
+        }
+    }
+
     void Rack::setModuleVisible (const juce::String& id, bool visible)
     {
-        // Toggle visibility only; order is owned explicitly by the customization list
-        // (applyLayoutOrder), so a module keeps its position when shown/hidden.
+        // Interactive toggle: flip visibility AND couple the enable (hide ⇒ disable,
+        // show ⇒ enable once). Order is owned by the list, so position is kept.
         bool changed = false;
         for (auto& e : layoutModel)
             if (e.id == id && e.visible != visible) { e.visible = visible; changed = true; }
         if (! changed) return;
+        driveEnable (id, visible);
         relayout();
         if (onLayoutChanged) onLayoutChanged();
     }
@@ -109,9 +121,15 @@ namespace rack
     {
         // Bulk-set every module in the zone (no separate zone state). The zone's header is
         // derived in layout() — emptying a zone makes its header disappear automatically.
+        // Each member's enable is coupled too (hide ⇒ disable, show ⇒ enable once).
         bool changed = false;
         for (auto& e : layoutModel)
-            if (e.zone == zone && e.visible != visible) { e.visible = visible; changed = true; }
+            if (e.zone == zone && e.visible != visible)
+            {
+                e.visible = visible;
+                driveEnable (e.id, visible);
+                changed = true;
+            }
         if (! changed) return;
         relayout();
         if (onLayoutChanged) onLayoutChanged();

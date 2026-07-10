@@ -123,6 +123,11 @@ namespace rack
         // Re-pack in place (reads the model) + repaint; used after a visibility change.
         void relayout();
 
+        // Couple visibility → enable on an INTERACTIVE toggle (Story 4.2): hide ⇒ disable,
+        // show ⇒ enable (one-time). Writes the module's enableParam if it has one. NOT used
+        // on load/reset (there visibility + enables are restored independently).
+        void driveEnable (const juce::String& id, bool on);
+
         juce::OwnedArray<ModuleFrame> frames;
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
         std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement

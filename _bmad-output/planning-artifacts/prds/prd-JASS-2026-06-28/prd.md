@@ -89,7 +89,7 @@ The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of mod
 
 ### FR Group E — Rack Customization (Epic 4)
 _(New capability, layered on the unified rack. The user tailors which modules are shown and where they sit; a customized layout persists with the preset and can be reset to the built-in default.)_
-- **FR15.** The user can **show or hide individual modules**. A hidden module is removed from the rack layout (not merely dimmed per FR7) and the remaining modules **re-pack** to close the gap. Hiding is a **UI concern only**: the module's parameters and audio processing are unaffected — a hidden Filter still filters.
+- **FR15.** The user can **show or hide individual modules**. A hidden module is removed from the rack layout (not merely dimmed per FR7) and the remaining modules **re-pack** to close the gap. **Visibility is coupled to the module's enable on the transition** (revised 2026-07-11): hiding a module also **disables** it, and showing it **re-enables** it once — thereafter, while visible, its enable toggle is free. Rationale: a hidden module's controls aren't reachable, so running it hidden makes no sense. (The coupling fires only on the interactive show/hide; loading a preset restores `visible` and each enable param independently, as saved.)
 - **FR16.** The user can **show or hide an entire zone** (and its zone header) as a unit.
 - **FR17.** The user can **move a module to a different zone** via drag & drop. The module keeps its identity/type tag (FR6); only its placement changes.
 - **FR18.** The user can **reorder modules within a zone** (drag & drop / reposition). Placement order is otherwise the module's declared default.

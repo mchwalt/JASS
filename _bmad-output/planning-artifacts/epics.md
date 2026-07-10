@@ -366,9 +366,10 @@ so that I can tailor which modules show and where they sit — the list order is
 
 **Given** the `RackLayout` model from Story 4.1
 **When** I open the customization panel (from the MODULES button) and toggle a module's visibility
-**Then** its `visible` flips in the layout model, it is added to / removed from the rack (hidden = removed, not merely dimmed per FR7), the rack **re-packs**, and its parameters and audio keep running while hidden (a hidden Filter still filters)
+**Then** its `visible` flips in the layout model, it is added to / removed from the rack (hidden = removed, not merely dimmed per FR7), the rack **re-packs**
+**And** visibility is **coupled to the module's enable on the transition** (revised 2026-07-11): hiding also disables the module, showing re-enables it once — thereafter, while visible, its enable toggle is free (the coupling fires only on this interactive toggle, not on load/reset)
 **And** the panel lists modules grouped by zone in their current order; **dragging a module within its zone reorders it**, and **dragging it into another zone's section moves it there** (updates `zone` + `position`) — the list order maps directly to the on-screen placement order
-**And** a module keeps its identity/type tag when moved to another zone (a Reverb dragged into GENERATORS stays a Processor — it does not become a generator)
+**And** **reordering / moving a module does NOT change its state** — only `zone` + `position` change; `visible`, the enable, the type/colour tag, bindings and displays are untouched (a Reverb dragged into GENERATORS stays a Processor, still enabled/visible as before)
 **And** the zone header row has a **tri-state bulk checkbox** (all / none / mixed) that turns the whole zone on or off; there is **no separate zone-visibility state** — a zone's header on the rack is **derived** (shown iff ≥1 module in it is visible), so emptying a zone makes its header disappear and re-enabling any module brings it back
 **And** all mutations go **only through the `RackLayout` model** and re-run the single `layout()` path (no ad-hoc bounds; NFR1); MASTER BUS stays right-aligned, other zones left-aligned
 **And** after any change the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (AD-12)
