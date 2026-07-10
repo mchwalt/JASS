@@ -2,6 +2,8 @@
 #include "../DSP/WavetableBank.h"
 #include "../Audio/PresetIO.h"
 #include "../Audio/Parameters.h"   // Parameters::ID for the Story-1.3 sample rack
+#include <map>
+#include <memory>
 
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
 // the rack framework owns the single shared look.
@@ -107,6 +109,11 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init"); };
 
+    // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
+    addAndMakeVisible(modulesBtn);
+    modulesBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff334155));
+    modulesBtn.onClick = [this] { showModulesMenu(); };
+
     // Current-preset display
     presetNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
     presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xffaab3c0));
@@ -141,6 +148,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // Story 1.3: stand up the sample rack BEFORE dropFocus so its controls are also
     // excluded from grabbing keyboard focus.
     buildSampleRack();
+    // Re-fit the window height whenever the rack layout changes (show/hide, AD-12).
+    if (sampleRack)
+        sampleRack->onLayoutChanged = [this] { refitHeight(); };
 
     std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)
     {
@@ -154,39 +164,79 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     };
     dropFocus(*this);
 
-    // setSize must be LAST so resized() sees all components. Story 1.3: width stays at
-    // the original 1520; the HEIGHT is derived from the rack's actual content so the
-    // full rack (incl. the Scope + Spectrum L displays at the bottom) always fits
-    // without scrolling. The auto-fit below scales the whole editor down on smaller
+    // Size the editor: fixed design width, height derived from the rack's VISIBLE content.
+    // Re-run on every show/hide via Rack::onLayoutChanged (AD-12). Must be after the rack +
+    // all chrome exist so resized() sees every component.
+    refitHeight();
+
+    // Drive the OSC FREQ-knob display (played frequency).
+    startTimerHz(30);
+}
+
+void SynthyEditor::refitHeight()
+{
+    // Fixed design width; height follows the rack's visible content so the full rack always
+    // fits without scrolling. The auto-fit-down transform scales the whole editor on smaller
     // displays. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
-    constexpr int kDesignW   = 1520;
+    constexpr int kDesignW    = 1520;
     constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
     constexpr int kBodyBottom = 72;   // keyboard band (matches resized())
     constexpr int kMargin     = 12;   // getLocalBounds().reduced(12)
     const int rackW = kDesignW - 2 * kMargin;
     const int rackH = sampleRack ? sampleRack->preferredHeight(rackW) : 800;
-    const int kDesignH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
-    setSize(kDesignW, kDesignH);
+    const int designH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
+    setSize(kDesignW, designH);
 
-    // --- Auto-fit ---------------------------------------------------------
-    // Backup for displays whose usable area is still smaller than the design
-    // canvas (e.g. 1366x768 laptops): scale the WHOLE editor down via a
-    // transform. The standalone window sizes itself from
-    // getLocalArea(editor, ...) which honours the transform, so the window
-    // shrinks to match. Proportions stay intact; we never scale above 1.0.
     if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
     {
         const auto ua = disp->userBounds;        // excludes the taskbar
         const double chrome = 90.0;              // title bar + a little breathing room
-        const double sH = (ua.getHeight() - chrome) / (double) kDesignH;
-        const double sW =  ua.getWidth()           / (double) kDesignW;
+        const double sH = (ua.getHeight() - chrome) / (double) designH;
+        const double sW =  ua.getWidth()            / (double) kDesignW;
         const double scale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
-        if (scale < 0.999)
-            setTransform(juce::AffineTransform::scale((float) scale));
+        // Reset to identity when no scaling is needed, so re-fitting to a shorter rack on a
+        // large display clears any transform set for an earlier, taller layout.
+        setTransform(scale < 0.999 ? juce::AffineTransform::scale((float) scale)
+                                   : juce::AffineTransform());
+    }
+}
+
+void SynthyEditor::showModulesMenu()
+{
+    if (! sampleRack) return;
+    using Zone = rack::Rack::Zone;
+
+    // Each menu item id maps to the toggle it performs. A tick = currently visible.
+    struct Action { bool isZone; Zone zone; juce::String moduleId; bool newVisible; };
+    auto actions = std::make_shared<std::map<int, Action>>();
+    int id = 1;
+
+    juce::PopupMenu menu;
+    for (auto zone : sampleRack->zones())
+    {
+        const bool zoneVis = sampleRack->isZoneVisible(zone);
+        juce::PopupMenu sub;
+        (*actions)[id] = { true, zone, {}, ! zoneVis };
+        sub.addItem(id++, "Show this zone", true, zoneVis);
+        sub.addSeparator();
+        for (const auto& m : sampleRack->modulesInZone(zone))
+        {
+            (*actions)[id] = { false, zone, m.id, ! m.visible };
+            sub.addItem(id++, m.title, /*enabled*/ zoneVis, /*ticked*/ m.visible);
+        }
+        menu.addSubMenu(rack::Rack::zoneName(zone), sub);
     }
 
-    // Drive the OSC FREQ-knob display (played frequency).
-    startTimerHz(30);
+    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&modulesBtn),
+        [this, actions](int result)
+        {
+            if (result == 0 || ! sampleRack) return;
+            auto it = actions->find(result);
+            if (it == actions->end()) return;
+            const auto& a = it->second;
+            if (a.isZone) sampleRack->setZoneVisible(a.zone, a.newVisible);
+            else          sampleRack->setModuleVisible(a.moduleId, a.newVisible);
+        });
 }
 
 void SynthyEditor::timerCallback()
@@ -471,6 +521,8 @@ void SynthyEditor::resized()
     // The title is centred over the FULL header width so "J A S S" sits in the true middle
     // of the window; the left cluster only overlays the left edge, clear of the centred text.
     g_titleBounds = headerRow;
+    // MODULES show/hide menu button overlays the right edge (clear of the centred title).
+    modulesBtn.setBounds(headerRow.removeFromRight(120).reduced(8, 17));
     // Left cluster: the Save/Load/Random/Reset buttons AND the current-preset name belong
     // together (the preset name is about what was loaded/saved). Buttons in a 2x2 block
     // with "Current State" beside them.

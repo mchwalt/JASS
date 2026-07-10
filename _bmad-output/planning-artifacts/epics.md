@@ -121,8 +121,9 @@ Build the fixed header chrome (preset SAVE / LOAD / RANDOM / RESET, centred titl
 **FRs covered:** FR14, NFR4, final NFR1 confirmation.
 
 ### Epic 4: Rack Customization
-Let the user tailor the rack: show/hide individual modules and whole zones, drag modules between zones, and reorder within a zone — with the customized layout persisted in the preset and resettable to the built-in default. Built foundation-first: introduce an ordered `RackLayout` data model (with default zone/order moved onto the descriptor) as the single source of truth, wire persistence, then layer the two interaction features on top. The window height auto-fits the visible modules.
+Let the user tailor the rack: show/hide individual modules and whole zones, drag modules between zones, and reorder within a zone — with the customized layout persisted in the preset and resettable to the built-in default. Built foundation-first: 4.1 introduces an ordered `RackLayout` data model (default zone/order on the descriptor) as the single source of truth; 4.2 adds the first visible mutation (show/hide) so there is real non-default state; 4.3 then persists that state and adds reset-layout; 4.4 adds drag & drop. The window height auto-fits the visible modules.
 **FRs covered:** FR15, FR16, FR17, FR18, FR19, FR20, NFR6 (and NFR1 held dynamically).
+_(Story order revised 2026-07-10: show/hide (4.2) precedes persistence (4.3) — persisting before any layout-mutating UI would only ever store the default, leaving nothing to verify.)_
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -353,47 +354,52 @@ So that later customization features (show/hide, drag & drop, persistence) all m
 **And** `typeTag` stays identity/colour only (unchanged by the refactor)
 **And** the app is visually **identical** to before — this is a pure internal refactor with no user-visible change, and no audio/param/format impact (NFR1, NFR2, NFR3).
 
-### Story 4.2: Persist the custom layout to `.synthy` (append-only) + reset layout
+### Story 4.2: Show / hide modules and zones (auto-fit height)
 
 As a JASS player,
-I want my customized rack layout saved in the preset and restorable to the default,
-So that a layout I set up survives save/load and I can always get back to the stock arrangement.
+I want to hide modules I don't use and hide whole zones,
+so that I can pare the rack down to just what I'm working with.
 
 **Acceptance Criteria:**
 
 **Given** the `RackLayout` model from Story 4.1
-**When** a preset is saved and reloaded
-**Then** the layout (per-module `zone`, `position`, `visible`) round-trips via **append-only standard APVTS params** in `.synthy`, with **no `kFormatVersion` bump** and no existing ID renamed/reordered (NFR6)
-**And** a preset lacking the layout params — one written by an older build or the C# app — loads with the **built-in default layout** (missing ⇒ default), and the C# app still loads the preset unaffected
-**And** a **"reset layout"** affordance restores the descriptor-default layout **without touching any audio parameter**
-**And** the audio engine, parameter values and existing `.synthy` fields are otherwise untouched (NFR2, NFR3).
+**When** I hide an individual module (via its header affordance / context action)
+**Then** its `visible` flips to false in the layout model, it is **removed** from the rack (not merely dimmed per FR7), and the remaining modules **re-pack** to close the gap, while the module's parameters and audio processing keep running (a hidden Filter still filters)
+**And** I can show or hide an **entire zone** (with its zone header) as a unit, and re-show a hidden module (e.g. from a "hidden modules" list / customization affordance)
+**And** after any show/hide the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (rack recomputes `preferredHeight`, editor re-applies `setSize`; the small-display auto-fit-down still applies) (AD-12)
+**And** a re-shown module returns with all bindings/rings/displays intact; no audio/param/format change (NFR2, NFR3).
 
-### Story 4.3: Show / hide modules and zones (auto-fit height)
+_Note: in 4.2 the visibility change is session-only (in-memory model). Making it survive save/load is Story 4.3 (persistence)._
+
+### Story 4.3: Persist the custom layout to `.synthy` + reset layout
 
 As a JASS player,
-I want to hide modules I don't use and hide whole zones,
-So that I can pare the rack down to just what I'm working with.
+I want my customized rack layout (what's hidden, and later where things sit) saved in the preset and restorable to the default,
+so that a layout I set up survives save/load and I can always get back to the stock arrangement.
 
 **Acceptance Criteria:**
 
-**Given** the layout model + persistence (Stories 4.1–4.2)
-**When** I hide an individual module
-**Then** it is **removed** from the layout (not merely dimmed per FR7) and the remaining modules **re-pack** to close the gap, while the module's parameters and audio processing keep running (a hidden Filter still filters)
-**And** I can show or hide an **entire zone** (with its zone header) as a unit
-**And** after any show/hide the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (rack recomputes `preferredHeight`, editor re-applies `setSize`; the small-display auto-fit-down still applies) (AD-12)
-**And** the visibility state persists via Story 4.2 and a re-shown module returns to its place with all bindings intact.
+**Given** the layout model + show/hide (Stories 4.1–4.2), so there is real non-default state to store
+**When** a preset (and the shared LiveState) is saved and reloaded
+**Then** the layout (per-module `visible`, `zone`, `position`) round-trips as a **single append-only structured field** (`"RackLayout"`) in `.synthy` — **not** ~20×3 individual automatable APVTS params — with **no `kFormatVersion` bump** and no existing field renamed/reordered (NFR6)
+**And** the same layout also round-trips in the plugin's DAW state (`getStateInformation`) via a non-parameter property on the APVTS ValueTree, so it survives with the editor closed
+**And** a preset lacking the field — older build or the C# app — loads with the **built-in default layout** (missing ⇒ default), and the C# app still loads the preset unaffected
+**And** a **"reset layout"** affordance restores the descriptor-default layout **without touching any audio parameter**
+**And** the audio engine, parameter values and existing `.synthy` fields are otherwise untouched (NFR2, NFR3).
+
+_(AD-11 precision 2026-07-10: layout persists as ONE structured `"RackLayout"` JSON field + a ValueTree property, not as dozens of standalone APVTS parameters — same append-only/interop guarantees, without polluting DAW automation.)_
 
 ### Story 4.4: Drag & drop between zones + reorder within a zone
 
 As a JASS player,
 I want to drag modules between zones and reorder them within a zone,
-So that I can arrange the rack the way I think about my signal flow.
+so that I can arrange the rack the way I think about my signal flow.
 
 **Acceptance Criteria:**
 
-**Given** the layout model + persistence + show/hide (Stories 4.1–4.3)
+**Given** the layout model + show/hide + persistence (Stories 4.1–4.3)
 **When** I drag a module to a different zone
 **Then** it moves there and the layout model updates (`zone` + `position`), both source and target zones re-pack, and the module keeps its identity/type tag (dragging Reverb into GENERATORS keeps it a Processor — it does not become a generator)
 **And** I can **reorder** modules within a zone by dragging, updating `position` in the model
 **And** all drag operations mutate **only the `RackLayout` model** and re-run the single `layout()` path (no ad-hoc bounds; NFR1)
-**And** the resulting arrangement persists via Story 4.2, and every moved module's controls, bindings, rings and displays remain fully functional (NFR2, NFR3).
+**And** the resulting arrangement persists via Story 4.3, and every moved module's controls, bindings, rings and displays remain fully functional (NFR2, NFR3).

@@ -46,6 +46,24 @@ namespace rack
         // specific module — e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button.
         ModuleFrame* moduleById (const juce::String& id);
 
+        // --- Show / hide (Story 4.2, AD-10) -------------------------------------------
+        // Mutate the RackLayout model, then re-pack via the single layout() path and notify
+        // the editor (onLayoutChanged) so it can auto-fit the window height (AD-12). Hiding
+        // is UI-only: the frame keeps its APVTS attachments + audio (it is just not placed).
+        void setModuleVisible (const juce::String& id, bool visible);
+        void setZoneVisible (Zone zone, bool visible);
+        bool isModuleVisible (const juce::String& id) const;
+        bool isZoneVisible (Zone zone) const;
+
+        // Menu data: the modules of a zone in placement order, with title + visibility.
+        struct ModuleInfo { juce::String id, title; bool visible; };
+        std::vector<ModuleInfo> modulesInZone (Zone zone) const;
+        const std::vector<Zone>& zones() const noexcept { return zoneOrder; }
+        static juce::String zoneName (Zone zone);
+
+        // Called after any layout mutation (show/hide) so the editor can re-fit height.
+        std::function<void()> onLayoutChanged;
+
         // Total stacked height the current population needs at `width` — lets the
         // editor size/verify the fixed window without scrolling (AC4).
         int preferredHeight (int width) const;
@@ -93,9 +111,13 @@ namespace rack
         const int cols;                            // columns this rack instance packs into
         std::vector<Zone> zoneOrder;               // zones rendered, top→bottom
         SynthyLookAndFeel lnf;                     // the single shared look (AD-7)
+        // Re-pack in place (reads the model) + repaint; used after a visibility change.
+        void relayout();
+
         juce::OwnedArray<ModuleFrame> frames;
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
         std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement
+        std::vector<Zone> hiddenZones;             // zones hidden as a unit (Story 4.2)
         std::vector<ZoneBand> zoneBands;           // computed in layout(), drawn in paint()
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Rack)
