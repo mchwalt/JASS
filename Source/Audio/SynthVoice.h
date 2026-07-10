@@ -39,6 +39,8 @@ public:
     int& getSubOctaveRef() { return subOctave; }
     bool& getAdsrOnRef() { return adsrOn; }
     bool& getMixModeOnRef() { return mixModeOn; }
+    int& getMixSrcARef() { return mixSrcA; }   // Epic 5: RingMod/FM operands
+    int& getMixSrcBRef() { return mixSrcB; }
 
     // Re-pluck the Karplus string at the voice's current (transposed) pitch.
     void pluckKarplus();
@@ -66,6 +68,8 @@ private:
     MixMode mixMode = MixMode::Additive;
     bool adsrOn = true;      // false => envelope bypassed (constant gain) — Story 2.4
     bool mixModeOn = true;   // false => oscillators summed additively regardless of mixMode
+    int mixSrcA = 0;         // Epic 5: RingMod/FM operand A (0..2 => OSC 1/2/3); default OSC1
+    int mixSrcB = 1;         // operand B; default OSC2 (== prior fixed OSC1<->OSC2 coupling)
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

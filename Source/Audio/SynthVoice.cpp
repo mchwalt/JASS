@@ -106,23 +106,31 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // Mix oscillators according to the mix mode. When Mix-Mode is disabled (Story 2.4)
         // the OSCs are summed plainly, regardless of the selected mode.
+        // Epic 5: A/B are user-selectable operands (0..2 => OSC 1/2/3); the third OSC
+        // (o = 3-a-b) is summed plainly. Defaults A=0,B=1,o=2 == the prior fixed OSC1<->OSC2.
+        // EVERY oscillator is advanced exactly once per sample in every branch (no phase drift);
+        // a==b falls back to plain additive so no oscillator is advanced twice.
+        const int a = juce::jlimit(0, 2, mixSrcA);
+        const int b = juce::jlimit(0, 2, mixSrcB);
         float mixedSample = 0.0f;
-        if (mixModeOn && mixMode == MixMode::FM)
+        if (mixModeOn && a != b && mixMode == MixMode::FM)
         {
-            // FM: OSC1 modulates OSC2's frequency, OSC3 additive
-            float modulator = oscillators[0].nextSample();
-            double fmOffset = modulator * oscillators[0].getFrequency() * 2.0;
-            float carrier = oscillators[1].nextSample(fmOffset);
-            float s2 = oscillators[2].nextSample();
-            mixedSample = carrier + s2;
+            // FM: OSC A modulates OSC B's frequency; the third OSC is additive.
+            const int o = 3 - a - b;
+            float modulator = oscillators[a].nextSample();
+            double fmOffset = modulator * oscillators[a].getFrequency() * 2.0;
+            float carrier = oscillators[b].nextSample(fmOffset);
+            float other = oscillators[o].nextSample();
+            mixedSample = carrier + other;
         }
-        else if (mixModeOn && mixMode == MixMode::RingMod)
+        else if (mixModeOn && a != b && mixMode == MixMode::RingMod)
         {
-            // Ring: OSC1 × OSC2 + OSC3
-            float s0 = oscillators[0].nextSample();
-            float s1 = oscillators[1].nextSample();
-            float s2 = oscillators[2].nextSample();
-            mixedSample = s0 * s1 * 2.0f + s2;
+            // Ring: OSC A × OSC B, + the third OSC.
+            const int o = 3 - a - b;
+            float sa = oscillators[a].nextSample();
+            float sb = oscillators[b].nextSample();
+            float other = oscillators[o].nextSample();
+            mixedSample = sa * sb * 2.0f + other;
         }
         else
         {

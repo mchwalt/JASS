@@ -11,6 +11,7 @@ namespace PresetIO
 {
     inline const juce::StringArray kWaveform   { "Sine", "Sawtooth", "Square", "Triangle" };
     inline const juce::StringArray kMixMode    { "Additive", "RingMod", "FM" };
+    inline const juce::StringArray kMixSrc     { "OSC 1", "OSC 2", "OSC 3" };   // Epic 5
     inline const juce::StringArray kFilterType { "Off", "Lowpass", "Highpass" };
     inline const juce::StringArray kDistortion { "Off", "SoftClip", "HardClip", "Foldback" };
     inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth" };
@@ -130,6 +131,8 @@ namespace PresetIO
         root->setProperty("MasterOn",     rawB(a, ID::masterOn));      // Story 2.4 (append-only; missing => on)
         root->setProperty("MixMode",      rawChoice(a, ID::mixMode, kMixMode));
         root->setProperty("MixModeOn",    rawB(a, ID::mixModeOn));
+        root->setProperty("MixSrcA",      rawChoice(a, ID::mixSrcA, kMixSrc));   // Epic 5 (append-only; missing => OSC1)
+        root->setProperty("MixSrcB",      rawChoice(a, ID::mixSrcB, kMixSrc));   //          (missing => OSC2)
         root->setProperty("ScopeOn",      rawB(a, ID::scopeOn));       // display enables (append-only; missing => on)
         root->setProperty("SpectrumOn",   rawB(a, ID::spectrumOn));
 
@@ -266,6 +269,8 @@ namespace PresetIO
         setRaw   (a, ID::masterOn,  jbool(v, "MasterOn",  rawB(a, ID::masterOn))  ? 1.f : 0.f);   // Story 2.4; missing => keep default (on)
         setChoice(a, ID::mixMode, kMixMode, v["MixMode"], rawI(a, ID::mixMode));
         setRaw   (a, ID::mixModeOn, jbool(v, "MixModeOn", rawB(a, ID::mixModeOn)) ? 1.f : 0.f);
+        setChoice(a, ID::mixSrcA, kMixSrc, v["MixSrcA"], rawI(a, ID::mixSrcA));   // Epic 5 (missing => default 0/1)
+        setChoice(a, ID::mixSrcB, kMixSrc, v["MixSrcB"], rawI(a, ID::mixSrcB));
         setRaw   (a, ID::scopeOn,    jbool(v, "ScopeOn",    rawB(a, ID::scopeOn))    ? 1.f : 0.f);   // missing => on
         setRaw   (a, ID::spectrumOn, jbool(v, "SpectrumOn", rawB(a, ID::spectrumOn)) ? 1.f : 0.f);
 

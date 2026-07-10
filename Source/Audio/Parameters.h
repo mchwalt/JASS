@@ -24,6 +24,8 @@ namespace Parameters
 
         // Mix mode
         constexpr const char* mixMode = "mixMode";
+        constexpr const char* mixSrcA = "mixSrcA";   // Epic 5: RingMod/FM operand A (0..2 => OSC 1/2/3)
+        constexpr const char* mixSrcB = "mixSrcB";   // Epic 5: RingMod/FM operand B
 
         // ADSR
         constexpr const char* attack    = "attack";
@@ -182,6 +184,9 @@ namespace Parameters
 
         // Mix mode
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixMode, 1), "Mix Mode", juce::StringArray{"Additive", "RingMod", "FM"}, 0));
+        // Epic 5: selectable RingMod/FM operands (append-only; defaults OSC1/OSC2 = prior behaviour).
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixSrcA, 1), "Mix Source A", juce::StringArray{"OSC 1", "OSC 2", "OSC 3"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixSrcB, 1), "Mix Source B", juce::StringArray{"OSC 1", "OSC 2", "OSC 3"}, 1));
 
         // ADSR
         auto timeRange = juce::NormalisableRange<float>(0.001f, 5.0f, 0.001f, 0.4f);
@@ -302,9 +307,11 @@ namespace Parameters
                               LFO& lfo, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
-                              bool& adsrOn, bool& mixModeOn)
+                              bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB)
     {
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
+        mixSrcA = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcA));   // Epic 5
+        mixSrcB = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcB));
         // Behavioural gates (Story 2.4): ADSR off => bypass envelope; Mix-Mode off => additive.
         adsrOn    = *apvts.getRawParameterValue(ID::adsrOn)    > 0.5f;
         mixModeOn = *apvts.getRawParameterValue(ID::mixModeOn) > 0.5f;
