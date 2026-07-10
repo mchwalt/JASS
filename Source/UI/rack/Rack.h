@@ -16,7 +16,9 @@ namespace rack
     class Rack : public juce::Component
     {
     public:
-        enum class Zone { Generators, Modulation, Processing, MasterBus };
+        // Zone now lives in ModuleDescriptor.h (AD-10) so a descriptor can declare its own
+        // default zone without an include-cycle. Kept spelled `Rack::Zone` for all callers.
+        using Zone = rack::Zone;
 
         // The main rack is the default 8-column, three-zone grid. A narrower zone set /
         // column count builds a focused sub-rack (e.g. the top-right master-bus insert:
@@ -27,9 +29,10 @@ namespace rack
                        std::vector<Zone> zones = { Zone::Generators, Zone::Modulation, Zone::Processing });
         ~Rack() override;
 
-        // Build + own a ModuleFrame for this descriptor, placed in the given zone.
-        // Insertion order within a zone is the placement order.
-        void addModule (Zone zone, ModuleDescriptor desc);
+        // Build + own a ModuleFrame for this descriptor. The zone comes from the descriptor's
+        // `defaultZone` (AD-10); within-zone order is seeded from the call order. Placement is
+        // then driven exclusively by the RackLayout model, not raw insertion order.
+        void addModule (ModuleDescriptor desc);
 
         void resized() override;            // THE placement + zone-header layout site
         void paint (juce::Graphics&) override;
@@ -60,11 +63,25 @@ namespace rack
     private:
         struct Placed
         {
+            juce::String id;           // stable module id (RackLayout key, AD-10)
             ModuleFrame* frame = nullptr;
-            Zone zone {};
             int cols = 1, units = 1;   // footprint from the size class
         };
+        // AD-10: the ordered, editable placement model — the single source of truth for
+        // WHERE each module sits. `layout()` walks this (per zone, by position, visible only)
+        // instead of raw insertion order. In Story 4.1 `visible` is always true (show/hide is
+        // Story 4.3) and persistence is Story 4.2 — this is the plumbing those build on.
+        struct RackLayoutEntry
+        {
+            juce::String id;
+            Zone zone {};
+            int  position = 0;   // within-zone order
+            bool visible  = true;
+        };
         struct ZoneBand { juce::String text; ModuleType tag; juce::Rectangle<int> bounds; };
+
+        // footprint/frame lookup by id (nullptr if unknown)
+        const Placed* placedById (const juce::String& id) const;
 
         // The ONE packing path (row-major first-fit, never overlaps). When apply is
         // true it sets frame bounds + zone-header bands; either way it returns the
@@ -77,7 +94,8 @@ namespace rack
         std::vector<Zone> zoneOrder;               // zones rendered, top→bottom
         SynthyLookAndFeel lnf;                     // the single shared look (AD-7)
         juce::OwnedArray<ModuleFrame> frames;
-        std::vector<Placed> placed;
+        std::vector<Placed> placed;                // id -> frame + footprint (build order)
+        std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement
         std::vector<ZoneBand> zoneBands;           // computed in layout(), drawn in paint()
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Rack)
