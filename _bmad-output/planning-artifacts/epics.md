@@ -369,7 +369,7 @@ so that I can tailor which modules show and where they sit — the list order is
 **Then** its `visible` flips in the layout model, it is added to / removed from the rack (hidden = removed, not merely dimmed per FR7), the rack **re-packs**, and its parameters and audio keep running while hidden (a hidden Filter still filters)
 **And** the panel lists modules grouped by zone in their current order; **dragging a module within its zone reorders it**, and **dragging it into another zone's section moves it there** (updates `zone` + `position`) — the list order maps directly to the on-screen placement order
 **And** a module keeps its identity/type tag when moved to another zone (a Reverb dragged into GENERATORS stays a Processor — it does not become a generator)
-**And** I can show/hide an **entire zone** as a unit from the panel
+**And** the zone header row has a **tri-state bulk checkbox** (all / none / mixed) that turns the whole zone on or off; there is **no separate zone-visibility state** — a zone's header on the rack is **derived** (shown iff ≥1 module in it is visible), so emptying a zone makes its header disappear and re-enabling any module brings it back
 **And** all mutations go **only through the `RackLayout` model** and re-run the single `layout()` path (no ad-hoc bounds; NFR1); MASTER BUS stays right-aligned, other zones left-aligned
 **And** after any change the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (AD-12)
 **And** no audio/param/format change (NFR2, NFR3).

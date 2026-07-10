@@ -101,6 +101,7 @@ claude-opus-4-8[1m]
 - **CallOutBox parent = nullptr (desktop)** so the editor's auto-fit transform doesn't skew the panel's mouse coordinates.
 - **Session-only:** layout is in-memory (no `PresetIO`/`Parameters.h`/`.synthy` touch) — persistence is Story 4.3. No audio/param/format change; the panel lives in `PluginEditor.cpp` → no new `.cpp`, no `CMakeLists.txt` change.
 - MASTER BUS stays right-aligned (existing `layout()` colShift); other zones left-aligned.
+- **Zone header = derived, not a separate state (refinement 2026-07-11, user-driven).** Removed the `hiddenZones` state / `isZoneVisible`. A zone's header on the rack is now **derived** in `layout()` (drawn iff ≥1 module in the zone is visible), so emptying a zone auto-hides its header and re-enabling any module brings it back — single source of truth = per-module `visible` (AD-10), and 4.3 persistence needs no zone flag. In the panel the zone header checkbox is a **tri-state bidirectional bulk toggle** (`setZoneVisible` now bulk-sets all members): all-on → all-off, none/mixed → all-on. The panel always lists every zone/module (even when empty on the rack) so nothing is unreachable.
 
 ### File List
 

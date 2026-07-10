@@ -42,7 +42,9 @@ namespace
                 auto box = rb.removeFromLeft (22);
                 if (row.header)
                 {
-                    drawCheck (g, box, rack.isZoneVisible (row.zone), juce::Colour (0xff8fb0c8));
+                    int vis = 0, total = 0; zoneCounts (row.zone, vis, total);
+                    const int state = (vis == 0 ? 0 : (vis == total ? 1 : 2));   // empty / all / mixed
+                    drawBox (g, box, state, juce::Colour (0xff8fb0c8));
                     g.setColour (juce::Colour (0xff8fb0c8));
                     g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
                     g.drawText (rack::Rack::zoneName (row.zone), rb.reduced (4, 0),
@@ -50,9 +52,8 @@ namespace
                 }
                 else
                 {
-                    const bool zoneVis = rack.isZoneVisible (row.zone);
-                    drawCheck (g, box, row.visible, juce::Colours::white);
-                    g.setColour (juce::Colours::white.withAlpha (row.visible && zoneVis ? 0.9f : 0.4f));
+                    drawBox (g, box, row.visible ? 1 : 0, juce::Colours::white);
+                    g.setColour (juce::Colours::white.withAlpha (row.visible ? 0.9f : 0.4f));
                     g.setFont (juce::FontOptions (13.0f));
                     g.drawText (row.title, rb.reduced (12, 0), juce::Justification::centredLeft);
                     g.setColour (juce::Colours::white.withAlpha (0.22f));
@@ -71,7 +72,14 @@ namespace
             auto& row = rows[(size_t) i];
             if (e.x < 22)   // checkbox column → toggle visibility
             {
-                if (row.header) rack.setZoneVisible (row.zone, ! rack.isZoneVisible (row.zone));
+                if (row.header)
+                {
+                    // Bidirectional bulk: all-on → all-off; otherwise (none/mixed) → all-on.
+                    int vis = 0, total = 0; zoneCounts (row.zone, vis, total);
+                    const bool target = ! (total > 0 && vis == total);
+                    rack.setZoneVisible (row.zone, target);
+                    for (auto& r : rows) if (! r.header && r.zone == row.zone) r.visible = target;
+                }
                 else { row.visible = ! row.visible; rack.setModuleVisible (row.id, row.visible); }
                 repaint();
                 return;
@@ -103,12 +111,20 @@ namespace
     private:
         struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; };
 
-        static void drawCheck (juce::Graphics& g, juce::Rectangle<int> area, bool on, juce::Colour c)
+        // state: 0 = empty, 1 = full, 2 = partial (mixed — a thin dash)
+        static void drawBox (juce::Graphics& g, juce::Rectangle<int> area, int state, juce::Colour c)
         {
             auto b = area.withSizeKeepingCentre (12, 12);
             g.setColour (c.withAlpha (0.6f));
             g.drawRect (b, 1);
-            if (on) { g.setColour (c); g.fillRect (b.reduced (3)); }
+            if (state == 1)      { g.setColour (c); g.fillRect (b.reduced (3)); }
+            else if (state == 2) { g.setColour (c); g.fillRect (b.reduced (3, 5)); }
+        }
+
+        void zoneCounts (rack::Rack::Zone z, int& vis, int& total) const
+        {
+            vis = 0; total = 0;
+            for (const auto& r : rows) if (! r.header && r.zone == z) { ++total; if (r.visible) ++vis; }
         }
 
         void rebuildRows()
