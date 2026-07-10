@@ -4,9 +4,144 @@
 #include "../Audio/Parameters.h"   // Parameters::ID for the Story-1.3 sample rack
 #include <map>
 #include <memory>
+#include <vector>
+#include <utility>
 
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
 // the rack framework owns the single shared look.
+
+// --- Rack customization panel (Story 4.2) -----------------------------------
+// A reorderable list of every module, grouped by zone. A left checkbox toggles
+// visibility; dragging a module row reorders it (list order = on-screen order) and
+// dragging it across a zone header moves it to that zone. All mutations go through the
+// Rack API (setModuleVisible / setZoneVisible / applyLayoutOrder) — the single layout()
+// path re-packs and the editor re-fits height (AD-10/AD-12). Shown in a CallOutBox.
+namespace
+{
+    class RackCustomizePanel : public juce::Component
+    {
+    public:
+        explicit RackCustomizePanel (rack::Rack& r) : rack (r)
+        {
+            rebuildRows();
+            setSize (kW, juce::jmax (kRowH, (int) rows.size() * kRowH));
+        }
+
+        void paint (juce::Graphics& g) override
+        {
+            g.fillAll (juce::Colour (0xff1b1f26));
+            for (int i = 0; i < (int) rows.size(); ++i)
+            {
+                auto rb  = juce::Rectangle<int> (0, i * kRowH, getWidth(), kRowH);
+                const auto& row = rows[(size_t) i];
+                if (i == dragIndex)
+                {
+                    g.setColour (juce::Colour (0xff2b3340));
+                    g.fillRect (rb);
+                }
+                auto box = rb.removeFromLeft (22);
+                if (row.header)
+                {
+                    drawCheck (g, box, rack.isZoneVisible (row.zone), juce::Colour (0xff8fb0c8));
+                    g.setColour (juce::Colour (0xff8fb0c8));
+                    g.setFont (juce::FontOptions (13.0f, juce::Font::bold));
+                    g.drawText (rack::Rack::zoneName (row.zone), rb.reduced (4, 0),
+                                juce::Justification::centredLeft);
+                }
+                else
+                {
+                    const bool zoneVis = rack.isZoneVisible (row.zone);
+                    drawCheck (g, box, row.visible, juce::Colours::white);
+                    g.setColour (juce::Colours::white.withAlpha (row.visible && zoneVis ? 0.9f : 0.4f));
+                    g.setFont (juce::FontOptions (13.0f));
+                    g.drawText (row.title, rb.reduced (12, 0), juce::Justification::centredLeft);
+                    g.setColour (juce::Colours::white.withAlpha (0.22f));
+                    g.drawText ("::", rb.removeFromRight (18), juce::Justification::centred);   // drag hint
+                }
+                g.setColour (juce::Colours::black.withAlpha (0.30f));
+                g.drawHorizontalLine (i * kRowH, 0.0f, (float) getWidth());
+            }
+        }
+
+        void mouseDown (const juce::MouseEvent& e) override
+        {
+            dragIndex = -1;
+            const int i = e.y / kRowH;
+            if (! juce::isPositiveAndBelow (i, (int) rows.size())) return;
+            auto& row = rows[(size_t) i];
+            if (e.x < 22)   // checkbox column → toggle visibility
+            {
+                if (row.header) rack.setZoneVisible (row.zone, ! rack.isZoneVisible (row.zone));
+                else { row.visible = ! row.visible; rack.setModuleVisible (row.id, row.visible); }
+                repaint();
+                return;
+            }
+            if (! row.header) dragIndex = i;   // only module rows are draggable
+        }
+
+        void mouseDrag (const juce::MouseEvent& e) override
+        {
+            if (dragIndex < 0) return;
+            const int target = juce::jlimit (1, (int) rows.size() - 1, e.y / kRowH);
+            if (target != dragIndex)
+            {
+                auto row = rows[(size_t) dragIndex];
+                rows.erase (rows.begin() + dragIndex);
+                rows.insert (rows.begin() + target, row);
+                dragIndex = target;
+                repaint();
+            }
+        }
+
+        void mouseUp (const juce::MouseEvent&) override
+        {
+            if (dragIndex < 0) return;
+            dragIndex = -1;
+            commitOrder();
+        }
+
+    private:
+        struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; };
+
+        static void drawCheck (juce::Graphics& g, juce::Rectangle<int> area, bool on, juce::Colour c)
+        {
+            auto b = area.withSizeKeepingCentre (12, 12);
+            g.setColour (c.withAlpha (0.6f));
+            g.drawRect (b, 1);
+            if (on) { g.setColour (c); g.fillRect (b.reduced (3)); }
+        }
+
+        void rebuildRows()
+        {
+            rows.clear();
+            for (auto z : rack.zones())
+            {
+                rows.push_back ({ true, z, {}, {}, true });
+                for (const auto& m : rack.modulesInZone (z))
+                    rows.push_back ({ false, z, m.id, m.title, m.visible });
+            }
+        }
+
+        void commitOrder()
+        {
+            // The zone of each module row = the most recent header above it; the row order
+            // drives Rack::applyLayoutOrder. Also fix each row's cached zone for future drags.
+            std::vector<std::pair<juce::String, rack::Rack::Zone>> ordered;
+            rack::Rack::Zone cur {};
+            for (auto& r : rows)
+            {
+                if (r.header) cur = r.zone;
+                else { r.zone = cur; ordered.push_back ({ r.id, cur }); }
+            }
+            rack.applyLayoutOrder (ordered);
+        }
+
+        rack::Rack& rack;
+        std::vector<Row> rows;
+        int dragIndex = -1;
+        static constexpr int kW = 260, kRowH = 26;
+    };
+}
 
 // --- EnvelopeDisplay ---
 
@@ -204,39 +339,12 @@ void SynthyEditor::refitHeight()
 void SynthyEditor::showModulesMenu()
 {
     if (! sampleRack) return;
-    using Zone = rack::Rack::Zone;
-
-    // Each menu item id maps to the toggle it performs. A tick = currently visible.
-    struct Action { bool isZone; Zone zone; juce::String moduleId; bool newVisible; };
-    auto actions = std::make_shared<std::map<int, Action>>();
-    int id = 1;
-
-    juce::PopupMenu menu;
-    for (auto zone : sampleRack->zones())
-    {
-        const bool zoneVis = sampleRack->isZoneVisible(zone);
-        juce::PopupMenu sub;
-        (*actions)[id] = { true, zone, {}, ! zoneVis };
-        sub.addItem(id++, "Show this zone", true, zoneVis);
-        sub.addSeparator();
-        for (const auto& m : sampleRack->modulesInZone(zone))
-        {
-            (*actions)[id] = { false, zone, m.id, ! m.visible };
-            sub.addItem(id++, m.title, /*enabled*/ zoneVis, /*ticked*/ m.visible);
-        }
-        menu.addSubMenu(rack::Rack::zoneName(zone), sub);
-    }
-
-    menu.showMenuAsync(juce::PopupMenu::Options().withTargetComponent(&modulesBtn),
-        [this, actions](int result)
-        {
-            if (result == 0 || ! sampleRack) return;
-            auto it = actions->find(result);
-            if (it == actions->end()) return;
-            const auto& a = it->second;
-            if (a.isZone) sampleRack->setZoneVisible(a.zone, a.newVisible);
-            else          sampleRack->setModuleVisible(a.moduleId, a.newVisible);
-        });
+    // The reorderable customization list (Story 4.2) in a call-out anchored to the button.
+    // Parent = nullptr (desktop) so the editor's auto-fit transform doesn't skew mouse coords.
+    auto panel = std::make_unique<RackCustomizePanel>(*sampleRack);
+    juce::CallOutBox::launchAsynchronously(std::move(panel),
+                                           modulesBtn.getScreenBounds(),
+                                           nullptr);
 }
 
 void SynthyEditor::timerCallback()
