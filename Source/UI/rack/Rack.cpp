@@ -64,6 +64,79 @@ namespace rack
         return nullptr;
     }
 
+    juce::String Rack::zoneName (Zone zone) { return zoneText (zone); }
+
+    void Rack::relayout()
+    {
+        layout (getWidth(), /*apply*/ true);
+        repaint();
+    }
+
+    void Rack::setModuleVisible (const juce::String& id, bool visible)
+    {
+        RackLayoutEntry* target = nullptr;
+        for (auto& e : layoutModel)
+            if (e.id == id) { target = &e; break; }
+        if (target == nullptr || target->visible == visible) return;
+
+        target->visible = visible;
+        if (visible)
+        {
+            // Re-showing appends the module at the END of its zone: module order follows the
+            // order of (re-)selection (customization rule), not the original build slot.
+            int maxPos = -1;
+            for (const auto& e : layoutModel)
+                if (e.zone == target->zone && &e != target)
+                    maxPos = juce::jmax (maxPos, e.position);
+            target->position = maxPos + 1;
+        }
+        relayout();
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::setZoneVisible (Zone zone, bool visible)
+    {
+        auto it = std::find (hiddenZones.begin(), hiddenZones.end(), zone);
+        const bool currentlyHidden = (it != hiddenZones.end());
+        if      (visible && currentlyHidden)     hiddenZones.erase (it);
+        else if (! visible && ! currentlyHidden) hiddenZones.push_back (zone);
+        else return;   // no change
+        relayout();
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    bool Rack::isModuleVisible (const juce::String& id) const
+    {
+        for (const auto& e : layoutModel)
+            if (e.id == id) return e.visible;
+        return false;
+    }
+
+    bool Rack::isZoneVisible (Zone zone) const
+    {
+        return std::find (hiddenZones.begin(), hiddenZones.end(), zone) == hiddenZones.end();
+    }
+
+    std::vector<Rack::ModuleInfo> Rack::modulesInZone (Zone zone) const
+    {
+        std::vector<const RackLayoutEntry*> es;
+        for (const auto& e : layoutModel)
+            if (e.zone == zone) es.push_back (&e);
+        std::stable_sort (es.begin(), es.end(),
+                          [] (const RackLayoutEntry* a, const RackLayoutEntry* b)
+                          { return a->position < b->position; });
+
+        std::vector<ModuleInfo> out;
+        for (const auto* e : es)
+        {
+            juce::String title = e->id;
+            if (const auto* p = placedById (e->id); p != nullptr && p->frame != nullptr)
+                title = p->frame->moduleTitle();
+            out.push_back ({ e->id, title, e->visible });
+        }
+        return out;
+    }
+
     int Rack::preferredHeight (int width) const
     {
         // layout() does not mutate when apply == false, but it is non-const (it writes
@@ -76,6 +149,8 @@ namespace rack
         if (apply)
             zoneBands.clear();
 
+        std::vector<ModuleFrame*> shownFrames;   // frames actually placed this pass (apply only)
+
         const int gridLeft  = kPad;
         const int gridWidth = juce::jmax (cols, width - 2 * kPad);   // guard tiny widths
         const int wc        = (gridWidth - (cols - 1) * kGutter) / cols;   // Wc
@@ -84,6 +159,10 @@ namespace rack
 
         for (auto zone : zoneOrder)
         {
+            // Hidden zone (Story 4.2): no header band, no modules, no height contribution.
+            if (std::find (hiddenZones.begin(), hiddenZones.end(), zone) != hiddenZones.end())
+                continue;
+
             // --- full-width zone header band ---
             if (apply)
                 zoneBands.push_back ({ zoneText (zone), zoneTag (zone),
@@ -165,6 +244,7 @@ namespace rack
                     const int pw = t.fcols * wc + (t.fcols - 1) * kGutter;
                     const int ph = t.funits * kHu + (t.funits - 1) * kGutter;
                     t.frame->setBounds (px, py, pw, ph);
+                    shownFrames.push_back (t.frame);
                 }
             }
 
@@ -173,6 +253,12 @@ namespace rack
                 y = zoneTopY + rowsUsed * kHu + (rowsUsed - 1) * kGutter;
             y += kGutter;   // gap before the next zone
         }
+
+        // Frames not placed this pass (module hidden or its zone hidden) are taken out of
+        // view — but kept alive with their APVTS attachments intact (hiding is UI-only).
+        if (apply)
+            for (auto* f : frames)
+                f->setVisible (std::find (shownFrames.begin(), shownFrames.end(), f) != shownFrames.end());
 
         return y + kPad;
     }

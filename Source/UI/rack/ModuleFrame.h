@@ -32,6 +32,8 @@ namespace rack
         // Module identity (stable slug from the descriptor) — used by the Rack to look a
         // module up (e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button).
         const juce::String& moduleId() const noexcept { return desc.id; }
+        // Display title (for the show/hide MODULES menu, Story 4.2).
+        const juce::String& moduleTitle() const noexcept { return desc.title; }
         // Visibly "press" this module's first Action button (shows the press animation AND
         // fires its onClick) — lets a keyboard shortcut mirror the on-screen button.
         void clickFirstAction();

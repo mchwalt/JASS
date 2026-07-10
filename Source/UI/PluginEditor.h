@@ -61,6 +61,9 @@ private:
 
     // Preset save/load (shared .synthy JSON format) + randomize + reset
     juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" }, resetBtn { "RESET" };
+    juce::TextButton modulesBtn { "MODULES" };   // show/hide menu (Story 4.2)
+    void showModulesMenu();
+    void refitHeight();   // recompute window height from the rack's visible content (AD-12)
     std::unique_ptr<juce::FileChooser> presetChooser;
     juce::Label presetNameLabel;                 // shows the currently loaded preset
     juce::String shownLabel;                     // last text pushed to the label (change-detect)
