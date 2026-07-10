@@ -71,6 +71,11 @@ namespace rack
         void resetLayout();               // restore descriptor-default layout (touches NO audio param)
         void reloadLayoutFromState();     // re-apply the persisted layout from apvts.state (after a load)
 
+        // Invariant guard: a HIDDEN module must never be audible. Forces every hidden module's
+        // enableParam off. Call after any path that may re-enable params under a stale layout
+        // (header RESET/RANDOM, preset load) so nothing plays invisibly.
+        void enforceHiddenDisabled();
+
         static constexpr const char* kLayoutStateProp = "rackLayout";
 
         // Menu data: the modules of a zone in placement order, with title + visibility.

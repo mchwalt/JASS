@@ -266,11 +266,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 
     addAndMakeVisible(randomBtn);
     randomBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff6d28d9));
-    randomBtn.onClick = [this] { processor.randomize(); setPresetName("Random"); };
+    randomBtn.onClick = [this] { processor.randomize(); setPresetName("Random");
+                                 if (sampleRack) sampleRack->enforceHiddenDisabled(); };
 
     addAndMakeVisible(resetBtn);
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
-    resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init"); };
+    resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
+                                if (sampleRack) sampleRack->enforceHiddenDisabled(); };
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
     addAndMakeVisible(modulesBtn);

@@ -101,7 +101,8 @@ claude-opus-4-8[1m]
 - **DAW state:** `getStateInformation`=`copyState()` carries the string property in the XML for free; `setStateInformation` restores it.
 - **Editor:** `reloadLayoutFromState()` applies the persisted layout after the rack is built (LiveState already loaded by then) and after the Load button. `RackCustomizePanel` got a **"Reset layout"** button (bottom of the CallOutBox) → `resetLayout()` + rebuild rows.
 - **Load/reset do NOT couple enables** — `applyLayoutVar`/`resetLayout` set `visible`/zone/pos only; enables restore from their own params (so a loaded preset isn't clobbered).
-- **Known minor:** a DAW `setStateInformation` while the editor is open doesn't auto-resync the open panel (edge case; editor reads on open). Layout changes don't flip the "Current State" modified indicator (params-only) — acceptable.
+- **Invariant fix (user-reported): hidden ⇒ never audible.** A hidden module "does not exist / is unreachable for the synth" (user's model). Bug: the header **RESET** (`resetToDefault` force-enables all 3 OSCs) and **RANDOM** reset param enables under a stale layout → a hidden OSC could play invisibly. Fix: `Rack::enforceHiddenDisabled()` forces every hidden module's `enableParam` off; called after RESET, after RANDOM, and at the end of `reloadLayoutFromState()` (defensive, also catches pre-coupling / hand-edited / C# presets where visible=false but enable=on). Header RESET keeps modules hidden (does not restore visibility) but now silent — matches the user's lean.
+- **Known minor:** a DAW `setStateInformation` while the editor is open doesn't auto-resync the open panel (edge case; editor reads on open). Layout changes don't flip the "Current State" modified indicator (params-only) — acceptable. DAW automation of a hidden module's enable while the editor is closed isn't guarded (no editor to enforce) — deferred edge.
 
 ### File List
 
