@@ -171,7 +171,7 @@ So that modules align consistently and the layout lives in exactly one place (NF
 **Given** a set of S/M/L modules handed to the `Rack`
 **When** the editor lays out
 **Then** each module occupies whole grid multiples on the 12-column grid (XS=2×1, S=3×1, M=4×1, L=4×2, XL=6×2) with uniform gutters and no module overlaps a grid boundary
-**And** the MASTER BUS / GENERATORS / MODULATION / PROCESSING zone headers span the rack width and separate the groups
+**And** the MASTER BUS / GENERATORS / MODULATION / PROCESSING / VISUALIZATION zone headers span the rack width and separate the groups
 **And** a single `SynthyLookAndFeel` is set once by the rack and applies to all modules
 **And** the full rack fits the fixed target window (~1920×1200) without scrolling.
 
@@ -252,7 +252,7 @@ So that the visualizations are first-class, consistent parts of the rack.
 **Then** the Oscilloscope and Spectrum render live as size-XL modules placed side by side (forming a display band)
 **And** each reuses its existing display component (`WaveformDisplay` / `SpectrumDisplay`) and repaints only on meaningful change (NFR5).
 
-_Decision (2026-07-01): the display modules get **no dedicated VISUALIZATION zone header** — a header for just two passive visualisers would cost a full row of vertical space in the fixed window for no navigation benefit. They read as a display band by form + placement alone. Zones stay MASTER BUS / GENERATORS / MODULATION / PROCESSING._
+_Decision (2026-07-01, REVERSED 2026-07-11): originally the scope + spectrum got no dedicated zone (a header for two passive visualisers seemed to waste a row in the fixed static layout). With Epic 4 making zones user-customizable (show/hide, move, reorder), a dedicated **VISUALIZATION** zone now earns its place — the visualizers are a group you'd want to hide or relocate as a unit. Scope + Spectrum live in the **VISUALIZATION** zone (bottom); zones are now MASTER BUS / GENERATORS / MODULATION / PROCESSING / VISUALIZATION._
 
 _Requirement (2026-07-02, restore C# features): (a) the Oscilloscope module gets a **selectable time-base / zoom** (1 / 2 / 5 / 10 / 25 ms) as a Combo + a **left-side ms scale** (axis ticks + labels in `WaveformDisplay::paint`); displayed samples = `ms × sampleRate/1000`. (b) the **Spectrum** module gets its own **scale** too (frequency axis, and level/dB axis, drawn in `SpectrumDisplay::paint`). Both are pure UI/drawing, no audio change._
 

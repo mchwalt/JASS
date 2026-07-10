@@ -43,7 +43,7 @@ Single operator: the developer-musician using JASS standalone for sound design a
 
 ## 5. The Rack Model (core design)
 
-The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of modules. The **zone grouping** is: a **MASTER BUS** row on top (right-aligned) plus GENERATORS → MODULATION → PROCESSING, each introduced by a zone header.
+The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of modules. The **zone grouping** is: a **MASTER BUS** row on top (right-aligned) plus GENERATORS → MODULATION → PROCESSING → VISUALIZATION, each introduced by a zone header.
 
 **Standard size classes.** The rack is a fixed **12-column proportional grid** (the raster is decoupled from knob diameter). A size class is a **column span**; a module declares only its class and the rack places it:
 
@@ -79,7 +79,7 @@ The editor is a **vertical 19″ rack**: a fixed-width frame holding rows of mod
 ### FR Group C — Standard Sizes & Rack Layout
 - **FR8.** Size classes live in a single data-driven table; **5 are defined and in use (XS/S/M/L/XL)** on the 12-column grid and every module is assigned one. The set stays extensible by one table row — never by per-module custom sizing.
 - **FR9.** The rack arranges modules on a **fixed grid** of rack-units × columns; modules align to the grid with consistent gutters. No module overlaps a grid boundary.
-- **FR10.** **Zone headers** (MASTER BUS / GENERATORS / MODULATION / PROCESSING) separate the groups and span the rack width. The MASTER BUS row sits on top (right-aligned) and holds the Master + Stereo modules.
+- **FR10.** **Zone headers** (MASTER BUS / GENERATORS / MODULATION / PROCESSING / VISUALIZATION) separate the groups and span the rack width. The MASTER BUS row sits on top (right-aligned) and holds the Master + Stereo modules; VISUALIZATION holds the oscilloscope + spectrum. _(Revised 2026-07-11: a dedicated VISUALIZATION zone was added for the scope + spectrum — see FR11; the earlier "no visualization zone" call was for the static layout and no longer applies now that zones are user-customizable.)_
 - **FR11.** Graphical displays — **oscilloscope, spectrum, ADSR-envelope curve** — are themselves modules (size **L**) within the rack, not specially-placed exceptions.
 
 ### FR Group D — Migration & Header

@@ -19,7 +19,8 @@ namespace rack
     // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
     // its own default zone — Rack.h includes this header, so the descriptor can't reference
     // Rack::Zone without an include-cycle. Rack aliases this as Rack::Zone for its callers.
-    enum class Zone { Generators, Modulation, Processing, MasterBus };
+    // (Persistence stores the zone by NAME, so appending an enumerator is safe.)
+    enum class Zone { Generators, Modulation, Processing, Visualization, MasterBus };
 
     // Desaturated identity tints (FR6), matching the rack mockup. The single source
     // of the type→colour map, shared by ModuleFrame (top edge / reset tint) and the
