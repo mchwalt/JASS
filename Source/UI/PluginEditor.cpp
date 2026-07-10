@@ -272,7 +272,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(resetBtn);
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
-                                if (sampleRack) sampleRack->enforceHiddenDisabled(); };
+                                if (sampleRack) sampleRack->resetLayout(); };   // factory: sound Init + default layout/visibility
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
     addAndMakeVisible(modulesBtn);

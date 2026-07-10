@@ -110,6 +110,9 @@ namespace rack
         Zone         defaultZone {};              // default rack zone (AD-10); the RackLayout model
                                                   // seeds from this. typeTag/`type` is identity/colour
                                                   // only and is INDEPENDENT of the zone.
+        bool         defaultVisible = true;       // factory visibility (Story 4.3): a factory reset
+                                                  // restores this. false => module starts hidden (+silent)
+                                                  // so the default rack doesn't overflow the screen.
         juce::String enableParam;                 // empty => always-on (Master, ADSR, Mix-Mode)
         std::vector<juce::String> resetParams;    // the reset (↺) writes these defaults to APVTS
         std::vector<BodyElement>  body;

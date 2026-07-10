@@ -47,17 +47,19 @@ namespace rack
         const auto spec = sizeClassSpec (desc.sizeClass);   // read footprint BEFORE moving
         const auto zone = desc.defaultZone;                 // AD-10: zone declared on descriptor
         const auto id   = desc.id;
+        const bool vis  = desc.defaultVisible;              // factory visibility (Story 4.3)
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addAndMakeVisible (*f);
         placed.push_back ({ id, f, spec.cols, spec.units });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
-        // default layout reproduces today's insertion-order packing exactly. visible defaults true.
+        // default layout reproduces today's insertion-order packing. Factory visibility from
+        // the descriptor (default true; false => starts hidden so the rack doesn't overflow).
         int pos = 0;
         for (const auto& e : layoutModel)
             if (e.zone == zone) ++pos;
-        layoutModel.push_back ({ id, zone, pos, /*visible*/ true });
-        defaultLayout.push_back ({ id, zone, pos, /*visible*/ true });   // stock layout (for reset + isDefault)
+        layoutModel.push_back ({ id, zone, pos, vis });
+        defaultLayout.push_back ({ id, zone, pos, vis });   // stock layout (for reset + isDefault)
     }
 
     const Rack::Placed* Rack::placedById (const juce::String& id) const
@@ -181,7 +183,7 @@ namespace rack
             for (const auto& d : defaultLayout)
                 if (d.id == e.id)
                 {
-                    if (d.zone != e.zone || d.position != e.position || ! e.visible) return false;
+                    if (d.zone != e.zone || d.position != e.position || e.visible != d.visible) return false;
                     matched = true; break;
                 }
             if (! matched) return false;
@@ -200,9 +202,10 @@ namespace rack
 
     void Rack::resetLayout()
     {
-        layoutModel = defaultLayout;   // stock visibility + zones + order (touches NO audio param)
+        layoutModel = defaultLayout;   // restore factory zones + order + visibility
         relayout();
-        writeLayoutToState();          // clears the property (now default)
+        writeLayoutToState();          // now default ⇒ clears the property
+        enforceHiddenDisabled();       // factory-hidden modules must be silent (invariant)
         if (onLayoutChanged) onLayoutChanged();
     }
 
