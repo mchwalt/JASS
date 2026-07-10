@@ -261,7 +261,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
-                                     voice->getAdsrOnRef(), voice->getMixModeOnRef());
+                                     voice->getAdsrOnRef(), voice->getMixModeOnRef(),
+                                     voice->getMixSrcARef(), voice->getMixSrcBRef());
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {

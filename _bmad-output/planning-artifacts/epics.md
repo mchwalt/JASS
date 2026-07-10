@@ -40,6 +40,9 @@ FR18: The user can reorder modules within a zone via drag & drop.
 FR19: The customized layout (per-module visibility, zone assignment, position/order) persists with the preset and restores on load; a single "reset layout" affordance restores the built-in default without touching audio parameters.
 FR20: Every module has a stable identity and a declared default zone so the default layout is reproducible and a customized layout is a delta against it.
 
+_Epic 5 — Flexible Mix Routing (added 2026-07-11):_
+FR21: MIX MODE's RingMod/FM coupling operates on two user-selectable oscillators (Source A, Source B ∈ {OSC 1, OSC 2, OSC 3}) instead of the fixed OSC1↔OSC2. FM: A modulates B (carrier); RingMod: A×B; the remaining OSC is summed plainly; Additive unchanged. Defaults A=OSC1/B=OSC2 (prior behaviour). Append-only params; missing ⇒ default coupling. First sanctioned DSP change, scoped to the 3 OSCs.
+
 ### NonFunctional Requirements
 
 NFR1: Maintainability — no module defines its own `resized()` geometry; layout is data-driven via the framework. Primary engineering win and a success gate.
@@ -103,6 +106,7 @@ FR18: Epic 4 — reorder modules within a zone
 FR19: Epic 4 — persist custom layout + reset layout
 FR20: Epic 4 — stable id + declared default zone on descriptor (foundation)
 NFR6: Epic 4 — append-only, interop-safe layout persistence
+FR21: Epic 5 — selectable MIX MODE sources (A/B among OSC 1/2/3)
 
 ## Epic List
 
@@ -124,6 +128,10 @@ Build the fixed header chrome (preset SAVE / LOAD / RANDOM / RESET, centred titl
 Let the user tailor the rack: show/hide individual modules and whole zones, drag modules between zones, and reorder within a zone — with the customized layout persisted in the preset and resettable to the built-in default. Built foundation-first: 4.1 introduces an ordered `RackLayout` data model (default zone/order on the descriptor) as the single source of truth; 4.2 adds the first visible mutation (show/hide) so there is real non-default state; 4.3 then persists that state and adds reset-layout; 4.4 adds drag & drop. The window height auto-fits the visible modules.
 **FRs covered:** FR15, FR16, FR17, FR18, FR19, FR20, NFR6 (and NFR1 held dynamically).
 _(Story order revised 2026-07-10: show/hide (4.2) precedes persistence (4.3) — persisting before any layout-mutating UI would only ever store the default, leaving nothing to verify.)_
+
+### Epic 5: Flexible Mix Routing
+Make the MIX MODE (RingMod / FM) coupling operate on two user-selectable oscillators (A/B ∈ OSC 1/2/3) instead of the fixed OSC1↔OSC2 — the natural consequence of freely arrangeable modules. The first sanctioned audio/DSP change, kept surgical (only the OSC-mix block + two append-only params); scoped to the three OSCs.
+**FRs covered:** FR21.
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -398,3 +406,23 @@ _(AD-11 precision 2026-07-10: layout persists as ONE structured `"RackLayout"` J
 ### Story 4.4: ~~Drag & drop between zones + reorder within a zone~~ — FOLDED INTO 4.2
 
 _Superseded 2026-07-11. Reordering and moving modules between zones is delivered by the **reorderable customization list in Story 4.2** instead of on-rack drag & drop (simpler, more robust, one place for show/hide + order + zone). This story is intentionally left empty; Epic 4 = Stories 4.1, 4.2, 4.3._
+
+## Epic 5: Flexible Mix Routing
+
+Generalize the MIX MODE coupling from the fixed OSC1↔OSC2 to two user-selectable operands. First sanctioned DSP change — surgical: only the OSC-mix block in `SynthVoice` + two append-only params + the MIX MODE descriptor. No other signal-chain change.
+
+### Story 5.1: Selectable MIX MODE sources (A/B among OSC 1/2/3)
+
+As a JASS sound designer,
+I want to choose which two oscillators MIX MODE (RingMod / FM) couples,
+so that I can ring-mod / FM any pair (1-2, 1-3, 2-3), not only OSC1↔OSC2.
+
+**Acceptance Criteria:**
+
+**Given** the MIX MODE module
+**When** I set Source A and Source B (each OSC 1/2/3)
+**Then** FM makes A modulate B (carrier) and RingMod computes A×B, with the remaining OSC summed plainly; Additive is unchanged; MIX-MODE-off sums plainly
+**And** every oscillator still advances exactly once per sample (no pitch/phase drift; A==B ⇒ plain additive)
+**And** the new `mixSrcA`/`mixSrcB` params are append-only with defaults OSC1/OSC2, so a preset without them loads with the prior 1↔2 coupling (missing ⇒ default)
+**And** MIX MODE's lit/dimmed state reflects the two selected OSCs being enabled
+**And** the default patch is audibly identical to before (regression), RT rules respected (NFR2), build clean.

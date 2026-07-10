@@ -23,7 +23,7 @@ This PRD covers a **UI-only redesign**: re-cast every sound source, modulator, f
 - Adding or restyling a module in the future is a small, declarative change — not bespoke layout code.
 
 **Non-Goals**
-- No new audio features or DSP modules. (One append-only exception: four enable bools were added so LFO/Noise/Filter/Distortion get a real header enable — see NFR3.)
+- No new audio features or DSP modules. (Append-only exceptions: the four enable bools for LFO/Noise/Filter/Distortion — see NFR3; and, as of Epic 5, selectable MIX MODE operands — FR21 — the first sanctioned DSP change, kept surgical.)
 - No change to the preset format or existing parameter IDs, and no audio-engine rework.
 - No theming system / multiple skins (single minimal look).
 - No **user-resizable or zoomable** editor: the window width is fixed and the rack is not zoomable. (Epic 4 adds layout customization; as a consequence the window **height** auto-fits the currently visible modules — this is automatic, not a user-drag-resize.)
@@ -95,6 +95,10 @@ _(New capability, layered on the unified rack. The user tailors which modules ar
 - **FR18.** The user can **reorder modules within a zone** (drag & drop / reposition). Placement order is otherwise the module's declared default.
 - **FR19.** The **customized layout** — per-module visibility, zone assignment, and position/order — **persists with the preset** and restores on load. A single **"reset layout"** affordance restores the built-in default layout without touching audio parameters.
 - **FR20.** Every module has a **stable identity** and a **declared default zone** so the default layout is reproducible and any customized layout is expressed as a delta against it. (The stable per-module id already exists; the default zone moves from the rack call-site onto the module.)
+
+### FR Group F — Flexible Mix Routing (Epic 5)
+_(First sanctioned audio/DSP change. The MIX MODE coupling operands become user-selectable now that modules are freely arrangeable.)_
+- **FR21.** MIX MODE's RingMod / FM coupling operates on **two user-selectable oscillators** (Source A, Source B ∈ {OSC 1, OSC 2, OSC 3}) instead of the fixed OSC 1 ↔ OSC 2. FM: A modulates B (carrier); RingMod: A × B; the remaining oscillator is summed plainly; Additive is unchanged. Defaults A=OSC 1, B=OSC 2 (identical to prior behaviour). New params are append-only; a preset without them loads with the default coupling. Scope is the three OSCs only (Noise/Wavetable/Sub are a separate future idea).
 
 ## 7. Non-Functional Requirements
 - **NFR1 — Maintainability:** no module defines its own `resized()` geometry; layout is data-driven via the framework. This is the primary engineering win and a success gate.

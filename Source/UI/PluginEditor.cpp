@@ -6,6 +6,7 @@
 #include <memory>
 #include <vector>
 #include <utility>
+#include <array>
 
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
 // the rack framework owns the single shared look.
@@ -539,26 +540,34 @@ void SynthyEditor::buildSampleRack()
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
               K(P::oscUniDetune(i), "DETUNE") });
     };
-    // MIX MODE (XS, half-width) sits BETWEEN OSC 1 and OSC 2 — it couples OSC 1<->2, so it
-    // reads as the connector between them. Row-major packing then puts OSC 3 on row 2 and
-    // (after Sub+Noise) Karplus on row 3.
+    // MIX MODE sits BETWEEN OSC 1 and OSC 2. Epic 5: it now couples two SELECTABLE oscillators
+    // (Source A / Source B), no longer a fixed OSC1<->OSC2.
     addOsc(1);
     {
-        // MIX MODE couples OSC1<->OSC2 (it sits between them). It is only meaningful when
-        // BOTH are on, so it shows as active/lit only then and dims otherwise. The derived
-        // enable reads the shared osc1On/osc2On params (AD-9) — it holds NO reference to the
-        // OSC modules; the atomics are grabbed once (stable for the APVTS lifetime).
-        auto* o1 = apvts.getRawParameterValue (P::oscOn (1));
-        auto* o2 = apvts.getRawParameterValue (P::oscOn (2));
+        // The derived lit/dimmed state reads the shared params only (AD-9), no module refs:
+        // MIX MODE is meaningful when the two SELECTED source OSCs are both enabled. Grab the
+        // relevant atomics once (stable for the APVTS lifetime).
+        auto* selA  = apvts.getRawParameterValue (P::mixSrcA);
+        auto* selB  = apvts.getRawParameterValue (P::mixSrcB);
+        std::array<std::atomic<float>*, 3> oscOn { apvts.getRawParameterValue (P::oscOn (1)),
+                                                   apvts.getRawParameterValue (P::oscOn (2)),
+                                                   apvts.getRawParameterValue (P::oscOn (3)) };
         ModuleDescriptor mix;
-        mix.sizeClass = SizeClass::XXS; mix.type = ModuleType::Generator;
+        mix.sizeClass = SizeClass::S; mix.type = ModuleType::Generator;   // MODE + Source A + Source B
         mix.id = "mixmode"; mix.title = "MIX MODE";
         mix.enableParam = P::mixModeOn;   // real user enable (off => additive, Story 2.4)
-        mix.body = { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }) };
-        // Effective lit = mixModeOn AND (osc1 && osc2): the interactive toggle is the user's
-        // enable; the predicate additionally dims when the coupling is meaningless (a UI cue,
-        // not an audio gate — the audio additive-fallback keys off mixModeOn only).
-        mix.enabledWhen = [o1, o2] { return o1->load() >= 0.5f && o2->load() >= 0.5f; };
+        const juce::StringArray oscItems { "OSC 1", "OSC 2", "OSC 3" };
+        mix.body = { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }),
+                     C(P::mixSrcA, "SRC A", oscItems),
+                     C(P::mixSrcB, "SRC B", oscItems) };
+        // Lit = mixModeOn AND both SELECTED sources enabled (a UI cue; the audio additive
+        // fallback keys off mixModeOn / a==b only).
+        mix.enabledWhen = [selA, selB, oscOn]
+        {
+            const int a = juce::jlimit (0, 2, (int) selA->load());
+            const int b = juce::jlimit (0, 2, (int) selB->load());
+            return oscOn[(size_t) a]->load() >= 0.5f && oscOn[(size_t) b]->load() >= 0.5f;
+        };
         mix.defaultZone = Rack::Zone::Generators;   // AD-10: zone on the descriptor
         sampleRack->addModule(std::move(mix));
     }
