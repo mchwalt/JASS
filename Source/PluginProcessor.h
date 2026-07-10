@@ -46,7 +46,15 @@ public:
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
     // from the message thread).
-    void pluckString() { pluckRequested = true; }
+    void pluckString()
+    {
+        pluckRequested = true;
+        // A pluck only re-excites ACTIVE voices; after the keyboard was played the auto-play
+        // drone is off and no voice renders, so the pluck would be silent. If nothing is held,
+        // re-arm the drone so a voice is active and the pluck is actually heard.
+        if (heldNotesLo.load() == 0 && heldNotesHi.load() == 0)
+            autoPlayEnabled = true;
+    }
 
     // Randomize all parameters (with guards so the result stays audible).
     void randomize();
