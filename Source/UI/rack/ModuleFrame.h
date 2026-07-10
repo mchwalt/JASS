@@ -34,6 +34,9 @@ namespace rack
         const juce::String& moduleId() const noexcept { return desc.id; }
         // Display title (for the show/hide MODULES menu, Story 4.2).
         const juce::String& moduleTitle() const noexcept { return desc.title; }
+        // Enable param id ("" if the module has no on/off) — lets the Rack couple
+        // visibility to enable (hide ⇒ disable, show ⇒ enable once; Story 4.2).
+        const juce::String& enableParamId() const noexcept { return desc.enableParam; }
         // Visibly "press" this module's first Action button (shows the press animation AND
         // fires its onClick) — lets a keyboard shortcut mirror the on-screen button.
         void clickFirstAction();
