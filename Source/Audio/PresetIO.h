@@ -206,6 +206,13 @@ namespace PresetIO
         root->setProperty("WavetableUnisonVoices", rawI(a, ID::wavetableUniVoices));
         root->setProperty("WavetableUnisonDetune", rawF(a, ID::wavetableUniDetune));
 
+        // Rack layout (Story 4.3, AD-11): append-only. The editor's Rack stores the custom
+        // layout as a JSON string on apvts.state ("rackLayout"); mirror it into the preset as
+        // a nested, readable "RackLayout" field. Absent when the layout is the default ⇒ field
+        // omitted (clean preset, missing⇒default on load; the C# app ignores the unknown field).
+        if (auto s = a.state.getProperty(juce::Identifier("rackLayout")).toString(); s.isNotEmpty())
+            root->setProperty("RackLayout", juce::JSON::parse(s));
+
         return juce::var(root);
     }
 
@@ -327,6 +334,15 @@ namespace PresetIO
         setRaw(a, ID::wavetableAmp,       (float) jnum(v, "WavetableAmplitude",    rawF(a, ID::wavetableAmp)));
         setRaw(a, ID::wavetableUniVoices, (float) jint(v, "WavetableUnisonVoices", rawI(a, ID::wavetableUniVoices)));
         setRaw(a, ID::wavetableUniDetune, (float) jnum(v, "WavetableUnisonDetune", rawF(a, ID::wavetableUniDetune)));
+
+        // Rack layout (Story 4.3): write the "RackLayout" field into the apvts.state property the
+        // Rack reads (non-parameter, so the reset-to-default loop above didn't touch it). Missing
+        // field ⇒ remove the property ⇒ built-in default layout. The editor re-applies it via
+        // Rack::reloadLayoutFromState() after a load.
+        if (v.hasProperty("RackLayout"))
+            a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
+        else
+            a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
     }
 
     inline bool loadFromFile(APVTS& a, const juce::File& file)

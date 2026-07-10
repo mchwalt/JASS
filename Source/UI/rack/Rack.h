@@ -64,6 +64,15 @@ namespace rack
         // within-zone position becomes the running index. Visibility is unchanged.
         void applyLayoutOrder (const std::vector<std::pair<juce::String, Zone>>& ordered);
 
+        // --- Persistence + reset (Story 4.3, AD-11) -----------------------------------
+        // The custom layout persists as ONE string property on apvts.state (`kLayoutStateProp`,
+        // JSON of layoutToVar). PresetIO mirrors it into the `.synthy` "RackLayout" field;
+        // getStateInformation carries it in the DAW state for free. Default layout ⇒ no property.
+        void resetLayout();               // restore descriptor-default layout (touches NO audio param)
+        void reloadLayoutFromState();     // re-apply the persisted layout from apvts.state (after a load)
+
+        static constexpr const char* kLayoutStateProp = "rackLayout";
+
         // Menu data: the modules of a zone in placement order, with title + visibility.
         struct ModuleInfo { juce::String id, title; bool visible; };
         std::vector<ModuleInfo> modulesInZone (Zone zone) const;
@@ -128,9 +137,17 @@ namespace rack
         // on load/reset (there visibility + enables are restored independently).
         void driveEnable (const juce::String& id, bool on);
 
+        // --- Layout persistence helpers (Story 4.3) ---
+        juce::var layoutToVar() const;                  // model → JSON var (array of {id,zone,pos,vis})
+        void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)
+        bool isDefaultLayout() const;                   // model == captured defaults?
+        void writeLayoutToState();                      // persist to apvts.state (or clear when default)
+        static Zone zoneFromName (const juce::String& name);   // inverse of zoneName
+
         juce::OwnedArray<ModuleFrame> frames;
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
         std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement
+        std::vector<RackLayoutEntry> defaultLayout;// descriptor defaults, captured at build (for reset + isDefault)
         std::vector<ZoneBand> zoneBands;           // computed in layout(), drawn in paint()
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Rack)

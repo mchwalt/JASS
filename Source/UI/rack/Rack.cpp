@@ -57,6 +57,7 @@ namespace rack
         for (const auto& e : layoutModel)
             if (e.zone == zone) ++pos;
         layoutModel.push_back ({ id, zone, pos, /*visible*/ true });
+        defaultLayout.push_back ({ id, zone, pos, /*visible*/ true });   // stock layout (for reset + isDefault)
     }
 
     const Rack::Placed* Rack::placedById (const juce::String& id) const
@@ -95,6 +96,7 @@ namespace rack
         if (! changed) return;
         driveEnable (id, visible);
         relayout();
+        writeLayoutToState();
         if (onLayoutChanged) onLayoutChanged();
     }
 
@@ -116,7 +118,105 @@ namespace rack
                 if (e.id == id) { e.zone = zone; e.position = counterFor (zone)++; break; }
 
         relayout();
+        writeLayoutToState();
         if (onLayoutChanged) onLayoutChanged();
+    }
+
+    // --- Layout persistence (Story 4.3, AD-11) --------------------------------------
+
+    Rack::Zone Rack::zoneFromName (const juce::String& name)
+    {
+        if (name == "MODULATION")    return Zone::Modulation;
+        if (name == "PROCESSING")    return Zone::Processing;
+        if (name == "VISUALIZATION") return Zone::Visualization;
+        if (name == "MASTER BUS")    return Zone::MasterBus;
+        return Zone::Generators;
+    }
+
+    juce::var Rack::layoutToVar() const
+    {
+        juce::Array<juce::var> arr;
+        for (const auto& e : layoutModel)
+        {
+            auto* o = new juce::DynamicObject();
+            o->setProperty ("id",   e.id);
+            o->setProperty ("zone", zoneName (e.zone));
+            o->setProperty ("pos",  e.position);
+            o->setProperty ("vis",  e.visible);
+            arr.add (juce::var (o));
+        }
+        return arr;
+    }
+
+    void Rack::applyLayoutVar (const juce::var& v)
+    {
+        // Restore from persisted layout: set zone/position/visible by id. Unknown ids are
+        // ignored; modules absent from the data keep their default. NO enable coupling and NO
+        // write-back here — this is the load path (enables come from their own params).
+        if (auto* arr = v.getArray())
+        {
+            for (const auto& item : *arr)
+            {
+                const auto id = item.getProperty ("id", {}).toString();
+                if (id.isEmpty()) continue;
+                for (auto& e : layoutModel)
+                    if (e.id == id)
+                    {
+                        e.zone     = zoneFromName (item.getProperty ("zone", {}).toString());
+                        e.position = (int)  item.getProperty ("pos", e.position);
+                        e.visible  = (bool) item.getProperty ("vis", e.visible);
+                        break;
+                    }
+            }
+        }
+        relayout();
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    bool Rack::isDefaultLayout() const
+    {
+        for (const auto& e : layoutModel)
+        {
+            bool matched = false;
+            for (const auto& d : defaultLayout)
+                if (d.id == e.id)
+                {
+                    if (d.zone != e.zone || d.position != e.position || ! e.visible) return false;
+                    matched = true; break;
+                }
+            if (! matched) return false;
+        }
+        return true;
+    }
+
+    void Rack::writeLayoutToState()
+    {
+        const juce::Identifier prop (kLayoutStateProp);
+        if (isDefaultLayout())
+            apvts.state.removeProperty (prop, nullptr);              // default ⇒ no property (clean preset)
+        else
+            apvts.state.setProperty (prop, juce::JSON::toString (layoutToVar()), nullptr);
+    }
+
+    void Rack::resetLayout()
+    {
+        layoutModel = defaultLayout;   // stock visibility + zones + order (touches NO audio param)
+        relayout();
+        writeLayoutToState();          // clears the property (now default)
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::reloadLayoutFromState()
+    {
+        const auto s = apvts.state.getProperty (juce::Identifier (kLayoutStateProp)).toString();
+        if (s.isNotEmpty())
+            applyLayoutVar (juce::JSON::parse (s));
+        else
+        {
+            layoutModel = defaultLayout;   // no stored layout ⇒ stock
+            relayout();
+            if (onLayoutChanged) onLayoutChanged();
+        }
     }
 
     void Rack::setZoneVisible (Zone zone, bool visible)
@@ -134,6 +234,7 @@ namespace rack
             }
         if (! changed) return;
         relayout();
+        writeLayoutToState();
         if (onLayoutChanged) onLayoutChanged();
     }
 
