@@ -462,7 +462,8 @@ void SynthyEditor::buildSampleRack()
     // MASTER BUS is the top row (first zone), then the three main zones below it.
     sampleRack = std::make_unique<Rack>(apvts, Rack::kDefaultCols,
         std::vector<Rack::Zone>{ Rack::Zone::MasterBus, Rack::Zone::Generators,
-                                 Rack::Zone::Modulation, Rack::Zone::Processing });
+                                 Rack::Zone::Modulation, Rack::Zone::Processing,
+                                 Rack::Zone::Visualization });
 
     namespace P = Parameters::ID;
 
@@ -620,13 +621,13 @@ void SynthyEditor::buildSampleRack()
     scope->setShowTitle(false);
     scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
     sampleOwned.add(scope);
-    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
+    add(Rack::Zone::Visualization, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
         { Display{ scope, 12 } });
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
     spec->setShowTitle(false);
     spec->setEnableSource(apvts.getRawParameterValue(P::spectrumOn));   // spectrumOn off => freeze+blank
     sampleOwned.add(spec);
-    add(Rack::Zone::Processing, SizeClass::XL, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
+    add(Rack::Zone::Visualization, SizeClass::XL, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
         { Display{ spec, 12 } });
 
     // Added LAST so the opaque rack covers the legacy body; the header chrome and

@@ -10,10 +10,11 @@ namespace rack
         {
             switch (z)
             {
-                case Rack::Zone::Generators: return ModuleType::Generator;
-                case Rack::Zone::Modulation: return ModuleType::Modulator;
-                case Rack::Zone::Processing: return ModuleType::Processor;
-                case Rack::Zone::MasterBus:  return ModuleType::Processor;
+                case Rack::Zone::Generators:    return ModuleType::Generator;
+                case Rack::Zone::Modulation:    return ModuleType::Modulator;
+                case Rack::Zone::Processing:    return ModuleType::Processor;
+                case Rack::Zone::Visualization: return ModuleType::Processor;
+                case Rack::Zone::MasterBus:     return ModuleType::Processor;
             }
             return ModuleType::Generator;
         }
@@ -22,10 +23,11 @@ namespace rack
         {
             switch (z)
             {
-                case Rack::Zone::Generators: return "GENERATORS";
-                case Rack::Zone::Modulation: return "MODULATION";
-                case Rack::Zone::Processing: return "PROCESSING";
-                case Rack::Zone::MasterBus:  return "MASTER BUS";
+                case Rack::Zone::Generators:    return "GENERATORS";
+                case Rack::Zone::Modulation:    return "MODULATION";
+                case Rack::Zone::Processing:    return "PROCESSING";
+                case Rack::Zone::Visualization: return "VISUALIZATION";
+                case Rack::Zone::MasterBus:     return "MASTER BUS";
             }
             return {};
         }
