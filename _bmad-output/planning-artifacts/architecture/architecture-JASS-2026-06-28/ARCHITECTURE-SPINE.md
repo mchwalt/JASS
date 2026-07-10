@@ -85,7 +85,8 @@ Layer → location:
 ### AD-10 — Ordered layout model is the single source of truth for placement (Epic 4)
 - **Binds:** the rack and every Epic-4 feature — show/hide, move-between-zones, reorder-within-zone, persistence (FR15–FR20).
 - **Prevents:** each feature keeping its own private view of order/visibility (today placement is *implicit*: a module's zone is passed to `Rack::addModule(zone, desc)` and within-zone order is raw insertion order, with no visibility concept) — the divergence that makes drag-drop, hide, and load fight each other.
-- **Rule:** the rack renders from **one ordered data model** `RackLayout = [ { id, zone, position, visible } ]` keyed by the module's stable `id` (AD-4 descriptor id, shipped in Story 1.5). Show/hide, move, and reorder mutate **only this model**; the rack then re-runs the **single `layout()` packing path** (AD-2) to re-pack — no component computes its own bounds, so NFR1 still holds in the dynamic case. Each module declares its **default zone and default order on the `ModuleDescriptor`** (moved off the `addModule` call-site); the built-in default layout is reproducible from descriptors alone, and a customized layout is a **delta** against it. `typeTag` remains **identity/colour only** and never changes when a module moves (dragging Reverb into GENERATORS keeps it a Processor — AD-9 spirit).
+- **Rule:** the rack renders from **one ordered data model** `RackLayout = [ { id, zone, position, visible } ]` keyed by the module's stable `id` (AD-4 descriptor id, shipped in Story 1.5). Show/hide, move, and reorder mutate **only this model**; the rack then re-runs the **single `layout()` packing path** (AD-2) to re-pack — no component computes its own bounds, so NFR1 still holds in the dynamic case. Each module declares its **default zone and default order on the `ModuleDescriptor`** (moved off the `addModule` call-site); the built-in default layout is reproducible from descriptors alone, and a customized layout is a **delta** against it. `typeTag` remains **identity/colour only** and never changes when a module moves (moving Reverb into GENERATORS keeps it a Processor — AD-9 spirit).
+  - **Interaction mechanism (revised 2026-07-11):** the user drives show/hide + reorder + zone-move through a **reorderable customization list** (Story 4.2, opened from the MODULES button) where **list order = on-screen placement order** — *not* on-rack drag & drop. This is a UI realization of the same invariant (mutate the model → re-run `layout()`); it is simpler/more robust and unifies all three operations in one place.
 
 ### AD-11 — Layout persistence is append-only, interop-safe, default-on-missing (Epic 4)
 - **Binds:** preset serialization (FR19, NFR6); extends the inherited NFR3 format-integrity constraint.
@@ -157,7 +158,7 @@ Fixed chrome stays in `PluginEditor`, outside the rack grid (FR14): preset SAVE/
 | Standard sizes & rack layout (FR8–FR11) | `rack/Rack` | AD-2, AD-5 |
 | Migration & header (FR12–FR14) | per-module descriptors in `PluginEditor`; chrome in `PluginEditor` | AD-1, AD-4 |
 | Maintainability / RT / state (NFR1–NFR3) | rack engine; inherited constraints | AD-2, AD-6, conventions |
-| Rack customization: show/hide, drag-drop, reorder (FR15–FR18, FR20) | `RackLayout` model + `Rack` (mutate model → re-run `layout()`); default zone/order on `ModuleDescriptor` | AD-10, AD-2 |
+| Rack customization: show/hide, reorder, zone-move via a reorderable list (FR15–FR18, FR20) | `RackLayout` model + `Rack` (mutate model → re-run `layout()`); customization list panel in the editor; default zone/order on `ModuleDescriptor` | AD-10, AD-2 |
 | Layout persistence + reset (FR19, NFR6) | `RackLayout` ↔ append-only `.synthy` params; editor height auto-fit | AD-11, AD-12 |
 
 ## Deferred

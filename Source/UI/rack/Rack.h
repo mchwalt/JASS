@@ -1,5 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
+#include <vector>
+#include <utility>
 #include "ModuleDescriptor.h"
 #include "ModuleFrame.h"
 #include "SynthyLookAndFeel.h"
@@ -54,6 +56,11 @@ namespace rack
         void setZoneVisible (Zone zone, bool visible);
         bool isModuleVisible (const juce::String& id) const;
         bool isZoneVisible (Zone zone) const;
+
+        // Set the full module order + zone assignment from the customization list (Story 4.2):
+        // `ordered` is every module id paired with its target zone, in the desired list order;
+        // within-zone position becomes the running index. Visibility is unchanged.
+        void applyLayoutOrder (const std::vector<std::pair<juce::String, Zone>>& ordered);
 
         // Menu data: the modules of a zone in placement order, with title + visibility.
         struct ModuleInfo { juce::String id, title; bool visible; };

@@ -1,4 +1,4 @@
-# Story 4.2: Show / hide modules and zones (auto-fit height)
+# Story 4.2: Rack customization panel — show/hide, reorder & move between zones (auto-fit height)
 
 Status: review
 
@@ -7,18 +7,22 @@ Status: review
 ## Story
 
 As a JASS player,
-I want to hide modules I don't use and hide whole zones,
-so that I can pare the rack down to just what I'm working with.
+I want a panel with a reorderable list of all modules where I can toggle visibility and drag items to change their order and zone,
+so that I can tailor which modules show and where they sit — the list order is the on-screen order.
+
+_(Approach revised 2026-07-11: a reorderable customization **list-panel** replaces on-rack drag & drop and the interim show/hide popup. It unifies show/hide + reorder + zone-move in one place; former Story 4.4 is folded in here.)_
 
 ## Acceptance Criteria
 
-1. **Hide a module.** The user can hide any individual module. Its `visible` flag flips to `false` in the `RackLayout` model (Story 4.1), the frame is removed from view (not merely dimmed per FR7), and the remaining modules **re-pack** to close the gap.
-2. **Audio unaffected (hiding is UI-only).** A hidden module keeps its parameters and audio processing running — a hidden Filter still filters, a hidden LFO still modulates. No parameter, APVTS entry, `.synthy` field, or audio behaviour changes (NFR2, NFR3).
-3. **Hide/show a zone.** The user can hide or show an entire zone as a unit — its zone header band and all its modules disappear/return together.
-4. **Re-show.** A hidden module or zone can be brought back (there must be a discoverable path to re-show, since a hidden module has no header to click). A re-shown module returns with all bindings, modulation rings, and displays intact.
-5. **Auto-fit height (AD-12).** After any show/hide the window **width stays fixed (1520 px)** and the **height auto-fits** the currently visible modules: the rack recomputes `preferredHeight(width)` and the editor re-applies `setSize`; the existing small-display auto-fit-down transform still applies.
-6. **Session-only in 4.2.** Visibility lives in the in-memory model only; surviving save/load is Story 4.3. (So after a restart the rack shows the default — that is expected here.)
-7. **Clean build**; verification = build + running app (toggle a few modules and a zone, watch re-pack + height change; confirm audio of a hidden module still sounds).
+1. **Show/hide a module.** A left checkbox per module toggles `visible` in the `RackLayout` model (Story 4.1); hidden = removed from the rack (not merely dimmed per FR7) and the rack **re-packs**.
+2. **Audio unaffected (hiding is UI-only).** A hidden module keeps its parameters and audio running — a hidden Filter still filters. No parameter, APVTS entry, `.synthy` field, or audio behaviour changes (NFR2, NFR3).
+3. **Reorder + move between zones by dragging list rows.** The panel lists modules grouped by zone in current order; dragging a module row within its zone reorders it, and dragging it across a zone header moves it to that zone (updates `zone` + `position`). **List order = on-screen placement order.**
+4. **Identity preserved on move.** A module keeps its type/colour tag when moved to another zone (Reverb dragged into GENERATORS stays a Processor).
+5. **Zone show/hide.** A zone header row's checkbox hides/shows the whole zone.
+6. **Single packing path (NFR1).** All mutations go through the Rack API (`setModuleVisible` / `setZoneVisible` / `applyLayoutOrder`) → the one `layout()` path re-packs; no ad-hoc bounds. MASTER BUS stays right-aligned, other zones left-aligned.
+7. **Auto-fit height (AD-12).** After any change the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules; the small-display auto-fit-down transform still applies.
+8. **Session-only in 4.2.** The layout lives in the in-memory model only; surviving save/load is Story 4.3 (so a restart shows the default — expected here).
+9. **Clean build**; verification = build + running app (toggle modules + a zone, drag to reorder and across zones, watch re-pack + height; confirm a hidden module still sounds).
 
 ## Tasks / Subtasks
 
@@ -92,14 +96,16 @@ claude-opus-4-8[1m]
 - **Rack visibility API:** `setModuleVisible(id,bool)`, `setZoneVisible(Zone,bool)`, `isModuleVisible`, `isZoneVisible`, `modulesInZone(Zone)` (ordered `{id,title,visible}` for the menu), `zones()`, static `zoneName(Zone)`, and `onLayoutChanged` callback. Hidden zones tracked in a `std::vector<Zone> hiddenZones`.
 - **`layout()`:** skips hidden zones entirely (no header band, no modules, no height), and after the apply pass sets `frame->setVisible(...)` so hidden modules/zones are taken out of view while keeping their APVTS attachments + audio (hiding is UI-only). `preferredHeight()` measures the same visible set.
 - **Editor height auto-fit (AD-12):** extracted `refitHeight()` from the constructor (fixed `kDesignW=1520`, height from `preferredHeight`, plus the small-display auto-fit-down transform — now resets to identity when no scaling is needed). Wired `sampleRack->onLayoutChanged = [this]{ refitHeight(); }`.
-- **MODULES menu:** `juce::TextButton modulesBtn` in the header (right edge, clear of the centred title) → `showModulesMenu()` builds a `PopupMenu` with one submenu per zone (a tickable "Show this zone" + tickable module items; module items disabled when the zone is hidden). Toggling calls the Rack API, which re-packs + re-fits height.
-- **Click-order rule (user, 2026-07-10):** re-showing a module appends it at the END of its zone (`position = maxPosInZone + 1`) so module order follows (re-)selection order, not the original build slot. MASTER BUS stays right-aligned (existing `layout()` colShift); other zones left-aligned.
-- **Session-only:** visibility is in-memory (no `PresetIO`/`Parameters.h`/`.synthy` touch) — persistence is Story 4.3. No audio/param/format change; no new `.cpp` → no `CMakeLists.txt` change.
+- **Interim popup (commit `6d8610a`) → replaced by the panel (this commit).** First pass shipped show/hide via a `PopupMenu`; per the user's 2026-07-11 decision it is now a **reorderable customization list-panel** (`RackCustomizePanel`, anonymous namespace in `PluginEditor.cpp`) shown in a `juce::CallOutBox` anchored to `modulesBtn`. Rows grouped by zone: left checkbox = visibility (module or whole zone via the header row); dragging a module row reorders it and dragging across a zone header moves it to that zone.
+- **New Rack API:** `applyLayoutOrder(vector<pair<id,Zone>>)` — the panel hands the full ordered (id,zone) list; the rack assigns each `zone` + a within-zone `position` = running index. `setModuleVisible` reverted to *visibility-only* (order is now owned explicitly by the list, so a toggle keeps position — the earlier append-on-show rule is obsolete under the list paradigm).
+- **CallOutBox parent = nullptr (desktop)** so the editor's auto-fit transform doesn't skew the panel's mouse coordinates.
+- **Session-only:** layout is in-memory (no `PresetIO`/`Parameters.h`/`.synthy` touch) — persistence is Story 4.3. No audio/param/format change; the panel lives in `PluginEditor.cpp` → no new `.cpp`, no `CMakeLists.txt` change.
+- MASTER BUS stays right-aligned (existing `layout()` colShift); other zones left-aligned.
 
 ### File List
 
-- `Source/UI/rack/Rack.h` (visibility API, `hiddenZones`, `onLayoutChanged`, `ModuleInfo`, `relayout`, `zoneName`)
-- `Source/UI/rack/Rack.cpp` (visibility methods incl. append-on-show; `layout()` hidden-zone skip + frame `setVisible` pass; `zoneName`)
+- `Source/UI/rack/Rack.h` (visibility API, `applyLayoutOrder`, `hiddenZones`, `onLayoutChanged`, `ModuleInfo`, `relayout`, `zoneName`, `<utility>` include)
+- `Source/UI/rack/Rack.cpp` (visibility methods; `applyLayoutOrder`; `layout()` hidden-zone skip + frame `setVisible` pass; `zoneName`)
 - `Source/UI/rack/ModuleFrame.h` (`moduleTitle()` accessor)
 - `Source/UI/PluginEditor.h` (`modulesBtn`, `showModulesMenu`, `refitHeight` decls)
-- `Source/UI/PluginEditor.cpp` (MODULES button + menu; `refitHeight()` extracted; `onLayoutChanged` wired; `<map>`/`<memory>` includes)
+- `Source/UI/PluginEditor.cpp` (`RackCustomizePanel` list-panel + `CallOutBox`; MODULES button; `refitHeight()` extracted; `onLayoutChanged` wired)

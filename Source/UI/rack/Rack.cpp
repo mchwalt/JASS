@@ -74,22 +74,33 @@ namespace rack
 
     void Rack::setModuleVisible (const juce::String& id, bool visible)
     {
-        RackLayoutEntry* target = nullptr;
+        // Toggle visibility only; order is owned explicitly by the customization list
+        // (applyLayoutOrder), so a module keeps its position when shown/hidden.
+        bool changed = false;
         for (auto& e : layoutModel)
-            if (e.id == id) { target = &e; break; }
-        if (target == nullptr || target->visible == visible) return;
+            if (e.id == id && e.visible != visible) { e.visible = visible; changed = true; }
+        if (! changed) return;
+        relayout();
+        if (onLayoutChanged) onLayoutChanged();
+    }
 
-        target->visible = visible;
-        if (visible)
+    void Rack::applyLayoutOrder (const std::vector<std::pair<juce::String, rack::Zone>>& ordered)
+    {
+        // The customization list is the authority on order + zone: assign each listed module
+        // its zone and a within-zone position = its running index among same-zone entries in
+        // `ordered`. Visibility is left untouched (owned by setModuleVisible).
+        std::vector<std::pair<Zone, int>> next;   // per-zone running counter
+        auto counterFor = [&] (Zone z) -> int&
         {
-            // Re-showing appends the module at the END of its zone: module order follows the
-            // order of (re-)selection (customization rule), not the original build slot.
-            int maxPos = -1;
-            for (const auto& e : layoutModel)
-                if (e.zone == target->zone && &e != target)
-                    maxPos = juce::jmax (maxPos, e.position);
-            target->position = maxPos + 1;
-        }
+            for (auto& c : next) if (c.first == z) return c.second;
+            next.push_back ({ z, 0 });
+            return next.back().second;
+        };
+
+        for (const auto& [id, zone] : ordered)
+            for (auto& e : layoutModel)
+                if (e.id == id) { e.zone = zone; e.position = counterFor (zone)++; break; }
+
         relayout();
         if (onLayoutChanged) onLayoutChanged();
     }

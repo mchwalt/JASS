@@ -336,7 +336,9 @@ So that the rack UI is confirmed to work as a plugin, not only standalone.
 
 ## Epic 4: Rack Customization
 
-Layer user-tailorable layout on top of the unified rack. Foundation first (ordered layout model + persistence), then the two interactions (show/hide, drag & drop). No audio feature, DSP, parameter-ID or preset-format-structure change — only append-only layout params. Verification for every story = clean build + the running app (no unit-test framework); the built-in default layout must be byte-for-byte unchanged until the user customizes.
+Layer user-tailorable layout on top of the unified rack via a **reorderable customization list** (not on-rack drag & drop): 4.1 builds the ordered `RackLayout` model; 4.2 is a customization panel where the list controls per-module visibility, order, and zone (list order = screen position); 4.3 persists that layout and adds reset. No audio feature, DSP, parameter-ID or preset-format-structure change — only an append-only layout field. Verification for every story = clean build + the running app (no unit-test framework); the built-in default layout must be byte-for-byte unchanged until the user customizes.
+
+_(Approach revised 2026-07-11: a reorderable list-panel replaces on-rack drag & drop — simpler and more robust, and it unifies show/hide + reorder + zone-move in one place. Former Story 4.4 (on-rack drag & drop) is folded into Story 4.2.)_
 
 ### Story 4.1: Ordered RackLayout model + descriptor-declared default zone/order
 
@@ -354,22 +356,25 @@ So that later customization features (show/hide, drag & drop, persistence) all m
 **And** `typeTag` stays identity/colour only (unchanged by the refactor)
 **And** the app is visually **identical** to before — this is a pure internal refactor with no user-visible change, and no audio/param/format impact (NFR1, NFR2, NFR3).
 
-### Story 4.2: Show / hide modules and zones (auto-fit height)
+### Story 4.2: Rack customization panel — show/hide, reorder & move between zones (auto-fit height)
 
 As a JASS player,
-I want to hide modules I don't use and hide whole zones,
-so that I can pare the rack down to just what I'm working with.
+I want a panel with a reorderable list of all modules where I can toggle visibility and drag items to change their order and zone,
+so that I can tailor which modules show and where they sit — the list order is the on-screen order.
 
 **Acceptance Criteria:**
 
 **Given** the `RackLayout` model from Story 4.1
-**When** I hide an individual module (via its header affordance / context action)
-**Then** its `visible` flips to false in the layout model, it is **removed** from the rack (not merely dimmed per FR7), and the remaining modules **re-pack** to close the gap, while the module's parameters and audio processing keep running (a hidden Filter still filters)
-**And** I can show or hide an **entire zone** (with its zone header) as a unit, and re-show a hidden module (e.g. from a "hidden modules" list / customization affordance)
-**And** after any show/hide the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (rack recomputes `preferredHeight`, editor re-applies `setSize`; the small-display auto-fit-down still applies) (AD-12)
-**And** a re-shown module returns with all bindings/rings/displays intact; no audio/param/format change (NFR2, NFR3).
+**When** I open the customization panel (from the MODULES button) and toggle a module's visibility
+**Then** its `visible` flips in the layout model, it is added to / removed from the rack (hidden = removed, not merely dimmed per FR7), the rack **re-packs**, and its parameters and audio keep running while hidden (a hidden Filter still filters)
+**And** the panel lists modules grouped by zone in their current order; **dragging a module within its zone reorders it**, and **dragging it into another zone's section moves it there** (updates `zone` + `position`) — the list order maps directly to the on-screen placement order
+**And** a module keeps its identity/type tag when moved to another zone (a Reverb dragged into GENERATORS stays a Processor — it does not become a generator)
+**And** I can show/hide an **entire zone** as a unit from the panel
+**And** all mutations go **only through the `RackLayout` model** and re-run the single `layout()` path (no ad-hoc bounds; NFR1); MASTER BUS stays right-aligned, other zones left-aligned
+**And** after any change the window **width stays fixed (1520 px)** and the **height auto-fits** the visible modules (AD-12)
+**And** no audio/param/format change (NFR2, NFR3).
 
-_Note: in 4.2 the visibility change is session-only (in-memory model). Making it survive save/load is Story 4.3 (persistence)._
+_Note: in 4.2 the customization is session-only (in-memory model). Making it survive save/load is Story 4.3 (persistence). Interim implementation note: a first pass shipped show/hide via a `PopupMenu` (commit `6d8610a`); this story replaces that popup with the reorderable panel._
 
 ### Story 4.3: Persist the custom layout to `.synthy` + reset layout
 
@@ -389,17 +394,6 @@ so that a layout I set up survives save/load and I can always get back to the st
 
 _(AD-11 precision 2026-07-10: layout persists as ONE structured `"RackLayout"` JSON field + a ValueTree property, not as dozens of standalone APVTS parameters — same append-only/interop guarantees, without polluting DAW automation.)_
 
-### Story 4.4: Drag & drop between zones + reorder within a zone
+### Story 4.4: ~~Drag & drop between zones + reorder within a zone~~ — FOLDED INTO 4.2
 
-As a JASS player,
-I want to drag modules between zones and reorder them within a zone,
-so that I can arrange the rack the way I think about my signal flow.
-
-**Acceptance Criteria:**
-
-**Given** the layout model + show/hide + persistence (Stories 4.1–4.3)
-**When** I drag a module to a different zone
-**Then** it moves there and the layout model updates (`zone` + `position`), both source and target zones re-pack, and the module keeps its identity/type tag (dragging Reverb into GENERATORS keeps it a Processor — it does not become a generator)
-**And** I can **reorder** modules within a zone by dragging, updating `position` in the model
-**And** all drag operations mutate **only the `RackLayout` model** and re-run the single `layout()` path (no ad-hoc bounds; NFR1)
-**And** the resulting arrangement persists via Story 4.3, and every moved module's controls, bindings, rings and displays remain fully functional (NFR2, NFR3).
+_Superseded 2026-07-11. Reordering and moving modules between zones is delivered by the **reorderable customization list in Story 4.2** instead of on-rack drag & drop (simpler, more robust, one place for show/hide + order + zone). This story is intentionally left empty; Epic 4 = Stories 4.1, 4.2, 4.3._
