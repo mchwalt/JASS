@@ -157,3 +157,10 @@ Hide-Toggle + Drag-Handle pro Modul.
 
 - ✅ **Gemeinsames Preset-Format** – `.synthy` + LiveState, wird in C++ weiter gepflegt
 - **C# ist eingefroren** – Entwicklung läuft nur noch in C++ (kein Spiegeln mehr). Format bleibt rückwärtskompatibel (fehlende Felder = Defaults).
+
+---
+
+## 🔜 Backlog (2026-07-11)
+
+- **Feedback-FM / Self-FM** (★★★ / ★★★★) – ein Oszillator moduliert seine eigene Frequenz (DX-Style, hellere/sägezahnartige Timbres). Braucht einen **eigenen Feedback-Amount-Regler** (nicht als A==B-Nebeneffekt von MIX MODE, wegen Stabilität/Lautheit). **Kein ähnliches Modul vorhanden** (die bestehenden „feedback"-Stellen sind Delay/Reverb/Chorus + Karplus-Loop). MIX MODE koppelt bewusst nur zwei *verschiedene* OSCs.
+- **Online-Hilfe pro Modul** (★★ / ★★★) – Klick auf den Modul-Titel **oder** Maus-Hover > 2 s blendet ein Hilfe-Popup mit **Kurzbeschreibung** des Moduls ein; blendet automatisch wieder aus, sobald der Cursor das Modul verlässt. Pro Modul ein Hilfetext (im `ModuleDescriptor` als optionales Feld denkbar).

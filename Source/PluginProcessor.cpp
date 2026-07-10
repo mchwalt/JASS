@@ -14,6 +14,10 @@ SynthyProcessor::SynthyProcessor()
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
 
+    // Epic 5: keep the MIX MODE source selectors distinct (both standalone + plugin).
+    apvts.addParameterListener(Parameters::ID::mixSrcA, this);
+    apvts.addParameterListener(Parameters::ID::mixSrcB, this);
+
     // The shared LiveState bridges the two standalone apps (C# <-> C++). In a
     // plugin host (e.g. REAPER) the host owns project state, so leave it alone.
     if (wrapperType == wrapperType_Standalone)
@@ -40,6 +44,8 @@ SynthyProcessor::SynthyProcessor()
 SynthyProcessor::~SynthyProcessor()
 {
     keyboardState.removeListener(this);
+    apvts.removeParameterListener(Parameters::ID::mixSrcA, this);
+    apvts.removeParameterListener(Parameters::ID::mixSrcB, this);
     if (wrapperType == wrapperType_Standalone)
     {
         stopTimer();
@@ -86,6 +92,28 @@ void SynthyProcessor::saveLiveState()
     // Persist the active preset name + modified flag so the patch (and whether it
     // was an unsaved working state) come back on restart.
     PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), currentPresetName, isPresetModified());
+}
+
+void SynthyProcessor::parameterChanged(const juce::String& paramId, float newValue)
+{
+    using namespace Parameters;
+    // Keep the two MIX MODE source selectors distinct (Epic 5). Setting one equal to the other
+    // bumps the OTHER to a free OSC. The guard stops the bump from re-triggering us.
+    if (fixingMixSrc.exchange(true)) { return; }
+
+    const int v = juce::jlimit(0, 2, (int) newValue);
+    auto bumpOther = [this](const char* otherId, int avoid)
+    {
+        if (auto* p = apvts.getParameter(otherId))
+            p->setValueNotifyingHost(p->convertTo0to1((float) (avoid == 0 ? 1 : 0)));   // first OSC != avoid
+    };
+
+    if (paramId == ID::mixSrcA && v == (int) *apvts.getRawParameterValue(ID::mixSrcB))
+        bumpOther(ID::mixSrcB, v);
+    else if (paramId == ID::mixSrcB && v == (int) *apvts.getRawParameterValue(ID::mixSrcA))
+        bumpOther(ID::mixSrcA, v);
+
+    fixingMixSrc = false;
 }
 
 void SynthyProcessor::randomize()

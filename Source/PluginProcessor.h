@@ -11,6 +11,7 @@
 class SynthyProcessor : public juce::AudioProcessor,
                         private juce::Timer,
                         private juce::ValueTree::Listener,
+                        private juce::AudioProcessorValueTreeState::Listener,
                         private juce::MidiKeyboardState::Listener
 {
 public:
@@ -113,6 +114,12 @@ private:
     void timerCallback() override;
     void valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&) override { liveDirty = true; }
     void saveLiveState();
+
+    // Epic 5: keep the two MIX MODE source selectors distinct (a==b would be a no-op / needs
+    // self-FM which is a separate future feature). When one is set equal to the other, bump the
+    // other to a free OSC. Registered for mixSrcA/mixSrcB only.
+    void parameterChanged(const juce::String& paramId, float newValue) override;
+    std::atomic<bool> fixingMixSrc { false };   // reentrancy guard
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)
 };

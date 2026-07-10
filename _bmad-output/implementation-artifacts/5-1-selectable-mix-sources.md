@@ -100,6 +100,7 @@ claude-opus-4-8[1m]
 - **UI:** MIX MODE module XXS→**S**, body now `MODE + SRC A + SRC B` combos. `enabledWhen` reads `mixSrcA/B` + the 3 `oscOn` (via a captured `std::array` of raw pointers) → lit when both selected sources are enabled.
 - **Persistence:** append-only `.synthy` fields `MixSrcA`/`MixSrcB` (choice names via `kMixSrc`); missing ⇒ default 0/1 (older presets keep the 1↔2 coupling). No format-version change needed (append-only).
 - **First real DSP change**, kept surgical (only the OSC-mix block + 2 params). Signal chain / effects / noise-karplus-wavetable-sub path untouched. C# interop deprioritized (per user).
+- **A==B prevented (user decision 2026-07-11).** SRC A and SRC B are kept distinct: a `parameterChanged` listener on `mixSrcA`/`mixSrcB` (processor is now an `APVTS::Listener`, registered in both standalone + plugin, reentrancy-guarded) bumps the OTHER selector to a free OSC when they'd collide. MIX MODE stays "couple two different oscillators"; the DSP `a==b` additive fallback remains as a safety net but is effectively unreachable. **Self-FM/feedback-FM deferred** to a dedicated feature with its own feedback-amount control (`docs/Feature_Ideas.md` backlog) — no similar module exists today. Also logged there: per-module online-help popup.
 
 ### File List
 
