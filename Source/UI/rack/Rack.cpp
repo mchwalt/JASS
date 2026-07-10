@@ -217,6 +217,14 @@ namespace rack
             relayout();
             if (onLayoutChanged) onLayoutChanged();
         }
+        enforceHiddenDisabled();   // never leave a hidden module audible
+    }
+
+    void Rack::enforceHiddenDisabled()
+    {
+        for (const auto& e : layoutModel)
+            if (! e.visible)
+                driveEnable (e.id, false);   // hidden ⇒ silent (invariant)
     }
 
     void Rack::setZoneVisible (Zone zone, bool visible)
