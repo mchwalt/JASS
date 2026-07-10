@@ -1,5 +1,6 @@
 #include "Rack.h"
 #include <array>
+#include <algorithm>
 
 namespace rack
 {
@@ -39,12 +40,28 @@ namespace rack
 
     Rack::~Rack() { setLookAndFeel (nullptr); }
 
-    void Rack::addModule (Zone zone, ModuleDescriptor desc)
+    void Rack::addModule (ModuleDescriptor desc)
     {
         const auto spec = sizeClassSpec (desc.sizeClass);   // read footprint BEFORE moving
+        const auto zone = desc.defaultZone;                 // AD-10: zone declared on descriptor
+        const auto id   = desc.id;
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addAndMakeVisible (*f);
-        placed.push_back ({ f, zone, spec.cols, spec.units });
+        placed.push_back ({ id, f, spec.cols, spec.units });
+
+        // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
+        // default layout reproduces today's insertion-order packing exactly. visible defaults true.
+        int pos = 0;
+        for (const auto& e : layoutModel)
+            if (e.zone == zone) ++pos;
+        layoutModel.push_back ({ id, zone, pos, /*visible*/ true });
+    }
+
+    const Rack::Placed* Rack::placedById (const juce::String& id) const
+    {
+        for (const auto& p : placed)
+            if (p.id == id) return &p;
+        return nullptr;
     }
 
     int Rack::preferredHeight (int width) const
@@ -97,27 +114,41 @@ namespace rack
             struct Placement { ModuleFrame* frame; int fc, fr, fcols, funits; };
             std::vector<Placement> zonePlaced;
             int maxRowUsed = -1, maxColUsed = -1;
-            for (const auto& p : placed)
+
+            // AD-10: walk the RackLayout model for this zone — visible only, ordered by
+            // position — instead of raw insertion order of `placed`. Position is seeded in
+            // call order (addModule), so the default layout packs identically to before.
+            std::vector<const RackLayoutEntry*> entries;
+            for (const auto& e : layoutModel)
+                if (e.zone == zone && e.visible)
+                    entries.push_back (&e);
+            std::stable_sort (entries.begin(), entries.end(),
+                              [] (const RackLayoutEntry* a, const RackLayoutEntry* b)
+                              { return a->position < b->position; });
+
+            for (const auto* e : entries)
             {
-                if (p.zone != zone) continue;
+                const auto* pl = placedById (e->id);
+                if (pl == nullptr || pl->frame == nullptr) continue;
+                const int fcols = pl->cols, funits = pl->units;
 
                 // first free top-left cell that fits the cols×units footprint
                 int fr = 0, fc = 0;
                 for (bool found = false; ! found; ++fr)
-                    for (int c = 0; c + p.cols <= cols; ++c)
-                        if (fits (fr, c, p.cols, p.units)) { fc = c; found = true; break; }
+                    for (int c = 0; c + fcols <= cols; ++c)
+                        if (fits (fr, c, fcols, funits)) { fc = c; found = true; break; }
                 --fr;   // the for-loop over-incremented once after finding
 
-                ensureRows (fr + p.units - 1);
-                for (int rr = fr; rr < fr + p.units; ++rr)
-                    for (int cc = fc; cc < fc + p.cols; ++cc)
+                ensureRows (fr + funits - 1);
+                for (int rr = fr; rr < fr + funits; ++rr)
+                    for (int cc = fc; cc < fc + fcols; ++cc)
                         occ[(size_t) rr][(size_t) cc] = 1;
 
                 if (apply)
-                    zonePlaced.push_back ({ p.frame, fc, fr, p.cols, p.units });
+                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits });
 
-                maxRowUsed = juce::jmax (maxRowUsed, fr + p.units - 1);
-                maxColUsed = juce::jmax (maxColUsed, fc + p.cols - 1);
+                maxRowUsed = juce::jmax (maxRowUsed, fr + funits - 1);
+                maxColUsed = juce::jmax (maxColUsed, fc + fcols - 1);
             }
 
             if (apply)

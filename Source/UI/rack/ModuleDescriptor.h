@@ -16,6 +16,11 @@ namespace rack
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff }; // for live LFO rings (AD-8)
 
+    // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
+    // its own default zone — Rack.h includes this header, so the descriptor can't reference
+    // Rack::Zone without an include-cycle. Rack aliases this as Rack::Zone for its callers.
+    enum class Zone { Generators, Modulation, Processing, MasterBus };
+
     // Desaturated identity tints (FR6), matching the rack mockup. The single source
     // of the type→colour map, shared by ModuleFrame (top edge / reset tint) and the
     // Rack (zone-header hue) so the palette is defined exactly once.
@@ -97,10 +102,13 @@ namespace rack
     struct ModuleDescriptor
     {
         SizeClass    sizeClass {};
-        juce::String id;                          // stable slug (e.g. "osc1") — future layout key
-                                                  // for show/hide + drag-drop (ARCHITECTURE Deferred)
+        juce::String id;                          // stable slug (e.g. "osc1") — the layout key for
+                                                  // the RackLayout model: show/hide + drag-drop (AD-10)
         juce::String title;
         ModuleType   type {};
+        Zone         defaultZone {};              // default rack zone (AD-10); the RackLayout model
+                                                  // seeds from this. typeTag/`type` is identity/colour
+                                                  // only and is INDEPENDENT of the zone.
         juce::String enableParam;                 // empty => always-on (Master, ADSR, Mix-Mode)
         std::vector<juce::String> resetParams;    // the reset (↺) writes these defaults to APVTS
         std::vector<BodyElement>  body;

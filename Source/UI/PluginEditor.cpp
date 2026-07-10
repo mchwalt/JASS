@@ -315,12 +315,13 @@ void SynthyEditor::buildSampleRack()
     {
         ModuleDescriptor d;
         d.sizeClass = sc; d.type = type;
-        // Stable slug from the title (e.g. "OSC 1" -> "osc1") — the future layout key for
-        // show/hide + drag-drop (ARCHITECTURE Deferred). Derived once here so every module gets one.
+        // Stable slug from the title (e.g. "OSC 1" -> "osc1") — the RackLayout key for
+        // show/hide + drag-drop (AD-10). Derived once here so every module gets one.
         d.id = title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
         d.title = std::move(title);
+        d.defaultZone = zone;   // AD-10: zone declared on the descriptor
         d.enableParam = std::move(enableParam); d.body = std::move(body);
-        sampleRack->addModule(zone, std::move(d));
+        sampleRack->addModule(std::move(d));
     };
 
     // OSC WAVE items MUST match the oscWave param's choice ORDER — the ComboBoxAttachment
@@ -366,7 +367,8 @@ void SynthyEditor::buildSampleRack()
         // enable; the predicate additionally dims when the coupling is meaningless (a UI cue,
         // not an audio gate — the audio additive-fallback keys off mixModeOn only).
         mix.enabledWhen = [o1, o2] { return o1->load() >= 0.5f && o2->load() >= 0.5f; };
-        sampleRack->addModule(Rack::Zone::Generators, std::move(mix));
+        mix.defaultZone = Rack::Zone::Generators;   // AD-10: zone on the descriptor
+        sampleRack->addModule(std::move(mix));
     }
     addOsc(2);
     addOsc(3);
