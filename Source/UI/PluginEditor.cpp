@@ -24,8 +24,18 @@ namespace
         explicit RackCustomizePanel (rack::Rack& r) : rack (r)
         {
             rebuildRows();
-            setSize (kW, juce::jmax (kRowH, (int) rows.size() * kRowH));
+            addAndMakeVisible (resetBtn);
+            resetBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff334155));
+            resetBtn.onClick = [this] { rack.resetLayout(); rebuildRows(); repaint(); };
+            setSize (kW, listHeight() + kBtnH);
         }
+
+        void resized() override
+        {
+            resetBtn.setBounds (juce::Rectangle<int> (0, listHeight(), getWidth(), kBtnH).reduced (6, 5));
+        }
+
+        int listHeight() const { return juce::jmax (kRowH, (int) rows.size() * kRowH); }
 
         void paint (juce::Graphics& g) override
         {
@@ -154,8 +164,9 @@ namespace
 
         rack::Rack& rack;
         std::vector<Row> rows;
+        juce::TextButton resetBtn { "Reset layout" };
         int dragIndex = -1;
-        static constexpr int kW = 260, kRowH = 26;
+        static constexpr int kW = 260, kRowH = 26, kBtnH = 30;
     };
 }
 
@@ -249,6 +260,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
             PresetIO::loadFromFile(processor.getAPVTS(), f);
             processor.markPresetClean();   // current state now matches the loaded file
             setPresetName(f.getFileNameWithoutExtension());
+            if (sampleRack) sampleRack->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3)
         });
     };
 
@@ -301,7 +313,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     buildSampleRack();
     // Re-fit the window height whenever the rack layout changes (show/hide, AD-12).
     if (sampleRack)
+    {
         sampleRack->onLayoutChanged = [this] { refitHeight(); };
+        sampleRack->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
+    }
 
     std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)
     {
