@@ -53,9 +53,11 @@ namespace rack
         // the editor (onLayoutChanged) so it can auto-fit the window height (AD-12). Hiding
         // is UI-only: the frame keeps its APVTS attachments + audio (it is just not placed).
         void setModuleVisible (const juce::String& id, bool visible);
+        // Bulk convenience: set the visibility of ALL modules in a zone (one re-pack). There is
+        // NO separate zone-visibility state — a zone's header is derived (shown iff the zone has
+        // ≥1 visible module), so an emptied zone auto-disappears (AD-10 single source of truth).
         void setZoneVisible (Zone zone, bool visible);
         bool isModuleVisible (const juce::String& id) const;
-        bool isZoneVisible (Zone zone) const;
 
         // Set the full module order + zone assignment from the customization list (Story 4.2):
         // `ordered` is every module id paired with its target zone, in the desired list order;
@@ -124,7 +126,6 @@ namespace rack
         juce::OwnedArray<ModuleFrame> frames;
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
         std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement
-        std::vector<Zone> hiddenZones;             // zones hidden as a unit (Story 4.2)
         std::vector<ZoneBand> zoneBands;           // computed in layout(), drawn in paint()
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (Rack)

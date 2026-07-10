@@ -107,11 +107,12 @@ namespace rack
 
     void Rack::setZoneVisible (Zone zone, bool visible)
     {
-        auto it = std::find (hiddenZones.begin(), hiddenZones.end(), zone);
-        const bool currentlyHidden = (it != hiddenZones.end());
-        if      (visible && currentlyHidden)     hiddenZones.erase (it);
-        else if (! visible && ! currentlyHidden) hiddenZones.push_back (zone);
-        else return;   // no change
+        // Bulk-set every module in the zone (no separate zone state). The zone's header is
+        // derived in layout() — emptying a zone makes its header disappear automatically.
+        bool changed = false;
+        for (auto& e : layoutModel)
+            if (e.zone == zone && e.visible != visible) { e.visible = visible; changed = true; }
+        if (! changed) return;
         relayout();
         if (onLayoutChanged) onLayoutChanged();
     }
@@ -121,11 +122,6 @@ namespace rack
         for (const auto& e : layoutModel)
             if (e.id == id) return e.visible;
         return false;
-    }
-
-    bool Rack::isZoneVisible (Zone zone) const
-    {
-        return std::find (hiddenZones.begin(), hiddenZones.end(), zone) == hiddenZones.end();
     }
 
     std::vector<Rack::ModuleInfo> Rack::modulesInZone (Zone zone) const
@@ -170,8 +166,12 @@ namespace rack
 
         for (auto zone : zoneOrder)
         {
-            // Hidden zone (Story 4.2): no header band, no modules, no height contribution.
-            if (std::find (hiddenZones.begin(), hiddenZones.end(), zone) != hiddenZones.end())
+            // Derived zone visibility (Story 4.2): a zone with no visible module contributes
+            // NO header band, no modules, no height — the header disappears automatically.
+            bool anyVisible = false;
+            for (const auto& e : layoutModel)
+                if (e.zone == zone && e.visible) { anyVisible = true; break; }
+            if (! anyVisible)
                 continue;
 
             // --- full-width zone header band ---
