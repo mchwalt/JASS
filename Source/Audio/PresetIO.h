@@ -19,7 +19,10 @@ namespace PresetIO
     inline const juce::StringArray kSubWave     { "Sine", "Square" };
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
 
-    constexpr int kFormatVersion = 1;
+    // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
+    // applyVar always factory-resets first, so older files (v1 / no version) load safely and
+    // missing fields fall back to factory. The number is for future *value* migrations.
+    constexpr int kFormatVersion = 2;
 
     // Shared root: %AppData%\Roaming\Synthy (same as the C# app).
     inline juce::File synthyFolder()
@@ -228,14 +231,22 @@ namespace PresetIO
         if (! v.isObject())
             return;
 
-        // A preset is a COMPLETE patch snapshot. Reset every parameter to its
-        // default FIRST, so any field the file omits — e.g. a feature added
-        // after this preset was saved (Sub, Stereo, Bitcrush, …) — falls back to
-        // its default instead of inheriting the previously loaded patch's value.
-        // (The per-field readers below use the now-default current value as their
-        // "missing key" fallback, so omitted fields correctly stay at default.)
+        // Format version (Story: versioning). Absent ⇒ 1 (pre-versioned files). We ALWAYS load
+        // by first establishing a factory baseline (below), then layering the file's values on
+        // top, so any version — including older presets that lack newer fields — loads safely
+        // and picks up factory defaults for whatever it omits. The version number is reserved
+        // for future *value* migrations (a field whose meaning changed), not mere new fields
+        // (those are handled by the missing⇒default fallback).
+        const int fileVersion = jint(v, "FormatVersion", 1);
+        juce::ignoreUnused(fileVersion);
+
+        // FACTORY RESET before reading (a preset is a COMPLETE snapshot): reset every parameter
+        // to its default AND clear the rack layout to factory. Any field the file omits then
+        // falls back to factory instead of inheriting the previously loaded patch. (Per-field
+        // readers below use the now-default current value as their "missing key" fallback.)
         for (auto* p : a.processor.getParameters())
             p->setValueNotifyingHost(p->getDefaultValue());
+        a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);   // factory layout baseline
 
         if (auto oscs = v["Oscillators"]; oscs.isArray())
         {
@@ -335,14 +346,11 @@ namespace PresetIO
         setRaw(a, ID::wavetableUniVoices, (float) jint(v, "WavetableUnisonVoices", rawI(a, ID::wavetableUniVoices)));
         setRaw(a, ID::wavetableUniDetune, (float) jnum(v, "WavetableUnisonDetune", rawF(a, ID::wavetableUniDetune)));
 
-        // Rack layout (Story 4.3): write the "RackLayout" field into the apvts.state property the
-        // Rack reads (non-parameter, so the reset-to-default loop above didn't touch it). Missing
-        // field ⇒ remove the property ⇒ built-in default layout. The editor re-applies it via
-        // Rack::reloadLayoutFromState() after a load.
+        // Rack layout (Story 4.3): layer the "RackLayout" field onto the factory-cleared
+        // property (baseline set above). Absent ⇒ stays factory-default. The editor re-applies
+        // it via Rack::reloadLayoutFromState() after a load.
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
-        else
-            a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
     }
 
     inline bool loadFromFile(APVTS& a, const juce::File& file)
