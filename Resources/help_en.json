@@ -2,7 +2,7 @@
   "osc1": "Core oscillator 1. Pick a waveform and tune FREQ; AMP sets its level, VOICES/DETUNE add unison thickness, and FB adds self-FM feedback (sine morphs toward sawtooth, then into gritty inharmonic tones).",
   "osc2": "Core oscillator 2. Same controls as OSC 1 — waveform, FREQ, AMP, VOICES/DETUNE unison, and FB self-FM feedback. Defaults one octave above OSC 1.",
   "osc3": "Core oscillator 3. Same controls as OSC 1 — waveform, FREQ, AMP, VOICES/DETUNE unison, and FB self-FM feedback. Defaults one octave below OSC 1.",
-  "crossmod": "Cross-modulates two selectable oscillators (SRC A / SRC B): RingMod multiplies them, FM lets A modulate B's pitch. When disabled, the oscillators are simply added together.",
+  "mixmode": "Cross-modulates two selectable oscillators (SRC A / SRC B): RingMod multiplies them, FM lets A modulate B's pitch. When disabled, the oscillators are simply added together.",
   "sub": "A sine or square sub-oscillator that tracks OSC 1's pitch one or two octaves down, adding low-end weight.",
   "noise": "A white- or pink-noise layer, useful for percussion, breath and texture.",
   "stringkarplus": "A plucked-string physical model. PLUCK (or the spacebar) excites the string; DAMP and STR (stretch) shape how its overtones decay.",
