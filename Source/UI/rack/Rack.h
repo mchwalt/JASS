@@ -87,6 +87,10 @@ namespace rack
         // Called after any layout mutation (show/hide) so the editor can re-fit height.
         std::function<void()> onLayoutChanged;
 
+        // Called when a module's header info icon is clicked (Story 6.1); carries the module
+        // id so the editor can resolve title + help text and show the shared HelpPanel.
+        std::function<void(const juce::String& id)> onModuleHelp;
+
         // Total stacked height the current population needs at `width` — lets the
         // editor size/verify the fixed window without scrolling (AC4).
         int preferredHeight (int width) const;

@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "ModuleDescriptor.h"
+#include "IconButton.h"
 
 namespace rack
 {
@@ -41,6 +42,11 @@ namespace rack
         // fires its onClick) — lets a keyboard shortcut mirror the on-screen button.
         void clickFirstAction();
 
+        // Fired when the header info icon is clicked (Story 6.1); carries this module's id so
+        // the editor can resolve its title + help text (in the active language) and show the
+        // shared HelpPanel. Only present/shown when HelpTextStore has an entry for the id.
+        std::function<void(const juce::String& id)> onHelp;
+
     private:
         void timerCallback() override;
         void buildHeader();
@@ -74,7 +80,8 @@ namespace rack
 
         juce::Label titleLabel;
         std::unique_ptr<juce::ToggleButton> enableBtn;   // only if enableParam set
-        juce::TextButton resetBtn;
+        IconButton resetBtn { IconButton::Kind::Reset };
+        std::unique_ptr<IconButton> infoBtn;              // only if HelpTextStore has this id
 
         std::vector<Cell> cells;
         juce::OwnedArray<juce::Component> ownedWidgets;   // owns non-Display body widgets
