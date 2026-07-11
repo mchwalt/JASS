@@ -97,7 +97,7 @@ public:
         return false;
     }
 
-    static constexpr int kWidth   = 300;
+    static constexpr int kWidth   = 340;
     static constexpr int kTitleH  = 26;
     static constexpr int kPad     = 12;
 
