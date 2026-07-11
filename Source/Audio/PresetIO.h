@@ -123,6 +123,7 @@ namespace PresetIO
             od->setProperty("Amplitude",    rawF(a, ID::oscAmp(o)));
             od->setProperty("UnisonVoices", rawI(a, ID::oscUniVoices(o)));
             od->setProperty("UnisonDetune", rawF(a, ID::oscUniDetune(o)));
+            od->setProperty("Feedback",     rawF(a, ID::oscFeedback(o)));   // Self-FM (append-only; C# ignores it; missing => 0)
             oscs.add(juce::var(od));
         }
         root->setProperty("Oscillators", oscs);
@@ -263,6 +264,7 @@ namespace PresetIO
                 setRaw   (a, ID::oscAmp(o + 1),       (float) jnum(od, "Amplitude", rawF(a, ID::oscAmp(o + 1))));
                 setRaw   (a, ID::oscUniVoices(o + 1), (float) jint(od, "UnisonVoices", rawI(a, ID::oscUniVoices(o + 1))));
                 setRaw   (a, ID::oscUniDetune(o + 1), (float) jnum(od, "UnisonDetune", rawF(a, ID::oscUniDetune(o + 1))));
+                setRaw   (a, ID::oscFeedback(o + 1),  (float) jnum(od, "Feedback",     rawF(a, ID::oscFeedback(o + 1))));   // Self-FM (missing => factory 0)
             }
         }
 

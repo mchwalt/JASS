@@ -534,11 +534,13 @@ void SynthyEditor::buildSampleRack()
     // ---- GENERATORS ----
     auto addOsc = [&](int i)
     {
-        add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator,
+        // M (not S): six controls now — WAVE, FREQ, AMP, VOICES, DETUNE + FB (Self-FM).
+        // S is meant for 3–4 controls; a sixth would cram it, so bump one class up.
+        add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator,
             "OSC " + juce::String(i), P::oscOn(i),
             { C(P::oscWave(i), "WAVE", waves), Kfreq(P::oscFreq(i), "FREQ"),
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
-              K(P::oscUniDetune(i), "DETUNE") });
+              K(P::oscUniDetune(i), "DETUNE"), K(P::oscFeedback(i), "FB") });
     };
     // CROSS MOD sits BETWEEN OSC 1 and OSC 2. It couples two SELECTABLE oscillators (Source A /
     // Source B) via RingMod or FM; disabled => plain additive sum (Option B, Epic 5).
