@@ -33,13 +33,16 @@ public:
         titleText = title;
         bodyText  = body;
 
-        // Lay the body out at the fixed content width to measure the needed height.
+        // Lay the body out at the fixed content width to measure the needed height. The
+        // AttributedString here MUST match paint()'s exactly (same font AND line spacing),
+        // otherwise the measured height is short and the last line gets clipped.
         juce::AttributedString as;
         as.append (body, juce::Font (juce::FontOptions (14.0f)), juce::Colour (0xffcdd3dc));
+        as.setLineSpacing (2.0f);
         juce::TextLayout tl;
         tl.createLayout (as, (float) (kWidth - 2 * kPad));
 
-        const int bodyH   = (int) std::ceil (tl.getHeight());
+        const int bodyH   = (int) std::ceil (tl.getHeight()) + 4;   // +4 safety against rounding
         const int totalH  = kTitleH + kPad + bodyH + kPad;
         setSize (kWidth, juce::jmax (totalH, kTitleH + 40));
         repaint();
