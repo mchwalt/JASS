@@ -20,6 +20,10 @@ public:
 
     void setTimeRangeMs(double ms) { timeRangeMs = ms; }
 
+    // Reset the time-base selector to its factory default (10 ms). Setting the id sends a
+    // notification, so onChange -> updateTimeRange() applies it. Used by the module's ↺.
+    void resetTimeRange() { zoomBox.setSelectedId(4); }
+
     void resized() override
     {
         auto area = getLocalBounds();

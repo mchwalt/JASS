@@ -125,6 +125,12 @@ namespace rack
         // dim overlay + moduleEnabled(). If both enableParam and enabledWhen are set,
         // enabledWhen wins.
         std::function<bool()> enabledWhen;
+
+        // Optional EXTRA reset action for state the ↺ can't reach via APVTS params — e.g. a
+        // display's internal control (the Oscilloscope's time-base). When set, the module shows
+        // a reset ↺ even if it has no resettable params, and doReset() calls this after writing
+        // any param defaults. Used by the VISUALIZATION modules (Story 6.1 follow-up).
+        std::function<void()> onReset;
     };
 
     // --- Size-class table (AD-2) ------------------------------------------

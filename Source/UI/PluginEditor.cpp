@@ -597,7 +597,8 @@ void SynthyEditor::buildSampleRack()
              };
 
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
-                   juce::String enableParam, std::vector<BodyElement> body)
+                   juce::String enableParam, std::vector<BodyElement> body,
+                   std::function<void()> onReset = {})
     {
         ModuleDescriptor d;
         d.sizeClass = sc; d.type = type;
@@ -607,6 +608,7 @@ void SynthyEditor::buildSampleRack()
         d.title = std::move(title);
         d.defaultZone = zone;   // AD-10: zone declared on the descriptor
         d.enableParam = std::move(enableParam); d.body = std::move(body);
+        d.onReset = std::move(onReset);   // extra non-param reset (e.g. scope time-base)
         sampleRack->addModule(std::move(d));
     };
 
@@ -635,9 +637,11 @@ void SynthyEditor::buildSampleRack()
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
               K(P::oscUniDetune(i), "DETUNE"), K(P::oscFeedback(i), "FB") });
     };
-    // CROSS MOD sits BETWEEN OSC 1 and OSC 2. It couples two SELECTABLE oscillators (Source A /
-    // Source B) via RingMod or FM; disabled => plain additive sum (Option B, Epic 5).
     addOsc(1);
+    addOsc(2);
+    addOsc(3);
+    // CROSS MOD comes AFTER OSC 3 in the default order (user pref 2026-07-12). It couples two
+    // SELECTABLE oscillators (Source A / Source B) via RingMod or FM; disabled => plain additive sum.
     {
         // The derived lit/dimmed state reads the shared params only (AD-9), no module refs:
         // CROSS MOD is meaningful when the two SELECTED source OSCs are both enabled. Grab the
@@ -668,8 +672,6 @@ void SynthyEditor::buildSampleRack()
         mix.defaultZone = Rack::Zone::Generators;   // AD-10: zone on the descriptor
         sampleRack->addModule(std::move(mix));
     }
-    addOsc(2);
-    addOsc(3);
 
     add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "SUB", P::subOn,
         { C(P::subWave, "WAVE", { "Sine", "Square" }), K(P::subLevel, "LEVEL") });
@@ -745,13 +747,17 @@ void SynthyEditor::buildSampleRack()
     scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
     sampleOwned.add(scope);
     add(Rack::Zone::Visualization, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
-        { Display{ scope, 12 } });
+        { Display{ scope, 12 } },
+        [scope] { scope->resetTimeRange(); });   // ↺ restores the 10 ms default time-base
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
     spec->setShowTitle(false);
     spec->setEnableSource(apvts.getRawParameterValue(P::spectrumOn));   // spectrumOn off => freeze+blank
     sampleOwned.add(spec);
+    // SPECTRUM has no adjustable state yet — its ↺ is a uniform-anatomy placeholder (a no-op
+    // for now) so every module carries the same header controls; wire real params here later.
     add(Rack::Zone::Visualization, SizeClass::XL, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
-        { Display{ spec, 12 } });
+        { Display{ spec, 12 } },
+        [] { });
 
     // Added LAST so the opaque rack covers the legacy body; the header chrome and
     // keyboard sit in their own bands and stay live.
