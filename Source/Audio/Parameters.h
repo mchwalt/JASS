@@ -21,6 +21,7 @@ namespace Parameters
         inline juce::String oscAmp(int i)   { return "osc" + juce::String(i) + "Amp"; }
         inline juce::String oscUniVoices(int i) { return "osc" + juce::String(i) + "UniVoices"; }
         inline juce::String oscUniDetune(int i) { return "osc" + juce::String(i) + "UniDetune"; }
+        inline juce::String oscFeedback(int i)  { return "osc" + juce::String(i) + "Feedback"; }  // Self-FM depth (append-only)
 
         // Mix mode
         constexpr const char* mixMode = "mixMode";
@@ -180,6 +181,13 @@ namespace Parameters
                 juce::ParameterID(ID::oscUniDetune(i), 1),
                 "OSC " + juce::String(i) + " Uni Detune",
                 juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
+
+            // Self-FM / feedback (append-only; default 0 = off, so existing
+            // presets/users are unchanged until the knob is turned up).
+            params.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID(ID::oscFeedback(i), 1),
+                "OSC " + juce::String(i) + " Feedback",
+                juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.0f));
         }
 
         // Mix mode
@@ -329,6 +337,7 @@ namespace Parameters
             oscillators[o].setUnisonCount(static_cast<int>(*apvts.getRawParameterValue(ID::oscUniVoices(o + 1))));
             // Detune param is 0..1 (=±1 semitone); oscillator works in cents.
             oscillators[o].setDetuneAmount(*apvts.getRawParameterValue(ID::oscUniDetune(o + 1)) * 100.0);
+            oscillators[o].setFeedback(*apvts.getRawParameterValue(ID::oscFeedback(o + 1)));   // Self-FM
         }
 
         env.setAttack(*apvts.getRawParameterValue(ID::attack));
