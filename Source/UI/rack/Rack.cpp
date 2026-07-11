@@ -77,14 +77,17 @@ namespace rack
         repaint();
     }
 
-    void Rack::driveEnable (const juce::String& id, bool on)
+    void Rack::driveEnable (const juce::String& id, bool show)
     {
+        // hide  => force the module disabled (it's "not present" for the synth);
+        // show  => restore its FACTORY-DEFAULT enable state, NOT force-on — e.g. CROSS MOD
+        //          defaults to disabled, so re-showing it must leave it disabled.
         if (const auto* p = placedById (id); p != nullptr && p->frame != nullptr)
         {
             const auto pid = p->frame->enableParamId();
             if (pid.isNotEmpty())
                 if (auto* param = apvts.getParameter (pid))
-                    param->setValueNotifyingHost (on ? 1.0f : 0.0f);
+                    param->setValueNotifyingHost (show ? param->getDefaultValue() : 0.0f);
         }
     }
 
