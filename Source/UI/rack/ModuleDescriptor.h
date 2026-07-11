@@ -19,7 +19,7 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W4H1, W6H1, W8H1, W8H2, W12H2 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W8H1, W8H2, W12H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff }; // for live LFO rings (AD-8)
 
@@ -161,7 +161,10 @@ namespace rack
             // slotCapacity is only a generous debug guard, not a layout driver. Names encode the
             // footprint (W{cols}H{rows}); widths are 24ths, so 8/24 = one third of the rack.
             case SizeClass::W2H1:  return {  2, 1,  2, KnobSize::Small };  // single control (was XXS)
+            case SizeClass::W3H1:  return {  3, 1,  3, KnobSize::Small };  // single control, wider header (fits title + 3 icons)
             case SizeClass::W4H1:  return {  4, 1,  4, KnobSize::Small };  // 1–2 controls   (was XS)
+            case SizeClass::W4H2:  return {  4, 2, 12, KnobSize::Small };  // narrow 2-row (ADSR: 4 knobs + curve)
+            case SizeClass::W5H1:  return {  5, 1,  6, KnobSize::Small };  // ~4 controls incl. 1–2 combos (LFO)
             case SizeClass::W6H1:  return {  6, 1,  6, KnobSize::Small };  // 3–4 controls   (was S)
             case SizeClass::W8H1:  return {  8, 1,  8, KnobSize::Small };  // 5–6 controls   (was M; 3 per row)
             case SizeClass::W8H2:  return {  8, 2, 16, KnobSize::Small };  // knobs + curve display (was L)

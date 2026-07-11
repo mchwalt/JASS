@@ -1,6 +1,6 @@
 # Story 7.2: Tighten module size classes to fit control counts
 
-Status: ready-for-dev
+Status: done
 
 <!-- Builds on Story 7.1 (24-col grid + column-based names). The finer grid makes tight small
      sizes possible; this story assigns them, module by module, with the user's eye. -->
@@ -59,6 +59,16 @@ claude-opus-4-8[1m]
 
 ### Debug Log References
 
+- Iterated widths live with the user in the running app (screenshots + eye). Knob "shrink" happens only when the per-slot cell width < the fixed rotary `KnobSize::Small = 46 px`; the 62 px figure is only the widget width cap, not the rotary size — so a module is wide enough as long as `moduleWidth/nContentSlots - 4 ≥ 46`.
+
 ### Completion Notes List
 
+- **New intermediate classes added** to `sizeClassSpec`+enum: `W3H1` (3×1), `W4H2` (4×2, ADSR), `W5H1` (5×1, CROSS MOD). `W2H1` retained as the smallest base class (currently unused). A transient `W7H1` was added then removed once LFO settled at W6.
+- **Final per-module classes** (user-approved by eye): STEREO/MASTER `W3H1`; OSC 1/2/3 `W8H1` (unchanged, 3-per-row density benchmark); CROSS MOD `W5H1` (5 — 4 truncated "RingMod"); SUB/NOISE `W3H1`; STRING-KARPLUS `W6H1`; ENVELOPE-ADSR `W4H2` (narrower, keeps 2-row curve); LFO & ARPEGGIATOR `W6H1` (equal width, full knobs); FILTER/DISTORTION `W4H1` (knobs verified full — rotary 46 fits the ~56 px cell); WAVEFOLD/BITCRUSH/CHORUS/DELAY/REVERB `W3H1`; OSCILLOSCOPE/SPECTRUM `W12H2`.
+- **MASTER header fix:** MASTER W2H1→W3H1 so the title + info ⓘ + reset ↺ + enable fit (Epic-6 regression resolved).
+- Rules held: rotaries never below `KnobSize::Small`; combos wide enough to read (`RingMod`, `Highpass`, `Soft Clip`); OSC stays W8H1; uniform header anatomy; MASTER BUS right-aligned. UI-only — no param/APVTS/DSP/`.synthy` change; module ids unchanged (layout/persistence intact).
+
 ### File List
+
+- `Source/UI/rack/ModuleDescriptor.h` (new size classes W3H1/W4H2/W5H1 + comments)
+- `Source/UI/PluginEditor.cpp` (per-module `SizeClass` assignments)
