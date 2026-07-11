@@ -138,9 +138,10 @@ namespace rack
         void relayout();
 
         // Couple visibility → enable on an INTERACTIVE toggle (Story 4.2): hide ⇒ disable,
-        // show ⇒ enable (one-time). Writes the module's enableParam if it has one. NOT used
-        // on load/reset (there visibility + enables are restored independently).
-        void driveEnable (const juce::String& id, bool on);
+        // show ⇒ restore the module's FACTORY-DEFAULT enable state (not force-on — e.g. CROSS MOD
+        // defaults to disabled). Writes the module's enableParam if it has one. NOT used on
+        // load/reset (there visibility + enables are restored independently).
+        void driveEnable (const juce::String& id, bool show);
 
         // --- Layout persistence helpers (Story 4.3) ---
         juce::var layoutToVar() const;                  // model → JSON var (array of {id,zone,pos,vis})
