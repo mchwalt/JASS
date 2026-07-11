@@ -209,7 +209,7 @@ namespace Parameters
         // Filter
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::filterOn, 1), "Filter On", false));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::filterType, 1), "Filter Type", juce::StringArray{"Lowpass", "Highpass"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterCutoff, 1), "Filter Cutoff", juce::NormalisableRange<float>(20.0f, 10000.0f, 1.0f, 0.3f), 550.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterCutoff, 1), "Filter Cutoff", juce::NormalisableRange<float>(20.0f, 20000.0f, 1.0f, 0.3f), 550.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterReso, 1), "Filter Resonance", juce::NormalisableRange<float>(0.1f, 10.0f, 0.01f), 0.707f));
 
         // Distortion
