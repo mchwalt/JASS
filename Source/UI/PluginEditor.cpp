@@ -1,5 +1,6 @@
 #include "PluginEditor.h"
 #include "../DSP/WavetableBank.h"
+#include "HelpTextStore.h"           // embedded EN/DE help texts (Story 6.1)
 #include "../Audio/PresetIO.h"
 #include "../Audio/Parameters.h"   // Parameters::ID for the Story-1.3 sample rack
 #include <map>
@@ -280,6 +281,25 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     modulesBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff334155));
     modulesBtn.onClick = [this] { showModulesMenu(); };
 
+    // Online-help language selector (Story 6.1): switches the language of the per-module help
+    // panels. Persisted as a global app setting (not per-preset). EN is the base/fallback.
+    langBox.addItem("EN", 1);
+    langBox.addItem("DE", 2);
+    currentLang = loadUiLanguage();
+    langBox.setSelectedId(currentLang == "DE" ? 2 : 1, juce::dontSendNotification);
+    langBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff334155));
+    langBox.onChange = [this]
+    {
+        currentLang = (langBox.getSelectedId() == 2) ? "DE" : "EN";
+        saveUiLanguage(currentLang);
+        // Live-update an already-open panel.
+        if (helpPanel && helpPanel->isVisible() && currentHelpId.isNotEmpty() && sampleRack)
+            if (auto* f = sampleRack->moduleById(currentHelpId))
+                helpPanel->setContent(f->moduleTitle(),
+                                      HelpTextStore::instance().get(currentHelpId, currentLang));
+    };
+    addAndMakeVisible(langBox);
+
     // Current-preset display
     presetNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
     presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xffaab3c0));
@@ -332,6 +352,14 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         }
     };
     dropFocus(*this);
+
+    // Online-help panel (Story 6.1): ONE shared, movable panel, added AFTER dropFocus so it
+    // KEEPS keyboard focus (needed for ESC-to-close). Hidden until an info icon is clicked.
+    helpPanel = std::make_unique<HelpPanel>();
+    helpPanel->onClose = [this] { if (helpPanel) helpPanel->setVisible(false); };
+    addChildComponent(*helpPanel);
+    if (sampleRack)
+        sampleRack->onModuleHelp = [this](const juce::String& id) { showModuleHelp(id); };
 
     // Size the editor: fixed design width, height derived from the rack's VISIBLE content.
     // Re-run on every show/hide via Rack::onLayoutChanged (AD-12). Must be after the rack +
@@ -429,6 +457,12 @@ void SynthyEditor::setPresetName(const juce::String& name)
 
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
 {
+    // ESC closes an open help panel (Story 6.1) — fallback in case the panel lost focus.
+    if (key == juce::KeyPress::escapeKey && helpPanel && helpPanel->isVisible())
+    {
+        helpPanel->setVisible(false);
+        return true;
+    }
     // z / x shift the computer-keyboard octave (these keys aren't note keys).
     auto c = key.getTextCharacter();
     if (c == 'z' || c == 'Z' || c == 'x' || c == 'X')
@@ -467,6 +501,65 @@ void SynthyEditor::paint(juce::Graphics& g)
         g.setColour(juce::Colour(0xff8899aa));
         g.drawText("Just Another Simple Synthesizer", subArea, juce::Justification::centred);
     }
+}
+
+void SynthyEditor::showModuleHelp(const juce::String& id)
+{
+    if (helpPanel == nullptr || sampleRack == nullptr)
+        return;
+
+    // Toggle: clicking the SAME module's info icon while its panel is open closes it.
+    if (helpPanel->isVisible() && currentHelpId == id)
+    {
+        helpPanel->setVisible(false);
+        return;
+    }
+
+    auto* f = sampleRack->moduleById(id);
+    const juce::String title = (f != nullptr) ? f->moduleTitle() : id;
+    helpPanel->setContent(title, HelpTextStore::instance().get(id, currentLang));   // sets size first
+    currentHelpId = id;
+
+    // Anchor beside the clicked module: to its right if there's room, else to its left,
+    // aligned to its top — then clamp fully inside the editor (above the keyboard band).
+    int x = getWidth() / 2 - HelpPanel::kWidth / 2, y = 90;
+    if (f != nullptr)
+    {
+        auto tl = getLocalPoint(f, juce::Point<int>(0, 0));   // module top-left in editor coords
+        x = tl.x + f->getWidth() + 8;
+        if (x + HelpPanel::kWidth > getWidth() - 8)
+            x = tl.x - HelpPanel::kWidth - 8;                 // no room right → place left
+        y = tl.y;
+    }
+    const int maxX = juce::jmax(8, getWidth()  - HelpPanel::kWidth        - 8);
+    const int maxY = juce::jmax(8, getHeight() - helpPanel->getHeight()   - 80);   // keep clear of keyboard
+    helpPanel->setTopLeftPosition(juce::jlimit(8, maxX, x), juce::jlimit(8, maxY, y));
+
+    helpPanel->setVisible(true);
+    helpPanel->toFront(true);
+    helpPanel->grabKeyboardFocus();   // so ESC closes it
+}
+
+juce::File SynthyEditor::uiLanguageFile()
+{
+    return PresetIO::synthyFolder().getChildFile("ui-language.txt");
+}
+
+juce::String SynthyEditor::loadUiLanguage()
+{
+    auto f = uiLanguageFile();
+    if (f.existsAsFile())
+    {
+        auto s = f.loadFileAsString().trim().toUpperCase();
+        if (s == "EN" || s == "DE")
+            return s;
+    }
+    return "EN";
+}
+
+void SynthyEditor::saveUiLanguage(const juce::String& lang)
+{
+    uiLanguageFile().replaceWithText(lang);
 }
 
 void SynthyEditor::buildSampleRack()
@@ -678,6 +771,8 @@ void SynthyEditor::resized()
     g_titleBounds = headerRow;
     // MODULES show/hide menu button overlays the right edge (clear of the centred title).
     modulesBtn.setBounds(headerRow.removeFromRight(120).reduced(8, 17));
+    // Help-language selector sits just left of the MODULES button (Story 6.1).
+    langBox.setBounds(headerRow.removeFromRight(66).reduced(4, 20));
     // Left cluster: the Save/Load/Random/Reset buttons AND the current-preset name belong
     // together (the preset name is about what was loaded/saved). Buttons in a 2x2 block
     // with "Current State" beside them.

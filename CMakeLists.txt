@@ -41,6 +41,14 @@ target_sources(JASS PRIVATE
 
 juce_generate_juce_header(JASS)
 
+# Embedded resources (Story 6.1): per-module online-help texts, one JSON per language,
+# compiled into the binary so they are available in both Standalone and VST3 without any
+# external file dependency. Adding a language = drop in help_xx.json + list it here.
+juce_add_binary_data(JASS_Resources SOURCES
+    Resources/help_en.json
+    Resources/help_de.json
+)
+
 target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -50,6 +58,7 @@ target_compile_definitions(JASS PUBLIC
 
 target_link_libraries(JASS
     PRIVATE
+        JASS_Resources
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

@@ -5,6 +5,7 @@
 #include "SpectrumDisplay.h"
 #include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
 #include "rack/Rack.h"
+#include "HelpPanel.h"                // movable per-module help panel (Story 6.1)
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
 // sustain hold → release tail. The A/D/R segment widths are drawn proportional
@@ -84,6 +85,16 @@ private:
     std::unique_ptr<rack::Rack> sampleRack;
     juce::OwnedArray<juce::Component> sampleOwned;   // owns the rack's Display components (ADSR curve, scope, spectrum)
     void buildSampleRack();
+
+    // Online help (Story 6.1): a header language selector + one shared movable HelpPanel.
+    juce::ComboBox langBox;                 // EN / DE
+    juce::String currentLang { "EN" };      // active help language (persisted as a global app setting)
+    std::unique_ptr<HelpPanel> helpPanel;   // reused for every module; closed via ✕ / ESC
+    juce::String currentHelpId;             // module id currently shown (for live re-render on language switch)
+    void showModuleHelp(const juce::String& id);
+    static juce::File uiLanguageFile();     // %AppData%\Synthy settings file for the language choice
+    static juce::String loadUiLanguage();   // persisted language, else "EN"
+    static void saveUiLanguage(const juce::String& lang);
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyEditor)
 };

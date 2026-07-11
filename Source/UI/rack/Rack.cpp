@@ -50,6 +50,8 @@ namespace rack
         const bool vis  = desc.defaultVisible;              // factory visibility (Story 4.3)
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addAndMakeVisible (*f);
+        // Forward this frame's help-icon click up to the editor (Story 6.1).
+        f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
         placed.push_back ({ id, f, spec.cols, spec.units });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the

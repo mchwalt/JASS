@@ -43,6 +43,10 @@ FR20: Every module has a stable identity and a declared default zone so the defa
 _Epic 5 — Flexible Mix Routing (added 2026-07-11):_
 FR21: MIX MODE's RingMod/FM coupling operates on two user-selectable oscillators (Source A, Source B ∈ {OSC 1, OSC 2, OSC 3}) instead of the fixed OSC1↔OSC2. FM: A modulates B (carrier); RingMod: A×B; the remaining OSC is summed plainly; Additive unchanged. Defaults A=OSC1/B=OSC2 (prior behaviour). Append-only params; missing ⇒ default coupling. First sanctioned DSP change, scoped to the 3 OSCs.
 
+_Epic 6 — Module Discoverability (added 2026-07-11):_
+FR22: Each module can carry a short help description. The module header shows a small circled-"i" info icon; clicking it opens a **movable** help panel with the module's title + description. The panel stays open until the user closes it via its top-right "✕" or the ESC key (it is NOT a hover/auto-dismiss popup). The help text is optional per module (a module without one shows no info icon). UI-only: no audio/param/`.synthy` impact.
+FR23: The online help is **multi-language**, starting with **English (EN)** and **German (DE)**. Help texts live in **language resource files** (`Resources/help_en.json`, `help_de.json`, keyed by module id) embedded via `juce_add_binary_data` — not inline in code. A language selector combo box in the JASS header switches the active language; the help panel renders the description in the selected language (EN fallback), and an already-open panel updates on switch. The language choice persists as a global app setting (not in `.synthy`). Extensible: a new language = a new resource file + combo entry.
+
 ### NonFunctional Requirements
 
 NFR1: Maintainability — no module defines its own `resized()` geometry; layout is data-driven via the framework. Primary engineering win and a success gate.
@@ -107,6 +111,8 @@ FR19: Epic 4 — persist custom layout + reset layout
 FR20: Epic 4 — stable id + declared default zone on descriptor (foundation)
 NFR6: Epic 4 — append-only, interop-safe layout persistence
 FR21: Epic 5 — selectable MIX MODE sources (A/B among OSC 1/2/3)
+FR22: Epic 6 — per-module online help (header info icon → movable description panel)
+FR23: Epic 6 — multi-language help (EN/DE) with a header language selector
 
 ## Epic List
 
@@ -132,6 +138,10 @@ _(Story order revised 2026-07-10: show/hide (4.2) precedes persistence (4.3) —
 ### Epic 5: Flexible Mix Routing
 Make the MIX MODE (RingMod / FM) coupling operate on two user-selectable oscillators (A/B ∈ OSC 1/2/3) instead of the fixed OSC1↔OSC2 — the natural consequence of freely arrangeable modules. The first sanctioned audio/DSP change, kept surgical (only the OSC-mix block + two append-only params); scoped to the three OSCs.
 **FRs covered:** FR21.
+
+### Epic 6: Module Discoverability
+Help players learn what each module does without a manual: an optional per-module help description, opened from a circled-"i" info icon in the module header into a movable help panel (closed via "✕" or ESC). The help is multi-language (EN/DE to start), switched by a language selector in the JASS header. UI-only, built on the existing `ModuleDescriptor`/`ModuleFrame`/`Rack` framework. Pulled forward from the backlog (`docs/Feature_Ideas.md`) after Epic 5 + the Self-FM feature.
+**FRs covered:** FR22, FR23.
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -429,3 +439,25 @@ so that I can ring-mod / FM any pair (1-2, 1-3, 2-3), not only OSC1↔OSC2.
 **And** the default patch is audibly identical to before (regression), RT rules respected (NFR2), build clean.
 
 _(Option B + rename applied 2026-07-11: dropped "Additive" as a mode — the module-off IS additive — and renamed MIX MODE → CROSS MOD, since with Additive gone the module is purely oscillator cross-modulation. Internal id/param IDs kept stable.)_
+
+## Epic 6: Module Discoverability
+
+Give each module an optional short help description, revealed on demand, so a player can learn what a module does in place. Built entirely on the existing rack framework (`ModuleDescriptor` + `ModuleFrame`) and the `CallOutBox` mechanism already used for the customization panel. No audio, DSP, parameter-ID or `.synthy` change. Verification = clean build + the running app (no unit-test framework).
+
+### Story 6.1: Per-module online help — info icon, movable panel, EN/DE
+
+As a JASS player,
+I want a circled-"i" info icon in each module's header that opens a movable description panel, in my chosen language,
+so that I can learn what each module does without leaving the synth or reading a separate manual.
+
+**Acceptance Criteria:**
+
+**Given** a module whose descriptor carries help text
+**When** JASS opens
+**Then** the module header shows a small circled-"i" info icon (only for modules that have help text; a module without help shows no icon and is unchanged)
+**And** clicking the info icon opens a help panel showing the module's title + description
+**And** the panel is **movable** (drag by its title bar) and stays open until closed via its top-right "✕" or the ESC key (no hover/auto-dismiss)
+**And** the JASS header has a **language selector combo box** offering **EN** and **DE**; the panel shows the description in the selected language, and an already-open panel updates when the language changes
+**And** every currently-shipping module has an accurate 1–2 sentence description **in both EN and DE**
+**And** the info icon, panel, and selector do not disturb existing interactions (knob drag, value-box edit, combos, enable toggle, reset ↺, customization panel), and header geometry stays uniform across modules
+**And** it is UI-only: no parameter, APVTS, audio-thread, or `.synthy` change (NFR2, NFR3), repaint cost negligible (NFR5).

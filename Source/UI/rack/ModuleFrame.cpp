@@ -1,4 +1,5 @@
 #include "ModuleFrame.h"
+#include "../HelpTextStore.h"
 
 namespace rack
 {
@@ -88,13 +89,21 @@ namespace rack
             });
         if (hasResettableParams)
         {
-            resetBtn.setButtonText (juce::String::fromUTF8 ("\xE2\x86\xBA"));   // ↺
+            resetBtn.setTint (typeColour (desc.type));
             resetBtn.setTooltip ("Reset this module to default");
-            auto c = typeColour (desc.type);
-            resetBtn.setColour (juce::TextButton::buttonColourId, c.withAlpha (0.25f));
-            resetBtn.setColour (juce::TextButton::textColourOffId, c);
             resetBtn.onClick = [this] { doReset(); };
             addAndMakeVisible (resetBtn);
+        }
+
+        // Online-help info icon (Story 6.1): shown only when a help text exists for this
+        // module id. Clicking it asks the editor (via onHelp) to show the shared HelpPanel.
+        if (HelpTextStore::instance().has (desc.id))
+        {
+            infoBtn = std::make_unique<IconButton> (IconButton::Kind::Info);
+            infoBtn->setTint (typeColour (desc.type));
+            infoBtn->setTooltip ("What does this module do?");
+            infoBtn->onClick = [this] { if (onHelp) onHelp (desc.id); };
+            addAndMakeVisible (*infoBtn);
         }
     }
 
@@ -281,6 +290,11 @@ namespace rack
         if (enableBtn != nullptr)
             enableBtn->setBounds (enableSlot);
         resetBtn.setBounds (header.removeFromRight (20));
+        // Info icon slot reserved unconditionally (like enable/reset) so titles line up
+        // across every module; only occupied when this module has help (Story 6.1).
+        auto infoSlot = header.removeFromRight (20);
+        if (infoBtn != nullptr)
+            infoBtn->setBounds (infoSlot);
         titleLabel.setBounds (header);
 
         // --- body slot grid (the single body-layout site) ---
