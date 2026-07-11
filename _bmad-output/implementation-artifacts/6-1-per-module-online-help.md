@@ -1,6 +1,6 @@
 # Story 6.1: Per-module online help — info icon, movable panel, EN/DE (resource-backed)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
