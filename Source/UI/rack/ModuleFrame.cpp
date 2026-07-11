@@ -75,10 +75,9 @@ namespace rack
             enableBtn->setInterceptsMouseClicks (false, false);
         }
 
-        // Reset ↺ is shown only when the module has resettable parameters (a Knob/Combo/
-        // Toggle bound to a paramId). A pure passive display (Scope/Spectrum) has none, so
-        // it gets no reset — matching its lack of an enabler. (resized() still reserves the
-        // slot so header geometry stays uniform.)
+        // Reset ↺ is shown when the module has resettable parameters (a Knob/Combo/Toggle
+        // bound to a paramId) OR carries an extra onReset action (e.g. a display's internal
+        // time-base). (resized() reserves the slot regardless so header geometry stays uniform.)
         const bool hasResettableParams = std::any_of (desc.body.begin(), desc.body.end(),
             [] (const BodyElement& el)
             {
@@ -87,7 +86,7 @@ namespace rack
                 if (auto* t = std::get_if<Toggle> (&el)) return t->paramId.isNotEmpty();
                 return false;
             });
-        if (hasResettableParams)
+        if (hasResettableParams || desc.onReset)
         {
             resetBtn.setTint (typeColour (desc.type));
             resetBtn.setTooltip ("Reset this module to default");
@@ -271,6 +270,9 @@ namespace rack
             else if (auto* c = std::get_if<Combo>  (&el)) resetId (c->paramId);
             else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
         }
+
+        // Extra non-param reset (e.g. the Oscilloscope's internal time-base).
+        if (desc.onReset) desc.onReset();
     }
 
     void ModuleFrame::resized()
@@ -344,24 +346,27 @@ namespace rack
                 // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
                 // is just the short box. Name sits ABOVE, so the block is caption + widget.
                 const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
-                const int blockH = capH + wH;
-                // Centre the caption+widget block vertically so the name sits DIRECTLY above
-                // its widget — never floating to the top of a tall (e.g. L) cell.
-                const int top = juce::jmax (cr.getY(), cr.getCentreY() - blockH / 2);
-
-                cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);   // NAME on top
 
                 if (isKnob)
                 {
-                    // ONE fixed knob size everywhere (AD-3), CENTRED — the slider draws the
-                    // rotary in its top square and the value box in the bottom 14 px. Width
-                    // a touch wider than the knob so the value text isn't truncated.
+                    // Knob block (NAME + rotary + value box) centred vertically in the cell.
+                    // ONE fixed knob size everywhere (AD-3), CENTRED horizontally; the slider
+                    // draws the rotary in its top square and the value box in the bottom 14 px.
+                    const int blockH = capH + wH;
+                    const int top = juce::jmax (cr.getY(), cr.getCentreY() - blockH / 2);
+                    cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
                     const int sw = juce::jmin (cr.getWidth(), 62);
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
                 }
                 else
-                    // Combo: short (half-height) + wide (2 slots), LEFT-aligned, under its name.
-                    cell.widget->setBounds (cr.getX(), top + capH, cr.getWidth(), wH);
+                {
+                    // Combo: box centred on the cell centre-line — EXACTLY like the press
+                    // buttons (LOAD WAV etc., which use withSizeKeepingCentre) — so all
+                    // interactive widgets sit on one line; its NAME caption sits directly above.
+                    const int boxY = juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
+                    cell.caption->setBounds (cr.getX(), boxY - capH, cr.getWidth(), capH);
+                    cell.widget->setBounds (cr.getX(), boxY, cr.getWidth(), wH);
+                }
             }
             else if (cell.widget != nullptr)
             {
