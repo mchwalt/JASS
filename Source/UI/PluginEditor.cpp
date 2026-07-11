@@ -621,9 +621,9 @@ void SynthyEditor::buildSampleRack()
     // Stereo becomes a normal module whose Enable IS stereoOn (no special-case header
     // chrome); Master is the new XS class (a single knob). Demonstrates "everything is a
     // module" before we formalise FR14 / the XS size class via correct-course.
-    add(Rack::Zone::MasterBus, SizeClass::XS, ModuleType::Processor, "STEREO", P::stereoOn,
+    add(Rack::Zone::MasterBus, SizeClass::W4H1, ModuleType::Processor, "STEREO", P::stereoOn,
         { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
-    add(Rack::Zone::MasterBus, SizeClass::XXS, ModuleType::Processor, "MASTER", P::masterOn,
+    add(Rack::Zone::MasterBus, SizeClass::W2H1, ModuleType::Processor, "MASTER", P::masterOn,
         { K(P::masterVol, "VOL") });
 
     // ---- GENERATORS ----
@@ -631,7 +631,7 @@ void SynthyEditor::buildSampleRack()
     {
         // M (not S): six controls now — WAVE, FREQ, AMP, VOICES, DETUNE + FB (Self-FM).
         // S is meant for 3–4 controls; a sixth would cram it, so bump one class up.
-        add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator,
+        add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator,
             "OSC " + juce::String(i), P::oscOn(i),
             { C(P::oscWave(i), "WAVE", waves), Kfreq(P::oscFreq(i), "FREQ"),
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
@@ -652,7 +652,7 @@ void SynthyEditor::buildSampleRack()
                                                    apvts.getRawParameterValue (P::oscOn (2)),
                                                    apvts.getRawParameterValue (P::oscOn (3)) };
         ModuleDescriptor mix;
-        mix.sizeClass = SizeClass::S; mix.type = ModuleType::Generator;   // MODE + Source A + Source B
+        mix.sizeClass = SizeClass::W6H1; mix.type = ModuleType::Generator;   // MODE + Source A + Source B
         // Renamed MIX MODE -> CROSS MOD (Option B: Additive dropped, module-off = additive).
         // Internal id stays "mixmode" so RackLayout persistence keeps matching.
         mix.id = "mixmode"; mix.title = "CROSS MOD";
@@ -673,15 +673,15 @@ void SynthyEditor::buildSampleRack()
         sampleRack->addModule(std::move(mix));
     }
 
-    add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "SUB", P::subOn,
+    add(Rack::Zone::Generators, SizeClass::W6H1, ModuleType::Generator, "SUB", P::subOn,
         { C(P::subWave, "WAVE", { "Sine", "Square" }), K(P::subLevel, "LEVEL") });
-    add(Rack::Zone::Generators, SizeClass::S, ModuleType::Generator, "NOISE", P::noiseOn,
+    add(Rack::Zone::Generators, SizeClass::W6H1, ModuleType::Generator, "NOISE", P::noiseOn,
         { C(P::noiseType, "TYPE", { "White", "Pink" }), K(P::noiseAmp, "AMP") });
-    add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
+    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR") });
-    add(Rack::Zone::Generators, SizeClass::M, ModuleType::Generator, "WAVETABLE", P::wavetableOn,
+    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,
         { Combo{ P::wavetableBank, "BANK",
                  std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
           FileAction{ "LOAD WAV",
@@ -700,24 +700,24 @@ void SynthyEditor::buildSampleRack()
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
     // curve), a Display body element (AD-5), owned by sampleOwned so its lifetime is tied
     // to the editor.
-    add(Rack::Zone::Modulation, SizeClass::L, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
+    add(Rack::Zone::Modulation, SizeClass::W8H2, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ sampleOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
     // LFO WAVE must list the lfoWave param's OWN choices in order — the ComboBoxAttachment
     // maps by index, so the shared `waves` array (a different order) would mislabel every
     // waveform (Story 2.1 AC3).
-    add(Rack::Zone::Modulation, SizeClass::M, ModuleType::Modulator, "LFO", P::lfoOn,
+    add(Rack::Zone::Modulation, SizeClass::W8H1, ModuleType::Modulator, "LFO", P::lfoOn,
         { C(P::lfoWave, "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
           C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff" }),
           K(P::lfoRate, "RATE"), K(P::lfoDepth, "DEPTH") });
-    add(Rack::Zone::Modulation, SizeClass::M, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
+    add(Rack::Zone::Modulation, SizeClass::W8H1, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
         { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
           K(P::arpRate, "RATE"), K(P::arpOctaves, "OCT"), K(P::arpGate, "GATE") });
 
     // ---- PROCESSING ----
     // FILTER: TYPE combo + CUTOFF + RESO (= 4 slots, like DISTORTION) → M (4 cols) so the
     // combo isn't cramped. (Exact width tuning deferred to next session.)
-    add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "FILTER", P::filterOn,
+    add(Rack::Zone::Processing, SizeClass::W8H1, ModuleType::Processor, "FILTER", P::filterOn,
         { C(P::filterType, "TYPE", { "Lowpass", "Highpass" }),
           Kmod(P::filterCutoff, "CUTOFF", ModTarget::FilterCutoff), K(P::filterReso, "RESO") });
     // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
@@ -725,18 +725,18 @@ void SynthyEditor::buildSampleRack()
     // ComboBoxAttachment maps by INDEX, so the canonical param/.synthy strings stay
     // "SoftClip"/"HardClip" (project-context: UI display may differ from the interop string).
     // Order/count MUST match distortionType's choices exactly, or the index mapping breaks.
-    add(Rack::Zone::Processing, SizeClass::M, ModuleType::Processor, "DISTORTION", P::distortionOn,
+    add(Rack::Zone::Processing, SizeClass::W8H1, ModuleType::Processor, "DISTORTION", P::distortionOn,
         { C(P::distortionType, "TYPE", { "Soft Clip", "Hard Clip", "Foldback" }),
           K(P::distortionDrive, "DRIVE"), K(P::distortionMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "WAVEFOLD", P::wavefoldOn,
+    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "WAVEFOLD", P::wavefoldOn,
         { K(P::wavefoldDrive, "DRIVE"), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "BITCRUSH", P::bitcrushOn,
+    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "BITCRUSH", P::bitcrushOn,
         { K(P::bitcrushBits, "BITS"), K(P::bitcrushRate, "RATE"), K(P::bitcrushMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "CHORUS", P::chorusOn,
+    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "CHORUS", P::chorusOn,
         { K(P::chorusRate, "RATE"), K(P::chorusDepth, "DEPTH"), K(P::chorusMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "DELAY", P::delayOn,
+    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "DELAY", P::delayOn,
         { K(P::delayTime, "TIME"), K(P::delayFeedback, "FB"), K(P::delayMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::S, ModuleType::Processor, "REVERB", P::reverbOn,
+    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "REVERB", P::reverbOn,
         { K(P::reverbRoom, "ROOM"), K(P::reverbDamp, "DAMP"), K(P::reverbMix, "MIX") });
     // Real visualizers (own instances, separate from the legacy ones behind the rack —
     // one-parent rule). setShowTitle(false): the module header already shows the title.
@@ -746,7 +746,7 @@ void SynthyEditor::buildSampleRack()
     scope->setShowTitle(false);
     scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
     sampleOwned.add(scope);
-    add(Rack::Zone::Visualization, SizeClass::XL, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
+    add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
         { Display{ scope, 12 } },
         [scope] { scope->resetTimeRange(); });   // ↺ restores the 10 ms default time-base
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
@@ -755,7 +755,7 @@ void SynthyEditor::buildSampleRack()
     sampleOwned.add(spec);
     // SPECTRUM has no adjustable state yet — its ↺ is a uniform-anatomy placeholder (a no-op
     // for now) so every module carries the same header controls; wire real params here later.
-    add(Rack::Zone::Visualization, SizeClass::XL, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
+    add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
         { Display{ spec, 12 } },
         [] { });
 

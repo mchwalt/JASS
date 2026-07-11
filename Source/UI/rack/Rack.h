@@ -96,8 +96,10 @@ namespace rack
         int preferredHeight (int width) const;
 
         // --- fixed grid constants (frozen from the mockup; AC4) ---
-        static constexpr int kDefaultCols = 12;   // refined proportional grid (was 8); a pure
-                                                  // layout raster, independent of knob size
+        static constexpr int kDefaultCols = 24;   // fine proportional grid (was 12); a pure layout
+                                                  // raster, independent of knob size. 24 columns give
+                                                  // the granularity to size small modules tightly
+                                                  // (module widths are expressed in 24ths).
         static constexpr int kGutter      = 10;   // uniform gutter between cells
         static constexpr int kHu          = 114;  // one rack-unit row height (L spans 2).
                                                   // Sized so a 1-unit body fits name caption +

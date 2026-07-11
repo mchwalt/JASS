@@ -48,7 +48,8 @@ FR22: Each module can carry a short help description. The module header shows a 
 FR23: The online help is **multi-language**, starting with **English (EN)** and **German (DE)**. Help texts live in **language resource files** (`Resources/help_en.json`, `help_de.json`, keyed by module id) embedded via `juce_add_binary_data` — not inline in code. A language selector combo box in the JASS header switches the active language; the help panel renders the description in the selected language (EN fallback), and an already-open panel updates on switch. The language choice persists as a global app setting (not in `.synthy`). Extensible: a new language = a new resource file + combo entry.
 
 _Epic 7 — UI Polish (added 2026-07-12):_
-FR24: Module size classes are tightened so each module's footprint fits its actual control count — no module is unnecessarily large/wide — while honouring the size-class rules (AD-2/AD-3): rotaries keep their minimum diameter, combos keep enough width, "XXS only for single-control modules", and the uniform header anatomy (title · info · reset · enable) is unchanged. OSC 1/2/3 stay M (6 controls incl. FB). UI-only; no audio/param/`.synthy` impact.
+FR24: Module size classes are tightened so each module's footprint fits its actual control count — no module is unnecessarily large/wide — while honouring the size-class rules (AD-2/AD-3): rotaries keep their minimum diameter, combos keep enough width, single-control modules use the smallest class, and the uniform header anatomy (title · info · reset · enable) is unchanged. OSC 1/2/3 stay at the 3-per-row width. UI-only; no audio/param/`.synthy` impact.
+FR25: The rack grid is refined from 12 to 24 columns and the size classes are renamed to their grid footprint (`W{cols}H{rows}`, e.g. `W8H1`) instead of T-shirt sizes — giving the finer granularity needed to size small modules tightly and making the grid maths explicit. Visually neutral (each old class maps to the doubled column count); enables FR24.
 
 ### NonFunctional Requirements
 
@@ -117,6 +118,7 @@ FR21: Epic 5 — selectable MIX MODE sources (A/B among OSC 1/2/3)
 FR22: Epic 6 — per-module online help (header info icon → movable description panel)
 FR23: Epic 6 — multi-language help (EN/DE) with a header language selector
 FR24: Epic 7 — tighten module size classes to fit control counts (UI polish)
+FR25: Epic 7 — finer 24-column grid + column-based size-class names (enabler)
 
 ## Epic List
 
@@ -148,8 +150,8 @@ Help players learn what each module does without a manual: an optional per-modul
 **FRs covered:** FR22, FR23.
 
 ### Epic 7: UI Polish
-Tighten the module size classes so each module's footprint matches its real control count — several modules read as unnecessarily large/wide. Pure sizing pass on the data-driven size-class table (AD-2), honouring the rotary-minimum (AD-3), combo-width and "XXS = single control" rules, keeping the uniform header anatomy and the fixed 12-column grid. UI-only; no audio/DSP/param/`.synthy` change.
-**FRs covered:** FR24.
+Tighten module sizing so each module's footprint matches its real control count. Done in two steps: **7.1** refines the grid 12→24 columns and renames the size classes to their column footprint (`W{cols}H{rows}`) — the enabler that makes tight small widths possible and the maths explicit (visually neutral); **7.2** assigns the tighter classes module by module (with the user's eye), incl. STEREO and the MASTER header-title fix. Data-driven size-class table (AD-2), rotary-minimum (AD-3), combo-width and single-control rules honoured; uniform header anatomy kept. UI-only; no audio/DSP/param/`.synthy` change.
+**FRs covered:** FR24, FR25.
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -472,25 +474,38 @@ so that I can learn what each module does without leaving the synth or reading a
 
 ## Epic 7: UI Polish
 
-A pure sizing pass: tighten each module's size class to fit its real control count so nothing looks unnecessarily large/wide, without breaking the rotary-minimum, combo-width, "XXS = single control", uniform-header or fixed-grid rules. No audio/DSP/param/`.synthy` change; verification = clean build + the running app (user's eye).
+Two steps: 7.1 refines the grid + renames the classes (enabler, visually neutral); 7.2 assigns the tighter sizes with the user's eye. No audio/DSP/param/`.synthy` change; verification = clean build + the running app.
 
-### Story 7.1: Tighten module size classes to fit control counts
+### Story 7.1: Finer 24-column grid + column-based size-class names (foundation) — DONE
 
-As a JASS player,
-I want each module sized to its actual controls (no oversized/over-wide modules),
-so that the rack reads tight and balanced rather than wasteful.
+As a JASS developer,
+I want the grid refined 12→24 columns and the size classes renamed to their footprint (`W{cols}H{rows}`),
+so that small modules can be sized tightly and every size reads as explicit grid maths.
 
 **Acceptance Criteria:**
 
-**Given** the data-driven size-class table (AD-2: XXS=1×1, XS=2×1, S=3×1, M=4×1, L=4×2, XL=6×2) and the current per-module assignments
-**When** each module's assigned class is audited against its control count (combo = 2 slots, knob/button = 1, display = N)
-**Then** any module that is visibly larger/wider than its content needs is moved to a tighter class, subject to the guardrails below
-**And** rotaries keep at least the AD-3 minimum diameter after shrinking (no knob becomes too small to use)
-**And** combos keep enough width to show their item text (a combo needs ~2 content slots; don't cram it into a box too narrow)
-**And** the "XXS is for single-control modules only" rule holds, MASTER BUS stays right-aligned, other zones left-aligned
-**And** OSC 1/2/3 remain **M** (6 controls incl. FB — do not shrink to S)
-**And** the uniform header anatomy (title · info · reset · enable) and the fixed 1520 px / 12-column grid are unchanged
-**And** it is UI-only: no parameter, APVTS, audio-thread, DSP or `.synthy` change (NFR2, NFR3), and the change is only size-class assignments in `buildSampleRack` (plus the size-class table only if a genuinely new class is needed — avoid)
-**And** verified in the running app: the tightened modules look balanced, every control is still usable, nothing truncates or overlaps a grid boundary.
+**Given** the 12-column grid and T-shirt size names (XXS…XL)
+**When** the grid is set to 24 columns and the classes renamed to `W2H1/W4H1/W6H1/W8H1/W8H2/W12H2` (old counts doubled)
+**Then** the rack is **visually identical** (each module keeps its exact width/height), OSC stays 3-per-row
+**And** the enum, `sizeClassSpec` table and every `SizeClass::…` call site use the new names (no old names remain)
+**And** it is UI-only with zero persistence impact (size class is compile-time, not stored in `.synthy`).
 
-_(Sizing is a judgement call confirmed by eye — the story proposes candidates; the user approves the final per-module classes in the running app. See the implementation story file for the audit table.)_
+_(Done 2026-07-12. See `7-1-grid-and-size-names.md`.)_
+
+### Story 7.2: Tighten module size classes to fit control counts
+
+As a JASS player,
+I want each module sized to its actual controls (no oversized/over-wide modules),
+so that the rack reads tight and balanced — as densely packed as the OSC modules.
+
+**Acceptance Criteria:**
+
+**Given** the 24-col grid + column-based names (Story 7.1) and OSC (`W8H1`, 3-per-row) as the density benchmark
+**When** the user specifies each module's target width and it is applied (changing only the `SizeClass` arg; adding a new `W{cols}H{rows}` class as one table+enum case if the width is new)
+**Then** loose modules are tightened toward the OSC density, subject to the guardrails below
+**And** rotaries keep at least the AD-3 minimum diameter; combos keep enough width to read their items
+**And** STEREO is tightened (its 2 knobs currently float in `W4H1`) and the MASTER title truncation (title + 3 header icons don't fit `W2H1` since Epic 6) is fixed by widening MASTER slightly or compacting the header
+**And** single-control modules use the smallest class, MASTER BUS stays right-aligned / other zones left, uniform header anatomy kept, OSC stays `W8H1`
+**And** it is UI-only (no param/APVTS/DSP/`.synthy`), verified per module in the running app: balanced, controls usable/readable, no truncation or grid-boundary breach.
+
+_(Sizing is a judgement call confirmed by eye — the user drives the per-module target widths. See `7-2-module-size-tuning.md`.)_

@@ -12,7 +12,14 @@
 // no parameter definitions, no APVTS ownership here — pure UI-layer data.
 namespace rack
 {
-    enum class SizeClass  { XXS, XS, S, M, L, XL };                 // 12-col grid spans: 1x1, 2x1, 3x1, 4x1, 4x2, 6x2
+    // Size classes are named by their grid FOOTPRINT: W{cols}H{rows} on the 24-column grid
+    // (the smallest unit is 1 of 24 columns wide × 1 rack row tall). Column-based names make
+    // the grid maths explicit at every call site and show exactly which widths exist. The 24-col
+    // grid (was 12) gives the finer granularity needed to size small modules tightly without
+    // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
+    //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
+    //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
+    enum class SizeClass  { W2H1, W4H1, W6H1, W8H1, W8H2, W12H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff }; // for live LFO rings (AD-8)
 
@@ -149,16 +156,16 @@ namespace rack
     {
         switch (c)
         {
-            // PROTOTYPE: column spans on the refined 12-column grid (cols × units). Decoupled
-            // from knob size — the body fills the module width from its CONTENT (see
-            // ModuleFrame::resized). slotCapacity is now only a generous debug guard, not a
-            // layout driver. To be formalised in AD-2 via correct-course.
-            case SizeClass::XXS:return { 1, 1,  2, KnobSize::Small };  // single control (Master VOL, Mix-Mode)
-            case SizeClass::XS: return { 2, 1,  4, KnobSize::Small };  // 1–2 controls
-            case SizeClass::S:  return { 3, 1,  6, KnobSize::Small };  // 3–4 controls
-            case SizeClass::M:  return { 4, 1,  8, KnobSize::Small };  // 5–6 controls
-            case SizeClass::L:  return { 4, 2, 16, KnobSize::Small };  // knobs + curve display (ADSR)
-            case SizeClass::XL: return { 6, 2, 24, KnobSize::Small };  // wide visualisers (scope/spectrum)
+            // Column spans on the 24-column grid (cols × units). Decoupled from knob size —
+            // the body fills the module width from its CONTENT (see ModuleFrame::resized).
+            // slotCapacity is only a generous debug guard, not a layout driver. Names encode the
+            // footprint (W{cols}H{rows}); widths are 24ths, so 8/24 = one third of the rack.
+            case SizeClass::W2H1:  return {  2, 1,  2, KnobSize::Small };  // single control (was XXS)
+            case SizeClass::W4H1:  return {  4, 1,  4, KnobSize::Small };  // 1–2 controls   (was XS)
+            case SizeClass::W6H1:  return {  6, 1,  6, KnobSize::Small };  // 3–4 controls   (was S)
+            case SizeClass::W8H1:  return {  8, 1,  8, KnobSize::Small };  // 5–6 controls   (was M; 3 per row)
+            case SizeClass::W8H2:  return {  8, 2, 16, KnobSize::Small };  // knobs + curve display (was L)
+            case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small };  // wide visualisers      (was XL; 2 per row)
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };
