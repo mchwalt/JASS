@@ -101,7 +101,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         {
             // Modulate cutoff logarithmically
             double factor = std::pow(2.0, lfoValue * 3.0); // ±3 octaves
-            filter.setCutoff(std::clamp(baseCutoff * factor, 20.0, 10000.0));
+            filter.setCutoff(std::clamp(baseCutoff * factor, 20.0, 20000.0));
         }
 
         // Mix oscillators according to the mix mode. When Mix-Mode is disabled (Story 2.4)
