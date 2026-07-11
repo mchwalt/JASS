@@ -47,6 +47,9 @@ _Epic 6 — Module Discoverability (added 2026-07-11):_
 FR22: Each module can carry a short help description. The module header shows a small circled-"i" info icon; clicking it opens a **movable** help panel with the module's title + description. The panel stays open until the user closes it via its top-right "✕" or the ESC key (it is NOT a hover/auto-dismiss popup). The help text is optional per module (a module without one shows no info icon). UI-only: no audio/param/`.synthy` impact.
 FR23: The online help is **multi-language**, starting with **English (EN)** and **German (DE)**. Help texts live in **language resource files** (`Resources/help_en.json`, `help_de.json`, keyed by module id) embedded via `juce_add_binary_data` — not inline in code. A language selector combo box in the JASS header switches the active language; the help panel renders the description in the selected language (EN fallback), and an already-open panel updates on switch. The language choice persists as a global app setting (not in `.synthy`). Extensible: a new language = a new resource file + combo entry.
 
+_Epic 7 — UI Polish (added 2026-07-12):_
+FR24: Module size classes are tightened so each module's footprint fits its actual control count — no module is unnecessarily large/wide — while honouring the size-class rules (AD-2/AD-3): rotaries keep their minimum diameter, combos keep enough width, "XXS only for single-control modules", and the uniform header anatomy (title · info · reset · enable) is unchanged. OSC 1/2/3 stay M (6 controls incl. FB). UI-only; no audio/param/`.synthy` impact.
+
 ### NonFunctional Requirements
 
 NFR1: Maintainability — no module defines its own `resized()` geometry; layout is data-driven via the framework. Primary engineering win and a success gate.
@@ -113,6 +116,7 @@ NFR6: Epic 4 — append-only, interop-safe layout persistence
 FR21: Epic 5 — selectable MIX MODE sources (A/B among OSC 1/2/3)
 FR22: Epic 6 — per-module online help (header info icon → movable description panel)
 FR23: Epic 6 — multi-language help (EN/DE) with a header language selector
+FR24: Epic 7 — tighten module size classes to fit control counts (UI polish)
 
 ## Epic List
 
@@ -142,6 +146,10 @@ Make the MIX MODE (RingMod / FM) coupling operate on two user-selectable oscilla
 ### Epic 6: Module Discoverability
 Help players learn what each module does without a manual: an optional per-module help description, opened from a circled-"i" info icon in the module header into a movable help panel (closed via "✕" or ESC). The help is multi-language (EN/DE to start), switched by a language selector in the JASS header. UI-only, built on the existing `ModuleDescriptor`/`ModuleFrame`/`Rack` framework. Pulled forward from the backlog (`docs/Feature_Ideas.md`) after Epic 5 + the Self-FM feature.
 **FRs covered:** FR22, FR23.
+
+### Epic 7: UI Polish
+Tighten the module size classes so each module's footprint matches its real control count — several modules read as unnecessarily large/wide. Pure sizing pass on the data-driven size-class table (AD-2), honouring the rotary-minimum (AD-3), combo-width and "XXS = single control" rules, keeping the uniform header anatomy and the fixed 12-column grid. UI-only; no audio/DSP/param/`.synthy` change.
+**FRs covered:** FR24.
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -461,3 +469,28 @@ so that I can learn what each module does without leaving the synth or reading a
 **And** every currently-shipping module has an accurate 1–2 sentence description **in both EN and DE**
 **And** the info icon, panel, and selector do not disturb existing interactions (knob drag, value-box edit, combos, enable toggle, reset ↺, customization panel), and header geometry stays uniform across modules
 **And** it is UI-only: no parameter, APVTS, audio-thread, or `.synthy` change (NFR2, NFR3), repaint cost negligible (NFR5).
+
+## Epic 7: UI Polish
+
+A pure sizing pass: tighten each module's size class to fit its real control count so nothing looks unnecessarily large/wide, without breaking the rotary-minimum, combo-width, "XXS = single control", uniform-header or fixed-grid rules. No audio/DSP/param/`.synthy` change; verification = clean build + the running app (user's eye).
+
+### Story 7.1: Tighten module size classes to fit control counts
+
+As a JASS player,
+I want each module sized to its actual controls (no oversized/over-wide modules),
+so that the rack reads tight and balanced rather than wasteful.
+
+**Acceptance Criteria:**
+
+**Given** the data-driven size-class table (AD-2: XXS=1×1, XS=2×1, S=3×1, M=4×1, L=4×2, XL=6×2) and the current per-module assignments
+**When** each module's assigned class is audited against its control count (combo = 2 slots, knob/button = 1, display = N)
+**Then** any module that is visibly larger/wider than its content needs is moved to a tighter class, subject to the guardrails below
+**And** rotaries keep at least the AD-3 minimum diameter after shrinking (no knob becomes too small to use)
+**And** combos keep enough width to show their item text (a combo needs ~2 content slots; don't cram it into a box too narrow)
+**And** the "XXS is for single-control modules only" rule holds, MASTER BUS stays right-aligned, other zones left-aligned
+**And** OSC 1/2/3 remain **M** (6 controls incl. FB — do not shrink to S)
+**And** the uniform header anatomy (title · info · reset · enable) and the fixed 1520 px / 12-column grid are unchanged
+**And** it is UI-only: no parameter, APVTS, audio-thread, DSP or `.synthy` change (NFR2, NFR3), and the change is only size-class assignments in `buildSampleRack` (plus the size-class table only if a genuinely new class is needed — avoid)
+**And** verified in the running app: the tightened modules look balanced, every control is still usable, nothing truncates or overlaps a grid boundary.
+
+_(Sizing is a judgement call confirmed by eye — the story proposes candidates; the user approves the final per-module classes in the running app. See the implementation story file for the audit table.)_
