@@ -65,9 +65,9 @@ private:
     KarplusStrong karplus;
     WavetableOscillator wavetable;
 
-    MixMode mixMode = MixMode::Additive;
+    MixMode mixMode = MixMode::RingMod;   // only meaningful when mixModeOn; off => additive
     bool adsrOn = true;      // false => envelope bypassed (constant gain) — Story 2.4
-    bool mixModeOn = true;   // false => oscillators summed additively regardless of mixMode
+    bool mixModeOn = false;  // false => oscillators summed additively (the "Additive" default)
     int mixSrcA = 0;         // Epic 5: RingMod/FM operand A (0..2 => OSC 1/2/3); default OSC1
     int mixSrcB = 1;         // operand B; default OSC2 (== prior fixed OSC1<->OSC2 coupling)
 

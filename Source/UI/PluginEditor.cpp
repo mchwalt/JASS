@@ -540,12 +540,12 @@ void SynthyEditor::buildSampleRack()
               Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
               K(P::oscUniDetune(i), "DETUNE") });
     };
-    // MIX MODE sits BETWEEN OSC 1 and OSC 2. Epic 5: it now couples two SELECTABLE oscillators
-    // (Source A / Source B), no longer a fixed OSC1<->OSC2.
+    // CROSS MOD sits BETWEEN OSC 1 and OSC 2. It couples two SELECTABLE oscillators (Source A /
+    // Source B) via RingMod or FM; disabled => plain additive sum (Option B, Epic 5).
     addOsc(1);
     {
         // The derived lit/dimmed state reads the shared params only (AD-9), no module refs:
-        // MIX MODE is meaningful when the two SELECTED source OSCs are both enabled. Grab the
+        // CROSS MOD is meaningful when the two SELECTED source OSCs are both enabled. Grab the
         // relevant atomics once (stable for the APVTS lifetime).
         auto* selA  = apvts.getRawParameterValue (P::mixSrcA);
         auto* selB  = apvts.getRawParameterValue (P::mixSrcB);
@@ -554,10 +554,12 @@ void SynthyEditor::buildSampleRack()
                                                    apvts.getRawParameterValue (P::oscOn (3)) };
         ModuleDescriptor mix;
         mix.sizeClass = SizeClass::S; mix.type = ModuleType::Generator;   // MODE + Source A + Source B
-        mix.id = "mixmode"; mix.title = "MIX MODE";
-        mix.enableParam = P::mixModeOn;   // real user enable (off => additive, Story 2.4)
+        // Renamed MIX MODE -> CROSS MOD (Option B: Additive dropped, module-off = additive).
+        // Internal id stays "mixmode" so RackLayout persistence keeps matching.
+        mix.id = "mixmode"; mix.title = "CROSS MOD";
+        mix.enableParam = P::mixModeOn;   // enable = coupling on; off => plain additive sum
         const juce::StringArray oscItems { "OSC 1", "OSC 2", "OSC 3" };
-        mix.body = { C(P::mixMode, "MODE", { "Additive", "RingMod", "FM" }),
+        mix.body = { C(P::mixMode, "MODE", { "RingMod", "FM" }),
                      C(P::mixSrcA, "SRC A", oscItems),
                      C(P::mixSrcB, "SRC B", oscItems) };
         // Lit = mixModeOn AND both SELECTED sources enabled (a UI cue; the audio additive

@@ -129,8 +129,9 @@ namespace PresetIO
 
         root->setProperty("MasterVolume", rawF(a, ID::masterVol));
         root->setProperty("MasterOn",     rawB(a, ID::masterOn));      // Story 2.4 (append-only; missing => on)
-        root->setProperty("MixMode",      rawChoice(a, ID::mixMode, kMixMode));
-        root->setProperty("MixModeOn",    rawB(a, ID::mixModeOn));
+        // CROSS MOD (Option B): "Additive" == disabled. On-disk stays {Additive,RingMod,FM} via
+        // choiceOrOff so older presets round-trip; the live mixMode param holds only {RingMod,FM}.
+        root->setProperty("MixMode",      choiceOrOff(a, ID::mixModeOn, ID::mixMode, kMixMode));
         root->setProperty("MixSrcA",      rawChoice(a, ID::mixSrcA, kMixSrc));   // Epic 5 (append-only; missing => OSC1)
         root->setProperty("MixSrcB",      rawChoice(a, ID::mixSrcB, kMixSrc));   //          (missing => OSC2)
         root->setProperty("ScopeOn",      rawB(a, ID::scopeOn));       // display enables (append-only; missing => on)
@@ -267,8 +268,10 @@ namespace PresetIO
 
         setRaw   (a, ID::masterVol, (float) jnum(v, "MasterVolume", rawF(a, ID::masterVol)));
         setRaw   (a, ID::masterOn,  jbool(v, "MasterOn",  rawB(a, ID::masterOn))  ? 1.f : 0.f);   // Story 2.4; missing => keep default (on)
-        setChoice(a, ID::mixMode, kMixMode, v["MixMode"], rawI(a, ID::mixMode));
-        setRaw   (a, ID::mixModeOn, jbool(v, "MixModeOn", rawB(a, ID::mixModeOn)) ? 1.f : 0.f);
+        setChoiceOrOff(a, ID::mixModeOn, ID::mixMode, kMixMode, v["MixMode"]);   // "Additive" => off
+        // Back-compat: a Story-2.4-era preset may carry an explicit MixModeOn=false next to a
+        // RingMod/FM mode (off + mode were separate then) — honour it so it stays additive.
+        if (v.hasProperty("MixModeOn") && ! (bool) v["MixModeOn"]) setRaw(a, ID::mixModeOn, 0.0f);
         setChoice(a, ID::mixSrcA, kMixSrc, v["MixSrcA"], rawI(a, ID::mixSrcA));   // Epic 5 (missing => default 0/1)
         setChoice(a, ID::mixSrcB, kMixSrc, v["MixSrcB"], rawI(a, ID::mixSrcB));
         setRaw   (a, ID::scopeOn,    jbool(v, "ScopeOn",    rawB(a, ID::scopeOn))    ? 1.f : 0.f);   // missing => on
