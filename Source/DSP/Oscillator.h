@@ -4,7 +4,7 @@
 #include <algorithm>
 
 enum class WaveformType { Sine, Sawtooth, Square, Triangle };
-enum class MixMode { Additive, RingMod, FM };
+enum class MixMode { RingMod, FM };   // "Additive" (no coupling) = CROSS MOD module disabled (mixModeOn=false)
 
 class Oscillator
 {

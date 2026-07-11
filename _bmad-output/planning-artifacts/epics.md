@@ -411,18 +411,21 @@ _Superseded 2026-07-11. Reordering and moving modules between zones is delivered
 
 Generalize the MIX MODE coupling from the fixed OSC1↔OSC2 to two user-selectable operands. First sanctioned DSP change — surgical: only the OSC-mix block in `SynthVoice` + two append-only params + the MIX MODE descriptor. No other signal-chain change.
 
-### Story 5.1: Selectable MIX MODE sources (A/B among OSC 1/2/3)
+### Story 5.1: Selectable CROSS MOD sources (A/B among OSC 1/2/3)
 
 As a JASS sound designer,
-I want to choose which two oscillators MIX MODE (RingMod / FM) couples,
+I want to choose which two oscillators the cross-mod (RingMod / FM) couples,
 so that I can ring-mod / FM any pair (1-2, 1-3, 2-3), not only OSC1↔OSC2.
 
 **Acceptance Criteria:**
 
-**Given** the MIX MODE module
+**Given** the CROSS MOD module (renamed from MIX MODE)
 **When** I set Source A and Source B (each OSC 1/2/3)
-**Then** FM makes A modulate B (carrier) and RingMod computes A×B, with the remaining OSC summed plainly; Additive is unchanged; MIX-MODE-off sums plainly
-**And** every oscillator still advances exactly once per sample (no pitch/phase drift; A==B ⇒ plain additive)
-**And** the new `mixSrcA`/`mixSrcB` params are append-only with defaults OSC1/OSC2, so a preset without them loads with the prior 1↔2 coupling (missing ⇒ default)
-**And** MIX MODE's lit/dimmed state reflects the two selected OSCs being enabled
+**Then** FM makes A modulate B (carrier) and RingMod computes A×B, with the remaining OSC summed plainly
+**And** every oscillator still advances exactly once per sample (no pitch/phase drift)
+**And** Source A and B are always kept **distinct** (picking the same one bumps the other to a free OSC)
+**And** the MODE combo is **{RingMod, FM}** only — "no coupling" = the module **disabled** (enable toggle off ⇒ plain additive sum), matching the Filter/LFO pattern; default disabled ⇒ additive (identical to before)
+**And** the new `mixSrcA`/`mixSrcB` params are append-only (defaults OSC1/OSC2); the `.synthy` keeps the `Additive/RingMod/FM` marker via `choiceOrOff`, so older presets round-trip
 **And** the default patch is audibly identical to before (regression), RT rules respected (NFR2), build clean.
+
+_(Option B + rename applied 2026-07-11: dropped "Additive" as a mode — the module-off IS additive — and renamed MIX MODE → CROSS MOD, since with Additive gone the module is purely oscillator cross-modulation. Internal id/param IDs kept stable.)_

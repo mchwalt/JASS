@@ -183,7 +183,10 @@ namespace Parameters
         }
 
         // Mix mode
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixMode, 1), "Mix Mode", juce::StringArray{"Additive", "RingMod", "FM"}, 0));
+        // CROSS MOD (Epic 5 / Option B): the mode holds only the real couplings; "Additive"
+        // (no coupling) is the module being disabled (mixModeOn=false). PresetIO maps the on-disk
+        // "Additive"/"RingMod"/"FM" via choiceOrOff, so old presets still round-trip.
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixMode, 1), "Cross Mod", juce::StringArray{"RingMod", "FM"}, 0));
         // Epic 5: selectable RingMod/FM operands (append-only; defaults OSC1/OSC2 = prior behaviour).
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixSrcA, 1), "Mix Source A", juce::StringArray{"OSC 1", "OSC 2", "OSC 3"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixSrcB, 1), "Mix Source B", juce::StringArray{"OSC 1", "OSC 2", "OSC 3"}, 1));
@@ -290,7 +293,7 @@ namespace Parameters
         // (on) so behaviour is unchanged until the user toggles; append-only.
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::masterOn,  1), "Master On",   true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::adsrOn,    1), "Envelope On", true));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Mix Mode On", true));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Cross Mod On", false));   // off => additive (default)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::scopeOn,    1), "Scope On",    true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
 
