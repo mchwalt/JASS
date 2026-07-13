@@ -128,6 +128,7 @@ void SynthyProcessor::randomize()
     const float keepStereoTime  = *apvts.getRawParameterValue(ID::stereoTime);
     const float keepMasterVol   = *apvts.getRawParameterValue(ID::masterVol);
     const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
+    const float keepGlideOn     = *apvts.getRawParameterValue(ID::glideOn); // glide = performance, not sound design
 
     // Random value for every parameter...
     for (auto* p : getParameters())
@@ -171,6 +172,7 @@ void SynthyProcessor::randomize()
     set(ID::stereoTime,  keepStereoTime);
     set(ID::masterVol,   keepMasterVol);
     set(ID::arpOn,       keepArpOn);
+    set(ID::glideOn,     keepGlideOn);
 
     currentPresetName = "Random";
     markPresetClean();   // a fresh random patch is its own "clean" state
@@ -228,7 +230,14 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     synth.setCurrentPlaybackSampleRate(sampleRate);
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+        {
             voice->prepareToPlay(sampleRate, samplesPerBlock);
+            voice->setGlideInfo(&glideInfo);   // poly-glide: shared per-block source ratios
+        }
+
+    // Pre-size the glide note lists so the audio thread never reallocates.
+    glideHeld.reserve(128); glideLastChord.reserve(128);
+    glideNewNotes.reserve(128); glideOffNotes.reserve(128);
 
     stereoWidth.prepare(sampleRate);
     uiLfo.setSampleRate(sampleRate);
@@ -367,6 +376,58 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         for (int i = 0; i < synth.getNumVoices(); ++i)
             if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
                 v->pluckKarplus();
+
+    // Poly-glide (portamento): assign each newly-started note a predecessor pitch to glide
+    // FROM. Runs on the FINAL midi buffer (after the arpeggiator) so it glides arp steps too.
+    {
+        using namespace Parameters;
+        glideInfo.enabled = *apvts.getRawParameterValue(ID::glideOn) > 0.5f;
+        glideInfo.timeSec = *apvts.getRawParameterValue(ID::glideTime);
+        glideInfo.startRatio.fill(-1.0f);
+
+        glideNewNotes.clear();
+        glideOffNotes.clear();
+        for (const auto meta : midiMessages)
+        {
+            const auto m = meta.getMessage();
+            if (m.getChannel() == kDroneChannel) continue;   // never glide the auto-play drone
+            if (m.isNoteOn())       glideNewNotes.push_back(m.getNoteNumber());
+            else if (m.isNoteOff()) glideOffNotes.push_back(m.getNoteNumber());
+        }
+
+        if (glideInfo.enabled && ! glideNewNotes.empty())
+        {
+            // Source = chord held before this block; if nothing is held (a gap), glide from
+            // the last chord that WAS held. Pitch-sort both and map position-wise (i-th new
+            // glides from i-th old); surplus new notes glide from the highest old note.
+            const std::vector<int>& src0 = ! glideHeld.empty() ? glideHeld : glideLastChord;
+            if (! src0.empty())
+            {
+                std::vector<int> src = src0;
+                std::sort(src.begin(), src.end());
+                std::sort(glideNewNotes.begin(), glideNewNotes.end());
+                const double c4 = juce::MidiMessage::getMidiNoteInHertz(60);
+                for (int i = 0; i < (int) glideNewNotes.size(); ++i)
+                {
+                    const int from = src[(size_t) juce::jmin(i, (int) src.size() - 1)];
+                    const int note = glideNewNotes[(size_t) i];
+                    if (from != note && note >= 0 && note < 128)
+                        glideInfo.startRatio[(size_t) note] =
+                            (float) (juce::MidiMessage::getMidiNoteInHertz(from) / c4);
+                }
+            }
+        }
+
+        // Maintain the held-note set for the next block (always, so it is correct the moment
+        // glide is toggled on): drop note-offs, add note-ons (no duplicates).
+        for (int off : glideOffNotes)
+            glideHeld.erase(std::remove(glideHeld.begin(), glideHeld.end(), off), glideHeld.end());
+        for (int n : glideNewNotes)
+            if (std::find(glideHeld.begin(), glideHeld.end(), n) == glideHeld.end())
+                glideHeld.push_back(n);
+        if (! glideHeld.empty())
+            glideLastChord = glideHeld;
+    }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
 

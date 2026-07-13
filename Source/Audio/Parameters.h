@@ -80,6 +80,10 @@ namespace Parameters
         constexpr const char* arpOctaves = "arpOctaves";
         constexpr const char* arpGate    = "arpGate";
 
+        // Portamento / poly-glide (append-only)
+        constexpr const char* glideOn   = "glideOn";
+        constexpr const char* glideTime = "glideTime";
+
         // Stereo width (pseudo-stereo master stage; mono engine -> stereo)
         constexpr const char* stereoOn    = "stereoOn";
         constexpr const char* stereoWidth = "stereoWidth";
@@ -327,6 +331,10 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::arpMode, 1), "Arp Mode", juce::StringArray{"Up", "Down", "UpDown", "Random"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::arpOctaves, 1), "Arp Octaves", 1, 4, 2));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::arpGate, 1), "Arp Gate", juce::NormalisableRange<float>(0.05f, 1.0f, 0.01f), 0.5f));
+
+        // Portamento / poly-glide (append-only; default off => existing presets unchanged)
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::glideOn, 1), "Glide On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::glideTime, 1), "Glide Time", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.1f));
 
         // Stereo width (pseudo-stereo master stage)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::stereoOn, 1), "Stereo On", false));

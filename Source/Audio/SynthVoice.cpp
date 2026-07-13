@@ -8,6 +8,8 @@ bool SynthVoice::canPlaySound(juce::SynthesiserSound* sound)
 void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
 {
     currentSampleRate = sampleRate;
+    glideRatio.reset(sampleRate, 0.0);
+    glideRatio.setCurrentAndTargetValue(1.0);
     for (auto& osc : oscillators)
         osc.setSampleRate(sampleRate);
     subOsc.setSampleRate(sampleRate);
@@ -30,6 +32,23 @@ void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
     // the sound AT C4. Note 60 (the auto-play drone) gives ratio 1.0 = no shift.
     transposeRatio = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber)
                    / juce::MidiMessage::getMidiNoteInHertz(60);
+
+    // Poly-glide: start this note's pitch at the assigned predecessor ratio and glide to
+    // its own ratio. startRatio < 0 (no predecessor / glide off) => start on pitch instantly.
+    float glideFrom = -1.0f;
+    if (glideInfo != nullptr && glideInfo->enabled && midiNoteNumber >= 0 && midiNoteNumber < 128)
+        glideFrom = glideInfo->startRatio[(size_t) midiNoteNumber];
+    if (glideFrom > 0.0f && glideInfo->timeSec > 0.001)
+    {
+        glideRatio.reset(currentSampleRate, glideInfo->timeSec);
+        glideRatio.setCurrentAndTargetValue((double) glideFrom);
+        glideRatio.setTargetValue(transposeRatio);
+    }
+    else
+    {
+        glideRatio.reset(currentSampleRate, 0.0);
+        glideRatio.setCurrentAndTargetValue(transposeRatio);
+    }
 
     for (auto& osc : oscillators)
         osc.reset();
@@ -79,27 +98,29 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     double baseWtFreq = wavetable.getFrequency();
     baseCutoff = filter.getCutoff();
 
-    // Apply the note transposition for this block.
-    for (int i = 0; i < 3; ++i)
-        oscillators[i].setFrequency(baseFrequencies[i] * transposeRatio);
-    wavetable.setFrequency(baseWtFreq * transposeRatio);
-    // Sub-oscillator tracks OSC 1, shifted down by subOctave octave(s).
-    subOsc.setFrequency(baseFrequencies[0] * transposeRatio * std::pow(2.0, subOctave));
+    // Sub-oscillator octave multiplier (constant across the block).
+    const double subMul = std::pow(2.0, subOctave);
 
     for (int sample = 0; sample < numSamples; ++sample)
     {
+        // Poly-glide: the pitch ratio glides toward the target (== target once finished /
+        // when glide is off). Oscillator frequencies are (re)applied every sample so both
+        // the glide and the LFO frequency modulation take effect.
+        const double ratio = glideRatio.getNextValue();
+
         // LFO modulation
         float lfoValue = lfo.process();
         auto lfoTarget = lfo.getTarget();
 
-        if (lfoTarget == LFOTarget::Frequency)
-        {
-            // Modulate frequency by semitones (±12 semitones at full depth)
-            double factor = std::pow(2.0, lfoValue * 12.0 / 12.0);
-            for (int i = 0; i < 3; ++i)
-                oscillators[i].setFrequency(baseFrequencies[i] * transposeRatio * factor);
-        }
-        else if (lfoTarget == LFOTarget::FilterCutoff)
+        const double freqFactor = (lfoTarget == LFOTarget::Frequency)
+                                      ? std::pow(2.0, lfoValue)   // ±1 octave at full depth
+                                      : 1.0;
+        for (int i = 0; i < 3; ++i)
+            oscillators[i].setFrequency(baseFrequencies[i] * ratio * freqFactor);
+        wavetable.setFrequency(baseWtFreq * ratio);
+        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul);
+
+        if (lfoTarget == LFOTarget::FilterCutoff)
         {
             // Modulate cutoff logarithmically
             double factor = std::pow(2.0, lfoValue * 3.0); // ±3 octaves
