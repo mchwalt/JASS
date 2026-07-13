@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include "MarkdownRenderer.h"
 
 // A small, movable, read-only help panel (Story 6.1). Lives as a child of the editor so it
 // floats above the rack and inherits the look; it is NOT a CallOutBox (that dismisses on
@@ -27,20 +28,16 @@ public:
     }
 
     // Set the content and size the panel to fit the wrapped body. Call on open AND on a
-    // language switch while open.
+    // language switch while open. `body` is Markdown (compact subset) — it is rendered ONCE into
+    // an AttributedString that both this measure pass and paint() reuse, so the measured height
+    // can never disagree with what is drawn (no clipped last line).
     void setContent (const juce::String& title, const juce::String& body)
     {
         titleText = title;
-        bodyText  = body;
+        bodyAttr  = md::render (body);
 
-        // Lay the body out at the fixed content width to measure the needed height. The
-        // AttributedString here MUST match paint()'s exactly (same font AND line spacing),
-        // otherwise the measured height is short and the last line gets clipped.
-        juce::AttributedString as;
-        as.append (body, juce::Font (juce::FontOptions (14.0f)), juce::Colour (0xffcdd3dc));
-        as.setLineSpacing (2.0f);
         juce::TextLayout tl;
-        tl.createLayout (as, (float) (kWidth - 2 * kPad));
+        tl.createLayout (bodyAttr, (float) (kWidth - 2 * kPad));
 
         const int bodyH   = (int) std::ceil (tl.getHeight()) + 4;   // +4 safety against rounding
         const int totalH  = kTitleH + kPad + bodyH + kPad;
@@ -70,12 +67,9 @@ public:
         g.drawText (titleText, title.reduced (kPad, 0).withTrimmedRight (kTitleH),
                     juce::Justification::centredLeft, true);
 
-        // body
+        // body — the same AttributedString that was measured in setContent()
         auto body = getLocalBounds().withTrimmedTop (kTitleH).reduced (kPad, kPad);
-        juce::AttributedString as;
-        as.append (bodyText, juce::Font (juce::FontOptions (14.0f)), juce::Colour (0xffcdd3dc));
-        as.setLineSpacing (2.0f);
-        as.draw (g, body.toFloat());
+        bodyAttr.draw (g, body.toFloat());
     }
 
     // Drag from the title strip only (matches "drag by its title bar").
@@ -105,7 +99,8 @@ public:
     static constexpr int kPad     = 12;
 
 private:
-    juce::String titleText, bodyText;
+    juce::String titleText;
+    juce::AttributedString bodyAttr;   // rendered Markdown; measured in setContent, drawn in paint
     juce::TextButton closeBtn;
     juce::ComponentDragger dragger;
     juce::ComponentBoundsConstrainer constrainer;

@@ -41,13 +41,23 @@ target_sources(JASS PRIVATE
 
 juce_generate_juce_header(JASS)
 
-# Embedded resources (Story 6.1): per-module online-help texts, one JSON per language,
-# compiled into the binary so they are available in both Standalone and VST3 without any
-# external file dependency. Adding a language = drop in help_xx.json + list it here.
-juce_add_binary_data(JASS_Resources SOURCES
-    Resources/help_en.json
-    Resources/help_de.json
-)
+# Embedded resources (Story 6.1): per-module online-help texts, now one Markdown file per
+# module inside a per-language folder (Resources/<LANG>/<moduleId>.md), compiled into the
+# binary so they are available in both Standalone and VST3 without any external file
+# dependency. Markdown (instead of the old flat JSON) lets the texts carry formatting.
+#
+# One binary-data target PER LANGUAGE, each with its own NAMESPACE and HEADER_NAME. This is
+# deliberate: juce_add_binary_data derives its C++ symbol from the file BASENAME only (path is
+# dropped), so EN/osc1.md and DE/osc1.md would collide in a single target. Separate namespaces
+# keep them apart, and distinct HEADER_NAMEs avoid two "BinaryData.h" headers clashing.
+#
+# CONFIGURE_DEPENDS re-globs at build time, so dropping in a new module .md is picked up on the
+# next build. Adding a LANGUAGE = new Resources/<LANG> folder + a target below + one line in
+# HelpTextStore (registerLanguage).
+file(GLOB JASS_HELP_EN CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Resources/EN/*.md")
+file(GLOB JASS_HELP_DE CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Resources/DE/*.md")
+juce_add_binary_data(JASS_HelpEN HEADER_NAME HelpEN.h NAMESPACE HelpEN SOURCES ${JASS_HELP_EN})
+juce_add_binary_data(JASS_HelpDE HEADER_NAME HelpDE.h NAMESPACE HelpDE SOURCES ${JASS_HELP_DE})
 
 target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
@@ -58,7 +68,8 @@ target_compile_definitions(JASS PUBLIC
 
 target_link_libraries(JASS
     PRIVATE
-        JASS_Resources
+        JASS_HelpEN
+        JASS_HelpDE
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
