@@ -8,6 +8,7 @@
 #include "../DSP/NoiseGenerator.h"
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
+#include "../DSP/SyncDivision.h"
 
 namespace Parameters
 {
@@ -81,6 +82,7 @@ namespace Parameters
         constexpr const char* delayTime     = "delayTime";
         constexpr const char* delayFeedback = "delayFeedback";
         constexpr const char* delayMix      = "delayMix";
+        constexpr const char* delaySyncDiv  = "delaySyncDiv";   // Tempo-Sync: 0=Free, else note division (append-only)
 
         // Chorus
         constexpr const char* chorusOn    = "chorusOn";
@@ -94,6 +96,7 @@ namespace Parameters
         constexpr const char* lfoRate   = "lfoRate";
         constexpr const char* lfoDepth  = "lfoDepth";
         constexpr const char* lfoTarget = "lfoTarget";
+        constexpr const char* lfoSyncDiv = "lfoSyncDiv";   // Tempo-Sync: 0=Free, else note division (append-only)
 
         // Reverb
         constexpr const char* reverbOn   = "reverbOn";
@@ -124,6 +127,10 @@ namespace Parameters
 
         // Master
         constexpr const char* masterVol = "masterVol";
+
+        // Global sync tempo (BPM). Used for Tempo-Sync when no host tempo is available
+        // (Standalone) or as the base; the host's BPM overrides it in a DAW. Append-only.
+        constexpr const char* syncTempo = "syncTempo";
 
         // Module enables for the formerly always-on modules (Story 2.4). Append-only,
         // default TRUE so existing users/presets are unchanged until toggled.
@@ -229,6 +236,8 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayTime, 1), "Delay Time", juce::NormalisableRange<float>(0.01f, 2.0f, 0.01f), 0.3f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayFeedback, 1), "Delay Feedback", juce::NormalisableRange<float>(0.0f, 0.95f, 0.01f), 0.4f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayMix, 1), "Delay Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
+        // Tempo-Sync: 0 = Free (use Delay Time knob), else a note division. Append-only; default Free = unchanged.
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::delaySyncDiv, 1), "Delay Sync", SyncDivision::kNames, 0));
 
         // Chorus
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::chorusOn, 1), "Chorus On", false));
@@ -248,6 +257,8 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoDepth, 1), "LFO Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::lfoOn, 1), "LFO On", false));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget, 1), "LFO Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff"}, 0));
+        // Tempo-Sync: 0 = Free (use LFO Rate knob), else a note division. Append-only; default Free = unchanged.
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoSyncDiv, 1), "LFO Sync", SyncDivision::kNames, 0));
 
         // Noise
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::noiseOn, 1), "Noise On", false));
@@ -297,6 +308,9 @@ namespace Parameters
         // Master
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
+        // Global sync tempo (Standalone/base BPM; host tempo overrides in a DAW). Append-only.
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::syncTempo, 1), "Sync Tempo", juce::NormalisableRange<float>(40.0f, 250.0f, 1.0f), 120.0f));
+
         // Module enables for the formerly always-on modules (Story 2.4). Default TRUE
         // (on) so behaviour is unchanged until the user toggles; append-only.
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::masterOn,  1), "Master On",   true));
@@ -318,7 +332,8 @@ namespace Parameters
                               LFO& lfo, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
-                              bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB)
+                              bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB,
+                              double lfoRateHz, double delayTimeSec)
     {
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
         mixSrcA = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcA));   // Epic 5
@@ -370,7 +385,7 @@ namespace Parameters
         bitcrusher.mix     = *apvts.getRawParameterValue(ID::bitcrushMix);
 
         delay.enabled  = *apvts.getRawParameterValue(ID::delayOn) > 0.5f;
-        delay.time     = *apvts.getRawParameterValue(ID::delayTime);
+        delay.time     = delayTimeSec;   // Tempo-Sync: resolved in processBlock (Free => raw knob, else BPM division)
         delay.feedback = *apvts.getRawParameterValue(ID::delayFeedback);
         delay.mix      = *apvts.getRawParameterValue(ID::delayMix);
 
@@ -385,7 +400,7 @@ namespace Parameters
         reverb.mix      = *apvts.getRawParameterValue(ID::reverbMix);
 
         lfo.setWaveform(static_cast<LFOWaveform>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoWave))));
-        lfo.setRate(*apvts.getRawParameterValue(ID::lfoRate));
+        lfo.setRate(lfoRateHz);   // Tempo-Sync: resolved in processBlock (Free => raw knob, else BPM division)
         lfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
         const bool lfoOn = *apvts.getRawParameterValue(ID::lfoOn) > 0.5f;
         lfo.setTarget(lfoOn ? static_cast<LFOTarget>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoTarget)) + 1)

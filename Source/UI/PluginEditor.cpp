@@ -624,7 +624,7 @@ void SynthyEditor::buildRack()
     add(Rack::Zone::MasterBus, SizeClass::W3H1, ModuleType::Processor, "STEREO", P::stereoOn,
         { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
     add(Rack::Zone::MasterBus, SizeClass::W3H1, ModuleType::Processor, "MASTER", P::masterOn,
-        { K(P::masterVol, "VOL") });
+        { K(P::masterVol, "VOL"), K(P::syncTempo, "TEMPO") });   // TEMPO drives Tempo-Sync (host BPM overrides in a DAW)
 
     // ---- GENERATORS ----
     auto addOsc = [&](int i)
@@ -706,10 +706,12 @@ void SynthyEditor::buildRack()
     // LFO WAVE must list the lfoWave param's OWN choices in order — the ComboBoxAttachment
     // maps by index, so the shared `waves` array (a different order) would mislabel every
     // waveform (Story 2.1 AC3).
-    add(Rack::Zone::Modulation, SizeClass::W6H1, ModuleType::Modulator, "LFO", P::lfoOn,
+    // W8H1 (was W6H1): the SYNC combo (Tempo-Sync) is a 5th control. SYNC=Free => RATE knob;
+    // else RATE is driven by the note division at the host/Sync tempo (RATE knob then ignored).
+    add(Rack::Zone::Modulation, SizeClass::W8H1, ModuleType::Modulator, "LFO", P::lfoOn,
         { C(P::lfoWave, "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
           C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff" }),
-          K(P::lfoRate, "RATE"), K(P::lfoDepth, "DEPTH") });
+          K(P::lfoRate, "RATE"), C(P::lfoSyncDiv, "SYNC", SyncDivision::kNames), K(P::lfoDepth, "DEPTH") });
     add(Rack::Zone::Modulation, SizeClass::W6H1, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
         { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
           K(P::arpRate, "RATE"), K(P::arpOctaves, "OCT"), K(P::arpGate, "GATE") });
@@ -734,8 +736,11 @@ void SynthyEditor::buildRack()
         { K(P::bitcrushBits, "BITS"), K(P::bitcrushRate, "RATE"), K(P::bitcrushMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "CHORUS", P::chorusOn,
         { K(P::chorusRate, "RATE"), K(P::chorusDepth, "DEPTH"), K(P::chorusMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "DELAY", P::delayOn,
-        { K(P::delayTime, "TIME"), K(P::delayFeedback, "FB"), K(P::delayMix, "MIX") });
+    // W5H1 (was W3H1): SYNC combo (Tempo-Sync) added. SYNC=Free => TIME knob; else TIME is the
+    // note division at the host/Sync tempo (TIME knob then ignored).
+    add(Rack::Zone::Processing, SizeClass::W5H1, ModuleType::Processor, "DELAY", P::delayOn,
+        { K(P::delayTime, "TIME"), C(P::delaySyncDiv, "SYNC", SyncDivision::kNames),
+          K(P::delayFeedback, "FB"), K(P::delayMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "REVERB", P::reverbOn,
         { K(P::reverbRoom, "ROOM"), K(P::reverbDamp, "DAMP"), K(P::reverbMix, "MIX") });
     // Real visualizers (own instances, separate from the legacy ones behind the rack —

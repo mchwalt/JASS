@@ -276,6 +276,25 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
+    // Tempo-Sync (Feature): resolve the effective LFO rate + delay time ONCE per block.
+    // BPM = the host's tempo when hosted (VST3/DAW), else the internal Sync Tempo knob
+    // (Standalone). A division of "Free" (0) keeps the module's own free-running knob.
+    double syncBpm = *apvts.getRawParameterValue(Parameters::ID::syncTempo);
+    if (auto* ph = getPlayHead())
+        if (auto pos = ph->getPosition())
+            if (auto hostBpm = pos->getBpm())
+                syncBpm = *hostBpm;
+
+    const int lfoDiv = (int) *apvts.getRawParameterValue(Parameters::ID::lfoSyncDiv);
+    const double lfoRateHz = SyncDivision::isSynced(lfoDiv)
+                                 ? SyncDivision::lfoRateHz(syncBpm, lfoDiv)
+                                 : (double) *apvts.getRawParameterValue(Parameters::ID::lfoRate);
+
+    const int delayDiv = (int) *apvts.getRawParameterValue(Parameters::ID::delaySyncDiv);
+    const double delayTimeSec = SyncDivision::isSynced(delayDiv)
+                                    ? SyncDivision::delaySeconds(syncBpm, delayDiv)
+                                    : (double) *apvts.getRawParameterValue(Parameters::ID::delayTime);
+
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
@@ -290,7 +309,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
                                      voice->getAdsrOnRef(), voice->getMixModeOnRef(),
-                                     voice->getMixSrcARef(), voice->getMixSrcBRef());
+                                     voice->getMixSrcARef(), voice->getMixSrcBRef(),
+                                     lfoRateHz, delayTimeSec);
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {
@@ -357,7 +377,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Mirrors the patch LFO params; runs regardless of whether a note sounds.
     {
         using namespace Parameters;
-        uiLfo.setRate(*apvts.getRawParameterValue(ID::lfoRate));
+        uiLfo.setRate(lfoRateHz);   // Tempo-Sync: mirror the effective (synced or free) rate
         uiLfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
         uiLfo.setWaveform((LFOWaveform)(int) *apvts.getRawParameterValue(ID::lfoWave));
         const bool lfoOn = *apvts.getRawParameterValue(ID::lfoOn) > 0.5f;

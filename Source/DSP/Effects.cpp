@@ -78,7 +78,9 @@ float BitcrusherEffect::process(float input)
 void DelayEffect::prepare(double sampleRate)
 {
     sr = sampleRate;
-    buffer.assign(static_cast<int>(2.0 * sr), 0.0f);
+    // 6.5 s covers the longest tempo-synced division (1/1 down to 40 BPM = 6.0 s) plus the
+    // 2 s free-knob range; process() clamps the read offset to the buffer, so it never overruns.
+    buffer.assign(static_cast<int>(6.5 * sr), 0.0f);
     writePos = 0;
 }
 
