@@ -483,6 +483,13 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
             processor.pluckString();
         return true;
     }
+    // ESC closes the help panel. Handled HERE (not in the panel) so the panel never needs to
+    // grab keyboard focus — opening help therefore never interrupts computer-keyboard playing.
+    if (key == juce::KeyPress::escapeKey && helpPanel && helpPanel->isVisible())
+    {
+        helpPanel->setVisible(false);
+        return true;
+    }
     return false;
 }
 
@@ -536,8 +543,9 @@ void SynthyEditor::showModuleHelp(const juce::String& id)
     helpPanel->setTopLeftPosition(juce::jlimit(8, maxX, x), juce::jlimit(8, maxY, y));
 
     helpPanel->setVisible(true);
-    helpPanel->toFront(true);
-    helpPanel->grabKeyboardFocus();   // so ESC closes it
+    helpPanel->toFront(false);   // false = do NOT steal keyboard focus (keeps the on-screen
+                                 // keyboard playable via the computer keys). ESC is handled by
+                                 // the editor's keyPressed, so the panel needs no focus.
 }
 
 juce::File SynthyEditor::uiLanguageFile()

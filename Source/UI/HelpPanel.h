@@ -17,9 +17,12 @@ public:
         closeBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff3a3f48));
         closeBtn.setColour (juce::TextButton::textColourOffId, juce::Colour (0xffd0d6df));
         closeBtn.onClick = [this] { if (onClose) onClose(); };
+        closeBtn.setWantsKeyboardFocus (false);   // never steal focus from the playable keyboard
         addAndMakeVisible (closeBtn);
 
-        setWantsKeyboardFocus (true);   // so ESC reaches keyPressed while the panel is open
+        // The panel must NOT take keyboard focus: opening/moving help would otherwise stop the
+        // computer keys from playing the on-screen keyboard. ESC is handled by the editor.
+        setWantsKeyboardFocus (false);
 
         // Keep the panel within its parent (the editor) while dragging, always leaving the
         // title strip grabbable — otherwise it can be dragged under the keyboard/off-window
