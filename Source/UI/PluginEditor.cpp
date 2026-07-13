@@ -727,6 +727,9 @@ void SynthyEditor::buildRack()
     // ComboBoxAttachment maps by INDEX, so the canonical param/.synthy strings stay
     // "SoftClip"/"HardClip" (project-context: UI display may differ from the interop string).
     // Order/count MUST match distortionType's choices exactly, or the index mapping breaks.
+    // FORMANT / vowel filter: VOWEL morphs A-E-I-O-U, RESO sharpens, MIX dry/wet. 3 knobs => W3H1.
+    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "FORMANT", P::formantOn,
+        { K(P::formantVowel, "VOWEL"), K(P::formantReso, "RESO"), K(P::formantMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W4H1, ModuleType::Processor, "DISTORTION", P::distortionOn,
         { C(P::distortionType, "TYPE", { "Soft Clip", "Hard Clip", "Foldback" }),
           K(P::distortionDrive, "DRIVE"), K(P::distortionMix, "MIX") });

@@ -170,6 +170,78 @@ void PhaserEffect::reset()
     lastFlanger = 0.0f;
 }
 
+// --- Formant / vowel filter ---
+
+void FormantFilter::BandPass::set(double freq, double q, double sr)
+{
+    // RBJ band-pass (constant 0 dB peak gain).
+    const double w0    = 2.0 * M_PI * std::clamp(freq, 20.0, sr * 0.45) / sr;
+    const double cw    = std::cos(w0);
+    const double alpha = std::sin(w0) / (2.0 * std::max(0.5, q));
+    const double a0    = 1.0 + alpha;
+    b0 =  alpha / a0;
+    b1 =  0.0;
+    b2 = -alpha / a0;
+    a1 = (-2.0 * cw) / a0;
+    a2 = (1.0 - alpha) / a0;
+}
+
+float FormantFilter::BandPass::process(float x)
+{
+    // Transposed Direct Form II.
+    const double y = b0 * x + z1;
+    z1 = b1 * x - a1 * y + z2;
+    z2 = b2 * x - a2 * y;
+    return static_cast<float>(y);
+}
+
+void FormantFilter::prepare(double sampleRate)
+{
+    sr = sampleRate;
+    reset();
+    lastVowel = lastReso = -1.0;   // force a coefficient recompute on the first process()
+}
+
+void FormantFilter::updateCoeffs()
+{
+    // Vowel formant centre frequencies (Hz): F1, F2, F3 for A, E, I, O, U.
+    static const double F[5][3] = {
+        { 800.0, 1150.0, 2900.0 },  // A
+        { 400.0, 1600.0, 2700.0 },  // E
+        { 350.0, 1700.0, 2700.0 },  // I
+        { 450.0,  800.0, 2830.0 },  // O
+        { 325.0,  700.0, 2530.0 },  // U
+    };
+    const double pos = std::clamp(vowel, 0.0, 1.0) * 4.0;   // 0..4 across the five vowels
+    const int    i0  = std::min(3, (int) pos);
+    const int    i1  = i0 + 1;
+    const double fr  = pos - i0;
+    const double q   = 2.0 + std::clamp(resonance, 0.0, 1.0) * 18.0;   // Q 2..20
+    for (int b = 0; b < 3; ++b)
+        bands[b].set(F[i0][b] * (1.0 - fr) + F[i1][b] * fr, q, sr);
+}
+
+float FormantFilter::process(float input)
+{
+    if (!enabled) return input;
+    if (vowel != lastVowel || resonance != lastReso)
+    {
+        updateCoeffs();
+        lastVowel = vowel;
+        lastReso  = resonance;
+    }
+    // F1 loudest, F2/F3 progressively quieter (rough formant amplitudes).
+    const float wet = bands[0].process(input) * 1.0f
+                    + bands[1].process(input) * 0.6f
+                    + bands[2].process(input) * 0.35f;
+    return input * (1.0f - static_cast<float>(mix)) + wet * static_cast<float>(mix);
+}
+
+void FormantFilter::reset()
+{
+    for (auto& b : bands) b.reset();
+}
+
 // --- Chorus ---
 
 void ChorusEffect::prepare(double sampleRate)

@@ -99,6 +99,39 @@ private:
     float lastFlanger = 0.0f;
 };
 
+// Formant / vowel filter: three parallel band-pass "formants" whose centre
+// frequencies morph across the vowels A-E-I-O-U → a "talking" timbre. VOWEL sweeps
+// the morph, RESO sharpens the formants (Q). Coefficients are recomputed only when
+// VOWEL/RESO change (per block via the dirty check), so process() stays cheap. Stateful.
+class FormantFilter
+{
+public:
+    bool enabled = false;
+    double vowel = 0.0;       // 0..1 morph across A(0) E I O U(1)
+    double resonance = 0.5;   // 0..1 → band-pass Q
+    double mix = 1.0;         // dry/wet 0..1
+
+    void prepare(double sampleRate);
+    float process(float input);
+    void reset();
+
+private:
+    struct BandPass
+    {
+        double b0 = 0, b1 = 0, b2 = 0, a1 = 0, a2 = 0;   // normalised RBJ band-pass coeffs
+        double z1 = 0, z2 = 0;
+        void set(double freq, double q, double sr);
+        float process(float x);
+        void reset() { z1 = z2 = 0; }
+    };
+
+    void updateCoeffs();
+
+    double sr = 44100.0;
+    BandPass bands[3];
+    double lastVowel = -1.0, lastReso = -1.0;   // dirty markers (force first compute)
+};
+
 class ChorusEffect
 {
 public:
