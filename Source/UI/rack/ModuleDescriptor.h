@@ -21,7 +21,9 @@ namespace rack
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
     enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W8H1, W8H2, W12H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
-    enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff }; // for live LFO rings (AD-8)
+    // For live LFO rings (AD-8). Append-only, mirrors LFOTarget order (None = LFO Off).
+    enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff,
+                            WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
 
     // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
     // its own default zone — Rack.h includes this header, so the descriptor can't reference
