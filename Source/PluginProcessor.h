@@ -98,6 +98,14 @@ private:
     std::atomic<float> lfoDisplayValue { 0.0f };
     Arpeggiator arp;
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
+
+    // Poly-glide (portamento): the processor assigns each newly-started note a predecessor
+    // pitch to glide FROM (pitch-sorted against the previous chord) and shares it with all
+    // voices via glideInfo. Held-note tracking excludes the auto-play drone.
+    GlideInfo glideInfo;
+    std::vector<int> glideHeld;        // notes currently held down
+    std::vector<int> glideLastChord;   // last non-empty held set (glide source after a gap)
+    std::vector<int> glideNewNotes, glideOffNotes;   // per-block scratch (no RT realloc)
     bool autoNoteOn = false;
     std::atomic<bool> pluckRequested { false };   // set by pluckString(), consumed in processBlock
 
