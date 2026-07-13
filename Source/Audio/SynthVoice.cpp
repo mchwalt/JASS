@@ -70,6 +70,11 @@ void SynthVoice::quickFadeOut()
     // Ramp to silence over ~6 ms instead of stopping hard (which clicks). No-op if silent.
     if (! noteOn && envelope.getStage() == AdsrEnvelope::Stage::Idle)
         return;
+    // Already fading: do NOT restart it — resetting the counter would jump the fade gain back
+    // up to 1.0 mid-ramp (a discontinuity → click) on fast playing where a voice is stolen
+    // again before its fade finishes.
+    if (fadeOutCounter > 0)
+        return;
     fadeOutLength = fadeOutCounter = juce::jmax(1, (int) (currentSampleRate * 0.006));
 }
 
