@@ -161,6 +161,11 @@ namespace Parameters
         // still real APVTS params so every module has a working enabler. Append-only, default true.
         constexpr const char* scopeOn    = "scopeOn";
         constexpr const char* spectrumOn = "spectrumOn";
+
+        // On-screen keyboard enable (INPUT zone). UI-only placeholder for now (the toggle
+        // drives only the module's dim state; the keyboard stays playable) — reserved so the
+        // module carries a working enabler for a future use. Append-only, default true.
+        constexpr const char* keyboardOn = "keyboardOn";
     }
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
@@ -358,6 +363,7 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Cross Mod On", false));   // off => additive (default)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::scopeOn,    1), "Scope On",    true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::keyboardOn, 1), "Keyboard On", true));
 
         return { params.begin(), params.end() };
     }

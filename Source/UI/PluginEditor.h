@@ -7,6 +7,26 @@
 #include "rack/Rack.h"
 #include "HelpPanel.h"                // movable per-module help panel (Story 6.1)
 
+// On-screen keyboard that always spreads its full note range across its own width, so
+// the keys fill the module with no blank gap on the right. Now that the KEYBOARD lives in
+// the rack (Input zone) the frame — not the editor — sizes it, so the fill maths must run
+// in the component's own resized() rather than the editor's. setKeyWidth() only re-enters
+// resized() when the width actually changes (JUCE guards it), so this settles in one step.
+class FillWidthKeyboard : public juce::MidiKeyboardComponent
+{
+public:
+    using juce::MidiKeyboardComponent::MidiKeyboardComponent;
+    void resized() override
+    {
+        juce::MidiKeyboardComponent::resized();
+        int whiteKeys = 0;
+        for (int n = getRangeStart(); n <= getRangeEnd(); ++n)
+            if (! juce::MidiMessage::isMidiNoteBlack(n)) ++whiteKeys;
+        if (whiteKeys > 0 && getWidth() > 0)
+            setKeyWidth((float) getWidth() / (float) whiteKeys);
+    }
+};
+
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
 // sustain hold → release tail. The A/D/R segment widths are drawn proportional
 // to their durations (always filling the strip), the sustain segment is a fixed
@@ -72,8 +92,9 @@ private:
     void updatePresetLabel();                    // composes "Preset: X" / "Current State"
 
     // On-screen keyboard (auto-play drone is handled automatically by the processor)
-    std::unique_ptr<juce::MidiKeyboardComponent> keyboard;
+    std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     int kbBaseOctave = 4;   // computer-keyboard octave (z / x shift it)
+    bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
 
     // Layout bounds for paint() — the centred "J A S S" title.
     juce::Rectangle<int> g_titleBounds;

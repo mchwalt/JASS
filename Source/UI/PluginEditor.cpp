@@ -309,16 +309,17 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 
     // On-screen keyboard (shares the processor's MidiKeyboardState → plays the
     // active generators with full ADSR per note, transposed relative to C4).
-    keyboard = std::make_unique<juce::MidiKeyboardComponent>(
+    keyboard = std::make_unique<FillWidthKeyboard>(
         processor.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard);
     keyboard->setAvailableRange(21, 108);  // A0 .. C8 (full 88-key piano)
-    keyboard->setKeyWidth(20.0f);          // overridden in resized() to fill the row width
+    keyboard->setKeyWidth(20.0f);          // FillWidthKeyboard::resized() spreads keys to fill its width
     keyboard->setKeyPressBaseOctave(kbBaseOctave);
     keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
     // z / x shift the octave; the keyboard must have focus — grabbed on launch/click).
+    // The keyboard is added to the rack as a Display module (Input zone) in buildRack();
+    // the editor owns its lifetime, the frame parents + sizes it.
     keyboard->setWantsKeyboardFocus(true);
-    addAndMakeVisible(*keyboard);
     juce::Component::SafePointer<juce::MidiKeyboardComponent> kbPtr(keyboard.get());
     juce::MessageManager::callAsync([kbPtr]() mutable { if (kbPtr) kbPtr->grabKeyboardFocus(); });
 
@@ -377,7 +378,7 @@ void SynthyEditor::refitHeight()
     // displays. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
     constexpr int kDesignW    = 1520;
     constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
-    constexpr int kBodyBottom = 72;   // keyboard band (matches resized())
+    constexpr int kBodyBottom = 0;    // no reserved band — the keyboard is a rack module now
     constexpr int kMargin     = 12;   // getLocalBounds().reduced(12)
     const int rackW = kDesignW - 2 * kMargin;
     const int rackH = rackBody ? rackBody->preferredHeight(rackW) : 800;
@@ -420,6 +421,26 @@ void SynthyEditor::timerCallback()
     float lfo = processor.getLfoDisplayValue();
     bool lfoActive = *apvts.getRawParameterValue("lfoOn") > 0.5f;
     int target = (int) *apvts.getRawParameterValue("lfoTarget");
+
+    // Enforce the KEYBOARD module's enable on its INPUT: JUCE's MidiKeyboardComponent ignores
+    // the enabled flag (it never reads isEnabled), so a disabled module would otherwise still
+    // be playable. When keyboardOn is off, block mouse clicks and drop keyboard focus (computer
+    // keys only sound while focused); when on, restore both. Poll-and-diff (matches the frame's
+    // dim sync) so this touches the component only when the toggle actually flips.
+    if (keyboard)
+    {
+        const bool kbOn = *apvts.getRawParameterValue("keyboardOn") > 0.5f;
+        if (kbOn != keyboardPlayable)
+        {
+            keyboardPlayable = kbOn;
+            keyboard->setInterceptsMouseClicks (kbOn, kbOn);
+            keyboard->setWantsKeyboardFocus (kbOn);
+            if (kbOn)
+                keyboard->grabKeyboardFocus();
+            else if (keyboard->hasKeyboardFocus (true))
+                keyboard->giveAwayKeyboardFocus();
+        }
+    }
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
     // ModTarget has a +1 offset vs the raw lfoTarget (ModTarget::None = 0; raw 0 = Frequency).
@@ -582,7 +603,7 @@ void SynthyEditor::buildRack()
     rackBody = std::make_unique<Rack>(apvts, Rack::kDefaultCols,
         std::vector<Rack::Zone>{ Rack::Zone::MasterBus, Rack::Zone::Generators,
                                  Rack::Zone::Modulation, Rack::Zone::Processing,
-                                 Rack::Zone::Visualization });
+                                 Rack::Zone::Visualization, Rack::Zone::Input });
 
     namespace P = Parameters::ID;
 
@@ -784,8 +805,17 @@ void SynthyEditor::buildRack()
         { Display{ spec, 12 } },
         [] { });
 
-    // Added LAST so the opaque rack covers the legacy body; the header chrome and
-    // keyboard sit in their own bands and stay live.
+    // The on-screen keyboard is itself a module (INPUT zone) so it can be hidden like any
+    // other — e.g. when playing via an external MIDI keyboard. It wraps the existing keyboard
+    // as a Display (AD-5; the editor owns its lifetime). enableParam keyboardOn is a UI-only
+    // placeholder (drives only the dim state for now; the keyboard stays playable). The onReset
+    // is a no-op placeholder so the header carries the uniform reset ↺ like every other module.
+    // Full-width single row (W24H1). Its own info icon carries the play/shortcut help.
+    add(Rack::Zone::Input, SizeClass::W24H1, ModuleType::Generator, "KEYBOARD", P::keyboardOn,
+        { Display{ keyboard.get(), 24 } },
+        [] { });
+
+    // Added LAST so the opaque rack covers the legacy body; the header chrome stays live.
     addAndMakeVisible(*rackBody);
 }
 
@@ -819,30 +849,13 @@ void SynthyEditor::resized()
     presetNameLabel.setBounds(leftGroup);   // grouped with the load/save controls
     area.removeFromTop(8);
 
-    // The body between the header and keyboard belongs entirely to the rack (below).
-    // Reserve the full-width keyboard band at the bottom; the rack fills the rest.
-    auto kbRow = area.removeFromBottom(72).reduced(3, 0);
-
-    if (keyboard)
-    {
-        keyboard->setBounds(kbRow.reduced(2));
-        // Spread the configured range across the full row width instead of
-        // leaving blank space to the right: size each key so all white keys
-        // in the range exactly fill the keyboard.
-        int whiteKeys = 0;
-        for (int n = keyboard->getRangeStart(); n <= keyboard->getRangeEnd(); ++n)
-            if (! juce::MidiMessage::isMidiNoteBlack(n)) ++whiteKeys;
-        if (whiteKeys > 0)
-            keyboard->setKeyWidth((float) keyboard->getWidth() / (float) whiteKeys);
-    }
-
-    // The rack fills the body band (below the header row, above the keyboard); the header
-    // chrome and keyboard keep their own bands.
+    // The whole body below the header row belongs to the rack — the on-screen keyboard is
+    // now a rack module (INPUT zone), no longer a separate bottom band.
+    juce::ignoreUnused(area);
     if (rackBody)
     {
         auto rb = getLocalBounds().reduced(12);
         rb.removeFromTop(64 + 8);    // header row + gap (mirrors the header band above)
-        rb.removeFromBottom(72);     // keyboard band
         rackBody->setBounds(rb);
     }
 }
