@@ -30,8 +30,6 @@ void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
 {
     // All generators transpose relative to C4 (note 60); the FREQ knobs define
     // the sound AT C4. Note 60 (the auto-play drone) gives ratio 1.0 = no shift.
-    fadeOutCounter = 0;   // a fresh note is never fading out
-
     transposeRatio = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber)
                    / juce::MidiMessage::getMidiNoteInHertz(60);
 
@@ -63,19 +61,6 @@ void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
 
     envelope.gateOn();
     noteOn = true;
-}
-
-void SynthVoice::quickFadeOut()
-{
-    // Ramp to silence over ~6 ms instead of stopping hard (which clicks). No-op if silent.
-    if (! noteOn && envelope.getStage() == AdsrEnvelope::Stage::Idle)
-        return;
-    // Already fading: do NOT restart it — resetting the counter would jump the fade gain back
-    // up to 1.0 mid-ramp (a discontinuity → click) on fast playing where a voice is stolen
-    // again before its fade finishes.
-    if (fadeOutCounter > 0)
-        return;
-    fadeOutLength = fadeOutCounter = juce::jmax(1, (int) (currentSampleRate * 0.006));
 }
 
 void SynthVoice::pluckKarplus()
@@ -222,18 +207,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         mixedSample = std::clamp(mixedSample, -1.0f, 1.0f);
 
-        // Mono-glide quick fade-out: linear ramp to silence for a click-free voice steal.
-        bool fadeDone = false;
-        if (fadeOutCounter > 0)
-        {
-            mixedSample *= (float) fadeOutCounter / (float) fadeOutLength;
-            if (--fadeOutCounter == 0) fadeDone = true;
-        }
-
         for (int channel = 0; channel < outputBuffer.getNumChannels(); ++channel)
             outputBuffer.addSample(channel, startSample + sample, mixedSample);
 
-        if (fadeDone || envelope.getStage() == AdsrEnvelope::Stage::Idle)
+        if (envelope.getStage() == AdsrEnvelope::Stage::Idle)
         {
             clearCurrentNote();
             noteOn = false;

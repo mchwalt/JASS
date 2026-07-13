@@ -67,10 +67,6 @@ public:
     // Poly-glide: shared read-only info filled by the processor each block (see GlideInfo).
     void setGlideInfo(const GlideInfo* g) { glideInfo = g; }
 
-    // Mono-glide: start a short click-free fade to silence (used when a new note steals this
-    // voice) instead of a hard stop, which would click. No-op if the voice isn't sounding.
-    void quickFadeOut();
-
 private:
     Oscillator oscillators[3];
     Oscillator subOsc;            // sub-oscillator: tracks OSC1 pitch, octave(s) down
@@ -110,8 +106,4 @@ private:
     double currentSampleRate = 44100.0;
     bool noteOn = false;
     bool pluckEnabled = true;   // false → startNote skips the Karplus pluck (drone)
-
-    // Mono-glide quick fade-out: a short linear ramp to silence so a voice-steal never clicks.
-    int fadeOutCounter = 0;   // samples remaining in the fade (0 = not fading)
-    int fadeOutLength  = 0;   // total fade length in samples
 };
