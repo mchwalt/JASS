@@ -434,7 +434,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // playing; simultaneous chords in Mono still sound polyphonic — use Poly for chords.
         const bool glideMono = (int) *apvts.getRawParameterValue(ID::glideMode) == 0;
         if (glideInfo.enabled && glideMono && ! glideNewNotes.empty())
-            synth.allNotesOff(0, false);
+            for (int i = 0; i < synth.getNumVoices(); ++i)
+                if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+                    if (v->isVoiceActive())
+                        v->quickFadeOut();   // click-free (short ramp) instead of a hard stop
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
