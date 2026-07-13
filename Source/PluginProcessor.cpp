@@ -302,6 +302,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getEnvelope(), voice->getFilter(),
                                      voice->getDistortion(), voice->getWavefolder(),
                                      voice->getBitcrusher(),
+                                     voice->getPhaser(),
                                      voice->getDelay(),
                                      voice->getChorus(), voice->getReverb(),
                                      voice->getLFO(), voice->getNoise(),

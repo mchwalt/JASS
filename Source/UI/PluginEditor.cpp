@@ -734,6 +734,11 @@ void SynthyEditor::buildRack()
         { K(P::wavefoldDrive, "DRIVE"), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "BITCRUSH", P::bitcrushOn,
         { K(P::bitcrushBits, "BITS"), K(P::bitcrushRate, "RATE"), K(P::bitcrushMix, "MIX") });
+    // PHASER / FLANGER: TYPE combo (2 slots) + 4 knobs => W6H1 (6 cols).
+    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "PHASER", P::phaserOn,
+        { C(P::phaserType, "TYPE", { "Phaser", "Flanger" }),
+          K(P::phaserRate, "RATE"), K(P::phaserDepth, "DEPTH"),
+          K(P::phaserFeedback, "FB"), K(P::phaserMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "CHORUS", P::chorusOn,
         { K(P::chorusRate, "RATE"), K(P::chorusDepth, "DEPTH"), K(P::chorusMix, "MIX") });
     // W5H1 (was W3H1): SYNC combo (Tempo-Sync) added. SYNC=Free => TIME knob; else TIME is the

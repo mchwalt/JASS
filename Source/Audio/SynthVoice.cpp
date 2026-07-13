@@ -16,6 +16,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     lfo.setSampleRate(sampleRate);
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
+    phaser.prepare(sampleRate);
     delay.prepare(sampleRate);
     chorus.prepare(sampleRate);
     reverb.prepare(sampleRate);
@@ -163,6 +164,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // Effects
         mixedSample = distortion.process(mixedSample);
         mixedSample = bitcrusher.process(mixedSample);
+        mixedSample = phaser.process(mixedSample);
         mixedSample = chorus.process(mixedSample);
         mixedSample = delay.process(mixedSample);
         mixedSample = reverb.process(mixedSample);

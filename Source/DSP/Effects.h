@@ -65,6 +65,40 @@ private:
     double sr = 44100.0;
 };
 
+// Phaser (LFO-swept all-pass chain → moving notches) and Flanger (LFO-swept short
+// comb → jet/whoosh) in one switchable module. Both use a shared internal LFO and a
+// feedback path. Stateful.
+enum class PhaserType { Phaser, Flanger };
+
+class PhaserEffect
+{
+public:
+    bool enabled = false;
+    PhaserType type = PhaserType::Phaser;
+    double rate = 0.5;      // LFO speed in Hz
+    double depth = 0.7;     // sweep depth 0..1
+    double feedback = 0.5;  // resonance / intensity 0..0.95
+    double mix = 0.5;       // dry/wet 0..1 (0.5 = classic phaser notch depth)
+
+    void prepare(double sampleRate);
+    float process(float input);
+    void reset();
+
+private:
+    double sr = 44100.0;
+    double lfoPhase = 0.0;
+
+    // Phaser: chain of first-order all-pass sections, swept together.
+    static constexpr int kStages = 4;
+    float apState[kStages] = { 0.0f, 0.0f, 0.0f, 0.0f };
+    float lastPhaser = 0.0f;
+
+    // Flanger: short modulated delay line (1..7 ms) with feedback.
+    std::vector<float> buffer;
+    int writePos = 0;
+    float lastFlanger = 0.0f;
+};
+
 class ChorusEffect
 {
 public:

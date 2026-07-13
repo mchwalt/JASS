@@ -19,6 +19,7 @@ namespace PresetIO
     inline const juce::StringArray kNoiseType  { "Off", "White", "Pink" };
     inline const juce::StringArray kSubWave     { "Sine", "Square" };
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
+    inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
 
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
@@ -163,6 +164,13 @@ namespace PresetIO
         root->setProperty("BitcrushRate",    rawI(a, ID::bitcrushRate));
         root->setProperty("BitcrushMix",     rawF(a, ID::bitcrushMix));
 
+        root->setProperty("PhaserEnabled",  rawB(a, ID::phaserOn));                    // Feature 2 (append-only; C# ignores; missing => off)
+        root->setProperty("PhaserType",     rawChoice(a, ID::phaserType, kPhaserType));
+        root->setProperty("PhaserRate",     rawF(a, ID::phaserRate));
+        root->setProperty("PhaserDepth",    rawF(a, ID::phaserDepth));
+        root->setProperty("PhaserFeedback", rawF(a, ID::phaserFeedback));
+        root->setProperty("PhaserMix",      rawF(a, ID::phaserMix));
+
         root->setProperty("SubEnabled",  rawB(a, ID::subOn));
         root->setProperty("SubWaveform", rawChoice(a, ID::subWave, kSubWave));
         root->setProperty("SubOctave",   -(rawI(a, ID::subOctave) + 1));  // -1 or -2
@@ -306,6 +314,13 @@ namespace PresetIO
         setRaw(a, ID::bitcrushBits, (float) jint(v, "BitcrushBits", rawI(a, ID::bitcrushBits)));
         setRaw(a, ID::bitcrushRate, (float) jint(v, "BitcrushRate", rawI(a, ID::bitcrushRate)));
         setRaw(a, ID::bitcrushMix,  (float) jnum(v, "BitcrushMix",  rawF(a, ID::bitcrushMix)));
+
+        setRaw   (a, ID::phaserOn,       jbool(v, "PhaserEnabled", rawB(a, ID::phaserOn)) ? 1.f : 0.f);   // Feature 2; missing => off
+        setChoice(a, ID::phaserType, kPhaserType, v["PhaserType"], rawI(a, ID::phaserType));
+        setRaw   (a, ID::phaserRate,     (float) jnum(v, "PhaserRate",     rawF(a, ID::phaserRate)));
+        setRaw   (a, ID::phaserDepth,    (float) jnum(v, "PhaserDepth",    rawF(a, ID::phaserDepth)));
+        setRaw   (a, ID::phaserFeedback, (float) jnum(v, "PhaserFeedback", rawF(a, ID::phaserFeedback)));
+        setRaw   (a, ID::phaserMix,      (float) jnum(v, "PhaserMix",      rawF(a, ID::phaserMix)));
 
         setRaw   (a, ID::subOn, jbool(v, "SubEnabled", rawB(a, ID::subOn)) ? 1.f : 0.f);
         setChoice(a, ID::subWave, kSubWave, v["SubWaveform"], rawI(a, ID::subWave));

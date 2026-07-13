@@ -27,6 +27,7 @@ public:
     DistortionEffect& getDistortion() { return distortion; }
     WavefolderEffect& getWavefolder() { return wavefolder; }
     BitcrusherEffect& getBitcrusher() { return bitcrusher; }
+    PhaserEffect& getPhaser() { return phaser; }
     DelayEffect& getDelay() { return delay; }
     ChorusEffect& getChorus() { return chorus; }
     ReverbEffect& getReverb() { return reverb; }
@@ -57,6 +58,7 @@ private:
     DistortionEffect distortion;
     WavefolderEffect wavefolder;
     BitcrusherEffect bitcrusher;
+    PhaserEffect phaser;
     DelayEffect delay;
     ChorusEffect chorus;
     ReverbEffect reverb;
