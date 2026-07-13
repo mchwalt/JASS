@@ -31,6 +31,7 @@ public:
     DelayEffect& getDelay() { return delay; }
     ChorusEffect& getChorus() { return chorus; }
     ReverbEffect& getReverb() { return reverb; }
+    FormantFilter& getFormant() { return formant; }
     LFO& getLFO() { return lfo; }
     NoiseGenerator& getNoise() { return noise; }
     KarplusStrong& getKarplus() { return karplus; }
@@ -62,6 +63,7 @@ private:
     DelayEffect delay;
     ChorusEffect chorus;
     ReverbEffect reverb;
+    FormantFilter formant;   // vowel filter, applied right after the main filter
     LFO lfo;
     NoiseGenerator noise;
     KarplusStrong karplus;

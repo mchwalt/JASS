@@ -47,6 +47,12 @@ namespace Parameters
         constexpr const char* distortionDrive = "distortionDrive";
         constexpr const char* distortionMix   = "distortionMix";
 
+        // Formant / vowel filter (append-only)
+        constexpr const char* formantOn    = "formantOn";
+        constexpr const char* formantVowel = "formantVowel";
+        constexpr const char* formantReso  = "formantReso";
+        constexpr const char* formantMix   = "formantMix";
+
         // Wavefolder
         constexpr const char* wavefoldOn       = "wavefoldOn";
         constexpr const char* wavefoldDrive    = "wavefoldDrive";
@@ -227,6 +233,12 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterCutoff, 1), "Filter Cutoff", juce::NormalisableRange<float>(20.0f, 20000.0f, 1.0f, 0.3f), 550.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterReso, 1), "Filter Resonance", juce::NormalisableRange<float>(0.1f, 10.0f, 0.01f), 0.707f));
 
+        // Formant / vowel filter (append-only; default off => existing presets unchanged)
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::formantOn, 1), "Formant On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::formantVowel, 1), "Formant Vowel", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::formantReso, 1), "Formant Resonance", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::formantMix, 1), "Formant Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
+
         // Distortion
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::distortionOn, 1), "Distortion On", false));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::distortionType, 1), "Distortion Type", juce::StringArray{"SoftClip", "HardClip", "Foldback"}, 0));
@@ -346,6 +358,7 @@ namespace Parameters
                               PhaserEffect& phaser,
                               DelayEffect& delay,
                               ChorusEffect& chorus, ReverbEffect& reverb,
+                              FormantFilter& formant,
                               LFO& lfo, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
@@ -422,6 +435,11 @@ namespace Parameters
         reverb.roomSize = *apvts.getRawParameterValue(ID::reverbRoom);
         reverb.damping  = *apvts.getRawParameterValue(ID::reverbDamp);
         reverb.mix      = *apvts.getRawParameterValue(ID::reverbMix);
+
+        formant.enabled   = *apvts.getRawParameterValue(ID::formantOn) > 0.5f;
+        formant.vowel     = *apvts.getRawParameterValue(ID::formantVowel);
+        formant.resonance = *apvts.getRawParameterValue(ID::formantReso);
+        formant.mix       = *apvts.getRawParameterValue(ID::formantMix);
 
         lfo.setWaveform(static_cast<LFOWaveform>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoWave))));
         lfo.setRate(lfoRateHz);   // Tempo-Sync: resolved in processBlock (Free => raw knob, else BPM division)

@@ -13,6 +13,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     subOsc.setSampleRate(sampleRate);
     envelope.setSampleRate(sampleRate);
     filter.setSampleRate(sampleRate);
+    formant.prepare(sampleRate);
     lfo.setSampleRate(sampleRate);
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
@@ -153,8 +154,9 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         if (lfoTarget == LFOTarget::Amplitude)
             mixedSample *= (1.0f + lfoValue) * 0.5f; // map -1..+1 to 0..1
 
-        // Filter
+        // Filter (main biquad), then the vowel/formant filter.
         mixedSample = filter.process(mixedSample);
+        mixedSample = formant.process(mixedSample);
 
         // Envelope. Always advance the ADSR state (so toggling mid-note doesn't glitch);
         // when disabled (Story 2.4) bypass it with constant gain 1.0.

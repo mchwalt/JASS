@@ -150,6 +150,11 @@ namespace PresetIO
         root->setProperty("FilterCutoff",    rawF(a, ID::filterCutoff));
         root->setProperty("FilterResonance", rawF(a, ID::filterReso));
 
+        root->setProperty("FormantEnabled",    rawB(a, ID::formantOn));      // Feature 3 (append-only; C# ignores; missing => off)
+        root->setProperty("FormantVowel",      rawF(a, ID::formantVowel));
+        root->setProperty("FormantResonance",  rawF(a, ID::formantReso));
+        root->setProperty("FormantMix",        rawF(a, ID::formantMix));
+
         root->setProperty("DistortionType",  choiceOrOff(a, ID::distortionOn, ID::distortionType, kDistortion));
         root->setProperty("DistortionDrive", rawF(a, ID::distortionDrive));
         root->setProperty("DistortionMix",   rawF(a, ID::distortionMix));
@@ -300,6 +305,11 @@ namespace PresetIO
         setChoiceOrOff(a, ID::filterOn, ID::filterType, kFilterType, v["FilterType"]);
         setRaw(a, ID::filterCutoff, (float) jnum(v, "FilterCutoff",    rawF(a, ID::filterCutoff)));
         setRaw(a, ID::filterReso,   (float) jnum(v, "FilterResonance", rawF(a, ID::filterReso)));
+
+        setRaw(a, ID::formantOn,    jbool(v, "FormantEnabled", rawB(a, ID::formantOn)) ? 1.f : 0.f);   // Feature 3; missing => off
+        setRaw(a, ID::formantVowel, (float) jnum(v, "FormantVowel",     rawF(a, ID::formantVowel)));
+        setRaw(a, ID::formantReso,  (float) jnum(v, "FormantResonance", rawF(a, ID::formantReso)));
+        setRaw(a, ID::formantMix,   (float) jnum(v, "FormantMix",       rawF(a, ID::formantMix)));
 
         setChoiceOrOff(a, ID::distortionOn, ID::distortionType, kDistortion, v["DistortionType"]);
         setRaw(a, ID::distortionDrive, (float) jnum(v, "DistortionDrive", rawF(a, ID::distortionDrive)));
