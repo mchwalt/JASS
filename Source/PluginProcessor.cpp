@@ -428,16 +428,39 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (! glideHeld.empty())
             glideLastChord = glideHeld;
 
-        // Mono glide (default): hard-stop the sounding voices when a new note arrives so ONLY
-        // the new note plays, gliding from the previous pitch → the distinct classic portamento.
-        // (Poly leaves the old voices ringing, which blurs the sweep.) Best for sequential
-        // playing; simultaneous chords in Mono still sound polyphonic — use Poly for chords.
+        // Mono glide (default): monophonic last-note priority. When a new note starts, emit a
+        // REGULAR note-off for the previously sounding note, so the synth releases that voice
+        // itself (its normal envelope release — no click, no stuck notes, no fighting the voice
+        // manager). The new note still glides from the previous pitch (startRatio set above).
+        // Best for sequential playing; simultaneous chords in Mono collapse to last-note.
         const bool glideMono = (int) *apvts.getRawParameterValue(ID::glideMode) == 0;
-        if (glideInfo.enabled && glideMono && ! glideNewNotes.empty())
-            for (int i = 0; i < synth.getNumVoices(); ++i)
-                if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
-                    if (v->isVoiceActive())
-                        v->quickFadeOut();   // click-free (short ramp) instead of a hard stop
+        if (glideInfo.enabled && glideMono)
+        {
+            juce::MidiBuffer rebuilt;
+            for (const auto meta : midiMessages)
+            {
+                const auto m = meta.getMessage();
+                const int  sp = meta.samplePosition;
+                if (m.isNoteOn() && m.getChannel() != kDroneChannel)
+                {
+                    if (monoSounding >= 0 && monoSounding != m.getNoteNumber())
+                        rebuilt.addEvent (juce::MidiMessage::noteOff (1, monoSounding), sp);
+                    monoSounding = m.getNoteNumber();
+                    rebuilt.addEvent (m, sp);
+                }
+                else if (m.isNoteOff() && m.getChannel() != kDroneChannel)
+                {
+                    if (m.getNoteNumber() == monoSounding)
+                        monoSounding = -1;
+                    rebuilt.addEvent (m, sp);
+                }
+                else
+                    rebuilt.addEvent (m, sp);
+            }
+            midiMessages.swapWith (rebuilt);
+        }
+        else
+            monoSounding = -1;   // keep state clean while in Poly
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());

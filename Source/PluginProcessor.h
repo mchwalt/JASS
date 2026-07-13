@@ -106,6 +106,7 @@ private:
     std::vector<int> glideHeld;        // notes currently held down
     std::vector<int> glideLastChord;   // last non-empty held set (glide source after a gap)
     std::vector<int> glideNewNotes, glideOffNotes;   // per-block scratch (no RT realloc)
+    int monoSounding = -1;             // Mono glide: the note currently sounding (last-note priority)
     bool autoNoteOn = false;
     std::atomic<bool> pluckRequested { false };   // set by pluckString(), consumed in processBlock
 
