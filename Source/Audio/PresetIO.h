@@ -129,6 +129,7 @@ namespace PresetIO
         root->setProperty("Oscillators", oscs);
 
         root->setProperty("MasterVolume", rawF(a, ID::masterVol));
+        root->setProperty("SyncTempo",    rawF(a, ID::syncTempo));     // Tempo-Sync (append-only; C# ignores; missing => 120)
         root->setProperty("MasterOn",     rawB(a, ID::masterOn));      // Story 2.4 (append-only; missing => on)
         // CROSS MOD (Option B): "Additive" == disabled. On-disk stays {Additive,RingMod,FM} via
         // choiceOrOff so older presets round-trip; the live mixMode param holds only {RingMod,FM}.
@@ -181,11 +182,13 @@ namespace PresetIO
         root->setProperty("LfoTarget",   choiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
         root->setProperty("LfoDepth",    rawF(a, ID::lfoDepth));
+        root->setProperty("LfoSyncDiv",  rawChoice(a, ID::lfoSyncDiv, SyncDivision::kNames));   // Tempo-Sync (append-only; C# ignores; missing => Free)
 
         root->setProperty("DelayEnabled",  rawB(a, ID::delayOn));
         root->setProperty("DelayTime",     rawF(a, ID::delayTime));
         root->setProperty("DelayFeedback", rawF(a, ID::delayFeedback));
         root->setProperty("DelayMix",      rawF(a, ID::delayMix));
+        root->setProperty("DelaySyncDiv",  rawChoice(a, ID::delaySyncDiv, SyncDivision::kNames));   // Tempo-Sync (append-only; C# ignores; missing => Free)
 
         root->setProperty("ChorusEnabled", rawB(a, ID::chorusOn));
         root->setProperty("ChorusRate",    rawF(a, ID::chorusRate));
@@ -269,6 +272,7 @@ namespace PresetIO
         }
 
         setRaw   (a, ID::masterVol, (float) jnum(v, "MasterVolume", rawF(a, ID::masterVol)));
+        setRaw   (a, ID::syncTempo, (float) jnum(v, "SyncTempo", rawF(a, ID::syncTempo)));   // Tempo-Sync; missing => factory 120
         setRaw   (a, ID::masterOn,  jbool(v, "MasterOn",  rawB(a, ID::masterOn))  ? 1.f : 0.f);   // Story 2.4; missing => keep default (on)
         setChoiceOrOff(a, ID::mixModeOn, ID::mixMode, kMixMode, v["MixMode"]);   // "Additive" => off
         // Back-compat: a Story-2.4-era preset may carry an explicit MixModeOn=false next to a
@@ -323,11 +327,13 @@ namespace PresetIO
         setChoiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget, v["LfoTarget"]);
         setRaw(a, ID::lfoRate,  (float) jnum(v, "LfoRate",  rawF(a, ID::lfoRate)));
         setRaw(a, ID::lfoDepth, (float) jnum(v, "LfoDepth", rawF(a, ID::lfoDepth)));
+        setChoice(a, ID::lfoSyncDiv, SyncDivision::kNames, v["LfoSyncDiv"], rawI(a, ID::lfoSyncDiv));   // Tempo-Sync; missing => Free
 
         setRaw(a, ID::delayOn,       jbool(v, "DelayEnabled", rawB(a, ID::delayOn)) ? 1.f : 0.f);
         setRaw(a, ID::delayTime,     (float) jnum(v, "DelayTime",     rawF(a, ID::delayTime)));
         setRaw(a, ID::delayFeedback, (float) jnum(v, "DelayFeedback", rawF(a, ID::delayFeedback)));
         setRaw(a, ID::delayMix,      (float) jnum(v, "DelayMix",      rawF(a, ID::delayMix)));
+        setChoice(a, ID::delaySyncDiv, SyncDivision::kNames, v["DelaySyncDiv"], rawI(a, ID::delaySyncDiv));   // Tempo-Sync; missing => Free
 
         setRaw(a, ID::chorusOn,    jbool(v, "ChorusEnabled", rawB(a, ID::chorusOn)) ? 1.f : 0.f);
         setRaw(a, ID::chorusRate,  (float) jnum(v, "ChorusRate",  rawF(a, ID::chorusRate)));
