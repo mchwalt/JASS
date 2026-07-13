@@ -129,6 +129,7 @@ void SynthyProcessor::randomize()
     const float keepMasterVol   = *apvts.getRawParameterValue(ID::masterVol);
     const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
     const float keepGlideOn     = *apvts.getRawParameterValue(ID::glideOn); // glide = performance, not sound design
+    const float keepKeyboardOn  = *apvts.getRawParameterValue(ID::keyboardOn); // keyboard = input surface, not sound design
 
     // Random value for every parameter...
     for (auto* p : getParameters())
@@ -173,6 +174,7 @@ void SynthyProcessor::randomize()
     set(ID::masterVol,   keepMasterVol);
     set(ID::arpOn,       keepArpOn);
     set(ID::glideOn,     keepGlideOn);
+    set(ID::keyboardOn,  keepKeyboardOn);
 
     currentPresetName = "Random";
     markPresetClean();   // a fresh random patch is its own "clean" state

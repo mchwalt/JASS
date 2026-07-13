@@ -141,6 +141,7 @@ namespace PresetIO
         root->setProperty("MixSrcB",      rawChoice(a, ID::mixSrcB, kMixSrc));   //          (missing => OSC2)
         root->setProperty("ScopeOn",      rawB(a, ID::scopeOn));       // display enables (append-only; missing => on)
         root->setProperty("SpectrumOn",   rawB(a, ID::spectrumOn));
+        root->setProperty("KeyboardOn",   rawB(a, ID::keyboardOn));    // on-screen keyboard enable (append-only; missing => on)
 
         root->setProperty("AdsrOn",  rawB(a, ID::adsrOn));   // Story 2.4 (append-only; missing => on)
         root->setProperty("Attack",  rawF(a, ID::attack));
@@ -301,6 +302,7 @@ namespace PresetIO
         setChoice(a, ID::mixSrcB, kMixSrc, v["MixSrcB"], rawI(a, ID::mixSrcB));
         setRaw   (a, ID::scopeOn,    jbool(v, "ScopeOn",    rawB(a, ID::scopeOn))    ? 1.f : 0.f);   // missing => on
         setRaw   (a, ID::spectrumOn, jbool(v, "SpectrumOn", rawB(a, ID::spectrumOn)) ? 1.f : 0.f);
+        setRaw   (a, ID::keyboardOn, jbool(v, "KeyboardOn", rawB(a, ID::keyboardOn)) ? 1.f : 0.f);   // missing => on
 
         setRaw(a, ID::adsrOn,  jbool(v, "AdsrOn", rawB(a, ID::adsrOn)) ? 1.f : 0.f);   // Story 2.4; missing => keep default (on)
         setRaw(a, ID::attack,  (float) jnum(v, "Attack",  rawF(a, ID::attack)));

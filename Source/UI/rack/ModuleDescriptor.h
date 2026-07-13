@@ -19,7 +19,7 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W8H1, W8H2, W12H2 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W8H1, W8H2, W12H2, W24H1, W24H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8). Append-only, mirrors LFOTarget order (None = LFO Off).
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff,
@@ -29,7 +29,9 @@ namespace rack
     // its own default zone — Rack.h includes this header, so the descriptor can't reference
     // Rack::Zone without an include-cycle. Rack aliases this as Rack::Zone for its callers.
     // (Persistence stores the zone by NAME, so appending an enumerator is safe.)
-    enum class Zone { Generators, Modulation, Processing, Visualization, MasterBus };
+    // Input hosts non-DSP input surfaces (the on-screen keyboard) so they can be hidden
+    // like any module — e.g. when playing via an external MIDI keyboard.
+    enum class Zone { Generators, Modulation, Processing, Visualization, MasterBus, Input };
 
     // Desaturated identity tints (FR6), matching the rack mockup. The single source
     // of the type→colour map, shared by ModuleFrame (top edge / reset tint) and the
@@ -171,6 +173,8 @@ namespace rack
             case SizeClass::W8H1:  return {  8, 1,  8, KnobSize::Small };  // 5–6 controls   (was M; 3 per row)
             case SizeClass::W8H2:  return {  8, 2, 16, KnobSize::Small };  // knobs + curve display (was L)
             case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small };  // wide visualisers      (was XL; 2 per row)
+            case SizeClass::W24H1: return { 24, 1, 24, KnobSize::Small };  // full-width single row  (on-screen keyboard, flat)
+            case SizeClass::W24H2: return { 24, 2, 48, KnobSize::Small };  // full-width two rows    (on-screen keyboard, tall keys)
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };

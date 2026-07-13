@@ -15,6 +15,7 @@ namespace rack
                 case Rack::Zone::Processing:    return ModuleType::Processor;
                 case Rack::Zone::Visualization: return ModuleType::Processor;
                 case Rack::Zone::MasterBus:     return ModuleType::Processor;
+                case Rack::Zone::Input:         return ModuleType::Generator;
             }
             return ModuleType::Generator;
         }
@@ -28,6 +29,7 @@ namespace rack
                 case Rack::Zone::Processing:    return "PROCESSING";
                 case Rack::Zone::Visualization: return "VISUALIZATION";
                 case Rack::Zone::MasterBus:     return "MASTER BUS";
+                case Rack::Zone::Input:         return "INPUT";
             }
             return {};
         }
@@ -137,6 +139,7 @@ namespace rack
         if (name == "PROCESSING")    return Zone::Processing;
         if (name == "VISUALIZATION") return Zone::Visualization;
         if (name == "MASTER BUS")    return Zone::MasterBus;
+        if (name == "INPUT")         return Zone::Input;
         return Zone::Generators;
     }
 
