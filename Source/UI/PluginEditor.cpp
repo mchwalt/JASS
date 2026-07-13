@@ -2,7 +2,7 @@
 #include "../DSP/WavetableBank.h"
 #include "HelpTextStore.h"           // embedded EN/DE help texts (Story 6.1)
 #include "../Audio/PresetIO.h"
-#include "../Audio/Parameters.h"   // Parameters::ID for the Story-1.3 sample rack
+#include "../Audio/Parameters.h"   // Parameters::ID for the rack
 #include <map>
 #include <memory>
 #include <vector>
@@ -262,19 +262,19 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
             PresetIO::loadFromFile(processor.getAPVTS(), f);
             processor.markPresetClean();   // current state now matches the loaded file
             setPresetName(f.getFileNameWithoutExtension());
-            if (sampleRack) sampleRack->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3)
+            if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3)
         });
     };
 
     addAndMakeVisible(randomBtn);
     randomBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff6d28d9));
     randomBtn.onClick = [this] { processor.randomize(); setPresetName("Random");
-                                 if (sampleRack) sampleRack->enforceHiddenDisabled(); };
+                                 if (rackBody) rackBody->enforceHiddenDisabled(); };
 
     addAndMakeVisible(resetBtn);
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
-                                if (sampleRack) sampleRack->resetLayout(); };   // factory: sound Init + default layout/visibility
+                                if (rackBody) rackBody->resetLayout(); };   // factory: sound Init + default layout/visibility
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
     addAndMakeVisible(modulesBtn);
@@ -293,8 +293,8 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         currentLang = (langBox.getSelectedId() == 2) ? "DE" : "EN";
         saveUiLanguage(currentLang);
         // Live-update an already-open panel.
-        if (helpPanel && helpPanel->isVisible() && currentHelpId.isNotEmpty() && sampleRack)
-            if (auto* f = sampleRack->moduleById(currentHelpId))
+        if (helpPanel && helpPanel->isVisible() && currentHelpId.isNotEmpty() && rackBody)
+            if (auto* f = rackBody->moduleById(currentHelpId))
                 helpPanel->setContent(f->moduleTitle(),
                                       HelpTextStore::instance().get(currentHelpId, currentLang));
     };
@@ -331,14 +331,14 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // the on-screen keyboard keeps focus and the computer keys keep playing notes
     // even WHILE the user is tweaking parameters. (The keyboard keeps its focus;
     // a slider's right-click value box still grabs focus on demand for typing.)
-    // Story 1.3: stand up the sample rack BEFORE dropFocus so its controls are also
+    // Story 1.3: stand up the rack BEFORE dropFocus so its controls are also
     // excluded from grabbing keyboard focus.
-    buildSampleRack();
+    buildRack();
     // Re-fit the window height whenever the rack layout changes (show/hide, AD-12).
-    if (sampleRack)
+    if (rackBody)
     {
-        sampleRack->onLayoutChanged = [this] { refitHeight(); };
-        sampleRack->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
+        rackBody->onLayoutChanged = [this] { refitHeight(); };
+        rackBody->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
     }
 
     std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)
@@ -358,8 +358,8 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     helpPanel = std::make_unique<HelpPanel>();
     helpPanel->onClose = [this] { if (helpPanel) helpPanel->setVisible(false); };
     addChildComponent(*helpPanel);
-    if (sampleRack)
-        sampleRack->onModuleHelp = [this](const juce::String& id) { showModuleHelp(id); };
+    if (rackBody)
+        rackBody->onModuleHelp = [this](const juce::String& id) { showModuleHelp(id); };
 
     // Size the editor: fixed design width, height derived from the rack's VISIBLE content.
     // Re-run on every show/hide via Rack::onLayoutChanged (AD-12). Must be after the rack +
@@ -380,7 +380,7 @@ void SynthyEditor::refitHeight()
     constexpr int kBodyBottom = 72;   // keyboard band (matches resized())
     constexpr int kMargin     = 12;   // getLocalBounds().reduced(12)
     const int rackW = kDesignW - 2 * kMargin;
-    const int rackH = sampleRack ? sampleRack->preferredHeight(rackW) : 800;
+    const int rackH = rackBody ? rackBody->preferredHeight(rackW) : 800;
     const int designH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
     setSize(kDesignW, designH);
 
@@ -400,10 +400,10 @@ void SynthyEditor::refitHeight()
 
 void SynthyEditor::showModulesMenu()
 {
-    if (! sampleRack) return;
+    if (! rackBody) return;
     // The reorderable customization list (Story 4.2) in a call-out anchored to the button.
     // Parent = nullptr (desktop) so the editor's auto-fit transform doesn't skew mouse coords.
-    auto panel = std::make_unique<RackCustomizePanel>(*sampleRack);
+    auto panel = std::make_unique<RackCustomizePanel>(*rackBody);
     juce::CallOutBox::launchAsynchronously(std::move(panel),
                                            modulesBtn.getScreenBounds(),
                                            nullptr);
@@ -423,11 +423,11 @@ void SynthyEditor::timerCallback()
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
     // ModTarget has a +1 offset vs the raw lfoTarget (ModTarget::None = 0; raw 0 = Frequency).
-    if (sampleRack)
+    if (rackBody)
     {
         const rack::ModTarget activeT = lfoActive ? static_cast<rack::ModTarget>(target + 1)
                                                   : rack::ModTarget::None;
-        sampleRack->updateLiveFeed(lfoActive, activeT, lfo, ratio);
+        rackBody->updateLiveFeed(lfoActive, activeT, lfo, ratio);
     }
 
     // Keep the header label in sync: it reacts both to the (async-restored)
@@ -477,7 +477,7 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     // visibly presses too (its onClick calls pluckString); fall back to the direct call.
     if (key == juce::KeyPress::spaceKey)
     {
-        if (auto* f = sampleRack ? sampleRack->moduleById("stringkarplus") : nullptr)
+        if (auto* f = rackBody ? rackBody->moduleById("stringkarplus") : nullptr)
             f->clickFirstAction();
         else
             processor.pluckString();
@@ -505,7 +505,7 @@ void SynthyEditor::paint(juce::Graphics& g)
 
 void SynthyEditor::showModuleHelp(const juce::String& id)
 {
-    if (helpPanel == nullptr || sampleRack == nullptr)
+    if (helpPanel == nullptr || rackBody == nullptr)
         return;
 
     // Toggle: clicking the SAME module's info icon while its panel is open closes it.
@@ -515,7 +515,7 @@ void SynthyEditor::showModuleHelp(const juce::String& id)
         return;
     }
 
-    auto* f = sampleRack->moduleById(id);
+    auto* f = rackBody->moduleById(id);
     const juce::String title = (f != nullptr) ? f->moduleTitle() : id;
     helpPanel->setContent(title, HelpTextStore::instance().get(id, currentLang));   // sets size first
     currentHelpId = id;
@@ -562,7 +562,7 @@ void SynthyEditor::saveUiLanguage(const juce::String& lang)
     uiLanguageFile().replaceWithText(lang);
 }
 
-void SynthyEditor::buildSampleRack()
+void SynthyEditor::buildRack()
 {
     // TEMP (Story 1.3): a throwaway population to verify the grid engine, zone headers
     // and shared look at the fixed 1920×1200 target. It mirrors the mockup census
@@ -571,7 +571,7 @@ void SynthyEditor::buildSampleRack()
     using namespace rack;
     auto& apvts = processor.getAPVTS();
     // MASTER BUS is the top row (first zone), then the three main zones below it.
-    sampleRack = std::make_unique<Rack>(apvts, Rack::kDefaultCols,
+    rackBody = std::make_unique<Rack>(apvts, Rack::kDefaultCols,
         std::vector<Rack::Zone>{ Rack::Zone::MasterBus, Rack::Zone::Generators,
                                  Rack::Zone::Modulation, Rack::Zone::Processing,
                                  Rack::Zone::Visualization });
@@ -609,7 +609,7 @@ void SynthyEditor::buildSampleRack()
         d.defaultZone = zone;   // AD-10: zone declared on the descriptor
         d.enableParam = std::move(enableParam); d.body = std::move(body);
         d.onReset = std::move(onReset);   // extra non-param reset (e.g. scope time-base)
-        sampleRack->addModule(std::move(d));
+        rackBody->addModule(std::move(d));
     };
 
     // OSC WAVE items MUST match the oscWave param's choice ORDER — the ComboBoxAttachment
@@ -670,7 +670,7 @@ void SynthyEditor::buildSampleRack()
             return oscOn[(size_t) a]->load() >= 0.5f && oscOn[(size_t) b]->load() >= 0.5f;
         };
         mix.defaultZone = Rack::Zone::Generators;   // AD-10: zone on the descriptor
-        sampleRack->addModule(std::move(mix));
+        rackBody->addModule(std::move(mix));
     }
 
     add(Rack::Zone::Generators, SizeClass::W3H1, ModuleType::Generator, "SUB", P::subOn,
@@ -698,11 +698,11 @@ void SynthyEditor::buildSampleRack()
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
-    // curve), a Display body element (AD-5), owned by sampleOwned so its lifetime is tied
+    // curve), a Display body element (AD-5), owned by rackOwned so its lifetime is tied
     // to the editor.
     add(Rack::Zone::Modulation, SizeClass::W4H2, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
-          Display{ sampleOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
+          Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
     // LFO WAVE must list the lfoWave param's OWN choices in order — the ComboBoxAttachment
     // maps by index, so the shared `waves` array (a different order) would mislabel every
     // waveform (Story 2.1 AC3).
@@ -745,14 +745,14 @@ void SynthyEditor::buildSampleRack()
     auto* scope = new WaveformDisplay(processor.getWaveformCapture());
     scope->setShowTitle(false);
     scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
-    sampleOwned.add(scope);
+    rackOwned.add(scope);
     add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
         { Display{ scope, 12 } },
         [scope] { scope->resetTimeRange(); });   // ↺ restores the 10 ms default time-base
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
     spec->setShowTitle(false);
     spec->setEnableSource(apvts.getRawParameterValue(P::spectrumOn));   // spectrumOn off => freeze+blank
-    sampleOwned.add(spec);
+    rackOwned.add(spec);
     // SPECTRUM has no adjustable state yet — its ↺ is a uniform-anatomy placeholder (a no-op
     // for now) so every module carries the same header controls; wire real params here later.
     add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
@@ -761,7 +761,7 @@ void SynthyEditor::buildSampleRack()
 
     // Added LAST so the opaque rack covers the legacy body; the header chrome and
     // keyboard sit in their own bands and stay live.
-    addAndMakeVisible(*sampleRack);
+    addAndMakeVisible(*rackBody);
 }
 
 void SynthyEditor::resized()
@@ -813,11 +813,11 @@ void SynthyEditor::resized()
 
     // The rack fills the body band (below the header row, above the keyboard); the header
     // chrome and keyboard keep their own bands.
-    if (sampleRack)
+    if (rackBody)
     {
         auto rb = getLocalBounds().reduced(12);
         rb.removeFromTop(64 + 8);    // header row + gap (mirrors the header band above)
         rb.removeFromBottom(72);     // keyboard band
-        sampleRack->setBounds(rb);
+        rackBody->setBounds(rb);
     }
 }
