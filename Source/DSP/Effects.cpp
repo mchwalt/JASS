@@ -105,6 +105,71 @@ void DelayEffect::reset()
     writePos = 0;
 }
 
+// --- Phaser / Flanger ---
+
+void PhaserEffect::prepare(double sampleRate)
+{
+    sr = sampleRate;
+    buffer.assign(static_cast<int>(0.02 * sr), 0.0f);   // up to 20 ms for the flanger delay line
+    reset();
+}
+
+float PhaserEffect::process(float input)
+{
+    if (!enabled) return input;
+
+    // Shared bipolar LFO, mapped to 0..1.
+    const double lfo = std::sin(2.0 * M_PI * lfoPhase);
+    lfoPhase += rate / sr;
+    if (lfoPhase >= 1.0) lfoPhase -= 1.0;
+    const double mod = lfo * 0.5 + 0.5;   // 0..1
+
+    if (type == PhaserType::Phaser)
+    {
+        // Sweep the all-pass corner frequency (logarithmically) over the depth range;
+        // deeper depth = wider sweep. fb feeds the chain output back into its input.
+        const double fc  = 200.0 * std::pow(2.0, mod * (1.0 + depth * 4.0));   // ~200 Hz .. a few kHz
+        const double t   = std::tan(M_PI * std::clamp(fc, 20.0, sr * 0.45) / sr);
+        const double g   = (t - 1.0) / (t + 1.0);                              // first-order all-pass coeff (-1..1)
+
+        float x = input + static_cast<float>(feedback) * lastPhaser;
+        for (int s = 0; s < kStages; ++s)
+        {
+            const float y = static_cast<float>(-g) * x + apState[s];
+            apState[s]    = x + static_cast<float>(g) * y;
+            x = y;
+        }
+        lastPhaser = x;
+        return input * (1.0f - static_cast<float>(mix)) + x * static_cast<float>(mix);
+    }
+
+    // Flanger: short swept delay (1..7 ms) with feedback → moving comb filter.
+    if (buffer.empty()) return input;
+    const int bufSize = static_cast<int>(buffer.size());
+
+    const double delaySec     = 0.001 + depth * 0.006 * mod;   // 1 ms .. up to 7 ms
+    const double delaySamples = delaySec * sr;
+    const int    r1   = (static_cast<int>(writePos - delaySamples) % bufSize + bufSize) % bufSize;
+    const int    r2   = (r1 + 1) % bufSize;
+    const double frac = delaySamples - std::floor(delaySamples);
+    const float  delayed = static_cast<float>(buffer[r1] * (1.0 - frac) + buffer[r2] * frac);
+
+    buffer[writePos] = input + static_cast<float>(feedback) * delayed;
+    writePos = (writePos + 1) % bufSize;
+    lastFlanger = delayed;
+    return input * (1.0f - static_cast<float>(mix)) + delayed * static_cast<float>(mix);
+}
+
+void PhaserEffect::reset()
+{
+    std::fill(buffer.begin(), buffer.end(), 0.0f);
+    for (auto& s : apState) s = 0.0f;
+    writePos = 0;
+    lfoPhase = 0.0;
+    lastPhaser = 0.0f;
+    lastFlanger = 0.0f;
+}
+
 // --- Chorus ---
 
 void ChorusEffect::prepare(double sampleRate)

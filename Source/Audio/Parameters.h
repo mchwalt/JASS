@@ -59,6 +59,14 @@ namespace Parameters
         constexpr const char* bitcrushRate = "bitcrushRate";
         constexpr const char* bitcrushMix  = "bitcrushMix";
 
+        // Phaser / Flanger (append-only)
+        constexpr const char* phaserOn       = "phaserOn";
+        constexpr const char* phaserType     = "phaserType";
+        constexpr const char* phaserRate     = "phaserRate";
+        constexpr const char* phaserDepth    = "phaserDepth";
+        constexpr const char* phaserFeedback = "phaserFeedback";
+        constexpr const char* phaserMix      = "phaserMix";
+
         // Arpeggiator (turns a held chord into an automatic note sequence)
         constexpr const char* arpOn      = "arpOn";
         constexpr const char* arpRate    = "arpRate";
@@ -287,6 +295,14 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::bitcrushRate, 1), "Bitcrush Rate", 1, 50, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::bitcrushMix, 1), "Bitcrush Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
 
+        // Phaser / Flanger (append-only; default off => existing presets unchanged)
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::phaserOn, 1), "Phaser On", false));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::phaserType, 1), "Phaser Type", juce::StringArray{"Phaser", "Flanger"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserRate, 1), "Phaser Rate", juce::NormalisableRange<float>(0.05f, 5.0f, 0.01f, 0.4f), 0.5f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserDepth, 1), "Phaser Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserFeedback, 1), "Phaser Feedback", juce::NormalisableRange<float>(0.0f, 0.95f, 0.01f), 0.5f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserMix, 1), "Phaser Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+
         // Sub oscillator
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::subOn, 1), "Sub On", false));
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subWave, 1), "Sub Wave", juce::StringArray{"Sine", "Square"}, 0));
@@ -327,6 +343,7 @@ namespace Parameters
                               Oscillator* oscillators, AdsrEnvelope& env,
                               BiquadFilter& filter, DistortionEffect& distortion,
                               WavefolderEffect& wavefolder, BitcrusherEffect& bitcrusher,
+                              PhaserEffect& phaser,
                               DelayEffect& delay,
                               ChorusEffect& chorus, ReverbEffect& reverb,
                               LFO& lfo, NoiseGenerator& noise,
@@ -383,6 +400,13 @@ namespace Parameters
         bitcrusher.bits    = *apvts.getRawParameterValue(ID::bitcrushBits);
         bitcrusher.rate    = *apvts.getRawParameterValue(ID::bitcrushRate);
         bitcrusher.mix     = *apvts.getRawParameterValue(ID::bitcrushMix);
+
+        phaser.enabled  = *apvts.getRawParameterValue(ID::phaserOn) > 0.5f;
+        phaser.type     = static_cast<PhaserType>(static_cast<int>(*apvts.getRawParameterValue(ID::phaserType)));
+        phaser.rate     = *apvts.getRawParameterValue(ID::phaserRate);
+        phaser.depth    = *apvts.getRawParameterValue(ID::phaserDepth);
+        phaser.feedback = *apvts.getRawParameterValue(ID::phaserFeedback);
+        phaser.mix      = *apvts.getRawParameterValue(ID::phaserMix);
 
         delay.enabled  = *apvts.getRawParameterValue(ID::delayOn) > 0.5f;
         delay.time     = delayTimeSec;   // Tempo-Sync: resolved in processBlock (Free => raw knob, else BPM division)
