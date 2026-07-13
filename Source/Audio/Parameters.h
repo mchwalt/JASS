@@ -280,7 +280,7 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoRate, 1), "LFO Rate", juce::NormalisableRange<float>(0.1f, 20.0f, 0.1f), 2.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoDepth, 1), "LFO Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::lfoOn, 1), "LFO On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget, 1), "LFO Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget, 1), "LFO Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive"}, 0));
         // Tempo-Sync: 0 = Free (use LFO Rate knob), else a note division. Append-only; default Free = unchanged.
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoSyncDiv, 1), "LFO Sync", SyncDivision::kNames, 0));
 

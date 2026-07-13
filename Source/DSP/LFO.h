@@ -6,7 +6,10 @@
 #endif
 
 enum class LFOWaveform { Sine, Triangle, Square, Sawtooth };
-enum class LFOTarget { Off, Frequency, Amplitude, FilterCutoff };
+// Append-only: new targets go at the END so the choice-index mapping stays stable
+// (LFOTarget = lfoTarget-param index + 1; Off = 0). See Parameters.h + PresetIO kLfoTarget.
+enum class LFOTarget { Off, Frequency, Amplitude, FilterCutoff,
+                       WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
 
 class LFO
 {

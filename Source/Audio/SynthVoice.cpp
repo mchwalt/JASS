@@ -97,6 +97,11 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         baseFrequencies[i] = oscillators[i].getFrequency();
     double baseWtFreq = wavetable.getFrequency();
     baseCutoff = filter.getCutoff();
+    // Base values for the additional LFO targets (captured once; the LFO modulates around them).
+    const double baseReso  = filter.getResonance();
+    const double basePos   = wavetable.getPosition();
+    const double baseVowel = formant.vowel;
+    const double baseFold  = wavefolder.drive;
 
     // Sub-oscillator octave multiplier (constant across the block).
     const double subMul = std::pow(2.0, subOctave);
@@ -126,6 +131,14 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             double factor = std::pow(2.0, lfoValue * 3.0); // ±3 octaves
             filter.setCutoff(std::clamp(baseCutoff * factor, 20.0, 20000.0));
         }
+        else if (lfoTarget == LFOTarget::WavetablePosition)
+            wavetable.setPosition(std::clamp(basePos + lfoValue * 0.5, 0.0, 1.0));
+        else if (lfoTarget == LFOTarget::FormantVowel)
+            formant.vowel = std::clamp(baseVowel + lfoValue * 0.5, 0.0, 1.0);
+        else if (lfoTarget == LFOTarget::FilterResonance)
+            filter.setResonance(std::clamp(baseReso * std::pow(2.0, lfoValue * 1.5), 0.1, 10.0));
+        else if (lfoTarget == LFOTarget::WavefolderDrive)
+            wavefolder.drive = std::clamp(baseFold + lfoValue * 0.5, 0.0, 1.0);
 
         // Mix oscillators according to the mix mode. When Mix-Mode is disabled (Story 2.4)
         // the OSCs are summed plainly, regardless of the selected mode.
@@ -205,9 +218,13 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         }
     }
 
-    // Restore the knob frequencies (applyToVoice resets them next block anyway)
+    // Restore the knob values (applyToVoice resets them next block anyway)
     for (int i = 0; i < 3; ++i)
         oscillators[i].setFrequency(baseFrequencies[i]);
     wavetable.setFrequency(baseWtFreq);
+    wavetable.setPosition(basePos);
     filter.setCutoff(baseCutoff);
+    filter.setResonance(baseReso);
+    formant.vowel = baseVowel;
+    wavefolder.drive = baseFold;
 }

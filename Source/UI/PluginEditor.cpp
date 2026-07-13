@@ -693,7 +693,7 @@ void SynthyEditor::buildRack()
                                   pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
                       },
                       { juce::String(P::wavetableBank) } },   // refresh the BANK combo after load
-          K(P::wavetablePosition, "POS"), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
+          Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
           K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") });
 
     // ---- MODULATION ----
@@ -710,7 +710,7 @@ void SynthyEditor::buildRack()
     // else RATE is driven by the note division at the host/Sync tempo (RATE knob then ignored).
     add(Rack::Zone::Modulation, SizeClass::W8H1, ModuleType::Modulator, "LFO", P::lfoOn,
         { C(P::lfoWave, "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
-          C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff" }),
+          C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive" }),
           K(P::lfoRate, "RATE"), C(P::lfoSyncDiv, "SYNC", SyncDivision::kNames), K(P::lfoDepth, "DEPTH") });
     add(Rack::Zone::Modulation, SizeClass::W6H1, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
         { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
@@ -724,7 +724,8 @@ void SynthyEditor::buildRack()
     // combo isn't cramped. (Exact width tuning deferred to next session.)
     add(Rack::Zone::Processing, SizeClass::W4H1, ModuleType::Processor, "FILTER", P::filterOn,
         { C(P::filterType, "TYPE", { "Lowpass", "Highpass" }),
-          Kmod(P::filterCutoff, "CUTOFF", ModTarget::FilterCutoff), K(P::filterReso, "RESO") });
+          Kmod(P::filterCutoff, "CUTOFF", ModTarget::FilterCutoff),
+          Kmod(P::filterReso, "RESO", ModTarget::FilterResonance) });
     // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
     // DISTORTION TYPE: display text is cosmetic ("Soft Clip"/"Hard Clip" read better) — the
     // ComboBoxAttachment maps by INDEX, so the canonical param/.synthy strings stay
@@ -732,12 +733,12 @@ void SynthyEditor::buildRack()
     // Order/count MUST match distortionType's choices exactly, or the index mapping breaks.
     // FORMANT / vowel filter: VOWEL morphs A-E-I-O-U, RESO sharpens, MIX dry/wet. 3 knobs => W3H1.
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "FORMANT", P::formantOn,
-        { K(P::formantVowel, "VOWEL"), K(P::formantReso, "RESO"), K(P::formantMix, "MIX") });
+        { Kmod(P::formantVowel, "VOWEL", ModTarget::FormantVowel), K(P::formantReso, "RESO"), K(P::formantMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W4H1, ModuleType::Processor, "DISTORTION", P::distortionOn,
         { C(P::distortionType, "TYPE", { "Soft Clip", "Hard Clip", "Foldback" }),
           K(P::distortionDrive, "DRIVE"), K(P::distortionMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "WAVEFOLD", P::wavefoldOn,
-        { K(P::wavefoldDrive, "DRIVE"), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
+        { Kmod(P::wavefoldDrive, "DRIVE", ModTarget::WavefolderDrive), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
     add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "BITCRUSH", P::bitcrushOn,
         { K(P::bitcrushBits, "BITS"), K(P::bitcrushRate, "RATE"), K(P::bitcrushMix, "MIX") });
     // PHASER / FLANGER: TYPE combo (2 slots) + 4 knobs => W6H1 (6 cols).

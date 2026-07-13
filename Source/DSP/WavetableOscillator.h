@@ -21,6 +21,7 @@ public:
     void setDetuneAmount(double cents) { detuneCents = cents; }
     void setBank(const WavetableBank* b) { bank = b; }
     double getFrequency() const { return frequency; }
+    double getPosition() const { return position; }
 
     void reset() { phases.fill(0.0); }
 
