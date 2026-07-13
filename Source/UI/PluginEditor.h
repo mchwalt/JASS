@@ -79,12 +79,12 @@ private:
     juce::Rectangle<int> g_titleBounds;
 
     // The rack IS the editor body now (legacy per-module panels removed in Story 3.3):
-    // buildSampleRack() assembles every module as a declarative descriptor (AD-1) and
+    // buildRack() assembles every module as a declarative descriptor (AD-1) and
     // the Rack owns all placement (AD-2). The header chrome + keyboard sit in their own
-    // bands. (Names kept as "sample*" from the Story-1.3 scaffold; purely historical.)
-    std::unique_ptr<rack::Rack> sampleRack;
-    juce::OwnedArray<juce::Component> sampleOwned;   // owns the rack's Display components (ADSR curve, scope, spectrum)
-    void buildSampleRack();
+    // bands.
+    std::unique_ptr<rack::Rack> rackBody;
+    juce::OwnedArray<juce::Component> rackOwned;   // owns the rack's Display components (ADSR curve, scope, spectrum)
+    void buildRack();
 
     // Online help (Story 6.1): a header language selector + one shared movable HelpPanel.
     juce::ComboBox langBox;                 // EN / DE
