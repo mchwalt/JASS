@@ -337,7 +337,7 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
         // Global sync tempo (Standalone/base BPM; host tempo overrides in a DAW). Append-only.
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::syncTempo, 1), "Sync Tempo", juce::NormalisableRange<float>(40.0f, 250.0f, 1.0f), 120.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::syncTempo, 1), "Sync Tempo", juce::NormalisableRange<float>(40.0f, 250.0f, 1.0f), 130.0f));
 
         // Module enables for the formerly always-on modules (Story 2.4). Default TRUE
         // (on) so behaviour is unchanged until the user toggles; append-only.
