@@ -715,9 +715,9 @@ void SynthyEditor::buildRack()
     add(Rack::Zone::Modulation, SizeClass::W6H1, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
         { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
           K(P::arpRate, "RATE"), K(P::arpOctaves, "OCT"), K(P::arpGate, "GATE") });
-    // GLIDE / portamento (poly): TIME sets the glide duration; enable = glideOn. One control.
+    // GLIDE / portamento: MODE = Mono (distinct classic glide) / Poly (per-voice), TIME = duration.
     add(Rack::Zone::Modulation, SizeClass::W3H1, ModuleType::Modulator, "GLIDE", P::glideOn,
-        { K(P::glideTime, "TIME") });
+        { C(P::glideMode, "MODE", { "Mono", "Poly" }), K(P::glideTime, "TIME") });
 
     // ---- PROCESSING ----
     // FILTER: TYPE combo + CUTOFF + RESO (= 4 slots, like DISTORTION) → M (4 cols) so the

@@ -21,6 +21,7 @@ namespace PresetIO
     inline const juce::StringArray kSubWave     { "Sine", "Square" };
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
     inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
+    inline const juce::StringArray kGlideMode   { "Mono", "Poly" };        // Feature 4 (append-only; C# ignores)
 
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
@@ -194,6 +195,7 @@ namespace PresetIO
 
         root->setProperty("GlideEnabled", rawB(a, ID::glideOn));      // Feature 4 (append-only; C# ignores; missing => off)
         root->setProperty("GlideTime",    rawF(a, ID::glideTime));
+        root->setProperty("GlideMode",    rawChoice(a, ID::glideMode, kGlideMode));   // missing => Mono
 
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   choiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget));
@@ -352,8 +354,9 @@ namespace PresetIO
         setRaw   (a, ID::arpOctaves, (float) jint(v, "ArpOctaves", rawI(a, ID::arpOctaves)));
         setRaw   (a, ID::arpGate,    (float) jnum(v, "ArpGate", rawF(a, ID::arpGate)));
 
-        setRaw(a, ID::glideOn,   jbool(v, "GlideEnabled", rawB(a, ID::glideOn)) ? 1.f : 0.f);   // Feature 4; missing => off
-        setRaw(a, ID::glideTime, (float) jnum(v, "GlideTime", rawF(a, ID::glideTime)));
+        setRaw   (a, ID::glideOn,   jbool(v, "GlideEnabled", rawB(a, ID::glideOn)) ? 1.f : 0.f);   // Feature 4; missing => off
+        setRaw   (a, ID::glideTime, (float) jnum(v, "GlideTime", rawF(a, ID::glideTime)));
+        setChoice(a, ID::glideMode, kGlideMode, v["GlideMode"], rawI(a, ID::glideMode));   // missing => Mono
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
         setChoiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget, v["LfoTarget"]);

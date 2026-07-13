@@ -427,6 +427,14 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 glideHeld.push_back(n);
         if (! glideHeld.empty())
             glideLastChord = glideHeld;
+
+        // Mono glide (default): hard-stop the sounding voices when a new note arrives so ONLY
+        // the new note plays, gliding from the previous pitch → the distinct classic portamento.
+        // (Poly leaves the old voices ringing, which blurs the sweep.) Best for sequential
+        // playing; simultaneous chords in Mono still sound polyphonic — use Poly for chords.
+        const bool glideMono = (int) *apvts.getRawParameterValue(ID::glideMode) == 0;
+        if (glideInfo.enabled && glideMono && ! glideNewNotes.empty())
+            synth.allNotesOff(0, false);
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
