@@ -5,6 +5,7 @@
 #include "Audio/Parameters.h"
 #include "DSP/WaveformCapture.h"
 #include "DSP/StereoWidth.h"
+#include "DSP/Compressor.h"
 #include "DSP/Arpeggiator.h"
 #include <vector>
 
@@ -94,6 +95,7 @@ private:
     juce::MidiKeyboardState keyboardState;
     WaveformCapture waveformCapture { 512 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
+    Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfo;                 // display-only LFO mirroring the patch LFO (for the rings)
     std::atomic<float> lfoDisplayValue { 0.0f };
     Arpeggiator arp;

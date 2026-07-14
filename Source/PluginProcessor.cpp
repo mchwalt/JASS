@@ -130,6 +130,7 @@ void SynthyProcessor::randomize()
     const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
     const float keepGlideOn     = *apvts.getRawParameterValue(ID::glideOn); // glide = performance, not sound design
     const float keepKeyboardOn  = *apvts.getRawParameterValue(ID::keyboardOn); // keyboard = input surface, not sound design
+    const float keepCompOn      = *apvts.getRawParameterValue(ID::compOn);     // compressor = mastering, not sound design
 
     // Random value for every parameter...
     for (auto* p : getParameters())
@@ -180,6 +181,7 @@ void SynthyProcessor::randomize()
     set(ID::arpOn,       keepArpOn);
     set(ID::glideOn,     keepGlideOn);
     set(ID::keyboardOn,  keepKeyboardOn);
+    set(ID::compOn,      keepCompOn);
 
     currentPresetName = "Random";
     markPresetClean();   // a fresh random patch is its own "clean" state
@@ -247,6 +249,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     glideNewNotes.reserve(128); glideOffNotes.reserve(128);
 
     stereoWidth.prepare(sampleRate);
+    compressor.prepare(sampleRate);
     uiLfo.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     arpHeldScratch.reserve(128);
@@ -500,6 +503,18 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     auto* channelData = buffer.getReadPointer(0);
     for (int i = 0; i < buffer.getNumSamples(); ++i)
         waveformCapture.writeSample(channelData[i]);
+
+    // Master-bus compressor: glue the summed mono mix before it is widened.
+    {
+        using namespace Parameters;
+        compressor.enabled   = *apvts.getRawParameterValue(ID::compOn) > 0.5f;
+        compressor.threshold = *apvts.getRawParameterValue(ID::compThreshold);
+        compressor.ratio     = *apvts.getRawParameterValue(ID::compRatio);
+        compressor.attackMs  = *apvts.getRawParameterValue(ID::compAttack);
+        compressor.releaseMs = *apvts.getRawParameterValue(ID::compRelease);
+        compressor.makeupDb  = *apvts.getRawParameterValue(ID::compMakeup);
+        compressor.process(buffer);
+    }
 
     // Final pseudo-stereo stage: turns the mono mix into a wide stereo image.
     stereoWidth.enabled = *apvts.getRawParameterValue(Parameters::ID::stereoOn) > 0.5f;

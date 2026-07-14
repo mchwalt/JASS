@@ -188,6 +188,13 @@ namespace PresetIO
         root->setProperty("StereoWidth",   rawF(a, ID::stereoWidth));
         root->setProperty("StereoTime",    rawF(a, ID::stereoTime));  // 1..15 ms
 
+        root->setProperty("CompEnabled",   rawB(a, ID::compOn));       // master-bus compressor (append-only; C# ignores; missing => off)
+        root->setProperty("CompThreshold", rawF(a, ID::compThreshold));
+        root->setProperty("CompRatio",     rawF(a, ID::compRatio));
+        root->setProperty("CompAttack",    rawF(a, ID::compAttack));
+        root->setProperty("CompRelease",   rawF(a, ID::compRelease));
+        root->setProperty("CompMakeup",    rawF(a, ID::compMakeup));
+
         root->setProperty("ArpEnabled", rawB(a, ID::arpOn));
         root->setProperty("ArpRate",    rawF(a, ID::arpRate));
         root->setProperty("ArpMode",    rawChoice(a, ID::arpMode, kArpMode));
@@ -353,6 +360,13 @@ namespace PresetIO
         setRaw(a, ID::stereoOn,    jbool(v, "StereoEnabled", rawB(a, ID::stereoOn)) ? 1.f : 0.f);
         setRaw(a, ID::stereoWidth, (float) jnum(v, "StereoWidth", rawF(a, ID::stereoWidth)));
         setRaw(a, ID::stereoTime,  (float) jnum(v, "StereoTime",  rawF(a, ID::stereoTime)));
+
+        setRaw(a, ID::compOn,        jbool(v, "CompEnabled", rawB(a, ID::compOn)) ? 1.f : 0.f);   // append-only; missing => off
+        setRaw(a, ID::compThreshold, (float) jnum(v, "CompThreshold", rawF(a, ID::compThreshold)));
+        setRaw(a, ID::compRatio,     (float) jnum(v, "CompRatio",     rawF(a, ID::compRatio)));
+        setRaw(a, ID::compAttack,    (float) jnum(v, "CompAttack",    rawF(a, ID::compAttack)));
+        setRaw(a, ID::compRelease,   (float) jnum(v, "CompRelease",   rawF(a, ID::compRelease)));
+        setRaw(a, ID::compMakeup,    (float) jnum(v, "CompMakeup",    rawF(a, ID::compMakeup)));
 
         setRaw   (a, ID::arpOn,      jbool(v, "ArpEnabled", rawB(a, ID::arpOn)) ? 1.f : 0.f);
         setRaw   (a, ID::arpRate,    (float) jnum(v, "ArpRate", rawF(a, ID::arpRate)));
