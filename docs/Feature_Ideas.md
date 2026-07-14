@@ -28,7 +28,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 | **Unison/Detune** | per-Oszillator, 1–7 Stimmen → fetter Sound |
 | **Mix-Modi** | Additive · **Ring-Modulation** · **FM** (OSC1→OSC2) |
 | **Wavetable-Synthese** | 6 Built-in Banks + Position-Morph + **WAV-Import** |
-| **Noise Generator** | White + Pink (Voss-McCartney) |
+| **Noise Generator** | White + Pink (Voss-McCartney) + **Brown + Blue** (2026-07-14, `5bdd73d`) |
 | **Karplus-Strong** | gezupfte Saite (Physical Modeling), Damping/Stretch |
 | **Distortion** | SoftClip / HardClip / **Foldback**, Drive, Mix |
 | **Wavefolding** | West-Coast Sinus-Wavefolder (pre-filter), Drive / Symmetry / Mix |
@@ -64,6 +64,7 @@ Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Co
 |---|---|---|---|
 | **Phaser / Flanger** | Allpass-Kette / modulierter Comb → Sweep-Sounds | ★★ | ★★★★ |
 | ~~Bitcrusher~~ | ✅ umgesetzt (C++) – BITS + RATE + MIX | – | – |
+| ~~**Kompressor**~~ | ✅ umgesetzt (C++, 2026-07-14, `87d6483`) – Master-Bus-Glue (THRESH/RATIO/ATK/REL/GAIN), läuft auf der Summe | – | – |
 | **Convolution-Reverb** | echte Impulsantworten laden (Kathedrale, Platte) | ★★★★ | ★★★★ |
 | ~~Stereo-Width / Pseudo-Stereo~~ | ✅ umgesetzt (C++) – Master-Stufe WIDTH+TIME, mono-kompatibel (Lauridsen-Comb). Siehe „Echtes Stereo" unten | – | – |
 | **EQ (3-Band)** | Bass/Mid/Treble | ★★ | ★★★ |
@@ -145,8 +146,8 @@ Hide-Toggle + Drag-Handle pro Modul.
 
 ## 📋 Klassiker noch offen
 
-- **Portamento/Glide** – Tonhöhe gleitet von Note zu Note (★★ / ★★★★)
-- **Pitch-Envelope** – Tonhöhe verändert sich über Zeit (Laser, Kicks) (★★ / ★★★★)
+- ~~**Portamento/Glide**~~ – ✅ umgesetzt (C++, Mono+Poly)
+- ~~**Pitch-Envelope**~~ – ✅ umgesetzt (C++, 2026-07-14, `d779225`): einmaliger Pitch-Sweep pro Note (Kicks/Laser/Zaps), Modul PITCH ENV (AMOUNT ±48 HT, TIME)
 - **Stereo-Panning** – pro Oszillator L/R platzieren (★★ / ★★★)
 - **Modulation Matrix** – beliebige Quelle → beliebiges Ziel (★★★ / ★★★★★)
 - **Voller Sampler** – WAV als Klangquelle (Wavetable-Import deckt schon Teile ab) (★★★★ / ★★★★)
