@@ -198,6 +198,10 @@ namespace PresetIO
         root->setProperty("GlideTime",    rawF(a, ID::glideTime));
         root->setProperty("GlideMode",    rawChoice(a, ID::glideMode, kGlideMode));   // missing => Mono
 
+        root->setProperty("PitchEnvEnabled", rawB(a, ID::pitchEnvOn));      // append-only; C# ignores; missing => off
+        root->setProperty("PitchEnvAmount",  rawF(a, ID::pitchEnvAmount));
+        root->setProperty("PitchEnvTime",    rawF(a, ID::pitchEnvTime));
+
         root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
         root->setProperty("LfoTarget",   choiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget));
         root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
@@ -359,6 +363,10 @@ namespace PresetIO
         setRaw   (a, ID::glideOn,   jbool(v, "GlideEnabled", rawB(a, ID::glideOn)) ? 1.f : 0.f);   // Feature 4; missing => off
         setRaw   (a, ID::glideTime, (float) jnum(v, "GlideTime", rawF(a, ID::glideTime)));
         setChoice(a, ID::glideMode, kGlideMode, v["GlideMode"], rawI(a, ID::glideMode));   // missing => Mono
+
+        setRaw   (a, ID::pitchEnvOn,     jbool(v, "PitchEnvEnabled", rawB(a, ID::pitchEnvOn)) ? 1.f : 0.f);   // append-only; missing => off
+        setRaw   (a, ID::pitchEnvAmount, (float) jnum(v, "PitchEnvAmount", rawF(a, ID::pitchEnvAmount)));
+        setRaw   (a, ID::pitchEnvTime,   (float) jnum(v, "PitchEnvTime",   rawF(a, ID::pitchEnvTime)));
 
         setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
         setChoiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget, v["LfoTarget"]);

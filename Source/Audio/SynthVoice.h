@@ -3,6 +3,7 @@
 #include <array>
 #include "../DSP/Oscillator.h"
 #include "../DSP/AdsrEnvelope.h"
+#include "../DSP/PitchEnvelope.h"
 #include "../DSP/BiquadFilter.h"
 #include "../DSP/Effects.h"
 #include "../DSP/LFO.h"
@@ -56,6 +57,9 @@ public:
     bool& getMixModeOnRef() { return mixModeOn; }
     int& getMixSrcARef() { return mixSrcA; }   // Epic 5: RingMod/FM operands
     int& getMixSrcBRef() { return mixSrcB; }
+    PitchEnvelope& getPitchEnv() { return pitchEnv; }
+    double& getPitchEnvAmountRef() { return pitchEnvAmount; }
+    bool& getPitchEnvOnRef() { return pitchEnvOn; }
 
     // Re-pluck the Karplus string at the voice's current (transposed) pitch.
     void pluckKarplus();
@@ -71,6 +75,7 @@ private:
     Oscillator oscillators[3];
     Oscillator subOsc;            // sub-oscillator: tracks OSC1 pitch, octave(s) down
     AdsrEnvelope envelope;
+    PitchEnvelope pitchEnv;   // one-shot pitch sweep (kicks/lasers/zaps)
     BiquadFilter filter;
     DistortionEffect distortion;
     WavefolderEffect wavefolder;
@@ -90,6 +95,8 @@ private:
     bool mixModeOn = false;  // false => oscillators summed additively (the "Additive" default)
     int mixSrcA = 0;         // Epic 5: RingMod/FM operand A (0..2 => OSC 1/2/3); default OSC1
     int mixSrcB = 1;         // operand B; default OSC2 (== prior fixed OSC1<->OSC2 coupling)
+    double pitchEnvAmount = 0.0;  // semitones at full envelope (bipolar); 0 => no pitch sweep
+    bool   pitchEnvOn = false;    // false => pitch envelope bypassed
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

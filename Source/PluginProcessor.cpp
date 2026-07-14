@@ -167,6 +167,11 @@ void SynthyProcessor::randomize()
     set(ID::subLevel,     0.3f + rng.nextFloat() * 0.4f);                 // 0.3..0.7
     set(ID::subOctave,    (float) rng.nextInt(juce::Range<int>(0, 2)));   // -1/-2 only
 
+    // Pitch envelope: keep the On/Off random but rein in the amount so random patches
+    // don't warble wildly on every note (a subtle ±6-semitone sweep at most).
+    set(ID::pitchEnvAmount, -6.0f + rng.nextFloat() * 12.0f);             // -6..+6 semitones
+    set(ID::pitchEnvTime,   0.05f + rng.nextFloat() * 0.35f);             // 0.05..0.4 s
+
     // Restore the global settings the dice roll overwrote (see snapshot above).
     set(ID::stereoOn,    keepStereoOn);
     set(ID::stereoWidth, keepStereoWidth);
@@ -323,6 +328,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
                                      voice->getAdsrOnRef(), voice->getMixModeOnRef(),
                                      voice->getMixSrcARef(), voice->getMixSrcBRef(),
+                                     voice->getPitchEnv(), voice->getPitchEnvAmountRef(),
+                                     voice->getPitchEnvOnRef(),
                                      lfoRateHz, delayTimeSec);
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
