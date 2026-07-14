@@ -292,7 +292,7 @@ namespace Parameters
 
         // Noise
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::noiseOn, 1), "Noise On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::noiseType, 1), "Noise Type", juce::StringArray{"White", "Pink"}, 0));
+        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::noiseType, 1), "Noise Type", juce::StringArray{"White", "Pink", "Brown", "Blue"}, 0));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::noiseAmp, 1), "Noise Amount", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
         // Karplus-Strong
