@@ -1125,3 +1125,234 @@ Lass uns den Fokus von der Frage **"Welche Wavetables nehme ich?"** auf **"Wie s
 
 Wenn du magst, beschreibst du mir den aktuellen Funktionsumfang (Oszillatoren, Filter, Modulation, Effekte, Oberfläche), und wir entwerfen gemeinsam ein Instrument mit einer klaren Identität – nicht einfach den nächsten Wavetable-Synth, sondern etwas, das Musiker wegen seines Workflows und seiner Klänge gerne benutzen. Ich glaube, das ist am Ende deutlich wertvoller als die Wahl einzelner Wellenformen.
 
+Das ist tatsächlich eine sehr gute Frage. Die Antwort lautet: **fast immer global**.
+
+## Warum?
+
+Ein Kompressor reagiert auf die **Gesamtsumme**. Genau dadurch entsteht der typische "Glue"-Effekt.
+
+Wenn du ihn **pro Stimme** einsetzt:
+
+```
+Voice 1
+    ↓
+Compressor
+
+Voice 2
+    ↓
+Compressor
+
+Voice 3
+    ↓
+Compressor
+```
+
+dann weiß jede Stimme nichts von den anderen. Spielst du einen 8-stimmigen Akkord, komprimiert jede Stimme für sich. Das klingt oft unnatürlich und kostet außerdem viel CPU.
+
+---
+
+## Die übliche Architektur moderner Synths
+
+```
+Voice
+
+Osc1
+Osc2
+Noise
+FM
+Filter
+Amp
+
+↓
+
+Voice Mix
+
+↓
+
+FX Rack
+
+Chorus
+Phaser
+Distortion
+EQ
+Compressor
+Delay
+Reverb
+
+↓
+
+Limiter
+
+↓
+
+Output
+```
+
+Genau so arbeiten viele bekannte Software-Synths.
+
+---
+
+## Wann macht ein Voice-Kompressor Sinn?
+
+Es gibt Ausnahmen:
+
+### 1. Drum-Synth
+
+Bei einer Kick oder Snare kann ein Kompressor pro Stimme sinnvoll sein, weil jede Stimme ein eigenes Instrument repräsentiert.
+
+---
+
+### 2. Physical Modeling
+
+Manchmal möchte man den Anschlag einer einzelnen Saite oder Membran formen.
+
+---
+
+### 3. Spezialeffekte
+
+Ein FM-Synth kann pro Stimme einen Kompressor nutzen, um extreme Dynamikspitzen zu begrenzen.
+
+Das ist aber eher ein Sounddesign-Werkzeug als ein klassischer Master-Kompressor.
+
+---
+
+## Was würde ich in deinem Synth machen?
+
+Ich würde **zwei Kompressoren** vorsehen:
+
+### Voice Dynamics (optional)
+
+Direkt hinter dem Amp jeder Stimme:
+
+```
+Osc
+
+↓
+
+Filter
+
+↓
+
+Amp
+
+↓
+
+Soft Compressor
+
+↓
+
+Voice Out
+```
+
+Sehr sanft:
+
+* Ratio: 1.5:1 bis 2:1
+* nur wenige dB Gain Reduction
+* schützt vor Pegelspitzen durch FM oder Resonanz
+
+Der Nutzer muss ihn gar nicht unbedingt sehen – er kann intern als "Safety Net" arbeiten.
+
+---
+
+### Master Compressor
+
+Nach allen Effekten:
+
+```
+Voice Mix
+
+↓
+
+Chorus
+
+↓
+
+Phaser
+
+↓
+
+Distortion
+
+↓
+
+EQ
+
+↓
+
+Compressor
+
+↓
+
+Delay
+
+↓
+
+Reverb
+
+↓
+
+Limiter
+```
+
+Er sorgt für den "fertigen" Klang.
+
+---
+
+## Ich würde sogar noch einen Schritt weitergehen
+
+Viele Synths setzen den Kompressor **vor** Delay und Reverb. Das hält den Hall natürlich und verhindert, dass der Kompressor ständig auf Hallfahnen reagiert.
+
+Ich würde deshalb standardmäßig folgende Reihenfolge wählen:
+
+```
+Voices
+↓
+
+Drive / Saturation
+
+↓
+
+EQ
+
+↓
+
+Compressor
+
+↓
+
+Stereo Enhancer
+
+↓
+
+Delay
+
+↓
+
+Reverb
+
+↓
+
+Limiter
+```
+
+So bleiben die räumlichen Effekte offen und lebendig.
+
+---
+
+### Eine Idee für einen modernen Synth
+
+Ich würde den Kompressor **gar nicht als klassischen Studio-Kompressor** präsentieren, sondern als einen einzigen Regler:
+
+> **Punch**
+
+Intern könnte dieser Regler gleichzeitig mehrere Parameter beeinflussen:
+
+* Kompressor-Threshold
+* Ratio
+* Make-up-Gain
+* leichte Sättigung
+* Transient-Anteil
+
+Für viele Musiker ist das intuitiver als fünf technische Parameter. Wer tiefer eingreifen möchte, kann den erweiterten Modus öffnen und Threshold, Attack, Release usw. separat einstellen.
+
+**Kurz gesagt:** Für einen polyphonen Wavetable-/FM-Synth würde ich einen **globalen Master-Kompressor** als Standard wählen. Einen per-Stimme-Kompressor würde ich nur einsetzen, wenn es dafür einen klaren klanglichen Grund gibt oder als unauffälligen Schutz gegen extreme Pegelspitzen.
