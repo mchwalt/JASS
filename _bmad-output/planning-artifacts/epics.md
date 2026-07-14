@@ -51,6 +51,10 @@ _Epic 7 — UI Polish (added 2026-07-12):_
 FR24: Module size classes are tightened so each module's footprint fits its actual control count — no module is unnecessarily large/wide — while honouring the size-class rules (AD-2/AD-3): rotaries keep their minimum diameter, combos keep enough width, single-control modules use the smallest class, and the uniform header anatomy (title · info · reset · enable) is unchanged. OSC 1/2/3 stay at the 3-per-row width. UI-only; no audio/param/`.synthy` impact.
 FR25: The rack grid is refined from 12 to 24 columns and the size classes are renamed to their grid footprint (`W{cols}H{rows}`, e.g. `W8H1`) instead of T-shirt sizes — giving the finer granularity needed to size small modules tightly and making the grid maths explicit. Visually neutral (each old class maps to the doubled column count); enables FR24.
 
+_Epic 8 — Modulation Matrix (added 2026-07-14):_
+FR26: Modulation is routed through a **matrix of `{source, target, amount}` slots** instead of a single hard-wired source→target. Multiple slots may target the same destination; their bipolar amounts **sum** and are applied **once** around the captured base value, reusing the existing per-target application curves/clamps. Source vocabulary v1: LFO 1, Envelope (ADSR), Velocity. Target vocabulary v1 = the seven currently-modulatable destinations (Pitch, Amplitude, Filter Cutoff, Filter Resonance, WT Position, Formant Vowel, Wavefold Drive). Both vocabularies are append-only (LFO 2–4, Macros, Voice-Random, Evolution, Pan, FM-Amount… are later stories). The change replaces the single-target if/else apply in `SynthVoice` and the single-target mod-ring system; it is the enabler for macros, per-voice random, an evolution module, and additional LFOs. Second sanctioned DSP change; kept surgical (engine + slots + the MOD MATRIX module + ring generalization). Default (no active slots) is audibly identical to before.
+FR27: The matrix persists **append-only, interop-safe**: N fixed slots as appended APVTS params (`modSlot{n}Source/Target/Amount` + `modMatrixOn`), serialized to `.synthy` as appended fields and to DAW state via APVTS; **no `kFormatVersion` bump**, no existing ID renamed/reordered. A preset lacking them (older build or the C# app) loads with all slots Off / matrix on (missing ⇒ default), so old presets and C# are unaffected. The existing LFO's built-in TARGET/DEPTH continue to work as an implicit routing on the same engine (zero-regression back-compat).
+
 ### NonFunctional Requirements
 
 NFR1: Maintainability — no module defines its own `resized()` geometry; layout is data-driven via the framework. Primary engineering win and a success gate.
@@ -119,6 +123,8 @@ FR22: Epic 6 — per-module online help (header info icon → movable descriptio
 FR23: Epic 6 — multi-language help (EN/DE) with a header language selector
 FR24: Epic 7 — tighten module size classes to fit control counts (UI polish)
 FR25: Epic 7 — finer 24-column grid + column-based size-class names (enabler)
+FR26: Epic 8 — accumulating modulation matrix (source→target slots, sum-per-target) replacing the single-target apply
+FR27: Epic 8 — append-only, interop-safe matrix persistence + implicit legacy-LFO routing (zero regression)
 
 ## Epic List
 
@@ -152,6 +158,10 @@ Help players learn what each module does without a manual: an optional per-modul
 ### Epic 7: UI Polish
 Tighten module sizing so each module's footprint matches its real control count. Done in two steps: **7.1** refines the grid 12→24 columns and renames the size classes to their column footprint (`W{cols}H{rows}`) — the enabler that makes tight small widths possible and the maths explicit (visually neutral); **7.2** assigns the tighter classes module by module (with the user's eye), incl. STEREO and the MASTER header-title fix. Data-driven size-class table (AD-2), rotary-minimum (AD-3), combo-width and single-control rules honoured; uniform header anatomy kept. UI-only; no audio/DSP/param/`.synthy` change.
 **FRs covered:** FR24, FR25.
+
+### Epic 8: Modulation Matrix
+Give JASS the "movement layer" (`docs/JASS_Ideen_Merge.md` §2): replace the single hard-wired source→target modulation with an **accumulating matrix** of `{source, target, amount}` slots. 8.1 builds the engine (decouple source from target, sum per target, apply once) + the source set (LFO 1, Envelope, Velocity) + the seven existing targets + N generic slots + the MOD MATRIX module + generalized mod rings + append-only persistence — with the existing LFO folded in as an implicit routing so the default is byte-identical. This is the **foundation** that makes the rest of the roadmap cheap: later stories add LFO 2–4, Macros + A/B morph, a Per-Voice-Random/Drift source, an Evolution module, and new targets (Pan, FM-Amount, FX mixes) — each just "another source/target on the matrix". Answers the 2026-07-14 LFO question (multiply vs. extend): neither — sources become value providers on the matrix. Second sanctioned DSP change, kept surgical.
+**FRs covered:** FR26, FR27.
 
 ## Epic 1: Rack Foundation & Generator Modules
 
@@ -509,3 +519,26 @@ so that the rack reads tight and balanced — as densely packed as the OSC modul
 **And** it is UI-only (no param/APVTS/DSP/`.synthy`), verified per module in the running app: balanced, controls usable/readable, no truncation or grid-boundary breach.
 
 _(Sizing is a judgement call confirmed by eye — the user drives the per-module target widths. See `7-2-module-size-tuning.md`.)_
+
+## Epic 8: Modulation Matrix
+
+Replace the single hard-wired source→target modulation with an accumulating `{source, target, amount}` matrix — the "movement layer" that unlocks macros, per-voice random, an evolution module, and additional LFOs. The refactor a 2nd LFO would force (accumulate per target, decouple source from target) IS the matrix, so it is built once. Second sanctioned DSP change; surgical (engine + slots + MOD MATRIX module + ring generalization + append-only persistence). Verification = clean build + the running app; the default patch (no active slots + the folded-in legacy LFO) must be audibly identical to before.
+
+### Story 8.1: Modulation Matrix — accumulating source→target routing engine
+
+As a JASS sound designer,
+I want a modulation matrix where any source can route to any target with its own amount and multiple sources can stack on one target,
+so that JASS gains the movement layer and macros / per-voice random / evolution / more LFOs become cheap follow-ons.
+
+**Acceptance Criteria:**
+
+**Given** the current single-target if/else apply (`SynthVoice.cpp:116-141,188-189`) and single-target mod rings
+**When** the matrix engine is introduced
+**Then** modulation is routed as `{source, target, amount}` slots whose bipolar amounts **sum per target** and are applied **once** around the captured base value, reusing today's exact per-target curves/clamps — and two slots on the same target (e.g. LFO 1 → Cutoff **and** Envelope → Cutoff) both audibly contribute (impossible today)
+**And** source vocabulary v1 = {LFO 1, Envelope, Velocity}; target vocabulary v1 = the seven existing destinations; both append-only
+**And** 4 fixed slots (decision 2026-07-14) are appended APVTS params (`modSlot{n}Source/Target/Amount` + `modMatrixOn`), persisted append-only to `.synthy` + DAW state, no `kFormatVersion` bump, missing ⇒ Off/on (old presets + C# unaffected); RANDOM leaves the matrix untouched in v1
+**And** the existing LFO's TARGET/DEPTH keep working as an **implicit routing** on the same engine, so the default patch is audibly identical (zero regression)
+**And** a MOD MATRIX rack module (MODULATION zone) lists the slots (Source combo · Target combo · bipolar Amount knob) with the uniform header + enable + info + reset, and the mod rings light **every** knob whose target currently receives (periodic-source) modulation, not just one
+**And** it is RT-safe (no alloc/lock in the callback; fixed-size per-voice slot array), builds clean, and is verified by ear per the story's test list.
+
+_See `_bmad-output/implementation-artifacts/8-1-modulation-matrix.md` for full dev context, the exact apply-block to replace, and the Open Design Questions (LFO-target keep-vs-fold, slot count, source set, RANDOM handling, module-vs-panel presentation)._
