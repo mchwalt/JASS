@@ -705,7 +705,7 @@ void SynthyEditor::buildRack()
     add(Rack::Zone::Generators, SizeClass::W3H1, ModuleType::Generator, "SUB", P::subOn,
         { C(P::subWave, "WAVE", { "Sine", "Square" }), K(P::subLevel, "LEVEL") });
     add(Rack::Zone::Generators, SizeClass::W3H1, ModuleType::Generator, "NOISE", P::noiseOn,
-        { C(P::noiseType, "TYPE", { "White", "Pink" }), K(P::noiseAmp, "AMP") });
+        { C(P::noiseType, "TYPE", { "White", "Pink", "Brown", "Blue" }), K(P::noiseAmp, "AMP") });
     add(Rack::Zone::Generators, SizeClass::W6H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
