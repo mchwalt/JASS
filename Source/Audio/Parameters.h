@@ -96,6 +96,14 @@ namespace Parameters
         constexpr const char* stereoWidth = "stereoWidth";
         constexpr const char* stereoTime  = "stereoTime";
 
+        // Master-bus compressor (append-only)
+        constexpr const char* compOn        = "compOn";
+        constexpr const char* compThreshold = "compThreshold";   // dB
+        constexpr const char* compRatio     = "compRatio";       // 1..20
+        constexpr const char* compAttack    = "compAttack";      // ms
+        constexpr const char* compRelease   = "compRelease";     // ms
+        constexpr const char* compMakeup    = "compMakeup";      // dB
+
         // Sub oscillator (tracks OSC 1 pitch, octave(s) down)
         constexpr const char* subOn     = "subOn";
         constexpr const char* subWave   = "subWave";
@@ -375,6 +383,14 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::pitchEnvOn, 1), "Pitch Env On", false));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvAmount, 1), "Pitch Env Amount", juce::NormalisableRange<float>(-48.0f, 48.0f, 0.1f), 0.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvTime, 1), "Pitch Env Time", juce::NormalisableRange<float>(0.005f, 2.0f, 0.001f, 0.4f), 0.3f));
+
+        // Master-bus compressor (append-only; default off => existing presets unchanged)
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::compOn, 1), "Comp On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compThreshold, 1), "Comp Threshold", juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -18.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compRatio, 1), "Comp Ratio", juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f, 0.5f), 2.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compAttack, 1), "Comp Attack", juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.4f), 10.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compRelease, 1), "Comp Release", juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.4f), 120.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compMakeup, 1), "Comp Makeup", juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 0.0f));
 
         return { params.begin(), params.end() };
     }

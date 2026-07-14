@@ -650,6 +650,10 @@ void SynthyEditor::buildRack()
     // Stereo becomes a normal module whose Enable IS stereoOn (no special-case header
     // chrome); Master is the new XS class (a single knob). Demonstrates "everything is a
     // module" before we formalise FR14 / the XS size class via correct-course.
+    // COMPRESSOR: master-bus glue (runs on the summed mix in processBlock). id "compressor".
+    add(Rack::Zone::MasterBus, SizeClass::W8H1, ModuleType::Processor, "COMPRESSOR", P::compOn,
+        { K(P::compThreshold, "THRESH"), K(P::compRatio, "RATIO"), K(P::compAttack, "ATK"),
+          K(P::compRelease, "REL"), K(P::compMakeup, "GAIN") });
     add(Rack::Zone::MasterBus, SizeClass::W3H1, ModuleType::Processor, "STEREO", P::stereoOn,
         { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
     add(Rack::Zone::MasterBus, SizeClass::W3H1, ModuleType::Processor, "MASTER", P::masterOn,
