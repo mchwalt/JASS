@@ -4,6 +4,7 @@
 #include "../DSP/BiquadFilter.h"
 #include "../DSP/Effects.h"
 #include "../DSP/AdsrEnvelope.h"
+#include "../DSP/PitchEnvelope.h"
 #include "../DSP/LFO.h"
 #include "../DSP/NoiseGenerator.h"
 #include "../DSP/KarplusStrong.h"
@@ -84,6 +85,11 @@ namespace Parameters
         constexpr const char* glideOn   = "glideOn";
         constexpr const char* glideTime = "glideTime";
         constexpr const char* glideMode = "glideMode";   // 0=Mono (one voice, distinct glide), 1=Poly (per-voice)
+
+        // Pitch envelope (one-shot pitch sweep; append-only)
+        constexpr const char* pitchEnvOn     = "pitchEnvOn";
+        constexpr const char* pitchEnvAmount = "pitchEnvAmount";   // semitones (bipolar)
+        constexpr const char* pitchEnvTime   = "pitchEnvTime";     // decay seconds
 
         // Stereo width (pseudo-stereo master stage; mono engine -> stereo)
         constexpr const char* stereoOn    = "stereoOn";
@@ -365,6 +371,11 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::keyboardOn, 1), "Keyboard On", true));
 
+        // Pitch envelope (append-only; default off => existing presets unchanged)
+        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::pitchEnvOn, 1), "Pitch Env On", false));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvAmount, 1), "Pitch Env Amount", juce::NormalisableRange<float>(-48.0f, 48.0f, 0.1f), 0.0f));
+        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvTime, 1), "Pitch Env Time", juce::NormalisableRange<float>(0.005f, 2.0f, 0.001f, 0.4f), 0.3f));
+
         return { params.begin(), params.end() };
     }
 
@@ -381,6 +392,7 @@ namespace Parameters
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
                               bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB,
+                              PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
                               double lfoRateHz, double delayTimeSec)
     {
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
@@ -389,6 +401,12 @@ namespace Parameters
         // Behavioural gates (Story 2.4): ADSR off => bypass envelope; Mix-Mode off => additive.
         adsrOn    = *apvts.getRawParameterValue(ID::adsrOn)    > 0.5f;
         mixModeOn = *apvts.getRawParameterValue(ID::mixModeOn) > 0.5f;
+
+        // Pitch envelope (one-shot pitch sweep). Amount/on are read by the voice per sample;
+        // the decay time lives on the envelope object.
+        pitchEnvOn     = *apvts.getRawParameterValue(ID::pitchEnvOn) > 0.5f;
+        pitchEnvAmount = *apvts.getRawParameterValue(ID::pitchEnvAmount);
+        pitchEnv.setDecay(*apvts.getRawParameterValue(ID::pitchEnvTime));
 
         for (int o = 0; o < 3; ++o)
         {

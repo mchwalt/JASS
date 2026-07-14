@@ -747,6 +747,10 @@ void SynthyEditor::buildRack()
     // GLIDE / portamento: MODE = Mono (distinct classic glide) / Poly (per-voice), TIME = duration.
     add(Rack::Zone::Modulation, SizeClass::W3H1, ModuleType::Modulator, "GLIDE", P::glideOn,
         { C(P::glideMode, "MODE", { "Mono", "Poly" }), K(P::glideTime, "TIME") });
+    // PITCH ENV: one-shot pitch sweep at note-on. AMOUNT = ± semitones (down = kick/zap,
+    // up = laser/riser), TIME = decay. id "pitchenv".
+    add(Rack::Zone::Modulation, SizeClass::W3H1, ModuleType::Modulator, "PITCH ENV", P::pitchEnvOn,
+        { K(P::pitchEnvAmount, "AMOUNT"), K(P::pitchEnvTime, "TIME") });
 
     // ---- PROCESSING ----
     // FILTER: TYPE combo + CUTOFF + RESO (= 4 slots, like DISTORTION) → M (4 cols) so the

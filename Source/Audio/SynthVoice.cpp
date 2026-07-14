@@ -14,6 +14,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
         osc.setSampleRate(sampleRate);
     subOsc.setSampleRate(sampleRate);
     envelope.setSampleRate(sampleRate);
+    pitchEnv.setSampleRate(sampleRate);
     filter.setSampleRate(sampleRate);
     formant.prepare(sampleRate);
     lfo.setSampleRate(sampleRate);
@@ -59,6 +60,7 @@ void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
     if (pluckEnabled)
         pluckKarplus();   // pluck at the transposed pitch (skipped for the drone)
 
+    pitchEnv.trigger();   // (re)start the one-shot pitch sweep at note-on
     envelope.gateOn();
     noteOn = true;
 }
@@ -120,10 +122,15 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         const double freqFactor = (lfoTarget == LFOTarget::Frequency)
                                       ? std::pow(2.0, lfoValue)   // ±1 octave at full depth
                                       : 1.0;
+        // Pitch envelope: one-shot 1→0 sweep, applied as a pitch multiplier to all
+        // pitched generators (osc/wavetable/sub; the plucked Karplus string is excluded).
+        const double pitchEnvMul = pitchEnvOn
+                                       ? std::pow(2.0, (pitchEnvAmount / 12.0) * pitchEnv.process())
+                                       : 1.0;
         for (int i = 0; i < 3; ++i)
-            oscillators[i].setFrequency(baseFrequencies[i] * ratio * freqFactor);
-        wavetable.setFrequency(baseWtFreq * ratio);
-        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul);
+            oscillators[i].setFrequency(baseFrequencies[i] * ratio * freqFactor * pitchEnvMul);
+        wavetable.setFrequency(baseWtFreq * ratio * pitchEnvMul);
+        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul * pitchEnvMul);
 
         if (lfoTarget == LFOTarget::FilterCutoff)
         {
