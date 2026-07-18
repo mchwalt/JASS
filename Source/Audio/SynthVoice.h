@@ -10,6 +10,7 @@
 #include "../DSP/NoiseGenerator.h"
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
+#include "../DSP/ModMatrix.h"
 #include "SynthSound.h"
 
 // Poly-glide (portamento): the processor computes, per block, the transpose ratio each
@@ -46,7 +47,7 @@ public:
     ChorusEffect& getChorus() { return chorus; }
     ReverbEffect& getReverb() { return reverb; }
     FormantFilter& getFormant() { return formant; }
-    LFO& getLFO() { return lfo; }
+    LFO* getLFOs() { return lfos; }
     NoiseGenerator& getNoise() { return noise; }
     KarplusStrong& getKarplus() { return karplus; }
     MixMode& getMixMode() { return mixMode; }
@@ -60,6 +61,9 @@ public:
     PitchEnvelope& getPitchEnv() { return pitchEnv; }
     double& getPitchEnvAmountRef() { return pitchEnvAmount; }
     bool& getPitchEnvOnRef() { return pitchEnvOn; }
+    // Modulation matrix (Story 8.1): the processor fills these per block from the params.
+    ModSlot* getModSlots() { return modSlots; }
+    bool& getModMatrixOnRef() { return modMatrixOn; }
 
     // Re-pluck the Karplus string at the voice's current (transposed) pitch.
     void pluckKarplus();
@@ -85,7 +89,7 @@ private:
     ChorusEffect chorus;
     ReverbEffect reverb;
     FormantFilter formant;   // vowel filter, applied right after the main filter
-    LFO lfo;
+    LFO lfos[kNumLFOs];   // indexed LFOs (each: own module + target + a matrix source)
     NoiseGenerator noise;
     KarplusStrong karplus;
     WavetableOscillator wavetable;
@@ -97,6 +101,13 @@ private:
     int mixSrcB = 1;         // operand B; default OSC2 (== prior fixed OSC1<->OSC2 coupling)
     double pitchEnvAmount = 0.0;  // semitones at full envelope (bipolar); 0 => no pitch sweep
     bool   pitchEnvOn = false;    // false => pitch envelope bypassed
+
+    // Modulation matrix (Story 8.1): N routing slots + master enable, filled per block by
+    // the processor (Parameters::applyToVoice). noteVelocity is the Velocity source (0..1),
+    // captured once at note-on and constant across the note.
+    ModSlot modSlots[ModMatrixConfig::kNumSlots];
+    bool    modMatrixOn = true;    // false => explicit slots ignored (implicit LFO routing still applies)
+    float   noteVelocity = 1.0f;   // MIDI velocity 0..1 (Velocity mod source)
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

@@ -425,15 +425,16 @@ namespace rack
         if (off != dimmed) { dimmed = off; repaint(); }
     }
 
-    void ModuleFrame::updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio)
+    void ModuleFrame::updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio)
     {
         const bool en = moduleEnabled();
 
-        // Modulation rings: only the enabled module whose knob matches the active LFO
-        // target shows the moving ring; every other ring knob is driven to 0. The
+        // Modulation rings (Story 8.1): every knob whose modTarget currently receives
+        // periodic (LFO) modulation shows the moving ring, driven by that target's summed
+        // amount; the rest are driven to 0. A disabled module shows no rings. The
         // SynthySlider itself repaints only on a meaningful change (NFR5).
         for (auto& rk : ringKnobs)
-            rk.slider->setModAmount ((lfoOn && en && rk.target == activeTarget) ? lfoValue : 0.0f);
+            rk.slider->setModAmount (en ? ringByTarget[(size_t) rk.target] : 0.0f);
 
         // Display transforms: show base × ratio. Guard (AD-4): a disabled module or a
         // non-positive ratio (no note sounding) => identity, so we never divide a stale

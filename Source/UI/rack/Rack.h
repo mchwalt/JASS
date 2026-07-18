@@ -42,7 +42,7 @@ namespace rack
         // Fan the live feed out to every frame (AD-8): the single editor timer reads the
         // processor's LFO atomic + active target + played ratio and calls this once per
         // tick. Each frame gates rings by its own enable and refreshes its transform knobs.
-        void updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio);
+        void updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio);
 
         // Find a module frame by its descriptor id (nullptr if none). Lets the editor reach a
         // specific module — e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button.

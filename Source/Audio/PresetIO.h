@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "Parameters.h"
+#include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 
 // Reads/writes the shared ".synthy" JSON preset format used by both the C#
 // and the C++ Synthy. Field names and enum strings match the C# Preset class
@@ -22,6 +23,8 @@ namespace PresetIO
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
     inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
     inline const juce::StringArray kGlideMode   { "Mono", "Poly" };        // Feature 4 (append-only; C# ignores)
+    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2" };   // Epic 8 (append-only; C# ignores)
+    // Mod-matrix TARGET reuses kLfoTarget (identical 0=Off..7 vocabulary), so no separate array.
 
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
@@ -50,6 +53,24 @@ namespace PresetIO
     inline juce::File liveStateFile()
     {
         return synthyFolder().getChildFile("LiveState.synthy");
+    }
+
+    // First-run seeding: write each SHIPPED demo preset (embedded from DemoPresets/*.synthy via
+    // juce_add_binary_data) into the user's Presets folder if it isn't already there. Idempotent —
+    // an existing file (incl. one the user edited) is never overwritten. Call once at startup.
+    inline void seedDemoPresets()
+    {
+        auto dir = presetsFolder();
+        for (int i = 0; i < DemoPresets::namedResourceListSize; ++i)
+        {
+            int size = 0;
+            const char* data = DemoPresets::getNamedResource(DemoPresets::namedResourceList[i], size);
+            if (data == nullptr || size <= 0)
+                continue;
+            auto dest = dir.getChildFile(DemoPresets::getNamedResourceOriginalFilename(DemoPresets::namedResourceList[i]));
+            if (! dest.existsAsFile())
+                dest.replaceWithData(data, (size_t) size);
+        }
     }
 
     namespace detail
@@ -195,6 +216,16 @@ namespace PresetIO
         root->setProperty("CompRelease",   rawF(a, ID::compRelease));
         root->setProperty("CompMakeup",    rawF(a, ID::compMakeup));
 
+        // Modulation matrix (Epic 8; append-only; C# ignores; missing => Off/0/on).
+        root->setProperty("ModMatrixOn", rawB(a, ID::modMatrixOn));
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            const juce::String p = "ModSlot" + juce::String(n);
+            root->setProperty(p + "Source", rawChoice(a, ID::modSlotSource(n), kModSource));
+            root->setProperty(p + "Target", rawChoice(a, ID::modSlotTarget(n), kLfoTarget));   // canonical 0=Off..7
+            root->setProperty(p + "Amount", rawF(a, ID::modSlotAmount(n)));
+        }
+
         root->setProperty("ArpEnabled", rawB(a, ID::arpOn));
         root->setProperty("ArpRate",    rawF(a, ID::arpRate));
         root->setProperty("ArpMode",    rawChoice(a, ID::arpMode, kArpMode));
@@ -209,11 +240,16 @@ namespace PresetIO
         root->setProperty("PitchEnvAmount",  rawF(a, ID::pitchEnvAmount));
         root->setProperty("PitchEnvTime",    rawF(a, ID::pitchEnvTime));
 
-        root->setProperty("LfoWaveform", rawChoice(a, ID::lfoWave, kLfoWave));
-        root->setProperty("LfoTarget",   choiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget));
-        root->setProperty("LfoRate",     rawF(a, ID::lfoRate));
-        root->setProperty("LfoDepth",    rawF(a, ID::lfoDepth));
-        root->setProperty("LfoSyncDiv",  rawChoice(a, ID::lfoSyncDiv, SyncDivision::kNames));   // Tempo-Sync (append-only; C# ignores; missing => Free)
+        // LFOs — indexed fields Lfo1*/Lfo2*/… (one loop, like the oscillators).
+        for (int i = 1; i <= kNumLFOs; ++i)
+        {
+            const juce::String p = "Lfo" + juce::String(i);
+            root->setProperty(p + "Waveform", rawChoice(a, ID::lfoWave(i), kLfoWave));
+            root->setProperty(p + "Target",   choiceOrOff(a, ID::lfoOn(i), ID::lfoTarget(i), kLfoTarget));
+            root->setProperty(p + "Rate",     rawF(a, ID::lfoRate(i)));
+            root->setProperty(p + "Depth",    rawF(a, ID::lfoDepth(i)));
+            root->setProperty(p + "SyncDiv",  rawChoice(a, ID::lfoSyncDiv(i), SyncDivision::kNames));
+        }
 
         root->setProperty("DelayEnabled",  rawB(a, ID::delayOn));
         root->setProperty("DelayTime",     rawF(a, ID::delayTime));
@@ -368,6 +404,16 @@ namespace PresetIO
         setRaw(a, ID::compRelease,   (float) jnum(v, "CompRelease",   rawF(a, ID::compRelease)));
         setRaw(a, ID::compMakeup,    (float) jnum(v, "CompMakeup",    rawF(a, ID::compMakeup)));
 
+        // Modulation matrix (Epic 8; append-only; missing => Off/0, ModMatrixOn missing => on).
+        setRaw(a, ID::modMatrixOn, jbool(v, "ModMatrixOn", rawB(a, ID::modMatrixOn)) ? 1.f : 0.f);
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            const juce::String p = "ModSlot" + juce::String(n);
+            setChoice(a, ID::modSlotSource(n), kModSource, v[juce::Identifier(p + "Source")], rawI(a, ID::modSlotSource(n)));
+            setChoice(a, ID::modSlotTarget(n), kLfoTarget, v[juce::Identifier(p + "Target")], rawI(a, ID::modSlotTarget(n)));
+            setRaw   (a, ID::modSlotAmount(n), (float) jnum(v, (p + "Amount").toRawUTF8(), rawF(a, ID::modSlotAmount(n))));
+        }
+
         setRaw   (a, ID::arpOn,      jbool(v, "ArpEnabled", rawB(a, ID::arpOn)) ? 1.f : 0.f);
         setRaw   (a, ID::arpRate,    (float) jnum(v, "ArpRate", rawF(a, ID::arpRate)));
         setChoice(a, ID::arpMode, kArpMode, v["ArpMode"], rawI(a, ID::arpMode));
@@ -382,11 +428,24 @@ namespace PresetIO
         setRaw   (a, ID::pitchEnvAmount, (float) jnum(v, "PitchEnvAmount", rawF(a, ID::pitchEnvAmount)));
         setRaw   (a, ID::pitchEnvTime,   (float) jnum(v, "PitchEnvTime",   rawF(a, ID::pitchEnvTime)));
 
-        setChoice(a, ID::lfoWave,   kLfoWave,   v["LfoWaveform"], rawI(a, ID::lfoWave));
-        setChoiceOrOff(a, ID::lfoOn, ID::lfoTarget, kLfoTarget, v["LfoTarget"]);
-        setRaw(a, ID::lfoRate,  (float) jnum(v, "LfoRate",  rawF(a, ID::lfoRate)));
-        setRaw(a, ID::lfoDepth, (float) jnum(v, "LfoDepth", rawF(a, ID::lfoDepth)));
-        setChoice(a, ID::lfoSyncDiv, SyncDivision::kNames, v["LfoSyncDiv"], rawI(a, ID::lfoSyncDiv));   // Tempo-Sync; missing => Free
+        // LFOs — indexed read-back. LFO 1 falls back to the PRE-INDEXING field names
+        // ("LfoWaveform" …) so older JASS presets and the current LiveState keep their LFO 1
+        // across the rename (C# compatibility dropped 2026-07-18).
+        for (int i = 1; i <= kNumLFOs; ++i)
+        {
+            const juce::String p = "Lfo" + juce::String(i);
+            auto pick = [&](const char* suffix, const char* legacy) -> juce::var
+            {
+                juce::var nv = v[juce::Identifier(p + suffix)];
+                if (! nv.isVoid()) return nv;
+                return (i == 1) ? v[juce::Identifier(legacy)] : juce::var();
+            };
+            setChoice(a, ID::lfoWave(i), kLfoWave, pick("Waveform", "LfoWaveform"), rawI(a, ID::lfoWave(i)));
+            setChoiceOrOff(a, ID::lfoOn(i), ID::lfoTarget(i), kLfoTarget, pick("Target", "LfoTarget"));
+            if (juce::var rv = pick("Rate",  "LfoRate");  ! rv.isVoid()) setRaw(a, ID::lfoRate(i),  (float) (double) rv);
+            if (juce::var dv = pick("Depth", "LfoDepth"); ! dv.isVoid()) setRaw(a, ID::lfoDepth(i), (float) (double) dv);
+            setChoice(a, ID::lfoSyncDiv(i), SyncDivision::kNames, pick("SyncDiv", "LfoSyncDiv"), rawI(a, ID::lfoSyncDiv(i)));
+        }
 
         setRaw(a, ID::delayOn,       jbool(v, "DelayEnabled", rawB(a, ID::delayOn)) ? 1.f : 0.f);
         setRaw(a, ID::delayTime,     (float) jnum(v, "DelayTime",     rawF(a, ID::delayTime)));

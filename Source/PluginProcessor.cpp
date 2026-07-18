@@ -11,6 +11,9 @@ SynthyProcessor::SynthyProcessor()
         synth.addVoice(new SynthVoice());
     synth.addSound(new SynthSound());
 
+    // Ship the demo presets into the user's Presets folder on first run (idempotent).
+    PresetIO::seedDemoPresets();
+
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
 
@@ -132,6 +135,18 @@ void SynthyProcessor::randomize()
     const float keepKeyboardOn  = *apvts.getRawParameterValue(ID::keyboardOn); // keyboard = input surface, not sound design
     const float keepCompOn      = *apvts.getRawParameterValue(ID::compOn);     // compressor = mastering, not sound design
 
+    // Modulation matrix (Epic 8 AC9): EXCLUDED from RANDOM in v1. Stacking random routings
+    // could pile extreme modulation onto one target and blow up the level, so leave the
+    // matrix exactly as the user set it (like the arp/glide input surfaces). Snapshot now.
+    const float keepModMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn);
+    float keepModSlot[ModMatrixConfig::kNumSlots][3];
+    for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
+    {
+        keepModSlot[n][0] = *apvts.getRawParameterValue(ID::modSlotSource(n + 1));
+        keepModSlot[n][1] = *apvts.getRawParameterValue(ID::modSlotTarget(n + 1));
+        keepModSlot[n][2] = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
+    }
+
     // Random value for every parameter...
     for (auto* p : getParameters())
         p->setValueNotifyingHost(rng.nextFloat());
@@ -182,6 +197,15 @@ void SynthyProcessor::randomize()
     set(ID::glideOn,     keepGlideOn);
     set(ID::keyboardOn,  keepKeyboardOn);
     set(ID::compOn,      keepCompOn);
+
+    // Restore the modulation matrix untouched (Epic 8 AC9; see snapshot above).
+    set(ID::modMatrixOn, keepModMatrixOn);
+    for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
+    {
+        set(ID::modSlotSource(n + 1), keepModSlot[n][0]);
+        set(ID::modSlotTarget(n + 1), keepModSlot[n][1]);
+        set(ID::modSlotAmount(n + 1), keepModSlot[n][2]);
+    }
 
     currentPresetName = "Random";
     markPresetClean();   // a fresh random patch is its own "clean" state
@@ -250,7 +274,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
     stereoWidth.prepare(sampleRate);
     compressor.prepare(sampleRate);
-    uiLfo.setSampleRate(sampleRate);
+    for (auto& l : uiLfos) l.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     arpHeldScratch.reserve(128);
 
@@ -304,10 +328,15 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (auto hostBpm = pos->getBpm())
                 syncBpm = *hostBpm;
 
-    const int lfoDiv = (int) *apvts.getRawParameterValue(Parameters::ID::lfoSyncDiv);
-    const double lfoRateHz = SyncDivision::isSynced(lfoDiv)
-                                 ? SyncDivision::lfoRateHz(syncBpm, lfoDiv)
-                                 : (double) *apvts.getRawParameterValue(Parameters::ID::lfoRate);
+    // Per-LFO effective rate (Tempo-Sync resolved once per block; Free => raw RATE knob).
+    double lfoRateHz[kNumLFOs];
+    for (int i = 0; i < kNumLFOs; ++i)
+    {
+        const int div = (int) *apvts.getRawParameterValue(Parameters::ID::lfoSyncDiv(i + 1));
+        lfoRateHz[i] = SyncDivision::isSynced(div)
+                           ? SyncDivision::lfoRateHz(syncBpm, div)
+                           : (double) *apvts.getRawParameterValue(Parameters::ID::lfoRate(i + 1));
+    }
 
     const int delayDiv = (int) *apvts.getRawParameterValue(Parameters::ID::delaySyncDiv);
     const double delayTimeSec = SyncDivision::isSynced(delayDiv)
@@ -325,7 +354,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getDelay(),
                                      voice->getChorus(), voice->getReverb(),
                                      voice->getFormant(),
-                                     voice->getLFO(), voice->getNoise(),
+                                     voice->getLFOs(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
@@ -333,6 +362,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getMixSrcARef(), voice->getMixSrcBRef(),
                                      voice->getPitchEnv(), voice->getPitchEnvAmountRef(),
                                      voice->getPitchEnvOnRef(),
+                                     voice->getModSlots(), voice->getModMatrixOnRef(),
                                      lfoRateHz, delayTimeSec);
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
@@ -486,16 +516,19 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Mirrors the patch LFO params; runs regardless of whether a note sounds.
     {
         using namespace Parameters;
-        uiLfo.setRate(lfoRateHz);   // Tempo-Sync: mirror the effective (synced or free) rate
-        uiLfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
-        uiLfo.setWaveform((LFOWaveform)(int) *apvts.getRawParameterValue(ID::lfoWave));
-        const bool lfoOn = *apvts.getRawParameterValue(ID::lfoOn) > 0.5f;
-        uiLfo.setTarget(lfoOn ? (LFOTarget)((int) *apvts.getRawParameterValue(ID::lfoTarget) + 1)
-                              : LFOTarget::Off);
-        float v = 0.0f;
-        for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
-            v = uiLfo.process();
-        lfoDisplayValue.store(v);
+        for (int li = 0; li < kNumLFOs; ++li)
+        {
+            uiLfos[li].setRate(lfoRateHz[li]);   // mirror the effective (synced or free) rate
+            uiLfos[li].setDepth(*apvts.getRawParameterValue(ID::lfoDepth(li + 1)));
+            uiLfos[li].setWaveform((LFOWaveform)(int) *apvts.getRawParameterValue(ID::lfoWave(li + 1)));
+            const bool on = *apvts.getRawParameterValue(ID::lfoOn(li + 1)) > 0.5f;
+            uiLfos[li].setTarget(on ? (LFOTarget)((int) *apvts.getRawParameterValue(ID::lfoTarget(li + 1)) + 1)
+                                    : LFOTarget::Off);
+            float v = 0.0f;
+            for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
+                v = uiLfos[li].process();
+            lfoDisplayValues[li].store(v);
+        }
     }
 
     // Capture waveform before master volume (still mono content -> the scope

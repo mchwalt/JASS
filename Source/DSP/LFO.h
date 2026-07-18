@@ -11,6 +11,10 @@ enum class LFOWaveform { Sine, Triangle, Square, Sawtooth };
 enum class LFOTarget { Off, Frequency, Amplitude, FilterCutoff,
                        WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
 
+// Number of LFOs, indexed like the oscillators (lfoOn(i), lfoRate(i) …). Grow HERE:
+// bumping this + appending a ModSource + the source-index map is all a new LFO needs.
+inline constexpr int kNumLFOs = 2;
+
 class LFO
 {
 public:

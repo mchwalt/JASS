@@ -17,7 +17,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     pitchEnv.setSampleRate(sampleRate);
     filter.setSampleRate(sampleRate);
     formant.prepare(sampleRate);
-    lfo.setSampleRate(sampleRate);
+    for (auto& l : lfos) l.setSampleRate(sampleRate);
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
     phaser.prepare(sampleRate);
@@ -26,9 +26,11 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     reverb.prepare(sampleRate);
 }
 
-void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
+void SynthVoice::startNote(int midiNoteNumber, float velocity,
                            juce::SynthesiserSound*, int)
 {
+    noteVelocity = velocity;   // Velocity mod source (Story 8.1): 0..1, constant across the note.
+
     // All generators transpose relative to C4 (note 60); the FREQ knobs define
     // the sound AT C4. Note 60 (the auto-play drone) gives ratio 1.0 = no shift.
     transposeRatio = juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber)
@@ -54,7 +56,7 @@ void SynthVoice::startNote(int midiNoteNumber, float /*velocity*/,
     for (auto& osc : oscillators)
         osc.reset();
     subOsc.reset();
-    lfo.reset();
+    for (auto& l : lfos) l.reset();
     noise.reset();
     wavetable.reset();
     if (pluckEnabled)
@@ -108,20 +110,59 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Sub-oscillator octave multiplier (constant across the block).
     const double subMul = std::pow(2.0, subOctave);
 
+    // --- Modulation matrix (Story 8.1) ---------------------------------------
+    // Which targets receive ANY routing this block: the LFO's own (implicit) target plus
+    // every active slot's target. Only these get their per-sample offset applied, so an
+    // untouched target is left exactly as applyToVoice set it — byte-identical to the old
+    // single-target behaviour when nothing (or only the legacy LFO) is routed.
+    // Each LFO's own built-in target (0 = Off .. 7 == LFOTarget index). ModSource index for
+    // each LFO (append-only order): LFO 1 -> ModSource::LFO1, LFO 2 -> ModSource::LFO2, …
+    static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2 };
+    int lfoTgt[kNumLFOs];
+    for (int i = 0; i < kNumLFOs; ++i) lfoTgt[i] = (int) lfos[i].getTarget();
+
+    std::array<bool, ModMatrixConfig::kNumTargets> tActive {};
+    for (int i = 0; i < kNumLFOs; ++i)
+        if (lfoTgt[i] > 0) tActive[(size_t) lfoTgt[i]] = true;
+    if (modMatrixOn)
+        for (const auto& s : modSlots)
+            if (s.target > 0 && s.target < ModMatrixConfig::kNumTargets && s.amount != 0.0f)
+                tActive[(size_t) s.target] = true;
+    std::array<double, ModMatrixConfig::kNumTargets> modOffset {};   // per-sample summed offsets
+
     for (int sample = 0; sample < numSamples; ++sample)
     {
         // Poly-glide: the pitch ratio glides toward the target (== target once finished /
         // when glide is off). Oscillator frequencies are (re)applied every sample so both
-        // the glide and the LFO frequency modulation take effect.
+        // the glide and the frequency modulation take effect.
         const double ratio = glideRatio.getNextValue();
 
-        // LFO modulation
-        float lfoValue = lfo.process();
-        auto lfoTarget = lfo.getTarget();
+        // Modulation sources this sample. lfo.process() advances the shared LFO ONCE (its
+        // value feeds both the implicit LFO routing and any slot whose source is LFO 1).
+        // envelope.process() advances the ADSR ONCE here and is REUSED for the amplitude
+        // gain below — it must NOT be advanced again this sample. Velocity is constant.
+        float lfoVals[kNumLFOs];
+        for (int i = 0; i < kNumLFOs; ++i) lfoVals[i] = lfos[i].process();
+        const float envValue = envelope.process();
+        // Envelope as a mod SOURCE is gated by the ENVELOPE module enable, so a source is
+        // only active when its module is on — the same rule as the LFOs (silent when off).
+        // (envValue itself still drives the amplitude gain below regardless, per Story 2.4.)
+        const float envSource = adsrOn ? envValue : 0.0f;
+        // Fill by ModSource index: Envelope + Velocity fixed, each LFO into its mapped source.
+        std::array<float, ModMatrixConfig::kNumSources> srcVals {};
+        srcVals[(size_t) ModSource::Envelope] = envSource;
+        srcVals[(size_t) ModSource::Velocity] = noteVelocity;
+        for (int i = 0; i < kNumLFOs; ++i) srcVals[(size_t) kLfoSourceIdx[i]] = lfoVals[i];
 
-        const double freqFactor = (lfoTarget == LFOTarget::Frequency)
-                                      ? std::pow(2.0, lfoValue)   // ±1 octave at full depth
-                                      : 1.0;
+        // Sum the explicit slots, then fold in each LFO's own TARGET as an implicit routing
+        // (amount 1) — so a single LFO on one target stays byte-identical to before.
+        modMatrixAccumulate(modSlots, modMatrixOn, srcVals, modOffset);
+        for (int i = 0; i < kNumLFOs; ++i)
+            if (lfoTgt[i] > 0) modOffset[(size_t) lfoTgt[i]] += lfoVals[i];
+
+        // Pitch: 2^offset octaves (offset 0 => ×1 = unchanged). Always applied — freqFactor
+        // multiplies the per-sample setFrequency that glide/pitch-env already require.
+        const double freqFactor = std::pow(2.0, modOffset[(size_t) LFOTarget::Frequency]);
         // Pitch envelope: one-shot 1→0 sweep, applied as a pitch multiplier to all
         // pitched generators (osc/wavetable/sub; the plucked Karplus string is excluded).
         const double pitchEnvMul = pitchEnvOn
@@ -132,20 +173,17 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         wavetable.setFrequency(baseWtFreq * ratio * pitchEnvMul);
         subOsc.setFrequency(baseFrequencies[0] * ratio * subMul * pitchEnvMul);
 
-        if (lfoTarget == LFOTarget::FilterCutoff)
-        {
-            // Modulate cutoff logarithmically
-            double factor = std::pow(2.0, lfoValue * 3.0); // ±3 octaves
-            filter.setCutoff(std::clamp(baseCutoff * factor, 20.0, 20000.0));
-        }
-        else if (lfoTarget == LFOTarget::WavetablePosition)
-            wavetable.setPosition(std::clamp(basePos + lfoValue * 0.5, 0.0, 1.0));
-        else if (lfoTarget == LFOTarget::FormantVowel)
-            formant.vowel = std::clamp(baseVowel + lfoValue * 0.5, 0.0, 1.0);
-        else if (lfoTarget == LFOTarget::FilterResonance)
-            filter.setResonance(std::clamp(baseReso * std::pow(2.0, lfoValue * 1.5), 0.1, 10.0));
-        else if (lfoTarget == LFOTarget::WavefolderDrive)
-            wavefolder.drive = std::clamp(baseFold + lfoValue * 0.5, 0.0, 1.0);
+        // Apply each ACTIVE target's summed offset ONCE, reusing today's exact curve+clamp.
+        if (tActive[(size_t) LFOTarget::FilterCutoff])
+            filter.setCutoff(std::clamp(baseCutoff * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterCutoff] * 3.0), 20.0, 20000.0));
+        if (tActive[(size_t) LFOTarget::WavetablePosition])
+            wavetable.setPosition(std::clamp(basePos + modOffset[(size_t) LFOTarget::WavetablePosition] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::FormantVowel])
+            formant.vowel = std::clamp(baseVowel + modOffset[(size_t) LFOTarget::FormantVowel] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::FilterResonance])
+            filter.setResonance(std::clamp(baseReso * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterResonance] * 1.5), 0.1, 10.0));
+        if (tActive[(size_t) LFOTarget::WavefolderDrive])
+            wavefolder.drive = std::clamp(baseFold + modOffset[(size_t) LFOTarget::WavefolderDrive] * 0.5, 0.0, 1.0);
 
         // Mix oscillators according to the mix mode. When Mix-Mode is disabled (Story 2.4)
         // the OSCs are summed plainly, regardless of the selected mode.
@@ -191,18 +229,20 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // so the filter can tame the harsh upper harmonics it generates.
         mixedSample = wavefolder.process(mixedSample);
 
-        // Apply amplitude LFO (tremolo)
-        if (lfoTarget == LFOTarget::Amplitude)
-            mixedSample *= (1.0f + lfoValue) * 0.5f; // map -1..+1 to 0..1
+        // Apply amplitude modulation (tremolo). Same (1+v)*0.5 map as before; only when
+        // Amplitude is an active target, so an unrouted patch keeps full gain (no ×0.5).
+        if (tActive[(size_t) LFOTarget::Amplitude])
+            mixedSample *= (1.0f + (float) modOffset[(size_t) LFOTarget::Amplitude]) * 0.5f;
 
         // Filter (main biquad), then the vowel/formant filter.
         mixedSample = filter.process(mixedSample);
         mixedSample = formant.process(mixedSample);
 
-        // Envelope. Always advance the ADSR state (so toggling mid-note doesn't glitch);
-        // when disabled (Story 2.4) bypass it with constant gain 1.0.
-        const float envGain = envelope.process();
-        mixedSample *= (adsrOn ? envGain : 1.0f);
+        // Envelope gain. The ADSR was already advanced ONCE at the top of the loop (envValue,
+        // also a mod source); reuse it here — do not advance twice. When disabled (Story 2.4)
+        // bypass it with constant gain 1.0. (The state still advanced, so toggling mid-note
+        // doesn't glitch, exactly as before.)
+        mixedSample *= (adsrOn ? envValue : 1.0f);
 
         // Effects
         mixedSample = distortion.process(mixedSample);

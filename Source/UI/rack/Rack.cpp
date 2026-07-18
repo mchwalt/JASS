@@ -419,10 +419,10 @@ namespace rack
         layout (getWidth(), /*apply*/ true);
     }
 
-    void Rack::updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio)
+    void Rack::updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio)
     {
         for (auto* f : frames)
-            f->updateLiveFeed (lfoOn, activeTarget, lfoValue, playedRatio);
+            f->updateLiveFeed (ringByTarget, playedRatio);
     }
 
     ModuleFrame* Rack::moduleById (const juce::String& id)

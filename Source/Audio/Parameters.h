@@ -10,6 +10,7 @@
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/SyncDivision.h"
+#include "../DSP/ModMatrix.h"
 
 namespace Parameters
 {
@@ -123,13 +124,14 @@ namespace Parameters
         constexpr const char* chorusDepth = "chorusDepth";
         constexpr const char* chorusMix   = "chorusMix";
 
-        // LFO
-        constexpr const char* lfoOn     = "lfoOn";
-        constexpr const char* lfoWave   = "lfoWave";
-        constexpr const char* lfoRate   = "lfoRate";
-        constexpr const char* lfoDepth  = "lfoDepth";
-        constexpr const char* lfoTarget = "lfoTarget";
-        constexpr const char* lfoSyncDiv = "lfoSyncDiv";   // Tempo-Sync: 0=Free, else note division (append-only)
+        // LFO — indexed 1..kNumLFOs, exactly like the oscillators (oscOn(i) …). lfoOn(1)="lfo1On".
+        // A new LFO = bump kNumLFOs (LFO.h) + append a ModSource; every layer loops over these.
+        inline juce::String lfoOn(int i)      { return "lfo" + juce::String(i) + "On"; }
+        inline juce::String lfoWave(int i)    { return "lfo" + juce::String(i) + "Wave"; }
+        inline juce::String lfoRate(int i)    { return "lfo" + juce::String(i) + "Rate"; }
+        inline juce::String lfoDepth(int i)   { return "lfo" + juce::String(i) + "Depth"; }
+        inline juce::String lfoTarget(int i)  { return "lfo" + juce::String(i) + "Target"; }
+        inline juce::String lfoSyncDiv(int i) { return "lfo" + juce::String(i) + "SyncDiv"; }
 
         // Reverb
         constexpr const char* reverbOn   = "reverbOn";
@@ -180,6 +182,13 @@ namespace Parameters
         // drives only the module's dim state; the keyboard stays playable) — reserved so the
         // module carries a working enabler for a future use. Append-only, default true.
         constexpr const char* keyboardOn = "keyboardOn";
+
+        // Modulation matrix (Story 8.1 / Epic 8). N routing slots, each {Source, Target,
+        // Amount}, plus a master enable. Append-only, indexed helpers (mirror oscFreq(i)).
+        inline juce::String modSlotSource(int n) { return "modSlot" + juce::String(n) + "Source"; }
+        inline juce::String modSlotTarget(int n) { return "modSlot" + juce::String(n) + "Target"; }
+        inline juce::String modSlotAmount(int n) { return "modSlot" + juce::String(n) + "Amount"; }
+        constexpr const char* modMatrixOn = "modMatrixOn";
     }
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
@@ -295,14 +304,18 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::reverbDamp, 1), "Reverb Damping", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::reverbMix, 1), "Reverb Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
 
-        // LFO
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoWave, 1), "LFO Wave", juce::StringArray{"Sine", "Triangle", "Square", "Sawtooth"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoRate, 1), "LFO Rate", juce::NormalisableRange<float>(0.1f, 20.0f, 0.1f), 2.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoDepth, 1), "LFO Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::lfoOn, 1), "LFO On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget, 1), "LFO Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive"}, 0));
-        // Tempo-Sync: 0 = Free (use LFO Rate knob), else a note division. Append-only; default Free = unchanged.
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoSyncDiv, 1), "LFO Sync", SyncDivision::kNames, 0));
+        // LFOs — indexed like the oscillators (one loop for all kNumLFOs). SYNC 0 = Free (use RATE
+        // knob), else a note division. All default off/Free so an unused LFO is silent.
+        for (int i = 1; i <= kNumLFOs; ++i)
+        {
+            const juce::String pre = "LFO " + juce::String(i) + " ";
+            params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoWave(i), 1), pre + "Wave", juce::StringArray{"Sine", "Triangle", "Square", "Sawtooth"}, 0));
+            params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoRate(i), 1), pre + "Rate", juce::NormalisableRange<float>(0.1f, 20.0f, 0.1f), 2.0f));
+            params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoDepth(i), 1), pre + "Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+            params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::lfoOn(i), 1), pre + "On", false));
+            params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget(i), 1), pre + "Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive"}, 0));
+            params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoSyncDiv(i), 1), pre + "Sync", SyncDivision::kNames, 0));
+        }
 
         // Noise
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::noiseOn, 1), "Noise On", false));
@@ -392,6 +405,26 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compRelease, 1), "Comp Release", juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.4f), 120.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compMakeup, 1), "Comp Makeup", juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 0.0f));
 
+        // Modulation matrix (Story 8.1 / Epic 8; append-only). N slots, each a {Source, Target,
+        // Amount} routing. Source = {LFO 1, Envelope, Velocity}; Target = {Off + the 7 modulation
+        // destinations} with "Off" at index 0 == slot inactive (so the Target index maps 1:1 to
+        // LFOTarget). Amount is bipolar (-1..+1), default 0 = no effect. The Target display names
+        // are cosmetic — the ComboBoxAttachment maps by INDEX (persistence uses canonical names).
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            params.push_back(std::make_unique<juce::AudioParameterChoice>(
+                juce::ParameterID(ID::modSlotSource(n), 1), "Mod " + juce::String(n) + " Source",
+                juce::StringArray{ "LFO 1", "Envelope", "Velocity", "LFO 2" }, 0));   // ORDER == ModSource (append-only)
+            params.push_back(std::make_unique<juce::AudioParameterChoice>(
+                juce::ParameterID(ID::modSlotTarget(n), 1), "Mod " + juce::String(n) + " Target",
+                juce::StringArray{ "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" }, 0));   // ORDER == LFOTarget (0=Off..7)
+            params.push_back(std::make_unique<juce::AudioParameterFloat>(
+                juce::ParameterID(ID::modSlotAmount(n), 1), "Mod " + juce::String(n) + " Amount",
+                juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 0.0f));
+        }
+        params.push_back(std::make_unique<juce::AudioParameterBool>(
+            juce::ParameterID(ID::modMatrixOn, 1), "Mod Matrix On", true));
+
         return { params.begin(), params.end() };
     }
 
@@ -404,13 +437,23 @@ namespace Parameters
                               DelayEffect& delay,
                               ChorusEffect& chorus, ReverbEffect& reverb,
                               FormantFilter& formant,
-                              LFO& lfo, NoiseGenerator& noise,
+                              LFO* lfos, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
                               bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB,
                               PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
-                              double lfoRateHz, double delayTimeSec)
+                              ModSlot* modSlots, bool& modMatrixOn,
+                              const double* lfoRateHz, double delayTimeSec)
     {
+        // Modulation matrix (Story 8.1): read the master enable + N slots into the voice.
+        modMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f;
+        for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
+        {
+            modSlots[n].source = (int) *apvts.getRawParameterValue(ID::modSlotSource(n + 1));
+            modSlots[n].target = (int) *apvts.getRawParameterValue(ID::modSlotTarget(n + 1));
+            modSlots[n].amount = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
+        }
+
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
         mixSrcA = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcA));   // Epic 5
         mixSrcB = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcB));
@@ -493,12 +536,16 @@ namespace Parameters
         formant.resonance = *apvts.getRawParameterValue(ID::formantReso);
         formant.mix       = *apvts.getRawParameterValue(ID::formantMix);
 
-        lfo.setWaveform(static_cast<LFOWaveform>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoWave))));
-        lfo.setRate(lfoRateHz);   // Tempo-Sync: resolved in processBlock (Free => raw knob, else BPM division)
-        lfo.setDepth(*apvts.getRawParameterValue(ID::lfoDepth));
-        const bool lfoOn = *apvts.getRawParameterValue(ID::lfoOn) > 0.5f;
-        lfo.setTarget(lfoOn ? static_cast<LFOTarget>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoTarget)) + 1)
-                            : LFOTarget::Off);
+        // LFOs — one loop for all (Tempo-Sync resolved per LFO in processBlock => lfoRateHz[i]).
+        for (int i = 0; i < kNumLFOs; ++i)
+        {
+            lfos[i].setWaveform(static_cast<LFOWaveform>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoWave(i + 1)))));
+            lfos[i].setRate(lfoRateHz[i]);
+            lfos[i].setDepth(*apvts.getRawParameterValue(ID::lfoDepth(i + 1)));
+            const bool on = *apvts.getRawParameterValue(ID::lfoOn(i + 1)) > 0.5f;
+            lfos[i].setTarget(on ? static_cast<LFOTarget>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoTarget(i + 1))) + 1)
+                                 : LFOTarget::Off);
+        }
 
         const bool noiseOn = *apvts.getRawParameterValue(ID::noiseOn) > 0.5f;
         noise.setType(noiseOn ? static_cast<NoiseType>(static_cast<int>(*apvts.getRawParameterValue(ID::noiseType)) + 1)

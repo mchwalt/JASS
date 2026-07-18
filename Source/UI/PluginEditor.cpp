@@ -414,13 +414,41 @@ void SynthyEditor::timerCallback()
 {
     double ratio = processor.getCurrentNoteRatio();
 
-    // Live modulation rings: route the current LFO value to whichever knob(s) the
-    // LFO targets (0 Frequency, 1 Amplitude, 2 FilterCutoff), but only when the LFO is
-    // enabled (lfoOn).
+    // Live modulation rings (Story 8.1): build the amount currently applied to each
+    // ModTarget by PERIODIC (LFO) sources = the display LFO value × the summed LFO-sourced
+    // routing coefficient into that target. That is the implicit legacy LFO→its-own-target
+    // routing PLUS any matrix slot whose source is LFO 1. Velocity/Envelope need a sounding
+    // note, so they contribute no idle-time ring (acceptable for v1, AC7).
+    namespace P = Parameters::ID;
     auto& apvts = processor.getAPVTS();
-    float lfo = processor.getLfoDisplayValue();
-    bool lfoActive = *apvts.getRawParameterValue("lfoOn") > 0.5f;
-    int target = (int) *apvts.getRawParameterValue("lfoTarget");
+
+    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only PERIODIC (LFO)
+    // sources animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
+    // lfoSrcVal[src] holds each LFO's display value at its ModSource slot; non-LFO sources
+    // stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
+    static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2 };
+    std::array<float, ModMatrixConfig::kNumSources> lfoSrcVal {};
+    rack::LiveModFeed feed {};
+    for (int i = 0; i < kNumLFOs; ++i)
+    {
+        const float dv = processor.getLfoDisplayValue(i);
+        lfoSrcVal[(size_t) kLfoSourceIdx[i]] = dv;
+        const bool on = *apvts.getRawParameterValue(P::lfoOn(i + 1)) > 0.5f;
+        const int tgt = on ? (int) *apvts.getRawParameterValue(P::lfoTarget(i + 1)) + 1 : 0;   // implicit routing
+        if (tgt > 0 && tgt < (int) feed.size()) feed[(size_t) tgt] += dv;
+    }
+    {
+        const bool matrixOn = *apvts.getRawParameterValue(P::modMatrixOn) > 0.5f;
+        if (matrixOn)
+            for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+            {
+                const int src = (int) *apvts.getRawParameterValue(P::modSlotSource(n));
+                const int tgt = (int) *apvts.getRawParameterValue(P::modSlotTarget(n));
+                const float amt = *apvts.getRawParameterValue(P::modSlotAmount(n));
+                if (tgt > 0 && tgt < (int) feed.size() && src >= 0 && src < (int) lfoSrcVal.size())
+                    feed[(size_t) tgt] += amt * lfoSrcVal[(size_t) src];   // Env/Vel contribute 0 (no idle ring)
+            }
+    }
 
     // Enforce the KEYBOARD module's enable on its INPUT: JUCE's MidiKeyboardComponent ignores
     // the enabled flag (it never reads isEnabled), so a disabled module would otherwise still
@@ -443,13 +471,8 @@ void SynthyEditor::timerCallback()
     }
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
-    // ModTarget has a +1 offset vs the raw lfoTarget (ModTarget::None = 0; raw 0 = Frequency).
     if (rackBody)
-    {
-        const rack::ModTarget activeT = lfoActive ? static_cast<rack::ModTarget>(target + 1)
-                                                  : rack::ModTarget::None;
-        rackBody->updateLiveFeed(lfoActive, activeT, lfo, ratio);
-    }
+        rackBody->updateLiveFeed(feed, ratio);
 
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.
@@ -736,15 +759,24 @@ void SynthyEditor::buildRack()
     add(Rack::Zone::Modulation, SizeClass::W4H2, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
-    // LFO WAVE must list the lfoWave param's OWN choices in order — the ComboBoxAttachment
-    // maps by index, so the shared `waves` array (a different order) would mislabel every
-    // waveform (Story 2.1 AC3).
-    // W8H1 (was W6H1): the SYNC combo (Tempo-Sync) is a 5th control. SYNC=Free => RATE knob;
-    // else RATE is driven by the note division at the host/Sync tempo (RATE knob then ignored).
-    add(Rack::Zone::Modulation, SizeClass::W8H1, ModuleType::Modulator, "LFO", P::lfoOn,
-        { C(P::lfoWave, "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
-          C(P::lfoTarget, "TARGET", { "Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive" }),
-          K(P::lfoRate, "RATE"), C(P::lfoSyncDiv, "SYNC", SyncDivision::kNames), K(P::lfoDepth, "DEPTH") });
+    // LFOs — one module per LFO, built in a loop (indexed params, like the oscillators).
+    // LFO 1 is visible with the stable id "lfo" (help/layout key); extra LFOs are hidden by
+    // default (show via MODULES) with ids "lfo2"/"lfo3"… . LFO WAVE/TARGET items MUST match
+    // the param's own choice order (ComboBoxAttachment maps by index). W8H1: SYNC is a 5th control.
+    for (int i = 1; i <= kNumLFOs; ++i)
+    {
+        ModuleDescriptor d;
+        d.sizeClass = SizeClass::W8H1; d.type = ModuleType::Modulator;
+        d.id    = (i == 1) ? juce::String("lfo") : ("lfo" + juce::String(i));
+        d.title = (i == 1) ? juce::String("LFO") : ("LFO " + juce::String(i));
+        d.defaultZone = Rack::Zone::Modulation;
+        d.defaultVisible = (i == 1);
+        d.enableParam = P::lfoOn(i);
+        d.body = { C(P::lfoWave(i), "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
+                   C(P::lfoTarget(i), "TARGET", { "Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive" }),
+                   K(P::lfoRate(i), "RATE"), C(P::lfoSyncDiv(i), "SYNC", SyncDivision::kNames), K(P::lfoDepth(i), "DEPTH") };
+        rackBody->addModule(std::move(d));
+    }
     add(Rack::Zone::Modulation, SizeClass::W6H1, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
         { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
           K(P::arpRate, "RATE"), K(P::arpOctaves, "OCT"), K(P::arpGate, "GATE") });
@@ -755,6 +787,26 @@ void SynthyEditor::buildRack()
     // up = laser/riser), TIME = decay. id "pitchenv".
     add(Rack::Zone::Modulation, SizeClass::W3H1, ModuleType::Modulator, "PITCH ENV", P::pitchEnvOn,
         { K(P::pitchEnvAmount, "AMOUNT"), K(P::pitchEnvTime, "TIME") });
+    // MOD MATRIX (Epic 8): the "movement layer". Four routing rows, each SRC → DEST · AMT.
+    // Any source can drive any target with its own bipolar amount; multiple rows STACK on one
+    // target (summed). The LFO keeps its own TARGET as an implicit routing on top (AC5).
+    // Target items MUST match the modSlotTarget param choices in order (attachment maps by
+    // index); "Off" = row inactive. Sizing (W12H4, one routing per row) is tunable in-app. id "modmatrix".
+    {
+        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity" };
+        const juce::StringArray tgtItems { "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" };   // ORDER == LFOTarget / modSlotTarget param
+        std::vector<BodyElement> matrixBody;
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            matrixBody.push_back(C(P::modSlotSource(n), "SRC",  srcItems));
+            matrixBody.push_back(C(P::modSlotTarget(n), "DEST", tgtItems));
+            matrixBody.push_back(K(P::modSlotAmount(n), "AMT"));
+        }
+        // W12H2 (half width, 2 rows = 2 routings per row): narrow AND short, so the taller
+        // rack doesn't trip the editor's global auto-fit downscale (AC6). Tunable.
+        add(Rack::Zone::Modulation, SizeClass::W12H2, ModuleType::Modulator, "MOD MATRIX",
+            P::modMatrixOn, std::move(matrixBody));
+    }
 
     // ---- PROCESSING ----
     // FILTER: TYPE combo + CUTOFF + RESO (= 4 slots, like DISTORTION) → M (4 cols) so the
