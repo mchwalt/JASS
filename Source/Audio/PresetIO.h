@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "Parameters.h"
+#include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 
 // Reads/writes the shared ".synthy" JSON preset format used by both the C#
@@ -29,7 +30,7 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 2;
+    constexpr int kFormatVersion = 3;   // v3 = nested-per-module (spec-driven). v<3 = flat (legacy).
 
     // Shared root: %AppData%\Roaming\Synthy (same as the C# app).
     inline juce::File synthyFolder()
@@ -137,152 +138,8 @@ namespace PresetIO
         root->setProperty("Name", name);
         root->setProperty("Modified", modified);
 
-        juce::Array<juce::var> oscs;
-        for (int o = 1; o <= 3; ++o)
-        {
-            auto* od = new juce::DynamicObject();
-            od->setProperty("Enabled",      rawB(a, ID::oscOn(o)));
-            od->setProperty("Waveform",     rawChoice(a, ID::oscWave(o), kWaveform));
-            od->setProperty("Frequency",    rawF(a, ID::oscFreq(o)));
-            od->setProperty("Amplitude",    rawF(a, ID::oscAmp(o)));
-            od->setProperty("UnisonVoices", rawI(a, ID::oscUniVoices(o)));
-            od->setProperty("UnisonDetune", rawF(a, ID::oscUniDetune(o)));
-            od->setProperty("Feedback",     rawF(a, ID::oscFeedback(o)));   // Self-FM (append-only; C# ignores it; missing => 0)
-            oscs.add(juce::var(od));
-        }
-        root->setProperty("Oscillators", oscs);
-
-        root->setProperty("MasterVolume", rawF(a, ID::masterVol));
-        root->setProperty("SyncTempo",    rawF(a, ID::syncTempo));     // Tempo-Sync (append-only; C# ignores; missing => 120)
-        root->setProperty("MasterOn",     rawB(a, ID::masterOn));      // Story 2.4 (append-only; missing => on)
-        // CROSS MOD (Option B): "Additive" == disabled. On-disk stays {Additive,RingMod,FM} via
-        // choiceOrOff so older presets round-trip; the live mixMode param holds only {RingMod,FM}.
-        root->setProperty("MixMode",      choiceOrOff(a, ID::mixModeOn, ID::mixMode, kMixMode));
-        root->setProperty("MixSrcA",      rawChoice(a, ID::mixSrcA, kMixSrc));   // Epic 5 (append-only; missing => OSC1)
-        root->setProperty("MixSrcB",      rawChoice(a, ID::mixSrcB, kMixSrc));   //          (missing => OSC2)
-        root->setProperty("ScopeOn",      rawB(a, ID::scopeOn));       // display enables (append-only; missing => on)
-        root->setProperty("SpectrumOn",   rawB(a, ID::spectrumOn));
-        root->setProperty("KeyboardOn",   rawB(a, ID::keyboardOn));    // on-screen keyboard enable (append-only; missing => on)
-
-        root->setProperty("AdsrOn",  rawB(a, ID::adsrOn));   // Story 2.4 (append-only; missing => on)
-        root->setProperty("Attack",  rawF(a, ID::attack));
-        root->setProperty("Decay",   rawF(a, ID::decay));
-        root->setProperty("Sustain", rawF(a, ID::sustain));
-        root->setProperty("Release", rawF(a, ID::release));
-
-        root->setProperty("FilterType",      choiceOrOff(a, ID::filterOn, ID::filterType, kFilterType));
-        root->setProperty("FilterCutoff",    rawF(a, ID::filterCutoff));
-        root->setProperty("FilterResonance", rawF(a, ID::filterReso));
-
-        root->setProperty("FormantEnabled",    rawB(a, ID::formantOn));      // Feature 3 (append-only; C# ignores; missing => off)
-        root->setProperty("FormantVowel",      rawF(a, ID::formantVowel));
-        root->setProperty("FormantResonance",  rawF(a, ID::formantReso));
-        root->setProperty("FormantMix",        rawF(a, ID::formantMix));
-
-        root->setProperty("DistortionType",  choiceOrOff(a, ID::distortionOn, ID::distortionType, kDistortion));
-        root->setProperty("DistortionDrive", rawF(a, ID::distortionDrive));
-        root->setProperty("DistortionMix",   rawF(a, ID::distortionMix));
-
-        root->setProperty("WavefoldEnabled",  rawB(a, ID::wavefoldOn));
-        root->setProperty("WavefoldDrive",    rawF(a, ID::wavefoldDrive));
-        root->setProperty("WavefoldSymmetry", rawF(a, ID::wavefoldSymmetry));
-        root->setProperty("WavefoldMix",      rawF(a, ID::wavefoldMix));
-
-        root->setProperty("BitcrushEnabled", rawB(a, ID::bitcrushOn));
-        root->setProperty("BitcrushBits",    rawI(a, ID::bitcrushBits));
-        root->setProperty("BitcrushRate",    rawI(a, ID::bitcrushRate));
-        root->setProperty("BitcrushMix",     rawF(a, ID::bitcrushMix));
-
-        root->setProperty("PhaserEnabled",  rawB(a, ID::phaserOn));                    // Feature 2 (append-only; C# ignores; missing => off)
-        root->setProperty("PhaserType",     rawChoice(a, ID::phaserType, kPhaserType));
-        root->setProperty("PhaserRate",     rawF(a, ID::phaserRate));
-        root->setProperty("PhaserDepth",    rawF(a, ID::phaserDepth));
-        root->setProperty("PhaserFeedback", rawF(a, ID::phaserFeedback));
-        root->setProperty("PhaserMix",      rawF(a, ID::phaserMix));
-
-        root->setProperty("SubEnabled",  rawB(a, ID::subOn));
-        root->setProperty("SubWaveform", rawChoice(a, ID::subWave, kSubWave));
-        root->setProperty("SubOctave",   -(rawI(a, ID::subOctave) + 1));  // -1 or -2
-        root->setProperty("SubLevel",    rawF(a, ID::subLevel));
-
-        root->setProperty("StereoEnabled", rawB(a, ID::stereoOn));
-        root->setProperty("StereoWidth",   rawF(a, ID::stereoWidth));
-        root->setProperty("StereoTime",    rawF(a, ID::stereoTime));  // 1..15 ms
-
-        root->setProperty("CompEnabled",   rawB(a, ID::compOn));       // master-bus compressor (append-only; C# ignores; missing => off)
-        root->setProperty("CompThreshold", rawF(a, ID::compThreshold));
-        root->setProperty("CompRatio",     rawF(a, ID::compRatio));
-        root->setProperty("CompAttack",    rawF(a, ID::compAttack));
-        root->setProperty("CompRelease",   rawF(a, ID::compRelease));
-        root->setProperty("CompMakeup",    rawF(a, ID::compMakeup));
-
-        // Modulation matrix (Epic 8; append-only; C# ignores; missing => Off/0/on).
-        root->setProperty("ModMatrixOn", rawB(a, ID::modMatrixOn));
-        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-        {
-            const juce::String p = "ModSlot" + juce::String(n);
-            root->setProperty(p + "Source", rawChoice(a, ID::modSlotSource(n), kModSource));
-            root->setProperty(p + "Target", rawChoice(a, ID::modSlotTarget(n), kLfoTarget));   // canonical 0=Off..7
-            root->setProperty(p + "Amount", rawF(a, ID::modSlotAmount(n)));
-        }
-
-        root->setProperty("ArpEnabled", rawB(a, ID::arpOn));
-        root->setProperty("ArpRate",    rawF(a, ID::arpRate));
-        root->setProperty("ArpMode",    rawChoice(a, ID::arpMode, kArpMode));
-        root->setProperty("ArpOctaves", rawI(a, ID::arpOctaves));
-        root->setProperty("ArpGate",    rawF(a, ID::arpGate));
-
-        root->setProperty("GlideEnabled", rawB(a, ID::glideOn));      // Feature 4 (append-only; C# ignores; missing => off)
-        root->setProperty("GlideTime",    rawF(a, ID::glideTime));
-        root->setProperty("GlideMode",    rawChoice(a, ID::glideMode, kGlideMode));   // missing => Mono
-
-        root->setProperty("PitchEnvEnabled", rawB(a, ID::pitchEnvOn));      // append-only; C# ignores; missing => off
-        root->setProperty("PitchEnvAmount",  rawF(a, ID::pitchEnvAmount));
-        root->setProperty("PitchEnvTime",    rawF(a, ID::pitchEnvTime));
-
-        // LFOs — indexed fields Lfo1*/Lfo2*/… (one loop, like the oscillators).
-        for (int i = 1; i <= kNumLFOs; ++i)
-        {
-            const juce::String p = "Lfo" + juce::String(i);
-            root->setProperty(p + "Waveform", rawChoice(a, ID::lfoWave(i), kLfoWave));
-            root->setProperty(p + "Target",   choiceOrOff(a, ID::lfoOn(i), ID::lfoTarget(i), kLfoTarget));
-            root->setProperty(p + "Rate",     rawF(a, ID::lfoRate(i)));
-            root->setProperty(p + "Depth",    rawF(a, ID::lfoDepth(i)));
-            root->setProperty(p + "SyncDiv",  rawChoice(a, ID::lfoSyncDiv(i), SyncDivision::kNames));
-        }
-
-        root->setProperty("DelayEnabled",  rawB(a, ID::delayOn));
-        root->setProperty("DelayTime",     rawF(a, ID::delayTime));
-        root->setProperty("DelayFeedback", rawF(a, ID::delayFeedback));
-        root->setProperty("DelayMix",      rawF(a, ID::delayMix));
-        root->setProperty("DelaySyncDiv",  rawChoice(a, ID::delaySyncDiv, SyncDivision::kNames));   // Tempo-Sync (append-only; C# ignores; missing => Free)
-
-        root->setProperty("ChorusEnabled", rawB(a, ID::chorusOn));
-        root->setProperty("ChorusRate",    rawF(a, ID::chorusRate));
-        root->setProperty("ChorusDepth",   rawF(a, ID::chorusDepth));
-        root->setProperty("ChorusMix",     rawF(a, ID::chorusMix));
-
-        root->setProperty("ReverbEnabled",  rawB(a, ID::reverbOn));
-        root->setProperty("ReverbRoomSize", rawF(a, ID::reverbRoom));
-        root->setProperty("ReverbDamping",  rawF(a, ID::reverbDamp));
-        root->setProperty("ReverbMix",      rawF(a, ID::reverbMix));
-
-        root->setProperty("KarplusEnabled",   rawB(a, ID::karplusOn));
-        root->setProperty("KarplusFrequency", rawF(a, ID::karplusFreq));
-        root->setProperty("KarplusAmplitude", rawF(a, ID::karplusAmp));
-        root->setProperty("KarplusDamping",   rawF(a, ID::karplusDamping));
-        root->setProperty("KarplusStretch",   rawF(a, ID::karplusStretch));
-
-        root->setProperty("NoiseType",      choiceOrOff(a, ID::noiseOn, ID::noiseType, kNoiseType));
-        root->setProperty("NoiseAmplitude", rawF(a, ID::noiseAmp));
-
-        root->setProperty("WavetableEnabled",      rawB(a, ID::wavetableOn));
-        root->setProperty("WavetableBankIndex",    rawI(a, ID::wavetableBank));
-        root->setProperty("WavetablePosition",     rawF(a, ID::wavetablePosition));
-        root->setProperty("WavetableFrequency",    rawF(a, ID::wavetableFreq));
-        root->setProperty("WavetableAmplitude",    rawF(a, ID::wavetableAmp));
-        root->setProperty("WavetableUnisonVoices", rawI(a, ID::wavetableUniVoices));
-        root->setProperty("WavetableUnisonDetune", rawF(a, ID::wavetableUniDetune));
+        // Every module writes its own nested object (spec-driven; Source/Modules/*Specs.h).
+        Modules::writeState(a, *root);
 
         // Rack layout (Story 4.3, AD-11): append-only. The editor's Rack stores the custom
         // layout as a JSON string on apvts.state ("rackLayout"); mirror it into the preset as
@@ -299,8 +156,10 @@ namespace PresetIO
         return file.replaceWithText(juce::JSON::toString(toVar(a, name, modified), false));
     }
 
-    // ── Import ──
-    inline void applyVar(APVTS& a, const juce::var& v)
+    // ── Import (LEGACY FLAT reader, v<3) ──
+    // Reads the OLD flat .synthy format. Retained ONLY to convert existing presets to v3 once
+    // (see convertLegacyPresetsToV3). New code uses applyVar (nested) below.
+    inline void applyVarFlatLegacy(APVTS& a, const juce::var& v)
     {
         using namespace detail;
         if (! v.isObject())
@@ -485,6 +344,47 @@ namespace PresetIO
         // it via Rack::reloadLayoutFromState() after a load.
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
+    }
+
+    // ── Import (nested v3 — the live reader) ──
+    inline void applyVar(APVTS& a, const juce::var& v)
+    {
+        if (! v.isObject())
+            return;
+        // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
+        // file's values on top (missing field => factory default). Clear the rack-layout baseline.
+        for (auto* p : a.processor.getParameters())
+            p->setValueNotifyingHost(p->getDefaultValue());
+        a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
+
+        Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
+
+        if (v.hasProperty("RackLayout"))
+            a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
+    }
+
+    // One-time conversion: rewrite every OLD flat preset (FormatVersion < 3) in the Presets folder
+    // (+ LiveState) into the new nested v3 format. Loads via the legacy flat reader into `a` as
+    // scratch, then re-saves nested. Idempotent (skips v3). Call once at startup BEFORE the normal
+    // LiveState load — the scratch mutation of `a` is then overwritten by that load.
+    inline void convertLegacyPresetsToV3(APVTS& a)
+    {
+        auto files = presetsFolder().findChildFiles(juce::File::findFiles, false, "*.synthy");
+        files.add(liveStateFile());
+        const juce::File backupDir = synthyFolder().getChildFile("PresetsBackup_v2");   // safety net
+        for (const auto& f : files)
+        {
+            if (! f.existsAsFile()) continue;
+            auto v = juce::JSON::parse(f.loadFileAsString());
+            if (! v.isObject()) continue;
+            if ((int) v.getProperty("FormatVersion", 1) >= 3) continue;   // already nested v3
+            backupDir.createDirectory();
+            f.copyFileTo(backupDir.getChildFile(f.getFileName()));         // keep the flat original, just in case
+            applyVarFlatLegacy(a, v);                                      // load old flat into `a` (scratch)
+            const auto name = v.getProperty("Name", f.getFileNameWithoutExtension()).toString();
+            const bool mod  = (bool) v.getProperty("Modified", false);
+            saveToFile(a, f, name, mod);                                   // re-save nested v3
+        }
     }
 
     inline bool loadFromFile(APVTS& a, const juce::File& file)

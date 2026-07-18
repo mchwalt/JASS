@@ -25,6 +25,9 @@ SynthyProcessor::SynthyProcessor()
     // plugin host (e.g. REAPER) the host owns project state, so leave it alone.
     if (wrapperType == wrapperType_Standalone)
     {
+        // One-time: convert any old flat (.synthy v<3) presets + LiveState to the nested v3 format
+        // (uses apvts as scratch; the LiveState load right below overwrites it). See PresetIO.
+        PresetIO::convertLegacyPresetsToV3(apvts);
         PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
         if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
             currentPresetName = n;
