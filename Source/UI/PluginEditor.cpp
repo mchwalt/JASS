@@ -3,6 +3,7 @@
 #include "HelpTextStore.h"           // embedded EN/DE help texts (Story 6.1)
 #include "../Audio/PresetIO.h"
 #include "../Audio/Parameters.h"   // Parameters::ID for the rack
+#include "../ModuleSpecs.h"         // spec-driven modules (proof: FILTER)
 #include <map>
 #include <memory>
 #include <vector>
@@ -821,12 +822,10 @@ void SynthyEditor::buildRack()
     }
 
     // ---- PROCESSING ----
-    // FILTER: TYPE combo + CUTOFF + RESO (= 4 slots, like DISTORTION) → M (4 cols) so the
-    // combo isn't cramped. (Exact width tuning deferred to next session.)
-    add(Rack::Zone::Processing, SizeClass::W4H1, ModuleType::Processor, "FILTER", P::filterOn,
-        { C(P::filterType, "TYPE", { "Lowpass", "Highpass" }),
-          Kmod(P::filterCutoff, "CUTOFF", ModTarget::FilterCutoff),
-          Kmod(P::filterReso, "RESO", ModTarget::FilterResonance) });
+    // FILTER: GENERATED from its ModuleSpec (proof) — the descriptor (size, zone, type, enable,
+    // body with TYPE combo + CUTOFF/RESO rings) is built from Modules::filter() instead of a
+    // hand-written add(...). Every other module below is still hand-written for now.
+    rackBody->addModule(makeModuleDescriptor(Modules::filter()));
     // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
     // DISTORTION TYPE: display text is cosmetic ("Soft Clip"/"Hard Clip" read better) — the
     // ComboBoxAttachment maps by INDEX, so the canonical param/.synthy strings stay

@@ -216,8 +216,18 @@ Das ersetzt: die 4 IDs, die 4 `createLayout`-Zeilen, die 3 `toVar`- + 3 `applyVa
 
 ---
 
-## 11. Offene Entscheidungen (vor dem Bauen)
+## 11. Entscheidungen (getroffen 2026-07-18/19)
 
-1. **Header-pro-Modul** (`Source/Modules/FilterModule.h`, Selbst-Registrierung) **oder** eine zentrale Specs-Datei (`ModuleSpecs.h` mit allen)? (Empfehlung: erst zentrale Datei — einfacher —, später splittbar.)
-2. **DSP mit ins Modul** ziehen (ein Header = Spec **+** `process()`) oder DSP getrennt in `Source/DSP/` lassen? (Empfehlung: getrennt lassen; Spec beschreibt nur Params/UI/Persistenz.)
-3. Migrations-Fallback **dauerhaft** behalten oder nach einem Übergang entfernen? (Empfehlung: behalten — billig, schützt alte Presets.)
+1. ✅ **Zentrale Specs-Datei zuerst** (`Source/ModuleSpecs.h`), später in Header-pro-Modul splittbar.
+2. ✅ **DSP getrennt** lassen (`Source/DSP/`) — die Spec beschreibt nur Params/UI/Persistenz.
+3. ✅ **Kein dauerhafter Migrations-Fallback** — die wenigen vorhandenen Presets werden **einmalig konvertiert** (flach → nested), dann liest/schreibt PresetIO nur noch das nested-Format. (Passiert erst im koordinierten Persistenz-Schritt.)
+
+## 12. Stand (Proof umgesetzt, 2026-07-19)
+
+**FILTER läuft spec-getrieben** — `Source/ModuleSpec.h` (Modell + Generatoren `makeParameter`/
+`appendModuleParameters`/`makeModuleDescriptor`) + `Source/ModuleSpecs.h` (`Modules::filter()`).
+`createLayout` erzeugt die Filter-Params aus der Spec; der Rack-Descriptor wird generiert. **APVTS
++ UI aus EINER Deklaration.** Persistenz + DSP unverändert (Default byte-identisch, alte Presets
+laden). Nächste Schritte: übrige Module Zug um Zug in Specs überführen; zuletzt Persistenz auf
+nested + Einmal-Konvertierung. **Layering-Fund:** `ModuleSpec.h` zieht die UI-`ModuleDescriptor.h`
+in die Audio-Schicht (via Parameters.h) — bei Fortführung trennen (Param-Gen audio, Descriptor-Gen UI).
