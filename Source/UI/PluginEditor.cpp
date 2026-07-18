@@ -691,50 +691,25 @@ void SynthyEditor::buildRack()
     rackBody->addModule(makeModuleDescriptor(Modules::master()));
 
     // ---- GENERATORS ----
-    auto addOsc = [&](int i)
+    // OSC 1-3 — spec-driven (OscSpecs.h). FREQ display-transform + AMP ring come from the spec.
+    for (int i = 1; i <= 3; ++i)
+        rackBody->addModule(makeModuleDescriptor(Modules::osc(i)));
+    // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
+    // which a static spec can't capture). Lit = mixModeOn AND both SELECTED source OSCs enabled.
     {
-        // M (not S): six controls now — WAVE, FREQ, AMP, VOICES, DETUNE + FB (Self-FM).
-        // S is meant for 3–4 controls; a sixth would cram it, so bump one class up.
-        add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator,
-            "OSC " + juce::String(i), P::oscOn(i),
-            { C(P::oscWave(i), "WAVE", waves), Kfreq(P::oscFreq(i), "FREQ"),
-              Kmod(P::oscAmp(i), "AMP", ModTarget::Amplitude), K(P::oscUniVoices(i), "VOICES"),
-              K(P::oscUniDetune(i), "DETUNE"), K(P::oscFeedback(i), "FB") });
-    };
-    addOsc(1);
-    addOsc(2);
-    addOsc(3);
-    // CROSS MOD comes AFTER OSC 3 in the default order (user pref 2026-07-12). It couples two
-    // SELECTABLE oscillators (Source A / Source B) via RingMod or FM; disabled => plain additive sum.
-    {
-        // The derived lit/dimmed state reads the shared params only (AD-9), no module refs:
-        // CROSS MOD is meaningful when the two SELECTED source OSCs are both enabled. Grab the
-        // relevant atomics once (stable for the APVTS lifetime).
-        auto* selA  = apvts.getRawParameterValue (P::mixSrcA);
-        auto* selB  = apvts.getRawParameterValue (P::mixSrcB);
+        auto d = makeModuleDescriptor(Modules::crossmod());
+        auto* selA = apvts.getRawParameterValue (P::mixSrcA);
+        auto* selB = apvts.getRawParameterValue (P::mixSrcB);
         std::array<std::atomic<float>*, 3> oscOn { apvts.getRawParameterValue (P::oscOn (1)),
                                                    apvts.getRawParameterValue (P::oscOn (2)),
                                                    apvts.getRawParameterValue (P::oscOn (3)) };
-        ModuleDescriptor mix;
-        mix.sizeClass = SizeClass::W5H1; mix.type = ModuleType::Generator;   // MODE + Source A + Source B
-        // Renamed MIX MODE -> CROSS MOD (Option B: Additive dropped, module-off = additive).
-        // Internal id stays "mixmode" so RackLayout persistence keeps matching.
-        mix.id = "mixmode"; mix.title = "CROSS MOD";
-        mix.enableParam = P::mixModeOn;   // enable = coupling on; off => plain additive sum
-        const juce::StringArray oscItems { "OSC 1", "OSC 2", "OSC 3" };
-        mix.body = { C(P::mixMode, "MODE", { "RingMod", "FM" }),
-                     C(P::mixSrcA, "SRC A", oscItems),
-                     C(P::mixSrcB, "SRC B", oscItems) };
-        // Lit = mixModeOn AND both SELECTED sources enabled (a UI cue; the audio additive
-        // fallback keys off mixModeOn / a==b only).
-        mix.enabledWhen = [selA, selB, oscOn]
+        d.enabledWhen = [selA, selB, oscOn]
         {
             const int a = juce::jlimit (0, 2, (int) selA->load());
             const int b = juce::jlimit (0, 2, (int) selB->load());
             return oscOn[(size_t) a]->load() >= 0.5f && oscOn[(size_t) b]->load() >= 0.5f;
         };
-        mix.defaultZone = Rack::Zone::Generators;   // AD-10: zone on the descriptor
-        rackBody->addModule(std::move(mix));
+        rackBody->addModule(std::move(d));
     }
 
     rackBody->addModule(makeModuleDescriptor(Modules::sub()));
@@ -765,54 +740,16 @@ void SynthyEditor::buildRack()
     add(Rack::Zone::Modulation, SizeClass::W4H2, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
-    // LFOs — one module per LFO, built in a loop (indexed params, like the oscillators).
-    // LFO 1 is visible with the stable id "lfo" (help/layout key); extra LFOs are hidden by
-    // default (show via MODULES) with ids "lfo2"/"lfo3"… . LFO WAVE/TARGET items MUST match
-    // the param's own choice order (ComboBoxAttachment maps by index). W8H1: SYNC is a 5th control.
+    // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
+    // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
     for (int i = 1; i <= kNumLFOs; ++i)
-    {
-        ModuleDescriptor d;
-        d.sizeClass = SizeClass::W8H1; d.type = ModuleType::Modulator;
-        d.id    = (i == 1) ? juce::String("lfo") : ("lfo" + juce::String(i));   // id "lfo" stays for help/layout
-        d.title = "LFO " + juce::String(i);   // display "LFO 1", "LFO 2", … (id stays "lfo" for LFO 1)
-        d.defaultZone = Rack::Zone::Modulation;
-        d.defaultVisible = (i == 1);
-        d.enableParam = P::lfoOn(i);
-        d.body = { C(P::lfoWave(i), "WAVE", { "Sine", "Triangle", "Square", "Sawtooth" }),
-                   C(P::lfoTarget(i), "TARGET", { "Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive" }),
-                   K(P::lfoRate(i), "RATE"), C(P::lfoSyncDiv(i), "SYNC", SyncDivision::kNames), K(P::lfoDepth(i), "DEPTH") };
-        rackBody->addModule(std::move(d));
-    }
+        rackBody->addModule(makeModuleDescriptor(Modules::lfo(i)));
     rackBody->addModule(makeModuleDescriptor(Modules::arpeggiator()));
     rackBody->addModule(makeModuleDescriptor(Modules::glide()));
     rackBody->addModule(makeModuleDescriptor(Modules::pitchEnv()));
-    // MOD MATRIX (Epic 8): the "movement layer". Four routing rows, each SRC → DEST · AMT.
-    // Any source can drive any target with its own bipolar amount; multiple rows STACK on one
-    // target (summed). The LFO keeps its own TARGET as an implicit routing on top (AC5).
-    // Target items MUST match the modSlotTarget param choices in order (attachment maps by
-    // index); "Off" = row inactive. Sizing (W12H4, one routing per row) is tunable in-app. id "modmatrix".
-    {
-        // MUST match the modSlotSource param choices in order (== ModSource): LFO 2 is
-        // appended (append-only), so it sits AFTER Velocity even though it reads oddly.
-        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2" };
-        const juce::StringArray tgtItems { "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" };   // ORDER == LFOTarget / modSlotTarget param
-        std::vector<BodyElement> matrixBody;
-        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-        {
-            matrixBody.push_back(C(P::modSlotSource(n), "SRC",  srcItems));
-            matrixBody.push_back(C(P::modSlotTarget(n), "DEST", tgtItems));
-            matrixBody.push_back(K(P::modSlotAmount(n), "AMT"));
-        }
-        // W12H2 (half width, 2 rows = 2 routings per row): narrow AND short, so the taller
-        // rack doesn't trip the editor's global auto-fit downscale (AC6). Tunable.
-        add(Rack::Zone::Modulation, SizeClass::W12H2, ModuleType::Modulator, "MOD MATRIX",
-            P::modMatrixOn, std::move(matrixBody));
-    }
+    rackBody->addModule(makeModuleDescriptor(Modules::modMatrix()));
 
-    // ---- PROCESSING ----
-    // FILTER: GENERATED from its ModuleSpec (proof) — the descriptor (size, zone, type, enable,
-    // body with TYPE combo + CUTOFF/RESO rings) is built from Modules::filter() instead of a
-    // hand-written add(...). Every other module below is still hand-written for now.
+    // ---- PROCESSING (spec-driven) ----
     rackBody->addModule(makeModuleDescriptor(Modules::filter()));
     // PROCESSING — spec-driven (Modules::*). Display-only combo labels (e.g. DISTORTION
     // "Soft Clip") live in the spec's displayChoices; canonical strings stay in choices.

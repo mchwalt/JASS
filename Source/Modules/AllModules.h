@@ -21,6 +21,10 @@
 #include "ArpeggiatorSpecs.h"
 #include "GlideSpecs.h"
 #include "PitchEnvSpecs.h"
+#include "OscSpecs.h"
+#include "CrossModSpecs.h"
+#include "LfoSpecs.h"
+#include "ModMatrixSpecs.h"
 
 namespace Modules
 {
@@ -30,6 +34,7 @@ namespace Modules
             filter(), compressor(), stereo(), master(), sub(), noise(),
             formant(), distortion(), wavefold(), bitcrush(), phaser(), chorus(),
             delay(), reverb(), arpeggiator(), glide(), pitchEnv(),
+            osc(1), osc(2), osc(3), crossmod(), lfo(1), lfo(2), modMatrix(),
         };
     }
 }
