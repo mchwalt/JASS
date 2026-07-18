@@ -28,6 +28,9 @@ target_sources(JASS PRIVATE
     Source/UI/rack/Rack.cpp
     Source/UI/rack/SynthyLookAndFeel.cpp
 
+    # Module specs (declarative modules → APVTS params + rack descriptors)
+    Source/Modules/ModuleRegistry.cpp
+
     # Audio engine
     Source/Audio/SynthVoice.cpp
     Source/Audio/SynthSound.cpp

@@ -3,7 +3,7 @@
 #include "HelpTextStore.h"           // embedded EN/DE help texts (Story 6.1)
 #include "../Audio/PresetIO.h"
 #include "../Audio/Parameters.h"   // Parameters::ID for the rack
-#include "../ModuleSpecs.h"         // spec-driven modules (proof: FILTER)
+#include "../Modules/AllModules.h"  // spec-driven module descriptors (makeModuleDescriptor + Modules::*)
 #include <map>
 #include <memory>
 #include <vector>

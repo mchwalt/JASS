@@ -11,7 +11,7 @@
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/SyncDivision.h"
 #include "../DSP/ModMatrix.h"
-#include "../ModuleSpecs.h"   // spec-driven modules (proof: FILTER) — generates APVTS params
+#include "../Modules/ModuleRegistry.h"   // spec-driven modules — generates APVTS params (audio-safe)
 
 namespace Parameters
 {
@@ -261,10 +261,11 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::sustain, 1), "Sustain", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::release, 1), "Release", timeRange, 1.0f));
 
-        // Filter — GENERATED from its ModuleSpec (proof of the module-spec architecture; see
-        // docs/Modul_Architektur_Konzept.md). Replaces the 4 hand-written push_back lines; the
-        // DSP wiring in applyToVoice still reads ID::filter* (same id strings).
-        appendModuleParameters(Modules::filter(), params);
+        // Spec-driven modules — GENERATED from their ModuleSpecs (see docs/Modul_Architektur_Konzept.md).
+        // Adds the APVTS params for every migrated module (currently FILTER). The DSP wiring in
+        // applyToVoice + PresetIO still read the ID:: strings (same ids). Remaining modules below
+        // are still hand-written and move here one at a time.
+        Modules::appendAllParameters(params);
 
         // Formant / vowel filter (append-only; default off => existing presets unchanged)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::formantOn, 1), "Formant On", false));
