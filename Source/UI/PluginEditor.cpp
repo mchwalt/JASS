@@ -783,16 +783,9 @@ void SynthyEditor::buildRack()
                    K(P::lfoRate(i), "RATE"), C(P::lfoSyncDiv(i), "SYNC", SyncDivision::kNames), K(P::lfoDepth(i), "DEPTH") };
         rackBody->addModule(std::move(d));
     }
-    add(Rack::Zone::Modulation, SizeClass::W6H1, ModuleType::Modulator, "ARPEGGIATOR", P::arpOn,
-        { C(P::arpMode, "MODE", { "Up", "Down", "UpDown", "Random" }),
-          K(P::arpRate, "RATE"), K(P::arpOctaves, "OCT"), K(P::arpGate, "GATE") });
-    // GLIDE / portamento: MODE = Mono (distinct classic glide) / Poly (per-voice), TIME = duration.
-    add(Rack::Zone::Modulation, SizeClass::W3H1, ModuleType::Modulator, "GLIDE", P::glideOn,
-        { C(P::glideMode, "MODE", { "Mono", "Poly" }), K(P::glideTime, "TIME") });
-    // PITCH ENV: one-shot pitch sweep at note-on. AMOUNT = ± semitones (down = kick/zap,
-    // up = laser/riser), TIME = decay. id "pitchenv".
-    add(Rack::Zone::Modulation, SizeClass::W3H1, ModuleType::Modulator, "PITCH ENV", P::pitchEnvOn,
-        { K(P::pitchEnvAmount, "AMOUNT"), K(P::pitchEnvTime, "TIME") });
+    rackBody->addModule(makeModuleDescriptor(Modules::arpeggiator()));
+    rackBody->addModule(makeModuleDescriptor(Modules::glide()));
+    rackBody->addModule(makeModuleDescriptor(Modules::pitchEnv()));
     // MOD MATRIX (Epic 8): the "movement layer". Four routing rows, each SRC → DEST · AMT.
     // Any source can drive any target with its own bipolar amount; multiple rows STACK on one
     // target (summed). The LFO keeps its own TARGET as an implicit routing on top (AC5).
@@ -821,35 +814,16 @@ void SynthyEditor::buildRack()
     // body with TYPE combo + CUTOFF/RESO rings) is built from Modules::filter() instead of a
     // hand-written add(...). Every other module below is still hand-written for now.
     rackBody->addModule(makeModuleDescriptor(Modules::filter()));
-    // M-class so the TYPE combo (2 slots) fits alongside DRIVE + MIX.
-    // DISTORTION TYPE: display text is cosmetic ("Soft Clip"/"Hard Clip" read better) — the
-    // ComboBoxAttachment maps by INDEX, so the canonical param/.synthy strings stay
-    // "SoftClip"/"HardClip" (project-context: UI display may differ from the interop string).
-    // Order/count MUST match distortionType's choices exactly, or the index mapping breaks.
-    // FORMANT / vowel filter: VOWEL morphs A-E-I-O-U, RESO sharpens, MIX dry/wet. 3 knobs => W3H1.
-    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "FORMANT", P::formantOn,
-        { Kmod(P::formantVowel, "VOWEL", ModTarget::FormantVowel), K(P::formantReso, "RESO"), K(P::formantMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::W4H1, ModuleType::Processor, "DISTORTION", P::distortionOn,
-        { C(P::distortionType, "TYPE", { "Soft Clip", "Hard Clip", "Foldback" }),
-          K(P::distortionDrive, "DRIVE"), K(P::distortionMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "WAVEFOLD", P::wavefoldOn,
-        { Kmod(P::wavefoldDrive, "DRIVE", ModTarget::WavefolderDrive), K(P::wavefoldSymmetry, "SYM"), K(P::wavefoldMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "BITCRUSH", P::bitcrushOn,
-        { K(P::bitcrushBits, "BITS"), K(P::bitcrushRate, "RATE"), K(P::bitcrushMix, "MIX") });
-    // PHASER / FLANGER: TYPE combo (2 slots) + 4 knobs => W6H1 (6 cols).
-    add(Rack::Zone::Processing, SizeClass::W6H1, ModuleType::Processor, "PHASER", P::phaserOn,
-        { C(P::phaserType, "TYPE", { "Phaser", "Flanger" }),
-          K(P::phaserRate, "RATE"), K(P::phaserDepth, "DEPTH"),
-          K(P::phaserFeedback, "FB"), K(P::phaserMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "CHORUS", P::chorusOn,
-        { K(P::chorusRate, "RATE"), K(P::chorusDepth, "DEPTH"), K(P::chorusMix, "MIX") });
-    // W5H1 (was W3H1): SYNC combo (Tempo-Sync) added. SYNC=Free => TIME knob; else TIME is the
-    // note division at the host/Sync tempo (TIME knob then ignored).
-    add(Rack::Zone::Processing, SizeClass::W5H1, ModuleType::Processor, "DELAY", P::delayOn,
-        { K(P::delayTime, "TIME"), C(P::delaySyncDiv, "SYNC", SyncDivision::kNames),
-          K(P::delayFeedback, "FB"), K(P::delayMix, "MIX") });
-    add(Rack::Zone::Processing, SizeClass::W3H1, ModuleType::Processor, "REVERB", P::reverbOn,
-        { K(P::reverbRoom, "ROOM"), K(P::reverbDamp, "DAMP"), K(P::reverbMix, "MIX") });
+    // PROCESSING — spec-driven (Modules::*). Display-only combo labels (e.g. DISTORTION
+    // "Soft Clip") live in the spec's displayChoices; canonical strings stay in choices.
+    rackBody->addModule(makeModuleDescriptor(Modules::formant()));
+    rackBody->addModule(makeModuleDescriptor(Modules::distortion()));
+    rackBody->addModule(makeModuleDescriptor(Modules::wavefold()));
+    rackBody->addModule(makeModuleDescriptor(Modules::bitcrush()));
+    rackBody->addModule(makeModuleDescriptor(Modules::phaser()));
+    rackBody->addModule(makeModuleDescriptor(Modules::chorus()));
+    rackBody->addModule(makeModuleDescriptor(Modules::delay()));
+    rackBody->addModule(makeModuleDescriptor(Modules::reverb()));
     // Real visualizers (own instances, separate from the legacy ones behind the rack —
     // one-parent rule). setShowTitle(false): the module header already shows the title.
     // Sharing the one WaveformCapture across instances is safe (updateSnapshot is idempotent

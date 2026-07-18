@@ -16,8 +16,8 @@ namespace Modules
         m.params = {
             { "filterOn",     "Enabled",   "",       ParamSpec::Kind::Bool },
             { "filterType",   "Type",      "TYPE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Lowpass", "Highpass" } },
-            { "filterCutoff", "Cutoff",    "CUTOFF", ParamSpec::Kind::Float, juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 550.0f,  {}, LFOTarget::FilterCutoff },
-            { "filterReso",   "Resonance", "RESO",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 10.0f, 0.01f),          0.707f, {}, LFOTarget::FilterResonance },
+            { "filterCutoff", "Cutoff",    "CUTOFF", ParamSpec::Kind::Float, juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 550.0f,  {}, {}, LFOTarget::FilterCutoff },
+            { "filterReso",   "Resonance", "RESO",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 10.0f, 0.01f),          0.707f, {}, {}, LFOTarget::FilterResonance },
         };
         return m;
     }

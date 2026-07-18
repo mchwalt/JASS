@@ -267,43 +267,7 @@ namespace Parameters
         // are still hand-written and move here one at a time.
         Modules::appendAllParameters(params);
 
-        // Formant / vowel filter (append-only; default off => existing presets unchanged)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::formantOn, 1), "Formant On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::formantVowel, 1), "Formant Vowel", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::formantReso, 1), "Formant Resonance", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::formantMix, 1), "Formant Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
-
-        // Distortion
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::distortionOn, 1), "Distortion On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::distortionType, 1), "Distortion Type", juce::StringArray{"SoftClip", "HardClip", "Foldback"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::distortionDrive, 1), "Distortion Drive", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::distortionMix, 1), "Distortion Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
-
-        // Wavefolder
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::wavefoldOn, 1), "Wavefold On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavefoldDrive, 1), "Wavefold Drive", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavefoldSymmetry, 1), "Wavefold Symmetry", juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 0.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavefoldMix, 1), "Wavefold Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
-
-        // Delay
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::delayOn, 1), "Delay On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayTime, 1), "Delay Time", juce::NormalisableRange<float>(0.01f, 2.0f, 0.01f), 0.3f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayFeedback, 1), "Delay Feedback", juce::NormalisableRange<float>(0.0f, 0.95f, 0.01f), 0.4f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::delayMix, 1), "Delay Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
-        // Tempo-Sync: 0 = Free (use Delay Time knob), else a note division. Append-only; default Free = unchanged.
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::delaySyncDiv, 1), "Delay Sync", SyncDivision::kNames, 0));
-
-        // Chorus
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::chorusOn, 1), "Chorus On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::chorusRate, 1), "Chorus Rate", juce::NormalisableRange<float>(0.1f, 5.0f, 0.01f), 1.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::chorusDepth, 1), "Chorus Depth", juce::NormalisableRange<float>(0.001f, 0.02f, 0.001f), 0.005f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::chorusMix, 1), "Chorus Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-
-        // Reverb
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::reverbOn, 1), "Reverb On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::reverbRoom, 1), "Reverb Room", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::reverbDamp, 1), "Reverb Damping", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::reverbMix, 1), "Reverb Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.3f));
+        // Formant, Distortion, Wavefold, Delay, Chorus, Reverb — now spec-driven.
 
         // LFOs — indexed like the oscillators (one loop for all kNumLFOs). SYNC 0 = Free (use RATE
         // knob), else a note division. All default off/Free so an unused LFO is silent.
@@ -336,33 +300,7 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::wavetableUniVoices, 1), "Wavetable Uni Voices", 1, 7, 1));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableUniDetune, 1), "Wavetable Uni Detune", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
 
-        // Bitcrusher
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::bitcrushOn, 1), "Bitcrush On", false));
-        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::bitcrushBits, 1), "Bitcrush Bits", 1, 16, 8));
-        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::bitcrushRate, 1), "Bitcrush Rate", 1, 50, 1));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::bitcrushMix, 1), "Bitcrush Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 1.0f));
-
-        // Phaser / Flanger (append-only; default off => existing presets unchanged)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::phaserOn, 1), "Phaser On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::phaserType, 1), "Phaser Type", juce::StringArray{"Phaser", "Flanger"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserRate, 1), "Phaser Rate", juce::NormalisableRange<float>(0.05f, 5.0f, 0.01f, 0.4f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserDepth, 1), "Phaser Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserFeedback, 1), "Phaser Feedback", juce::NormalisableRange<float>(0.0f, 0.95f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserMix, 1), "Phaser Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-
-        // Arpeggiator
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::arpOn, 1), "Arp On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::arpRate, 1), "Arp Rate", juce::NormalisableRange<float>(1.0f, 16.0f, 0.1f), 8.0f));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::arpMode, 1), "Arp Mode", juce::StringArray{"Up", "Down", "UpDown", "Random"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::arpOctaves, 1), "Arp Octaves", 1, 4, 2));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::arpGate, 1), "Arp Gate", juce::NormalisableRange<float>(0.05f, 1.0f, 0.01f), 0.5f));
-
-        // Portamento / glide (append-only; default off => existing presets unchanged)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::glideOn, 1), "Glide On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::glideTime, 1), "Glide Time", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f, 0.5f), 0.3f));
-        // Mono (default) = only the newest note sounds, gliding from the previous → distinct
-        // classic portamento. Poly = every note glides in its own voice (subtler, experimental).
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::glideMode, 1), "Glide Mode", juce::StringArray{"Mono", "Poly"}, 0));
+        // Bitcrush, Phaser, Arpeggiator, Glide — now spec-driven.
 
         // Module enables for the formerly always-on modules (Story 2.4). Default TRUE
         // (on) so behaviour is unchanged until the user toggles; append-only.
@@ -373,10 +311,7 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::keyboardOn, 1), "Keyboard On", true));
 
-        // Pitch envelope (append-only; default off => existing presets unchanged)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::pitchEnvOn, 1), "Pitch Env On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvAmount, 1), "Pitch Env Amount", juce::NormalisableRange<float>(-48.0f, 48.0f, 0.1f), 0.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvTime, 1), "Pitch Env Time", juce::NormalisableRange<float>(0.005f, 2.0f, 0.001f, 0.4f), 0.3f));
+        // Pitch envelope — now spec-driven.
 
         // Modulation matrix (Story 8.1 / Epic 8; append-only). N slots, each a {Source, Target,
         // Amount} routing. Source = {LFO 1, Envelope, Velocity}; Target = {Off + the 7 modulation

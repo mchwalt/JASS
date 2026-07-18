@@ -1,0 +1,22 @@
+#pragma once
+#include "ModuleSpec.h"
+
+// PHASER / FLANGER. Values verbatim from Parameters.h.
+namespace Modules
+{
+    inline ModuleSpec phaser()
+    {
+        ModuleSpec m;
+        m.id = "phaser"; m.title = "PHASER"; m.persistObject = "Phaser"; m.enableParamId = "phaserOn";
+        m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W6H1;
+        m.params = {
+            { "phaserOn",       "Enabled",  "",      ParamSpec::Kind::Bool },
+            { "phaserType",     "Type",     "TYPE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Phaser", "Flanger" } },
+            { "phaserRate",     "Rate",     "RATE",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.05f, 5.0f, 0.01f, 0.4f), 0.5f },
+            { "phaserDepth",    "Depth",    "DEPTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),        0.7f },
+            { "phaserFeedback", "Feedback", "FB",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 0.95f, 0.01f),       0.5f },
+            { "phaserMix",      "Mix",      "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),        0.5f },
+        };
+        return m;
+    }
+}
