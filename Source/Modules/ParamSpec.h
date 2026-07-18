@@ -19,7 +19,8 @@ struct ParamSpec
 
     juce::NormalisableRange<float> range {};    // Float / Int
     float defaultValue = 0.0f;                  // Float/Int value · Bool 0/1 · Choice index
-    juce::StringArray choices;                  // Choice items
+    juce::StringArray choices;                  // Choice items — CANONICAL (APVTS + persistence)
+    juce::StringArray displayChoices;           // optional UI-only combo labels (empty => use `choices`)
 
     LFOTarget modTarget = LFOTarget::Off;       // Off => no live mod-ring on this knob
     bool freqDisplay = false;                   // true => FREQ knob shows played frequency (base×ratio)

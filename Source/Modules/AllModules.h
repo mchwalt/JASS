@@ -10,18 +10,26 @@
 #include "MasterSpecs.h"
 #include "SubSpecs.h"
 #include "NoiseSpecs.h"
+#include "FormantSpecs.h"
+#include "DistortionSpecs.h"
+#include "WavefoldSpecs.h"
+#include "BitcrushSpecs.h"
+#include "PhaserSpecs.h"
+#include "ChorusSpecs.h"
+#include "DelaySpecs.h"
+#include "ReverbSpecs.h"
+#include "ArpeggiatorSpecs.h"
+#include "GlideSpecs.h"
+#include "PitchEnvSpecs.h"
 
 namespace Modules
 {
     inline std::vector<ModuleSpec> all()
     {
         return {
-            filter(),
-            compressor(),
-            stereo(),
-            master(),
-            sub(),
-            noise(),
+            filter(), compressor(), stereo(), master(), sub(), noise(),
+            formant(), distortion(), wavefold(), bitcrush(), phaser(), chorus(),
+            delay(), reverb(), arpeggiator(), glide(), pitchEnv(),
         };
     }
 }

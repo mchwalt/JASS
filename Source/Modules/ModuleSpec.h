@@ -41,7 +41,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
     {
         if (p.id == m.enableParamId || ! p.showInBody) continue;   // enable bool / hidden params: no body cell
         if (p.kind == ParamSpec::Kind::Choice)
-            d.body.push_back (rack::Combo { p.id, p.uiLabel, p.choices });
+            d.body.push_back (rack::Combo { p.id, p.uiLabel, p.displayChoices.isEmpty() ? p.choices : p.displayChoices });
         else if (p.kind == ParamSpec::Kind::Bool)
             d.body.push_back (rack::Toggle { p.id, p.uiLabel });
         else
