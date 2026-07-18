@@ -318,10 +318,7 @@ namespace Parameters
             params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoSyncDiv(i), 1), pre + "Sync", SyncDivision::kNames, 0));
         }
 
-        // Noise
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::noiseOn, 1), "Noise On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::noiseType, 1), "Noise Type", juce::StringArray{"White", "Pink", "Brown", "Blue"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::noiseAmp, 1), "Noise Amount", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
+        // Noise, Sub, Stereo, Master, Compressor — now spec-driven (Modules::appendAllParameters).
 
         // Karplus-Strong
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::karplusOn, 1), "Karplus On", false));
@@ -353,12 +350,6 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserFeedback, 1), "Phaser Feedback", juce::NormalisableRange<float>(0.0f, 0.95f, 0.01f), 0.5f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::phaserMix, 1), "Phaser Mix", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
 
-        // Sub oscillator
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::subOn, 1), "Sub On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subWave, 1), "Sub Wave", juce::StringArray{"Sine", "Square"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::subOctave, 1), "Sub Octave", juce::StringArray{"-1 Oct", "-2 Oct"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::subLevel, 1), "Sub Level", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-
         // Arpeggiator
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::arpOn, 1), "Arp On", false));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::arpRate, 1), "Arp Rate", juce::NormalisableRange<float>(1.0f, 16.0f, 0.1f), 8.0f));
@@ -373,20 +364,9 @@ namespace Parameters
         // classic portamento. Poly = every note glides in its own voice (subtler, experimental).
         params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::glideMode, 1), "Glide Mode", juce::StringArray{"Mono", "Poly"}, 0));
 
-        // Stereo width (pseudo-stereo master stage)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::stereoOn, 1), "Stereo On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoWidth, 1), "Stereo Width", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::stereoTime, 1), "Stereo Time", juce::NormalisableRange<float>(1.0f, 15.0f, 0.1f), 12.0f));
-
-        // Master
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::masterVol, 1), "Master Volume", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-
-        // Global sync tempo (Standalone/base BPM; host tempo overrides in a DAW). Append-only.
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::syncTempo, 1), "Sync Tempo", juce::NormalisableRange<float>(40.0f, 250.0f, 1.0f), 130.0f));
-
         // Module enables for the formerly always-on modules (Story 2.4). Default TRUE
         // (on) so behaviour is unchanged until the user toggles; append-only.
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::masterOn,  1), "Master On",   true));
+        // (masterOn is now spec-driven via MasterSpecs.h.)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::adsrOn,    1), "Envelope On", true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Cross Mod On", false));   // off => additive (default)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::scopeOn,    1), "Scope On",    true));
@@ -397,14 +377,6 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::pitchEnvOn, 1), "Pitch Env On", false));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvAmount, 1), "Pitch Env Amount", juce::NormalisableRange<float>(-48.0f, 48.0f, 0.1f), 0.0f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::pitchEnvTime, 1), "Pitch Env Time", juce::NormalisableRange<float>(0.005f, 2.0f, 0.001f, 0.4f), 0.3f));
-
-        // Master-bus compressor (append-only; default off => existing presets unchanged)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::compOn, 1), "Comp On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compThreshold, 1), "Comp Threshold", juce::NormalisableRange<float>(-60.0f, 0.0f, 0.1f), -18.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compRatio, 1), "Comp Ratio", juce::NormalisableRange<float>(1.0f, 20.0f, 0.1f, 0.5f), 2.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compAttack, 1), "Comp Attack", juce::NormalisableRange<float>(0.1f, 100.0f, 0.1f, 0.4f), 10.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compRelease, 1), "Comp Release", juce::NormalisableRange<float>(10.0f, 1000.0f, 1.0f, 0.4f), 120.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::compMakeup, 1), "Comp Makeup", juce::NormalisableRange<float>(0.0f, 24.0f, 0.1f), 0.0f));
 
         // Modulation matrix (Story 8.1 / Epic 8; append-only). N slots, each a {Source, Target,
         // Amount} routing. Source = {LFO 1, Envelope, Velocity}; Target = {Off + the 7 modulation

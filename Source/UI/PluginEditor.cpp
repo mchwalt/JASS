@@ -685,13 +685,10 @@ void SynthyEditor::buildRack()
     // chrome); Master is the new XS class (a single knob). Demonstrates "everything is a
     // module" before we formalise FR14 / the XS size class via correct-course.
     // COMPRESSOR: master-bus glue (runs on the summed mix in processBlock). id "compressor".
-    add(Rack::Zone::MasterBus, SizeClass::W8H1, ModuleType::Processor, "COMPRESSOR", P::compOn,
-        { K(P::compThreshold, "THRESH"), K(P::compRatio, "RATIO"), K(P::compAttack, "ATK"),
-          K(P::compRelease, "REL"), K(P::compMakeup, "GAIN") });
-    add(Rack::Zone::MasterBus, SizeClass::W3H1, ModuleType::Processor, "STEREO", P::stereoOn,
-        { K(P::stereoWidth, "WIDTH"), K(P::stereoTime, "TIME") });
-    add(Rack::Zone::MasterBus, SizeClass::W3H1, ModuleType::Processor, "MASTER", P::masterOn,
-        { K(P::masterVol, "VOL"), K(P::syncTempo, "TEMPO") });   // TEMPO drives Tempo-Sync (host BPM overrides in a DAW)
+    // MASTER BUS — spec-driven (Modules::*). See Source/Modules/*Specs.h.
+    rackBody->addModule(makeModuleDescriptor(Modules::compressor()));
+    rackBody->addModule(makeModuleDescriptor(Modules::stereo()));
+    rackBody->addModule(makeModuleDescriptor(Modules::master()));
 
     // ---- GENERATORS ----
     auto addOsc = [&](int i)
@@ -740,10 +737,8 @@ void SynthyEditor::buildRack()
         rackBody->addModule(std::move(mix));
     }
 
-    add(Rack::Zone::Generators, SizeClass::W3H1, ModuleType::Generator, "SUB", P::subOn,
-        { C(P::subWave, "WAVE", { "Sine", "Square" }), K(P::subLevel, "LEVEL") });
-    add(Rack::Zone::Generators, SizeClass::W3H1, ModuleType::Generator, "NOISE", P::noiseOn,
-        { C(P::noiseType, "TYPE", { "White", "Pink", "Brown", "Blue" }), K(P::noiseAmp, "AMP") });
+    rackBody->addModule(makeModuleDescriptor(Modules::sub()));
+    rackBody->addModule(makeModuleDescriptor(Modules::noise()));
     add(Rack::Zone::Generators, SizeClass::W6H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),

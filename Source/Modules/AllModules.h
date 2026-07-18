@@ -5,6 +5,11 @@
 // the editor (to build rack descriptors) and by ModuleRegistry.cpp (to add APVTS params). Add a
 // module here + its <Name>Specs.h include as it is migrated off the hand-written code.
 #include "FilterSpecs.h"
+#include "CompressorSpecs.h"
+#include "StereoSpecs.h"
+#include "MasterSpecs.h"
+#include "SubSpecs.h"
+#include "NoiseSpecs.h"
 
 namespace Modules
 {
@@ -12,6 +17,11 @@ namespace Modules
     {
         return {
             filter(),
+            compressor(),
+            stereo(),
+            master(),
+            sub(),
+            noise(),
         };
     }
 }
