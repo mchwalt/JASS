@@ -11,6 +11,7 @@
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/SyncDivision.h"
 #include "../DSP/ModMatrix.h"
+#include "../ModuleSpecs.h"   // spec-driven modules (proof: FILTER) — generates APVTS params
 
 namespace Parameters
 {
@@ -260,11 +261,10 @@ namespace Parameters
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::sustain, 1), "Sustain", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
         params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::release, 1), "Release", timeRange, 1.0f));
 
-        // Filter
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::filterOn, 1), "Filter On", false));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::filterType, 1), "Filter Type", juce::StringArray{"Lowpass", "Highpass"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterCutoff, 1), "Filter Cutoff", juce::NormalisableRange<float>(20.0f, 20000.0f, 1.0f, 0.3f), 550.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::filterReso, 1), "Filter Resonance", juce::NormalisableRange<float>(0.1f, 10.0f, 0.01f), 0.707f));
+        // Filter — GENERATED from its ModuleSpec (proof of the module-spec architecture; see
+        // docs/Modul_Architektur_Konzept.md). Replaces the 4 hand-written push_back lines; the
+        // DSP wiring in applyToVoice still reads ID::filter* (same id strings).
+        appendModuleParameters(Modules::filter(), params);
 
         // Formant / vowel filter (append-only; default off => existing presets unchanged)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::formantOn, 1), "Formant On", false));
