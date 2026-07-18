@@ -11,12 +11,12 @@ Das eigene **TARGET** des LFOs ist im Grunde auch ein eingebautes Routing und ko
 
 ## Ziele — jedes braucht sein Modul an, um hörbar zu sein
 
-- **Pitch** — geht immer (die Oszillatoren).
-- **Amplitude** — geht immer (Lautstärke).
-- **Cutoff** / **Resonance** — brauchen das **FILTER**-Modul an.
-- **WT Pos** — braucht das **WAVETABLE**-Modul an.
-- **Vowel** — braucht das **FORMANT**-Modul an.
-- **Wavefold** — braucht das **WAVEFOLD**-Modul an.
+- **Pitch** (Tonhöhe) — geht immer (die Oszillatoren).
+- **Amplitude** (Lautstärke) — geht immer.
+- **Cutoff** (Filter-Grenzfrequenz = „Helligkeit") / **Resonance** (Resonanz = Betonung an der Grenzfrequenz) — brauchen das **FILTER**-Modul an.
+- **WT Pos** (Wavetable-Position = Durchlauf durch die Wellenformen) — braucht das **WAVETABLE**-Modul an.
+- **Vowel** (Vokal-Klangfarbe, „ah/oh/ih") — braucht das **FORMANT**-Modul an.
+- **Wavefold** (Wellenfaltung = Verzerrung durch Falten der Welle) — braucht das **WAVEFOLD**-Modul an.
 
 - **AMT** — Stärke, bipolar: rechts addiert, links invertiert, Mitte (0) bewirkt nichts.
 

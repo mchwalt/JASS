@@ -468,6 +468,16 @@ void SynthyEditor::timerCallback()
             else if (keyboard->hasKeyboardFocus (true))
                 keyboard->giveAwayKeyboardFocus();
         }
+
+        // A modal popup (MODULES call-out, a combo dropdown, …) grabs the keyboard focus, so
+        // computer-key playing pauses while it's open. When it closes, hand focus back to the
+        // on-screen keyboard so playing resumes without an extra click — but NOT while the user
+        // is typing in a value box (a TextEditor has focus then). Edge-triggered on modal-close.
+        const bool modalOpen = juce::Component::getCurrentlyModalComponent() != nullptr;
+        if (keyboardPlayable && modalWasOpen && ! modalOpen
+            && dynamic_cast<juce::TextEditor*> (juce::Component::getCurrentlyFocusedComponent()) == nullptr)
+            keyboard->grabKeyboardFocus();
+        modalWasOpen = modalOpen;
     }
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
