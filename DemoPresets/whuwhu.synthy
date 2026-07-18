@@ -1,0 +1,204 @@
+{
+  "FormatVersion": 3,
+  "Name": "whuwhu",
+  "Modified": false,
+  "Filter": {
+    "Enabled": true,
+    "Type": "Lowpass",
+    "Cutoff": 702.0,
+    "Resonance": 0.25
+  },
+  "Compressor": {
+    "Enabled": false,
+    "Threshold": -18.0,
+    "Ratio": 2.0,
+    "Attack": 10.000000953674316,
+    "Release": 120.0,
+    "Makeup": 0.0
+  },
+  "Stereo": {
+    "Enabled": false,
+    "Width": 0.5,
+    "Time": 12.0
+  },
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 130.0
+  },
+  "Sub": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Octave": "-2 Oct",
+    "Level": 0.579999983310699
+  },
+  "Noise": {
+    "Enabled": true,
+    "Type": "Pink",
+    "Amount": 0.649999976158142
+  },
+  "Formant": {
+    "Enabled": false,
+    "Vowel": 0.0,
+    "Resonance": 0.5,
+    "Mix": 1.0
+  },
+  "Distortion": {
+    "Enabled": true,
+    "Type": "HardClip",
+    "Drive": 0.209999993443489,
+    "Mix": 0.779999971389771
+  },
+  "Wavefold": {
+    "Enabled": false,
+    "Drive": 0.550000011920929,
+    "Symmetry": 0.929999947547913,
+    "Mix": 0.25
+  },
+  "Bitcrush": {
+    "Enabled": true,
+    "Bits": 11.0,
+    "Rate": 7.0,
+    "Mix": 0.629999995231628
+  },
+  "Phaser": {
+    "Enabled": false,
+    "Type": "Phaser",
+    "Rate": 0.5,
+    "Depth": 0.699999988079071,
+    "Feedback": 0.5,
+    "Mix": 0.5
+  },
+  "Chorus": {
+    "Enabled": true,
+    "Rate": 2.899999856948853,
+    "Depth": 0.014000000432134,
+    "Mix": 0.669999957084656
+  },
+  "Delay": {
+    "Enabled": false,
+    "Time": 1.889999985694885,
+    "SyncDiv": "Free",
+    "Feedback": 0.009999999776483,
+    "Mix": 0.719999969005585
+  },
+  "Reverb": {
+    "Enabled": false,
+    "RoomSize": 0.140000000596046,
+    "Damping": 0.269999980926514,
+    "Mix": 0.779999971389771
+  },
+  "Arp": {
+    "Enabled": false,
+    "Mode": "Up",
+    "Rate": 8.0,
+    "Octaves": 2.0,
+    "Gate": 0.5
+  },
+  "Glide": {
+    "Enabled": false,
+    "Mode": "Mono",
+    "Time": 0.300000011920929
+  },
+  "PitchEnv": {
+    "Enabled": false,
+    "Amount": 0.0,
+    "Time": 0.300000011920929
+  },
+  "Osc1": {
+    "Enabled": true,
+    "Waveform": "Square",
+    "Frequency": 1264.0,
+    "Amplitude": 0.219999998807907,
+    "UnisonVoices": 2.0,
+    "UnisonDetune": 0.467000007629395,
+    "Feedback": 0.0
+  },
+  "Osc2": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Frequency": 1125.0,
+    "Amplitude": 0.719999969005585,
+    "UnisonVoices": 2.0,
+    "UnisonDetune": 0.12100000679493,
+    "Feedback": 0.0
+  },
+  "Osc3": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Frequency": 2964.0,
+    "Amplitude": 0.049999997019768,
+    "UnisonVoices": 6.0,
+    "UnisonDetune": 0.401000022888184,
+    "Feedback": 0.0
+  },
+  "CrossMod": {
+    "On": false,
+    "Mode": "RingMod",
+    "SrcA": "OSC 1",
+    "SrcB": "OSC 2"
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "Square",
+    "Target": "Frequency",
+    "Rate": 7.400000095367432,
+    "SyncDiv": "Free",
+    "Depth": 0.519999980926514
+  },
+  "Lfo2": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 2.0,
+    "SyncDiv": "Free",
+    "Depth": 0.5
+  },
+  "ModMatrix": {
+    "On": false,
+    "Slot1Source": "LFO 1",
+    "Slot1Target": "Off",
+    "Slot1Amount": 0.0,
+    "Slot2Source": "LFO 1",
+    "Slot2Target": "Off",
+    "Slot2Amount": 0.0,
+    "Slot3Source": "LFO 1",
+    "Slot3Target": "Off",
+    "Slot3Amount": 0.0,
+    "Slot4Source": "LFO 1",
+    "Slot4Target": "Off",
+    "Slot4Amount": 0.0
+  },
+  "Karplus": {
+    "Enabled": true,
+    "Frequency": 1604.0,
+    "Amplitude": 0.419999986886978,
+    "Damping": 0.340000003576279,
+    "Stretch": 0.419999986886978
+  },
+  "Wavetable": {
+    "Enabled": true,
+    "BankIndex": 2.0,
+    "Position": 0.392000019550323,
+    "Frequency": 164.0,
+    "Amplitude": 0.939999997615814,
+    "UnisonVoices": 5.0,
+    "UnisonDetune": 0.304000020027161
+  },
+  "Adsr": {
+    "Enabled": true,
+    "Attack": 0.240000009536743,
+    "Decay": 1.692000150680542,
+    "Sustain": 0.879999995231628,
+    "Release": 2.23799991607666
+  },
+  "Scope": {
+    "Enabled": true
+  },
+  "Spectrum": {
+    "Enabled": true
+  },
+  "Keyboard": {
+    "Enabled": true
+  }
+}

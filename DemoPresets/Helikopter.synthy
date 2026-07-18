@@ -1,12 +1,12 @@
 {
   "FormatVersion": 3,
-  "Name": "Matrix Demo",
+  "Name": "Helikopter",
   "Modified": false,
   "Filter": {
     "Enabled": true,
     "Type": "Lowpass",
-    "Cutoff": 500.0,
-    "Resonance": 2.499999761581421
+    "Cutoff": 1917.0,
+    "Resonance": 3.659999847412109
   },
   "Compressor": {
     "Enabled": false,
@@ -18,8 +18,8 @@
   },
   "Stereo": {
     "Enabled": true,
-    "Width": 0.5,
-    "Time": 12.0
+    "Width": 1.0,
+    "Time": 8.399999618530273
   },
   "Master": {
     "On": true,
@@ -33,9 +33,9 @@
     "Level": 0.5
   },
   "Noise": {
-    "Enabled": false,
+    "Enabled": true,
     "Type": "White",
-    "Amount": 0.5
+    "Amount": 0.419999986886978
   },
   "Formant": {
     "Enabled": false,
@@ -44,16 +44,16 @@
     "Mix": 1.0
   },
   "Distortion": {
-    "Enabled": false,
+    "Enabled": true,
     "Type": "SoftClip",
-    "Drive": 0.5,
-    "Mix": 1.0
+    "Drive": 0.209999993443489,
+    "Mix": 0.070000000298023
   },
   "Wavefold": {
-    "Enabled": false,
-    "Drive": 0.299999982118607,
-    "Symmetry": 0.0,
-    "Mix": 1.0
+    "Enabled": true,
+    "Drive": 0.379999995231628,
+    "Symmetry": 0.629999995231628,
+    "Mix": 0.649999976158142
   },
   "Bitcrush": {
     "Enabled": false,
@@ -70,23 +70,23 @@
     "Mix": 0.5
   },
   "Chorus": {
-    "Enabled": false,
-    "Rate": 1.5,
-    "Depth": 0.005000000353903,
-    "Mix": 0.5
+    "Enabled": true,
+    "Rate": 3.93999981880188,
+    "Depth": 0.002000000094995,
+    "Mix": 0.579999983310699
   },
   "Delay": {
-    "Enabled": false,
-    "Time": 0.299999982118607,
+    "Enabled": true,
+    "Time": 0.929999947547913,
     "SyncDiv": "Free",
-    "Feedback": 0.399999976158142,
-    "Mix": 0.299999982118607
+    "Feedback": 0.229999989271164,
+    "Mix": 0.370000004768372
   },
   "Reverb": {
     "Enabled": true,
-    "RoomSize": 0.5,
-    "Damping": 0.399999976158142,
-    "Mix": 0.280000001192093
+    "RoomSize": 0.719999969005585,
+    "Damping": 0.389999985694885,
+    "Mix": 0.070000000298023
   },
   "Arp": {
     "Enabled": false,
@@ -106,45 +106,45 @@
     "Time": 0.300000011920929
   },
   "Osc1": {
-    "Enabled": true,
+    "Enabled": false,
     "Waveform": "Sawtooth",
-    "Frequency": 262.0,
-    "Amplitude": 0.449999988079071,
-    "UnisonVoices": 3.0,
-    "UnisonDetune": 0.25,
+    "Frequency": 4579.0,
+    "Amplitude": 0.919999957084656,
+    "UnisonVoices": 7.0,
+    "UnisonDetune": 0.215000003576279,
     "Feedback": 0.0
   },
   "Osc2": {
     "Enabled": true,
     "Waveform": "Sawtooth",
-    "Frequency": 523.0,
-    "Amplitude": 0.319999992847443,
-    "UnisonVoices": 3.0,
-    "UnisonDetune": 0.200000002980232,
+    "Frequency": 6021.0,
+    "Amplitude": 0.349999994039536,
+    "UnisonVoices": 4.0,
+    "UnisonDetune": 0.453000009059906,
     "Feedback": 0.0
   },
   "Osc3": {
     "Enabled": true,
     "Waveform": "Sawtooth",
     "Frequency": 131.0,
-    "Amplitude": 0.399999976158142,
-    "UnisonVoices": 1.0,
-    "UnisonDetune": 0.0,
+    "Amplitude": 0.639999985694885,
+    "UnisonVoices": 4.0,
+    "UnisonDetune": 0.27700001001358,
     "Feedback": 0.0
   },
   "CrossMod": {
-    "On": false,
-    "Mode": "RingMod",
+    "On": true,
+    "Mode": "FM",
     "SrcA": "OSC 1",
     "SrcB": "OSC 2"
   },
   "Lfo1": {
     "Enabled": true,
-    "Waveform": "Sine",
-    "Target": "Filter Cutoff",
-    "Rate": 3.0,
+    "Waveform": "Triangle",
+    "Target": "Amplitude",
+    "Rate": 11.90000057220459,
     "SyncDiv": "Free",
-    "Depth": 0.5
+    "Depth": 0.789999961853027
   },
   "Lfo2": {
     "Enabled": false,
@@ -155,13 +155,13 @@
     "Depth": 0.5
   },
   "ModMatrix": {
-    "On": true,
-    "Slot1Source": "Envelope",
-    "Slot1Target": "Cutoff",
-    "Slot1Amount": 0.5,
-    "Slot2Source": "Velocity",
-    "Slot2Target": "Cutoff",
-    "Slot2Amount": 0.350000023841858,
+    "On": false,
+    "Slot1Source": "LFO 1",
+    "Slot1Target": "Off",
+    "Slot1Amount": 0.0,
+    "Slot2Source": "LFO 1",
+    "Slot2Target": "Off",
+    "Slot2Amount": 0.0,
     "Slot3Source": "LFO 1",
     "Slot3Target": "Off",
     "Slot3Amount": 0.0,
@@ -171,26 +171,26 @@
   },
   "Karplus": {
     "Enabled": false,
-    "Frequency": 262.0,
-    "Amplitude": 0.5,
-    "Damping": 0.5,
-    "Stretch": 0.0
+    "Frequency": 1020.0,
+    "Amplitude": 0.469999998807907,
+    "Damping": 0.889999985694885,
+    "Stretch": 0.909999966621399
   },
   "Wavetable": {
-    "Enabled": false,
-    "BankIndex": 0.0,
-    "Position": 0.0,
-    "Frequency": 262.0,
-    "Amplitude": 0.5,
+    "Enabled": true,
+    "BankIndex": 1.0,
+    "Position": 0.461000025272369,
+    "Frequency": 3466.0,
+    "Amplitude": 0.009999999776483,
     "UnisonVoices": 1.0,
-    "UnisonDetune": 0.200000002980232
+    "UnisonDetune": 0.281000018119812
   },
   "Adsr": {
     "Enabled": true,
-    "Attack": 0.02000000141561,
-    "Decay": 0.5,
-    "Sustain": 0.550000011920929,
-    "Release": 0.700000047683716
+    "Attack": 0.106000006198883,
+    "Decay": 0.305999994277954,
+    "Sustain": 0.75,
+    "Release": 0.08500000834465
   },
   "Scope": {
     "Enabled": true
