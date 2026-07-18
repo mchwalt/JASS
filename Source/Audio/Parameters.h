@@ -196,63 +196,8 @@ namespace Parameters
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-        // Oscillators — default tuning is an OCTAVE STACK (not a chord): OSC1
-        // at C4 (= the played note, since pitch transposes relative to C4),
-        // OSC2 one octave up (brilliance), OSC3 one octave down (body/sub).
-        // Octaves (2:1) stay consonant with ANY note or chord the user plays,
-        // so all three together sound full but never "off" — unlike the old
-        // C-E-G major triad, which forced a major chord onto every key.
-        float defaultFreqs[] = { 261.63f, 523.25f, 130.81f };  // C4, C5, C3
-        float defaultAmps[]  = { 0.5f, 0.5f, 0.5f };  // all amp knobs default to half
-
-        for (int i = 1; i <= 3; ++i)
-        {
-            params.push_back(std::make_unique<juce::AudioParameterBool>(
-                juce::ParameterID(ID::oscOn(i), 1),
-                "OSC " + juce::String(i) + " On", false));
-
-            params.push_back(std::make_unique<juce::AudioParameterChoice>(
-                juce::ParameterID(ID::oscWave(i), 1),
-                "OSC " + juce::String(i) + " Wave",
-                juce::StringArray{"Sine", "Sawtooth", "Square", "Triangle"}, 0));
-
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID(ID::oscFreq(i), 1),
-                "OSC " + juce::String(i) + " Freq",
-                juce::NormalisableRange<float>(20.0f, 10000.0f, 1.0f, 0.3f),
-                defaultFreqs[i - 1]));
-
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID(ID::oscAmp(i), 1),
-                "OSC " + juce::String(i) + " Amp",
-                juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f),
-                defaultAmps[i - 1]));
-
-            // Per-oscillator unison (detune 0..1 = ±1 semitone, matching C#)
-            params.push_back(std::make_unique<juce::AudioParameterInt>(
-                juce::ParameterID(ID::oscUniVoices(i), 1),
-                "OSC " + juce::String(i) + " Uni Voices", 1, 7, 1));
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID(ID::oscUniDetune(i), 1),
-                "OSC " + juce::String(i) + " Uni Detune",
-                juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
-
-            // Self-FM / feedback (append-only; default 0 = off, so existing
-            // presets/users are unchanged until the knob is turned up).
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID(ID::oscFeedback(i), 1),
-                "OSC " + juce::String(i) + " Feedback",
-                juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.0f));
-        }
-
-        // Mix mode
-        // CROSS MOD (Epic 5 / Option B): the mode holds only the real couplings; "Additive"
-        // (no coupling) is the module being disabled (mixModeOn=false). PresetIO maps the on-disk
-        // "Additive"/"RingMod"/"FM" via choiceOrOff, so old presets still round-trip.
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixMode, 1), "Cross Mod", juce::StringArray{"RingMod", "FM"}, 0));
-        // Epic 5: selectable RingMod/FM operands (append-only; defaults OSC1/OSC2 = prior behaviour).
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixSrcA, 1), "Mix Source A", juce::StringArray{"OSC 1", "OSC 2", "OSC 3"}, 0));
-        params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::mixSrcB, 1), "Mix Source B", juce::StringArray{"OSC 1", "OSC 2", "OSC 3"}, 1));
+        // Oscillators (OSC 1-3, octave stack C4/C5/C3) + CROSS MOD — now spec-driven
+        // (OscSpecs.h / CrossModSpecs.h via Modules::appendAllParameters).
 
         // ADSR
         auto timeRange = juce::NormalisableRange<float>(0.001f, 5.0f, 0.001f, 0.4f);
@@ -269,20 +214,8 @@ namespace Parameters
 
         // Formant, Distortion, Wavefold, Delay, Chorus, Reverb — now spec-driven.
 
-        // LFOs — indexed like the oscillators (one loop for all kNumLFOs). SYNC 0 = Free (use RATE
-        // knob), else a note division. All default off/Free so an unused LFO is silent.
-        for (int i = 1; i <= kNumLFOs; ++i)
-        {
-            const juce::String pre = "LFO " + juce::String(i) + " ";
-            params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoWave(i), 1), pre + "Wave", juce::StringArray{"Sine", "Triangle", "Square", "Sawtooth"}, 0));
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoRate(i), 1), pre + "Rate", juce::NormalisableRange<float>(0.1f, 20.0f, 0.1f), 2.0f));
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::lfoDepth(i), 1), pre + "Depth", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-            params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::lfoOn(i), 1), pre + "On", false));
-            params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoTarget(i), 1), pre + "Target", juce::StringArray{"Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive"}, 0));
-            params.push_back(std::make_unique<juce::AudioParameterChoice>(juce::ParameterID(ID::lfoSyncDiv(i), 1), pre + "Sync", SyncDivision::kNames, 0));
-        }
-
-        // Noise, Sub, Stereo, Master, Compressor — now spec-driven (Modules::appendAllParameters).
+        // LFOs (indexed), OSC 1-3, CROSS MOD, MOD MATRIX, and the pure effect/generator modules
+        // are all spec-driven now — see Modules::appendAllParameters() (Source/Modules/*Specs.h).
 
         // Karplus-Strong
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::karplusOn, 1), "Karplus On", false));
@@ -306,32 +239,11 @@ namespace Parameters
         // (on) so behaviour is unchanged until the user toggles; append-only.
         // (masterOn is now spec-driven via MasterSpecs.h.)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::adsrOn,    1), "Envelope On", true));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::mixModeOn, 1), "Cross Mod On", false));   // off => additive (default)
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::scopeOn,    1), "Scope On",    true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
         params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::keyboardOn, 1), "Keyboard On", true));
 
-        // Pitch envelope — now spec-driven.
-
-        // Modulation matrix (Story 8.1 / Epic 8; append-only). N slots, each a {Source, Target,
-        // Amount} routing. Source = {LFO 1, Envelope, Velocity}; Target = {Off + the 7 modulation
-        // destinations} with "Off" at index 0 == slot inactive (so the Target index maps 1:1 to
-        // LFOTarget). Amount is bipolar (-1..+1), default 0 = no effect. The Target display names
-        // are cosmetic — the ComboBoxAttachment maps by INDEX (persistence uses canonical names).
-        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-        {
-            params.push_back(std::make_unique<juce::AudioParameterChoice>(
-                juce::ParameterID(ID::modSlotSource(n), 1), "Mod " + juce::String(n) + " Source",
-                juce::StringArray{ "LFO 1", "Envelope", "Velocity", "LFO 2" }, 0));   // ORDER == ModSource (append-only)
-            params.push_back(std::make_unique<juce::AudioParameterChoice>(
-                juce::ParameterID(ID::modSlotTarget(n), 1), "Mod " + juce::String(n) + " Target",
-                juce::StringArray{ "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" }, 0));   // ORDER == LFOTarget (0=Off..7)
-            params.push_back(std::make_unique<juce::AudioParameterFloat>(
-                juce::ParameterID(ID::modSlotAmount(n), 1), "Mod " + juce::String(n) + " Amount",
-                juce::NormalisableRange<float>(-1.0f, 1.0f, 0.01f), 0.0f));
-        }
-        params.push_back(std::make_unique<juce::AudioParameterBool>(
-            juce::ParameterID(ID::modMatrixOn, 1), "Mod Matrix On", true));
+        // Pitch envelope + MOD MATRIX — now spec-driven.
 
         return { params.begin(), params.end() };
     }

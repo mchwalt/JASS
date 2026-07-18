@@ -1,0 +1,29 @@
+#pragma once
+#include "ModuleSpec.h"
+#include "../DSP/SyncDivision.h"   // SyncDivision::kNames for the SYNC combo
+
+// LFO 1..kNumLFOs — indexed factory. LFO 1 keeps the stable id "lfo" (help/layout) and is visible;
+// further LFOs are "lfo2"/"lfo3"… and hidden by default. Body order: WAVE, TARGET, RATE, SYNC, DEPTH.
+namespace Modules
+{
+    inline ModuleSpec lfo (int i)
+    {
+        const juce::String p = "lfo" + juce::String (i);
+        ModuleSpec m;
+        m.id    = (i == 1) ? juce::String ("lfo") : p;   // id "lfo" for LFO 1 (stable help/layout key)
+        m.title = "LFO " + juce::String (i);
+        m.persistObject = "Lfo" + juce::String (i);
+        m.enableParamId = p + "On";
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W8H1;
+        m.defaultVisible = (i == 1);
+        m.params = {
+            { p + "On",      "Enabled",  "",       ParamSpec::Kind::Bool },
+            { p + "Wave",    "Waveform", "WAVE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Triangle", "Square", "Sawtooth" } },
+            { p + "Target",  "Target",   "TARGET", ParamSpec::Kind::Choice, {}, 0.0f, { "Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive" } },
+            { p + "Rate",    "Rate",     "RATE",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 20.0f, 0.1f), 2.0f },
+            { p + "SyncDiv", "SyncDiv",  "SYNC",   ParamSpec::Kind::Choice, {}, 0.0f, SyncDivision::kNames },
+            { p + "Depth",   "Depth",    "DEPTH",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
+        };
+        return m;
+    }
+}
