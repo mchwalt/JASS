@@ -649,15 +649,7 @@ void SynthyEditor::buildRack()
     // a knob tagged as an LFO ring target …
     auto Kmod = [](juce::String id, juce::String lbl, ModTarget mt)
              { Knob k{ std::move(id), std::move(lbl) }; k.modTarget = mt; return k; };
-    // … and a FREQ knob with the played-frequency display transform (base × ratio).
-    auto Kfreq = [](juce::String id, juce::String lbl)
-             {
-                 Knob k{ std::move(id), std::move(lbl) };
-                 k.modTarget    = ModTarget::Frequency;
-                 k.toDisplay    = [](double base,  double ratio) { return base  * ratio; };
-                 k.fromDisplay  = [](double shown, double ratio) { return shown / ratio; };
-                 return k;
-             };
+    // (Kfreq — the FREQ display-transform helper — is now in OscSpecs.h via freqDisplay.)
 
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
                    juce::String enableParam, std::vector<BodyElement> body,
@@ -675,10 +667,6 @@ void SynthyEditor::buildRack()
         rackBody->addModule(std::move(d));
     };
 
-    // OSC WAVE items MUST match the oscWave param's choice ORDER — the ComboBoxAttachment
-    // maps by index, so a different order mislabels every waveform (same class of bug as the
-    // LFO-WAVE fix in Story 2.1). oscWave = { Sine, Sawtooth, Square, Triangle } (Parameters.h).
-    const juce::StringArray waves { "Sine", "Sawtooth", "Square", "Triangle" };
 
     // ---- MASTER BUS (top row; PROTOTYPE: decisions A+B) ----
     // Stereo becomes a normal module whose Enable IS stereoOn (no special-case header
