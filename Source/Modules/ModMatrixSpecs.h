@@ -18,9 +18,10 @@ namespace Modules
         for (int n = 1; n <= 4; ++n)   // kNumSlots (ModMatrixConfig::kNumSlots)
         {
             const juce::String s = "modSlot" + juce::String (n);
-            m.params.push_back ({ s + "Source", "Source", "SRC",  ParamSpec::Kind::Choice, {}, 0.0f, src });
-            m.params.push_back ({ s + "Target", "Target", "DEST", ParamSpec::Kind::Choice, {}, 0.0f, tgt });
-            m.params.push_back ({ s + "Amount", "Amount", "AMT",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f });
+            const juce::String k = "Slot" + juce::String (n);   // unique persist keys within the ModMatrix object
+            m.params.push_back ({ s + "Source", k + "Source", "SRC",  ParamSpec::Kind::Choice, {}, 0.0f, src });
+            m.params.push_back ({ s + "Target", k + "Target", "DEST", ParamSpec::Kind::Choice, {}, 0.0f, tgt });
+            m.params.push_back ({ s + "Amount", k + "Amount", "AMT",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f });
         }
         return m;
     }
