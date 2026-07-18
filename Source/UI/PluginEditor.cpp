@@ -767,8 +767,8 @@ void SynthyEditor::buildRack()
     {
         ModuleDescriptor d;
         d.sizeClass = SizeClass::W8H1; d.type = ModuleType::Modulator;
-        d.id    = (i == 1) ? juce::String("lfo") : ("lfo" + juce::String(i));
-        d.title = (i == 1) ? juce::String("LFO") : ("LFO " + juce::String(i));
+        d.id    = (i == 1) ? juce::String("lfo") : ("lfo" + juce::String(i));   // id "lfo" stays for help/layout
+        d.title = "LFO " + juce::String(i);   // display "LFO 1", "LFO 2", … (id stays "lfo" for LFO 1)
         d.defaultZone = Rack::Zone::Modulation;
         d.defaultVisible = (i == 1);
         d.enableParam = P::lfoOn(i);
@@ -793,7 +793,9 @@ void SynthyEditor::buildRack()
     // Target items MUST match the modSlotTarget param choices in order (attachment maps by
     // index); "Off" = row inactive. Sizing (W12H4, one routing per row) is tunable in-app. id "modmatrix".
     {
-        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity" };
+        // MUST match the modSlotSource param choices in order (== ModSource): LFO 2 is
+        // appended (append-only), so it sits AFTER Velocity even though it reads oddly.
+        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2" };
         const juce::StringArray tgtItems { "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" };   // ORDER == LFOTarget / modSlotTarget param
         std::vector<BodyElement> matrixBody;
         for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
