@@ -222,6 +222,15 @@ Das ersetzt: die 4 IDs, die 4 `createLayout`-Zeilen, die 3 `toVar`- + 3 `applyVa
 2. ✅ **DSP getrennt** lassen (`Source/DSP/`) — die Spec beschreibt nur Params/UI/Persistenz.
 3. ✅ **Kein dauerhafter Migrations-Fallback** — die wenigen vorhandenen Presets werden **einmalig konvertiert** (flach → nested), dann liest/schreibt PresetIO nur noch das nested-Format. (Passiert erst im koordinierten Persistenz-Schritt.)
 
+## 13. Fortschritt (2026-07-19)
+
+- ✅ **Layer-Trennung + Registry** (`Source/Modules/`): `ParamSpec.h` (audio) / `ModuleSpec.h` (UI) / `ModuleRegistry.{h,cpp}` / `AllModules.h`. `Parameters.h` ist UI-frei.
+- ✅ **17 reine Parameter-Module** spec-getrieben, je eigener `<Name>Specs.h`: Filter, Compressor, Stereo, Master, Sub, Noise, Formant, Distortion, Wavefold, Bitcrush, Phaser, Chorus, Delay, Reverb, Arpeggiator, Glide, PitchEnv. **Param-Anzahl exakt erhalten** (byte-identisch). Model-Erweiterungen: `showInBody` (SUB-Octave), `displayChoices` (DISTORTION-Anzeige), `freqDisplay` (für OSC vorbereitet).
+- ⏳ **Rest (Sonderfälle, brauchen Indizierung oder Editor-Kontext):**
+  - *Voll spec-bar (Factory):* OSC 1–3 (freqDisplay/AMP-Ring), LFO 1–2, MOD MATRIX (Slot-Zeilen).
+  - *Params spec-bar, UI editor-gebunden (Display/Action/enabledWhen):* CROSS MOD, STRING-KARPLUS (PLUCK), WAVETABLE (LOAD WAV), ENVELOPE-ADSR (Kurve), OSCILLOSCOPE, SPECTRUM, KEYBOARD.
+- ⏳ **Danach:** `.synthy` auf nested pro Modul (persistObject/persistKey stehen schon in den Specs) + Einmal-Konvertierung der vorhandenen Presets.
+
 ## 12. Stand (Proof umgesetzt, 2026-07-19)
 
 **FILTER läuft spec-getrieben** — `Source/ModuleSpec.h` (Modell + Generatoren `makeParameter`/
