@@ -196,54 +196,10 @@ namespace Parameters
     {
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
-        // Oscillators (OSC 1-3, octave stack C4/C5/C3) + CROSS MOD — now spec-driven
-        // (OscSpecs.h / CrossModSpecs.h via Modules::appendAllParameters).
-
-        // ADSR
-        auto timeRange = juce::NormalisableRange<float>(0.001f, 5.0f, 0.001f, 0.4f);
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::attack,  1), "Attack",  timeRange, 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::decay,   1), "Decay",   timeRange, 0.3f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::sustain, 1), "Sustain", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.7f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::release, 1), "Release", timeRange, 1.0f));
-
-        // Spec-driven modules — GENERATED from their ModuleSpecs (see docs/Modul_Architektur_Konzept.md).
-        // Adds the APVTS params for every migrated module (currently FILTER). The DSP wiring in
-        // applyToVoice + PresetIO still read the ID:: strings (same ids). Remaining modules below
-        // are still hand-written and move here one at a time.
+        // ALL modules are spec-driven now: every APVTS parameter comes from a ModuleSpec
+        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/Modul_Architektur_Konzept.md.
+        // The DSP wiring in applyToVoice + PresetIO still read the ID:: strings (unchanged ids).
         Modules::appendAllParameters(params);
-
-        // Formant, Distortion, Wavefold, Delay, Chorus, Reverb — now spec-driven.
-
-        // LFOs (indexed), OSC 1-3, CROSS MOD, MOD MATRIX, and the pure effect/generator modules
-        // are all spec-driven now — see Modules::appendAllParameters() (Source/Modules/*Specs.h).
-
-        // Karplus-Strong
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::karplusOn, 1), "Karplus On", false));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::karplusFreq, 1), "Karplus Freq", juce::NormalisableRange<float>(20.0f, 2000.0f, 1.0f, 0.3f), 261.63f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::karplusAmp, 1), "Karplus Amp", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::karplusDamping, 1), "Karplus Damping", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::karplusStretch, 1), "Karplus Stretch", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.0f));
-
-        // Wavetable
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::wavetableOn, 1), "Wavetable On", false));
-        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::wavetableBank, 1), "Wavetable Bank", 0, WavetableBankStore::MaxBanks - 1, 0));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetablePosition, 1), "Wavetable Position", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.0f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableFreq, 1), "Wavetable Freq", juce::NormalisableRange<float>(20.0f, 10000.0f, 1.0f, 0.3f), 261.63f));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableAmp, 1), "Wavetable Amp", juce::NormalisableRange<float>(0.0f, 1.0f, 0.01f), 0.5f));
-        params.push_back(std::make_unique<juce::AudioParameterInt>(juce::ParameterID(ID::wavetableUniVoices, 1), "Wavetable Uni Voices", 1, 7, 1));
-        params.push_back(std::make_unique<juce::AudioParameterFloat>(juce::ParameterID(ID::wavetableUniDetune, 1), "Wavetable Uni Detune", juce::NormalisableRange<float>(0.0f, 1.0f, 0.001f), 0.2f));
-
-        // Bitcrush, Phaser, Arpeggiator, Glide — now spec-driven.
-
-        // Module enables for the formerly always-on modules (Story 2.4). Default TRUE
-        // (on) so behaviour is unchanged until the user toggles; append-only.
-        // (masterOn is now spec-driven via MasterSpecs.h.)
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::adsrOn,    1), "Envelope On", true));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::scopeOn,    1), "Scope On",    true));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::spectrumOn, 1), "Spectrum On", true));
-        params.push_back(std::make_unique<juce::AudioParameterBool>(juce::ParameterID(ID::keyboardOn, 1), "Keyboard On", true));
-
-        // Pitch envelope + MOD MATRIX — now spec-driven.
 
         return { params.begin(), params.end() };
     }

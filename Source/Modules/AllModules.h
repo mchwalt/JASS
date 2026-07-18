@@ -25,6 +25,10 @@
 #include "CrossModSpecs.h"
 #include "LfoSpecs.h"
 #include "ModMatrixSpecs.h"
+#include "KarplusSpecs.h"
+#include "WavetableSpecs.h"
+#include "AdsrSpecs.h"
+#include "DisplaySpecs.h"
 
 namespace Modules
 {
@@ -35,6 +39,7 @@ namespace Modules
             formant(), distortion(), wavefold(), bitcrush(), phaser(), chorus(),
             delay(), reverb(), arpeggiator(), glide(), pitchEnv(),
             osc(1), osc(2), osc(3), crossmod(), lfo(1), lfo(2), modMatrix(),
+            string(), wavetable(), adsr(), oscilloscope(), spectrum(), keyboard(),
         };
     }
 }
