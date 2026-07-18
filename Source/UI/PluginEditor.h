@@ -95,6 +95,7 @@ private:
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     int kbBaseOctave = 4;   // computer-keyboard octave (z / x shift it)
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
+    bool modalWasOpen = false;      // edge-detect: a modal popup (e.g. MODULES) closing => refocus keyboard
 
     // Layout bounds for paint() — the centred "J A S S" title.
     juce::Rectangle<int> g_titleBounds;

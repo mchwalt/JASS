@@ -11,12 +11,12 @@ The LFO's own **TARGET** is really a built-in routing too, so it adds ON TOP of 
 
 ## Targets — each needs its module on to be heard
 
-- **Pitch** — always works (the oscillators).
-- **Amplitude** — always works (loudness).
-- **Cutoff** / **Resonance** — need the **FILTER** module on.
-- **WT Pos** — needs the **WAVETABLE** module on.
-- **Vowel** — needs the **FORMANT** module on.
-- **Wavefold** — needs the **WAVEFOLD** module on.
+- **Pitch** (how high/low the note) — always works (the oscillators).
+- **Amplitude** (loudness) — always works.
+- **Cutoff** (filter brightness) / **Resonance** (emphasis/peak at the cutoff) — need the **FILTER** module on.
+- **WT Pos** (wavetable position — sweeps through the waveforms) — needs the **WAVETABLE** module on.
+- **Vowel** (formant colour, "ah/oh/ee") — needs the **FORMANT** module on.
+- **Wavefold** (wavefolding distortion — folds the wave back on itself) — needs the **WAVEFOLD** module on.
 
 - **AMT** — amount, bipolar: right adds, left inverts, centre (0) does nothing.
 
