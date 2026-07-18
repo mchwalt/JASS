@@ -39,7 +39,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
 
     for (const auto& p : m.params)
     {
-        if (p.id == m.enableParamId) continue;   // enable bool is the header toggle, not a body cell
+        if (p.id == m.enableParamId || ! p.showInBody) continue;   // enable bool / hidden params: no body cell
         if (p.kind == ParamSpec::Kind::Choice)
             d.body.push_back (rack::Combo { p.id, p.uiLabel, p.choices });
         else if (p.kind == ParamSpec::Kind::Bool)

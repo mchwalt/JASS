@@ -23,6 +23,7 @@ struct ParamSpec
 
     LFOTarget modTarget = LFOTarget::Off;       // Off => no live mod-ring on this knob
     bool freqDisplay = false;                   // true => FREQ knob shows played frequency (base×ratio)
+    bool showInBody  = true;                    // false => APVTS param exists but NO rack control (e.g. SUB octave)
 };
 
 // One APVTS parameter from a ParamSpec. Display NAME is cosmetic (state is matched by id).
