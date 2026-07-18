@@ -1,5 +1,5 @@
 Lo-Fi-Digitalverfremdung.
 
-- **BITS** — senkt die Bittiefe (niedriger = kratziger, mehr Quantisierungsrauschen).
-- **RATE** — reduziert die Samplerate (höher = mehr Aliasing, härterer Alt-Digital-Sound).
-- **MIX** — mischt gegen das saubere Signal.
+- **BITS** (digitale Auflösung) — senkt die Bittiefe (niedriger = kratziger, mehr Quantisierungsrauschen).
+- **RATE** (Abtastraten-Reduktion) — reduziert die Samplerate (höher = mehr Aliasing, härterer Alt-Digital-Sound).
+- **MIX** (Effekt-Anteil, nass/trocken) — mischt gegen das saubere Signal.

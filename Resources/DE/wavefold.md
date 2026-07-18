@@ -1,5 +1,5 @@
-West-Coast-Wavefolding — faltet die Wellenform in sich zurück für helle, metallische Obertöne.
+West-Coast-Wavefolding (extra Obertöne) — faltet die Wellenform in sich zurück für helle, metallische Obertöne.
 
-- **DRIVE** — Faltungsstärke (mehr = mehr Obertöne).
-- **SYM** — Symmetrie: versetzt die Faltung für asymmetrische, hohlere Klänge.
-- **MIX** — mischt gegen das trockene Signal.
+- **DRIVE** (Intensität) — Faltungsstärke (mehr = mehr Obertöne).
+- **SYM** (Faltungsversatz) — Symmetrie: versetzt die Faltung für asymmetrische, hohlere Klänge.
+- **MIX** (Effekt-Anteil, nass/trocken) — mischt gegen das trockene Signal.

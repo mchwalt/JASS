@@ -1,4 +1,4 @@
-Sub-Oszillator, der OSC 1 eine (oder zwei) Oktaven tiefer folgt, für Bassfundament.
+Sub-Oszillator (zusätzlicher Ton ein/zwei Oktaven tiefer), der OSC 1 eine (oder zwei) Oktaven tiefer folgt, für Bassfundament.
 
-- **WAVE** — Ton: Sinus = sauberer Tiefbass, Rechteck = knurriger mit mehr Obertönen.
-- **LEVEL** — wie viel Sub beigemischt wird.
+- **WAVE** (Grund-Klangform) — Ton: Sinus = sauberer Tiefbass, Rechteck = knurriger mit mehr Obertönen.
+- **LEVEL** (Lautstärke) — wie viel Sub beigemischt wird.

@@ -1,7 +1,7 @@
 A second, independent low-frequency oscillator — identical to LFO 1. Hidden by default; show it via the MODULES panel. Modulated knobs show a live ring.
 
 - **WAVE** — the movement shape.
-- **TARGET** — its own built-in destination: Frequency (vibrato), Amplitude (tremolo), Filter Cutoff (wah), and more.
+- **TARGET** — its own built-in destination: Frequency (pitch, vibrato), Amplitude (loudness, tremolo), Filter Cutoff (brightness, wah), and more.
 - **RATE** — speed (used when SYNC = Free).
 - **SYNC** — locks the rate to the tempo as a note division; *Free* uses the RATE knob.
 - **DEPTH** — amount.

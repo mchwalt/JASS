@@ -1,8 +1,8 @@
-Wavetable-Oszillator, der durch eine Tabelle von Wellenformen fährt.
+Wavetable-Oszillator (Sammlung von Wellenformen zum Durchfahren), der durch eine Tabelle von Wellenformen fährt.
 
-- **BANK** — wählt die Tabelle; **LOAD WAV** importiert eine eigene.
-- **POS** — morpht durch die Tabelle — durchfahren für lebendige Klangverläufe.
+- **BANK** (die geladene Wellenform-Sammlung) — wählt die Tabelle; **LOAD WAV** importiert eine eigene.
+- **POS** (welche Wellenform in der Sammlung) — morpht durch die Tabelle — durchfahren für lebendige Klangverläufe.
 - **FREQ** — Tonhöhe.
-- **AMP** — Pegel.
-- **VOICES** — ergänzt verstimmte Unisono-Kopien.
-- **DETUNE** — spreizt sie für Breite.
+- **AMP** (Lautstärke) — Pegel.
+- **VOICES** (gestapelte verstimmte Kopien, fetter) — ergänzt verstimmte Unisono-Kopien.
+- **DETUNE** (leichte Verstimmung) — spreizt sie für Breite.

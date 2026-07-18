@@ -6,7 +6,7 @@ Blende dieses Modul aus (über das **MODULES**-Menü oder das Customization-Pane
 
 Noten spielst du über die mittlere/obere Buchstabenreihe (`a w s e d f t g y h u j k`). Zwei zusätzliche Tasten verschieben den spielbaren Bereich:
 
-- **Z** — eine Oktave *tiefer*
+- **Z** — eine Oktave (Tonhöhen-Verdopplung) *tiefer*
 - **X** — eine Oktave *höher*
 - **Leertaste** — Karplus-String erneut anzupfen
 

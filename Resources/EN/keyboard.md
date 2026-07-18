@@ -6,7 +6,7 @@ Hide this module (via the **MODULES** menu or the customization panel) when you 
 
 Play notes with the middle/top letter rows (`a w s e d f t g y h u j k`). Two extra keys shift the playable range:
 
-- **Z** — one octave *down*
+- **Z** — one octave (pitch doubling) *down*
 - **X** — one octave *up*
 - **Space** — re-pluck the Karplus string
 
