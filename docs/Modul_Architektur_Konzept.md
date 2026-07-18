@@ -229,7 +229,9 @@ Das ersetzt: die 4 IDs, die 4 `createLayout`-Zeilen, die 3 `toVar`- + 3 `applyVa
 - ✅ **ALLE 30 Module spec-getrieben** (Parameter). `createLayout()` = nur noch `Modules::appendAllParameters()`.
   - *Voll spec-bar (Factory):* OSC 1–3 (freqDisplay/AMP-Ring), LFO 1–2, MOD MATRIX (Slot-Zeilen).
   - *Params spec-bar, UI editor-gebunden (Display/Action/enabledWhen):* CROSS MOD (enabledWhen injiziert), STRING-KARPLUS (PLUCK), WAVETABLE (LOAD WAV), ENVELOPE-ADSR (Kurve), OSCILLOSCOPE, SPECTRUM, KEYBOARD.
-- ⏳ **Letzte Phase (offen):** `.synthy` auf nested pro Modul (persistObject/persistKey stehen in jeder Spec) + Einmal-Konvertierung der vorhandenen Presets. `PresetIO::toVar/applyVar` aus den Specs generieren.
+- ✅ **`.synthy` nested pro Modul (v3)** — `PresetIO::toVar/applyVar` generieren aus den Specs (`Modules::writeState/readState`): ein Objekt je Modul (persistObject) mit Feldern (persistKey), Choice als kanonischer String, kein `choiceOrOff`-„Off" mehr. **Einmal-Konvertierung** beim Start (Standalone): alte flache Presets (v<3) + LiveState → nested; Originale nach `%AppData%\Synthy\PresetsBackup_v2` gesichert. `kFormatVersion` 2→3.
+
+**Damit ist das Konzept vollständig umgesetzt.** Verbleibende Feinheiten: repo `DemoPresets/*.synthy` sind noch flach (werden on-device konvertiert); ~7 Module haben editor-gebundene UI (unvermeidbar); Layer-Trennung sauber (`Parameters.h`/`PresetIO.h` nutzen nur die audio-safe Registry).
 
 ## 12. Stand (Proof umgesetzt, 2026-07-19)
 
