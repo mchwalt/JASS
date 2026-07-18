@@ -1,6 +1,10 @@
+---
+baseline_commit: 5d0232bfab940d22a14bb5082f2e2de03488b705
+---
+
 # Story 8.1: Modulation Matrix — accumulating source→target routing engine
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -83,31 +87,31 @@ bigger than 5.1 because it replaces a mechanism rather than generalizing a formu
 
 ## Tasks / Subtasks
 
-- [ ] **Task 1 — Modulation engine (`Source/DSP/ModMatrix.h`, new header-only)** (AC: 1, 2, 3)
-  - [ ] Define `enum class ModSource { LFO1, Envelope, Velocity }` and reuse/define a target enum. **Prefer reusing the existing `LFOTarget`** (`DSP/LFO.h:9-12`) as the target vocabulary so the apply curves map 1:1 — its order is append-only and already mirrors the seven targets (+ `Off`). Do NOT reorder it.
-  - [ ] `ModMatrix` accumulates: given the current source values (LFO value, envelope value, velocity) and the N slot configs `{source, target, amount}`, produce a `float offset[targetCount]` summed across slots (+ the implicit legacy LFO routing per AC5). Header-only, no allocation, `setSampleRate` not needed (pure combine).
-  - [ ] Keep it a plain combiner: the **application** of each summed offset (the `2^x` etc. curves + clamps) stays in `SynthVoice` where the base values live — the matrix only sums amounts per target.
-- [ ] **Task 2 — Voice apply refactor (`SynthVoice.h/.cpp`)** (AC: 1, 3, 5)
-  - [ ] Add per-voice slot storage: `struct ModSlot { int source; int target; float amount; }` `modSlots[N]` (+ setters/refs like `mixSrcA`), a `bool modMatrixOn`, and `float noteVelocity` (capture in `startNote`).
-  - [ ] In `renderNextBlock`, after capturing the base values (`baseFrequencies/baseCutoff/baseReso/basePos/baseVowel/baseFold`, already at `SynthVoice.cpp:95-104`), compute per-target summed offsets each sample from: the LFO value (`lfo.process()`), the envelope value, velocity, weighted by the active slots + the implicit legacy LFO routing (`lfoTarget`/depth already in `lfo`).
-  - [ ] **Replace** the if/else block (`SynthVoice.cpp:116-141`) and the tremolo line (`188-189`) with: apply `offset[Pitch]` to the osc/wt/sub frequency factor, `offset[Cutoff]`→cutoff (log), `offset[Reso]`→reso, `offset[WtPos]`→position, `offset[Vowel]`→vowel, `offset[Fold]`→fold, `offset[Amplitude]`→tremolo — each using **today's exact curve+clamp**, applied once. Default (only implicit LFO, one target) ⇒ byte-identical.
-  - [ ] Envelope-as-source: read the same `envelope` value already used for gain (bipolar or 0..1 — document which). Velocity-as-source: 0..1 from note-on.
-- [ ] **Task 3 — Params (`Parameters.h`)** (AC: 4, 5)
-  - [ ] Add ID constants + helpers `modSlotSource(n)/modSlotTarget(n)/modSlotAmount(n)` (mirror the `oscFreq(i)` indexed-helper pattern) and `modMatrixOn`.
-  - [ ] `createLayout`: append N×(2 `AudioParameterChoice` + 1 `AudioParameterFloat` −1..+1) + the `modMatrixOn` bool (default on). Source choice = {LFO 1, Envelope, Velocity}; Target choice = {Off, Pitch, Amplitude, Cutoff, Resonance, WT Position, Vowel, Wavefold} (Off at index 0). **Append only — never reorder existing params.**
-  - [ ] `applyToVoice`: extend the signature (like the Epic-5 `int& mixSrcA` additions) to set each voice's `modSlots[n]` + `modMatrixOn` from the params. Mind the already-long signature (`Parameters.h:372-384`).
-- [ ] **Task 4 — Processor wiring (`PluginProcessor.cpp`)** (AC: 1, 7)
-  - [ ] Pass the new voice refs into `Parameters::applyToVoice(...)` (call site ~`PluginProcessor.cpp:254`).
-  - [ ] Extend the display-side modulation feed: today `uiLfo` + `lfoDisplayValue` drive one ring target (`PluginProcessor.cpp:475-488`). Compute the set of currently-modulated `(target, amount)` from the display LFO + active slots for the ring UI (AC7). Keep it atomic-based, no locks.
-- [ ] **Task 5 — MOD MATRIX module + generalized rings (`PluginEditor.cpp`, `ModuleDescriptor.h`, `Rack.cpp`, `ModuleFrame.cpp`)** (AC: 6, 7)
-  - [ ] Add the MOD MATRIX descriptor to the MODULATION zone: N slot rows (Source combo, Target combo, Amount bipolar knob), `enableParam = modMatrixOn`, help id `modmatrix`. Pick a size class that fits the rows (may need a new tall `W{cols}H2/H3` table entry — AD-2 single-table rule).
-  - [ ] Generalize the ring path: `ModTarget` set instead of a single `activeTarget`. `updateLiveFeed` takes a small fixed-size list of `(ModTarget, amount)`; `ModuleFrame` lights any knob whose `modTarget` is in the set (replace the `rk.target == activeTarget` equality at `ModuleFrame.cpp:436` with set membership). Keep repaint-only-on-change (NFR5).
-  - [ ] Register `modMatrixOn` in RANDOM per AC9 (include-with-bounds or exclude — decide + note).
-- [ ] **Task 6 — Persistence (`PresetIO.h`)** (AC: 8)
-  - [ ] Add canonical `StringArray`s for the source + target choices (member names, no display spaces). `toVar`: write `ModSlot{n}Source/Target/Amount` + `ModMatrixOn`. `applyVar`: read with missing ⇒ Off/0 and `modMatrixOn` missing ⇒ true (the `jbool(..., rawB(...))` fallback pattern). Append-only; no format-version bump.
-- [ ] **Task 7 — Help text (`Resources/EN/modmatrix.md`, `Resources/DE/modmatrix.md`)** (AC: 6)
-  - [ ] Short EN + DE description (what a slot is: Source → Target, bipolar Amount; stacking). Rebuild the Help binary-data targets (see the `juce_add_binary_data` build note in project memory).
-- [ ] **Task 8 — Verify** (AC: 10) — clean incremental build (`build/JASS_Standalone.vcxproj`, MSBuild/PowerShell; kill running `JASS.exe` first to avoid LNK1168); in-app: default patch identical → route LFO→Cutoff (matches old behaviour) → stack Envelope→Cutoff → Velocity→Amplitude → confirm rings. Standalone first; VST3 rebuild optional.
+- [x] **Task 1 — Modulation engine (`Source/DSP/ModMatrix.h`, new header-only)** (AC: 1, 2, 3)
+  - [x] Define `enum class ModSource { LFO1, Envelope, Velocity }` and reuse/define a target enum. **Prefer reusing the existing `LFOTarget`** (`DSP/LFO.h:9-12`) as the target vocabulary so the apply curves map 1:1 — its order is append-only and already mirrors the seven targets (+ `Off`). Do NOT reorder it.
+  - [x] `ModMatrix` accumulates: given the current source values (LFO value, envelope value, velocity) and the N slot configs `{source, target, amount}`, produce a `float offset[targetCount]` summed across slots (+ the implicit legacy LFO routing per AC5). Header-only, no allocation, `setSampleRate` not needed (pure combine).
+  - [x] Keep it a plain combiner: the **application** of each summed offset (the `2^x` etc. curves + clamps) stays in `SynthVoice` where the base values live — the matrix only sums amounts per target.
+- [x] **Task 2 — Voice apply refactor (`SynthVoice.h/.cpp`)** (AC: 1, 3, 5)
+  - [x] Add per-voice slot storage: `struct ModSlot { int source; int target; float amount; }` `modSlots[N]` (+ setters/refs like `mixSrcA`), a `bool modMatrixOn`, and `float noteVelocity` (capture in `startNote`).
+  - [x] In `renderNextBlock`, after capturing the base values (`baseFrequencies/baseCutoff/baseReso/basePos/baseVowel/baseFold`, already at `SynthVoice.cpp:95-104`), compute per-target summed offsets each sample from: the LFO value (`lfo.process()`), the envelope value, velocity, weighted by the active slots + the implicit legacy LFO routing (`lfoTarget`/depth already in `lfo`).
+  - [x] **Replace** the if/else block (`SynthVoice.cpp:116-141`) and the tremolo line (`188-189`) with: apply `offset[Pitch]` to the osc/wt/sub frequency factor, `offset[Cutoff]`→cutoff (log), `offset[Reso]`→reso, `offset[WtPos]`→position, `offset[Vowel]`→vowel, `offset[Fold]`→fold, `offset[Amplitude]`→tremolo — each using **today's exact curve+clamp**, applied once. Default (only implicit LFO, one target) ⇒ byte-identical.
+  - [x] Envelope-as-source: read the same `envelope` value already used for gain (bipolar or 0..1 — document which). Velocity-as-source: 0..1 from note-on.
+- [x] **Task 3 — Params (`Parameters.h`)** (AC: 4, 5)
+  - [x] Add ID constants + helpers `modSlotSource(n)/modSlotTarget(n)/modSlotAmount(n)` (mirror the `oscFreq(i)` indexed-helper pattern) and `modMatrixOn`.
+  - [x] `createLayout`: append N×(2 `AudioParameterChoice` + 1 `AudioParameterFloat` −1..+1) + the `modMatrixOn` bool (default on). Source choice = {LFO 1, Envelope, Velocity}; Target choice = {Off, Pitch, Amplitude, Cutoff, Resonance, WT Position, Vowel, Wavefold} (Off at index 0). **Append only — never reorder existing params.**
+  - [x] `applyToVoice`: extend the signature (like the Epic-5 `int& mixSrcA` additions) to set each voice's `modSlots[n]` + `modMatrixOn` from the params. Mind the already-long signature (`Parameters.h:372-384`).
+- [x] **Task 4 — Processor wiring (`PluginProcessor.cpp`)** (AC: 1, 7)
+  - [x] Pass the new voice refs into `Parameters::applyToVoice(...)` (call site ~`PluginProcessor.cpp:254`).
+  - [x] Extend the display-side modulation feed: today `uiLfo` + `lfoDisplayValue` drive one ring target (`PluginProcessor.cpp:475-488`). Compute the set of currently-modulated `(target, amount)` from the display LFO + active slots for the ring UI (AC7). Keep it atomic-based, no locks.
+- [x] **Task 5 — MOD MATRIX module + generalized rings (`PluginEditor.cpp`, `ModuleDescriptor.h`, `Rack.cpp`, `ModuleFrame.cpp`)** (AC: 6, 7)
+  - [x] Add the MOD MATRIX descriptor to the MODULATION zone: N slot rows (Source combo, Target combo, Amount bipolar knob), `enableParam = modMatrixOn`, help id `modmatrix`. Pick a size class that fits the rows (may need a new tall `W{cols}H2/H3` table entry — AD-2 single-table rule).
+  - [x] Generalize the ring path: `ModTarget` set instead of a single `activeTarget`. `updateLiveFeed` takes a small fixed-size list of `(ModTarget, amount)`; `ModuleFrame` lights any knob whose `modTarget` is in the set (replace the `rk.target == activeTarget` equality at `ModuleFrame.cpp:436` with set membership). Keep repaint-only-on-change (NFR5).
+  - [x] Register `modMatrixOn` in RANDOM per AC9 (include-with-bounds or exclude — decide + note).
+- [x] **Task 6 — Persistence (`PresetIO.h`)** (AC: 8)
+  - [x] Add canonical `StringArray`s for the source + target choices (member names, no display spaces). `toVar`: write `ModSlot{n}Source/Target/Amount` + `ModMatrixOn`. `applyVar`: read with missing ⇒ Off/0 and `modMatrixOn` missing ⇒ true (the `jbool(..., rawB(...))` fallback pattern). Append-only; no format-version bump.
+- [x] **Task 7 — Help text (`Resources/EN/modmatrix.md`, `Resources/DE/modmatrix.md`)** (AC: 6)
+  - [x] Short EN + DE description (what a slot is: Source → Target, bipolar Amount; stacking). Rebuild the Help binary-data targets (see the `juce_add_binary_data` build note in project memory).
+- [x] **Task 8 — Verify** (AC: 10) — clean incremental build (`build/JASS_Standalone.vcxproj`, MSBuild/PowerShell; kill running `JASS.exe` first to avoid LNK1168); in-app: default patch identical → route LFO→Cutoff (matches old behaviour) → stack Envelope→Cutoff → Velocity→Amplitude → confirm rings. Standalone first; VST3 rebuild optional.
 
 ## Dev Notes
 
@@ -201,6 +205,37 @@ claude-opus-4-8[1m]
 
 ### Debug Log References
 
+- Clean incremental Standalone build (Debug): help binary-data targets rebuilt `/t:Rebuild /nodeReuse:false` after the new `modmatrix.md` resources triggered a CMake reconfigure; `JASS_Standalone` exit 0, `/W4 /WX-` with no warnings on the five changed TUs.
+
 ### Completion Notes List
 
+- **Engine.** New header-only `Source/DSP/ModMatrix.h`: `ModSource {LFO1,Envelope,Velocity}`, `struct ModSlot {source,target,amount}`, config constants, and `modMatrixAccumulate()` — a pure combiner that sums each active routing (plus the implicit legacy LFO routing at amount 1) into a per-target offset. Targets reuse the existing `LFOTarget` vocabulary (0=Off..7) so the apply curves map 1:1; nothing reordered.
+- **Voice.** `SynthVoice::renderNextBlock` now computes a per-block active-target set + per-sample summed offsets and applies each active target ONCE with today's exact curve+clamp (Pitch `2^x`, Cutoff `2^(3x)`, Reso `2^(1.5x)`, WT-Pos/Vowel/Fold `base+0.5x`, Amplitude `(1+x)/2`). The old single-target if/else + tremolo line are gone. Byte-identical default verified by trace: LFO off + all slots Off ⇒ no target active, all offsets 0 ⇒ `freqFactor=2^0=1`, no cutoff/pos/vowel/reso/fold/amp calls fire. `envelope.process()` moved to the top of the sample loop, stored in `envValue`, and REUSED for both the Envelope mod source and the amplitude gain (advanced exactly once/sample; Idle-stage check unchanged). Velocity captured in `startNote` (`noteVelocity`, 0..1). **Design note:** the LFO's own built-in TARGET always contributes when the LFO is enabled (there is no "Off" in its target combo) — matrix slots add on top; using LFO 1 as a pure matrix source without its built-in routing is a later story. Envelope-as-source uses the raw ADSR value regardless of `adsrOn` (that toggle bypasses only the amplitude gain, not the generator).
+- **Params.** `Parameters.h`: indexed ID helpers `modSlotSource/Target/Amount(n)` + `modMatrixOn`; appended 4×(2 choice + 1 bipolar float −1..+1) + a `modMatrixOn` bool (default on); `applyToVoice` extended to fill the voice's slot array + enable (raw reads only). **Target choice display order MUST equal `LFOTarget`** — a first pass mis-ordered Resonance/WT-Pos/Vowel (caught by the independent review) and was fixed to `{Off, Pitch, Amplitude, Cutoff, WT Pos, Vowel, Resonance, Wavefold}`.
+- **Processor.** Call-site passes the new voice refs; RANDOM snapshots+restores `modMatrixOn` and all 12 slot params so the matrix is left untouched (AC9), matching the arp/glide/comp input-surface pattern.
+- **UI / rings.** New `rack::LiveModFeed` (std::array<float,8> indexed by ModTarget) generalizes `updateLiveFeed` across `ModuleFrame`/`Rack`/editor: a knob now lights with `feed[(int) modTarget]`, so several knobs light when the LFO routes to several targets. The editor timer builds the feed from the display LFO + LFO-sourced matrix slots (velocity/envelope produce no idle-time ring, AC7). New **MOD MATRIX** module (id `modmatrix`) in the MODULATION zone, new `W12H4` size class (4 routing rows: SRC combo · DEST combo · AMT bipolar knob). Sizing is tunable in-app per AC6.
+- **Persistence.** `PresetIO.h`: canonical `kModSource {"LFO1","Envelope","Velocity"}`; target persists via the existing `kLfoTarget` canonical array (identical vocabulary). Writes/reads `ModMatrixOn` + `ModSlot{n}Source/Target/Amount`, append-only, missing ⇒ Off/0 (and `ModMatrixOn` missing ⇒ on). No `kFormatVersion` bump. Old presets + the C# app load with all slots Off (interop-safe).
+- **Help.** `Resources/{EN,DE}/modmatrix.md` added (what a slot is; the stacking tip). C# still owes matching `.synthy` fields — pre-existing deferred-work debt.
+- **Independent review** (sonnet, per the project pattern) confirmed RT-safety (stack-only, no alloc/lock/log), byte-identical default, single envelope advance, correct stacking summation, and correct source/persistence indexing; it found ONE real bug (the target label ordering), now fixed.
+- **Verification:** clean build green. Functional ear-test (default unchanged → LFO→Cutoff via a slot → stack Envelope→Cutoff → Velocity→Amplitude → rings) is the user's per [[feedback_ui_verification]]. VST3 not rebuilt (optional).
+
 ### File List
+
+- `Source/DSP/ModMatrix.h` (new) — engine: enums, `ModSlot`, constants, `modMatrixAccumulate()`
+- `Source/Audio/SynthVoice.h` — modSlots/modMatrixOn/noteVelocity + accessors; include ModMatrix.h
+- `Source/Audio/SynthVoice.cpp` — accumulating apply replaces the single-target if/else; velocity capture; envelope moved up + reused
+- `Source/Audio/Parameters.h` — ID helpers + `modMatrixOn`; layout params; `applyToVoice` plumbing; include ModMatrix.h
+- `Source/Audio/PresetIO.h` — `kModSource`; write/read matrix params (append-only)
+- `Source/PluginProcessor.cpp` — applyToVoice call-site; RANDOM matrix exclusion
+- `Source/UI/rack/ModuleDescriptor.h` — `LiveModFeed` type; `W12H4` size class
+- `Source/UI/rack/Rack.h` / `Rack.cpp` — `updateLiveFeed` signature → LiveModFeed
+- `Source/UI/rack/ModuleFrame.h` / `ModuleFrame.cpp` — `updateLiveFeed` → per-target set membership
+- `Source/UI/PluginEditor.cpp` — timer builds the multi-target ring feed; MOD MATRIX descriptor
+- `Resources/EN/modmatrix.md` / `Resources/DE/modmatrix.md` (new) — help text
+
+### Change Log
+
+- 2026-07-18: Story 8.1 implemented — accumulating modulation matrix (4 slots; sources LFO 1 / Envelope / Velocity; 7 existing targets; stacking), MOD MATRIX rack module, generalized mod rings, append-only params + `.synthy` persistence, RANDOM-excluded. Standalone build green; ear-test pending (user).
+- 2026-07-18 (architecture, user decision): **C# `.synthy` compatibility DROPPED** — no longer a constraint, so the LFO params were freely renamed/indexed. **LFOs indexed like the oscillators** (`kNumLFOs` in `LFO.h`; `lfoOn(i)/lfoWave(i)/…` helpers; single loops in `createLayout`, `applyToVoice`, `SynthVoice`, processor display, editor modules, `PresetIO`). LFO 1's params renamed `lfo*`→`lfo1*`; `PresetIO` reads legacy `Lfo*` names as a fallback for LFO 1 so existing presets/LiveState survive. A new LFO now = bump `kNumLFOs` + append a `ModSource` + one entry in the `kLfoSourceIdx` map. **DemoPresets auto-shipped**: `DemoPresets/*.synthy` embedded via `juce_add_binary_data` (`DemoPresets` namespace) + `PresetIO::seedDemoPresets()` writes any missing ones into the user's Presets folder on startup (idempotent). Standalone green, `/W4` warning-free. (Note: `project-context.md`'s "field names MUST match C#" rule is now obsolete — flagged there.)
+- 2026-07-18 (follow-on, conversational): **Second LFO (LFO 2)** added as a cheap matrix follow-on — `ModSource::LFO2` (append-only), a full LFO 2 module (own params `lfo2On/Wave/Rate/Depth/Target/SyncDiv`, append-only; **default hidden** via manual descriptor `defaultVisible=false`), second per-voice `lfo2` + display `uiLfo2`/`lfoDisplayValue2`, both LFOs' implicit routings folded in the voice (accumulate now slots-only), ring feed accounts for both LFOs, `.synthy` round-trip (`Lfo2*`), help `lfo2.md` EN+DE. Also **`DemoPresets/` folder** in repo root + `Matrix Demo.synthy` (LFO+Envelope+Velocity stacked on Cutoff) copied into the user's Presets folder; global param defaults deliberately left all-off (changing them would retroactively modulate every old/C# preset via missing⇒default). Standalone green. Note: LFO 2 could be split into its own story (8.2); indexing the LFOs like the oscillators would make LFO 3/4 trivial.
+- 2026-07-18 (review refinements): (1) MOD MATRIX size W12H4 → W24H2 → **W12H2** (half width, 2 rows) — the tall class was overflowing the rack and tripping the editor's global auto-fit downscale (unused W12H4 class removed). (2) **Envelope source now gated by `adsrOn`** (ENVELOPE module enable) for a uniform "a source is only active when its module is on" rule, matching the LFO; amplitude gain path unchanged. (3) Help text `modmatrix.md` (EN+DE) expanded with the source/target module-dependency rules + the Velocity/drone note. All rebuilt green.

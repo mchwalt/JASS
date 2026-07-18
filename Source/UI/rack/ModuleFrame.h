@@ -24,11 +24,11 @@ namespace rack
         void paintOverChildren (juce::Graphics&) override;
 
         // Push the current live feed (read by the ONE editor timer, AD-8) into this
-        // frame's knobs: animate modulation rings on knobs whose modTarget matches the
-        // LFO's active target (gated by this module's enable), and refresh any
-        // display-transform knob (FREQ = base × played ratio). No audio-thread work —
-        // just applies values already read from the processor's atomics.
-        void updateLiveFeed (bool lfoOn, ModTarget activeTarget, float lfoValue, double playedRatio);
+        // frame's knobs: animate modulation rings on every knob whose modTarget currently
+        // receives modulation (ringByTarget[(int) target], gated by this module's enable),
+        // and refresh any display-transform knob (FREQ = base × played ratio). No audio-thread
+        // work — just applies values already read from the processor's atomics.
+        void updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio);
 
         // Module identity (stable slug from the descriptor) — used by the Rack to look a
         // module up (e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button).

@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <variant>
 #include <vector>
+#include <array>
 #include <functional>
 #include "../SynthySlider.h"   // KnobSize
 
@@ -24,6 +25,14 @@ namespace rack
     // For live LFO rings (AD-8). Append-only, mirrors LFOTarget order (None = LFO Off).
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff,
                             WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
+
+    // Live modulation feed for the rings (AD-8, generalized in Story 8.1). Indexed by
+    // ModTarget (None = 0, unused): the ring amount currently applied to each target by
+    // PERIODIC (LFO) sources — the display LFO value times the summed LFO-sourced routing
+    // coefficient into that target. A knob lights with feed[(int) knob.modTarget]. This
+    // replaces the old single-active-target feed so multiple knobs light when the matrix
+    // routes the LFO to several destinations at once.
+    using LiveModFeed = std::array<float, 8>;
 
     // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
     // its own default zone — Rack.h includes this header, so the descriptor can't reference
@@ -172,7 +181,7 @@ namespace rack
             case SizeClass::W6H1:  return {  6, 1,  6, KnobSize::Small };  // 3–4 controls   (was S)
             case SizeClass::W8H1:  return {  8, 1,  8, KnobSize::Small };  // 5–6 controls   (was M; 3 per row)
             case SizeClass::W8H2:  return {  8, 2, 16, KnobSize::Small };  // knobs + curve display (was L)
-            case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small };  // wide visualisers      (was XL; 2 per row)
+            case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small };  // wide visualisers + MOD MATRIX (2 routing rows)
             case SizeClass::W24H1: return { 24, 1, 24, KnobSize::Small };  // full-width single row  (on-screen keyboard, flat)
             case SizeClass::W24H2: return { 24, 2, 48, KnobSize::Small };  // full-width two rows    (on-screen keyboard, tall keys)
         }

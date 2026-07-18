@@ -71,7 +71,7 @@ public:
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
-    float getLfoDisplayValue() const { return lfoDisplayValue.load(); }
+    float getLfoDisplayValue(int i) const { return lfoDisplayValues[i].load(); }   // per-LFO (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
     // persisted into the LiveState file so it survives a restart. Touched only
@@ -96,8 +96,8 @@ private:
     WaveformCapture waveformCapture { 512 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
-    LFO uiLfo;                 // display-only LFO mirroring the patch LFO (for the rings)
-    std::atomic<float> lfoDisplayValue { 0.0f };
+    LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
+    std::atomic<float> lfoDisplayValues[kNumLFOs] {};
     Arpeggiator arp;
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
 

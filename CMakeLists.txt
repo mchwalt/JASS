@@ -59,6 +59,11 @@ file(GLOB JASS_HELP_DE CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Resources/
 juce_add_binary_data(JASS_HelpEN HEADER_NAME HelpEN.h NAMESPACE HelpEN SOURCES ${JASS_HELP_EN})
 juce_add_binary_data(JASS_HelpDE HEADER_NAME HelpDE.h NAMESPACE HelpDE SOURCES ${JASS_HELP_DE})
 
+# Demo presets (shipped): embedded so the app can SEED them into the user's Presets folder on
+# first run (see PresetIO::seedDemoPresets). Same one-target-with-own-namespace pattern as help.
+file(GLOB JASS_DEMO_PRESETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/DemoPresets/*.synthy")
+juce_add_binary_data(JASS_DemoPresets HEADER_NAME DemoPresets.h NAMESPACE DemoPresets SOURCES ${JASS_DEMO_PRESETS})
+
 target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -70,6 +75,7 @@ target_link_libraries(JASS
     PRIVATE
         JASS_HelpEN
         JASS_HelpDE
+        JASS_DemoPresets
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
