@@ -226,10 +226,10 @@ Das ersetzt: die 4 IDs, die 4 `createLayout`-Zeilen, die 3 `toVar`- + 3 `applyVa
 
 - ✅ **Layer-Trennung + Registry** (`Source/Modules/`): `ParamSpec.h` (audio) / `ModuleSpec.h` (UI) / `ModuleRegistry.{h,cpp}` / `AllModules.h`. `Parameters.h` ist UI-frei.
 - ✅ **17 reine Parameter-Module** spec-getrieben, je eigener `<Name>Specs.h`: Filter, Compressor, Stereo, Master, Sub, Noise, Formant, Distortion, Wavefold, Bitcrush, Phaser, Chorus, Delay, Reverb, Arpeggiator, Glide, PitchEnv. **Param-Anzahl exakt erhalten** (byte-identisch). Model-Erweiterungen: `showInBody` (SUB-Octave), `displayChoices` (DISTORTION-Anzeige), `freqDisplay` (für OSC vorbereitet).
-- ⏳ **Rest (Sonderfälle, brauchen Indizierung oder Editor-Kontext):**
+- ✅ **ALLE 30 Module spec-getrieben** (Parameter). `createLayout()` = nur noch `Modules::appendAllParameters()`.
   - *Voll spec-bar (Factory):* OSC 1–3 (freqDisplay/AMP-Ring), LFO 1–2, MOD MATRIX (Slot-Zeilen).
-  - *Params spec-bar, UI editor-gebunden (Display/Action/enabledWhen):* CROSS MOD, STRING-KARPLUS (PLUCK), WAVETABLE (LOAD WAV), ENVELOPE-ADSR (Kurve), OSCILLOSCOPE, SPECTRUM, KEYBOARD.
-- ⏳ **Danach:** `.synthy` auf nested pro Modul (persistObject/persistKey stehen schon in den Specs) + Einmal-Konvertierung der vorhandenen Presets.
+  - *Params spec-bar, UI editor-gebunden (Display/Action/enabledWhen):* CROSS MOD (enabledWhen injiziert), STRING-KARPLUS (PLUCK), WAVETABLE (LOAD WAV), ENVELOPE-ADSR (Kurve), OSCILLOSCOPE, SPECTRUM, KEYBOARD.
+- ⏳ **Letzte Phase (offen):** `.synthy` auf nested pro Modul (persistObject/persistKey stehen in jeder Spec) + Einmal-Konvertierung der vorhandenen Presets. `PresetIO::toVar/applyVar` aus den Specs generieren.
 
 ## 12. Stand (Proof umgesetzt, 2026-07-19)
 
