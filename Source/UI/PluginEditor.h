@@ -64,6 +64,53 @@ private:
     juce::Colour col;
 };
 
+// A slowly Y-rotating, extruded 3D rendering of the "J A S S" wordmark — the old-school
+// 3D-text-screensaver look, drawn with layered affine glyph fills (no OpenGL): the flat glyph
+// outline is filled once per depth slice, each slice x-scaled by cos(angle) and x-shifted by
+// (sliceDepth · sin(angle)), painted back-to-front with a depth shade. Purely decorative:
+// transparent + ignores the mouse; also paints the static subtitle beneath it.
+class SpinningTitle3D : public juce::Component, private juce::Timer
+{
+public:
+    SpinningTitle3D()
+    {
+        setInterceptsMouseClicks(false, false);
+        startTimerHz(30);
+    }
+    ~SpinningTitle3D() override { stopTimer(); }
+
+    void resized() override;
+    void paint(juce::Graphics&) override;
+
+    // Toggle the animation (persisted app setting). When off, the component draws the plain
+    // legacy 2D wordmark and stops its timer (no CPU). Portable: pure juce::Graphics either way.
+    void setAnimate(bool shouldAnimate)
+    {
+        if (animate == shouldAnimate) return;
+        animate = shouldAnimate;
+        if (animate) startTimerHz(30); else stopTimer();
+        repaint();
+    }
+    bool isAnimating() const noexcept { return animate; }
+
+private:
+    void timerCallback() override
+    {
+        angle += 0.026f;   // ~ one turn every ~4 s
+        if (angle >= juce::MathConstants<float>::twoPi)
+            angle -= juce::MathConstants<float>::twoPi;
+        repaint();
+    }
+    void rebuildGlyphPath();
+
+    juce::Path glyphPath;   // "J A S S" outline, centred at origin, scaled to the component
+    float angle = 0.0f;
+    bool  animate = true;   // false => plain static 2D title (legacy look)
+
+    static constexpr int   kLayers = 18;     // extrusion slices (back → front)
+    static constexpr float kDepth  = 9.0f;   // extrusion depth in px
+};
+
 class SynthyEditor : public juce::AudioProcessorEditor,
                      private juce::Timer
 {
@@ -74,6 +121,7 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
+    void mouseDown(const juce::MouseEvent& e) override;   // right-click title => 3D-anim toggle menu
     void timerCallback() override;
 
 private:
@@ -97,8 +145,13 @@ private:
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
     bool modalWasOpen = false;      // edge-detect: a modal popup (e.g. MODULES) closing => refocus keyboard
 
-    // Layout bounds for paint() — the centred "J A S S" title.
+    // Layout bounds for paint() — the centred title band.
     juce::Rectangle<int> g_titleBounds;
+    SpinningTitle3D spinningTitle;   // animated 3D "J A S S" wordmark + subtitle (fills g_titleBounds)
+    bool title3DAnimated = true;     // persisted: 3D header animation on/off (right-click title)
+    static juce::File titleAnimFile();       // %AppData%\Synthy setting for the 3D-title toggle
+    static bool loadTitleAnimated();         // persisted flag, else true
+    static void saveTitleAnimated(bool on);
 
     // The rack IS the editor body now (legacy per-module panels removed in Story 3.3):
     // buildRack() assembles every module as a declarative descriptor (AD-1) and
