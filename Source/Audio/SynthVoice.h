@@ -121,6 +121,11 @@ private:
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> glideRatio;
     int subOctave = -1;           // sub-oscillator octave offset (-1 or -2)
 
+    // When the ENVELOPE module is OFF (adsrOn=false) the amplitude isn't ADSR-shaped — but the
+    // note must still gate on/off cleanly and the voice must free PROMPTLY on release (not hang for
+    // the envelope's release time at full gain). This short smoothed gate does that (anti-click).
+    juce::SmoothedValue<float> bypassGate;   // 0..1, ~10 ms ramp; gain + voice-free path when ADSR off
+
     double currentSampleRate = 44100.0;
     bool noteOn = false;
     bool pluckEnabled = true;   // false → startNote skips the Karplus pluck (drone)
