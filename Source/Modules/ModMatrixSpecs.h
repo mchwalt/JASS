@@ -2,15 +2,16 @@
 #include "ModuleSpec.h"
 #include "../DSP/ModMatrix.h"   // ModMatrixConfig::kNumSlots
 
-// MOD MATRIX — four routing rows (SRC combo · DEST combo · AMT knob) built in a loop. SRC/DEST
-// item order MUST match the ModSource / LFOTarget order (append-only). Amount is bipolar.
+// MOD MATRIX — six routing slots (SRC combo · DEST combo · AMT knob) built in a loop, laid out
+// 2 rows × 3 slots (W16H2: each slot = 5 layout units, 2 rows => ceil(30/2)=15 cols => 3 slots/row).
+// SRC/DEST item order MUST match the ModSource / LFOTarget order (append-only). Amount is bipolar.
 namespace Modules
 {
     inline ModuleSpec modMatrix()
     {
         ModuleSpec m;
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W9H3;
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W16H2;
 
         const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
         const juce::StringArray tgt { "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" };   // == LFOTarget
