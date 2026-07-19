@@ -10,6 +10,7 @@
 #include <utility>
 #include <array>
 #include <cmath>
+#include <algorithm>
 
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
 // the rack framework owns the single shared look.
@@ -411,6 +412,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(presetNameLabel);
     setPresetName(processor.getCurrentPresetName());   // restored from LiveState
 
+    // Animated 3D wordmark in the header (decorative; transparent + ignores mouse so the
+    // header buttons underneath stay clickable). Animation is a persisted setting — right-click
+    // the title to toggle; off => plain 2D legacy look (and no timer / CPU).
+    addAndMakeVisible(spinningTitle);
+    title3DAnimated = loadTitleAnimated();
+    spinningTitle.setAnimate(title3DAnimated);
+
     // On-screen keyboard (shares the processor's MidiKeyboardState → plays the
     // active generators with full ADSR per note, transposed relative to C4).
     keyboard = std::make_unique<FillWidthKeyboard>(
@@ -664,18 +672,78 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
 void SynthyEditor::paint(juce::Graphics& g)
 {
     g.fillAll(juce::Colour(0xff1a1a2e));
+    // The title ("J A S S" + subtitle) is drawn by the animated SpinningTitle3D child now.
+}
 
-    // Title: big "J A S S" with the full name as a small subtitle beneath it.
+// --- SpinningTitle3D: extruded, Y-rotating 3D wordmark (see PluginEditor.h) -----------------
+
+void SpinningTitle3D::resized()
+{
+    rebuildGlyphPath();
+}
+
+void SpinningTitle3D::rebuildGlyphPath()
+{
+    glyphPath.clear();
+    constexpr float band = 20.0f;   // subtitle strip along the bottom
+    const float h = juce::jmax(12.0f, ((float) getHeight() - band) * 0.66f);
+    juce::GlyphArrangement ga;
+    ga.addLineOfText(juce::Font(juce::FontOptions(h, juce::Font::bold)), "J A S S", 0.0f, 0.0f);
+    ga.createPath(glyphPath);
+    const auto tb = glyphPath.getBounds();
+    glyphPath.applyTransform(juce::AffineTransform::translation(-tb.getCentreX(), -tb.getCentreY()));
+}
+
+void SpinningTitle3D::paint(juce::Graphics& g)
+{
+    auto area    = getLocalBounds().toFloat();
+    auto subArea = area.removeFromBottom(20.0f);
+
+    if (! animate)
     {
-        auto titleArea = g_titleBounds;
-        auto subArea = titleArea.removeFromBottom(20);
-        g.setFont(juce::FontOptions(26.0f, juce::Font::bold));
+        // Plain legacy 2D wordmark (animation disabled in settings).
         g.setColour(juce::Colour(0xff40c0ff));
-        g.drawText("J A S S", titleArea, juce::Justification::centred);
-        g.setFont(juce::FontOptions(13.0f));
-        g.setColour(juce::Colour(0xff8899aa));
-        g.drawText("Just Another Simple Synthesizer", subArea, juce::Justification::centred);
+        g.setFont(juce::FontOptions(26.0f, juce::Font::bold));
+        g.drawText("J A S S", area.toNearestInt(), juce::Justification::centred);
     }
+    else if (! glyphPath.isEmpty())
+    {
+        const float cx = area.getCentreX();
+        const float cy = area.getCentreY();
+        const float ct = std::cos(angle);
+        const float st = std::sin(angle);
+
+        // Extrusion slices, sorted far → near for the painter's algorithm. A slice at depth z0
+        // has centre rotated-z = z0·cos(angle); larger = farther from the viewer → drawn first.
+        std::array<float, (size_t) kLayers> z0s;
+        for (int i = 0; i < kLayers; ++i)
+            z0s[(size_t) i] = -kDepth * 0.5f + kDepth * (float) i / (float) (kLayers - 1);
+        std::sort(z0s.begin(), z0s.end(), [ct](float a, float b) { return a * ct > b * ct; });
+
+        const juce::Colour back  (0xff0b3a5e);   // deep blue (far side / wall base)
+        const juce::Colour wall  (0xff2f6f96);   // muted blue (wall top) — kept CLEARLY darker than
+        const juce::Colour front (0xff6fd3ff);   // the bright near face, so the front reads as ONE
+        for (int k = 0; k < kLayers; ++k)         // crisp lit surface instead of a smeared stack.
+        {
+            const float z0 = z0s[(size_t) k];
+            const float t  = (float) k / (float) (kLayers - 1);   // 0 = back, 1 = front
+            juce::Path p = glyphPath;
+            // Orthographic Y-rotation of a flat (z = z0) glyph reduces to an affine:
+            //   x' = x·cos + z0·sin ,  y' = y   → x-scale by cos, x-shift by z0·sin.
+            p.applyTransform(juce::AffineTransform::scale(ct, 1.0f)
+                                 .translated(cx + z0 * st, cy));
+            // The wall stays in the darker back→wall range; only the very front slice is the
+            // bright face → the stirnfläche keeps a defined edge (no bright doubled outline).
+            const bool isFront = (k == kLayers - 1);
+            g.setColour(isFront ? front : back.interpolatedWith(wall, t));
+            g.fillPath(p);
+        }
+    }
+
+    g.setColour(juce::Colour(0xff8899aa));
+    g.setFont(juce::FontOptions(13.0f));
+    g.drawText("Just Another Simple Synthesizer", subArea.toNearestInt(),
+               juce::Justification::centred);
 }
 
 void SynthyEditor::showModuleHelp(const juce::String& id)
@@ -776,6 +844,46 @@ juce::String SynthyEditor::loadUiLanguage()
 void SynthyEditor::saveUiLanguage(const juce::String& lang)
 {
     uiLanguageFile().replaceWithText(lang);
+}
+
+juce::File SynthyEditor::titleAnimFile()
+{
+    return PresetIO::synthyFolder().getChildFile("title-anim.txt");
+}
+
+bool SynthyEditor::loadTitleAnimated()
+{
+    auto f = titleAnimFile();
+    if (f.existsAsFile())
+        return f.loadFileAsString().trim() != "0";   // "0" => off; anything else / missing => on
+    return true;
+}
+
+void SynthyEditor::saveTitleAnimated(bool on)
+{
+    titleAnimFile().replaceWithText(on ? "1" : "0");
+}
+
+void SynthyEditor::mouseDown(const juce::MouseEvent& e)
+{
+    // Right-click on the title band toggles the 3D animation (persisted). The wordmark component
+    // is click-transparent, so the click lands here on the editor; the header buttons keep their
+    // own clicks. Left-clicks are ignored (nothing to do in the header background).
+    if (! e.mods.isPopupMenu() || ! g_titleBounds.contains(e.getPosition()))
+        return;
+
+    juce::PopupMenu m;
+    m.addItem(1, (currentLang == "DE" ? "3D-Titel animieren" : "Animate 3D title"),
+              true, title3DAnimated);
+    m.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(
+                        juce::Rectangle<int>(e.getScreenX(), e.getScreenY(), 1, 1)),
+                    [this](int r)
+                    {
+                        if (r != 1) return;
+                        title3DAnimated = ! title3DAnimated;
+                        spinningTitle.setAnimate(title3DAnimated);
+                        saveTitleAnimated(title3DAnimated);
+                    });
 }
 
 void SynthyEditor::buildRack()
@@ -948,6 +1056,7 @@ void SynthyEditor::resized()
     // The title is centred over the FULL header width so "J A S S" sits in the true middle
     // of the window; the left cluster only overlays the left edge, clear of the centred text.
     g_titleBounds = headerRow;
+    spinningTitle.setBounds(g_titleBounds);   // animated wordmark spans the full header row
     // MODULES show/hide menu button overlays the right edge (clear of the centred title).
     modulesBtn.setBounds(headerRow.removeFromRight(120).reduced(8, 17));
     // Help-language selector sits just left of the MODULES button (Story 6.1).
