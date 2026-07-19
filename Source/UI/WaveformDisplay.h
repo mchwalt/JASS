@@ -8,7 +8,7 @@ public:
     WaveformDisplay(WaveformCapture& capture, juce::Colour color = juce::Colour(0xff40c0ff))
         : captureRef(capture), strokeColour(color)
     {
-        zoomBox.addItemList({"1 ms", "2 ms", "5 ms", "10 ms", "25 ms", "50 ms"}, 1);
+        zoomBox.addItemList({"1 ms", "2 ms", "5 ms", "10 ms", "25 ms", "50 ms", "100 ms"}, 1);
         zoomBox.setSelectedId(4); // 10ms default
         zoomBox.onChange = [this]() { updateTimeRange(); };
         addAndMakeVisible(zoomBox);
@@ -66,7 +66,7 @@ public:
         }
 
         // X-axis: integer ms ticks
-        double tickIntervalMs = timeRangeMs <= 5 ? 1 : timeRangeMs <= 15 ? 2 : timeRangeMs <= 30 ? 5 : 10;
+        double tickIntervalMs = timeRangeMs <= 5 ? 1 : timeRangeMs <= 15 ? 2 : timeRangeMs <= 30 ? 5 : timeRangeMs <= 60 ? 10 : 20;
         int tickCount = static_cast<int>(timeRangeMs / tickIntervalMs);
 
         for (int i = 0; i <= tickCount; ++i)
@@ -153,7 +153,7 @@ private:
 
     void updateTimeRange()
     {
-        double values[] = { 1.0, 2.0, 5.0, 10.0, 25.0, 50.0 };
+        double values[] = { 1.0, 2.0, 5.0, 10.0, 25.0, 50.0, 100.0 };
         int idx = zoomBox.getSelectedId() - 1;
         if (idx >= 0 && idx < (int) (sizeof(values) / sizeof(values[0])))
             timeRangeMs = values[idx];
