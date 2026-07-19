@@ -173,10 +173,13 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         const double pitchEnvMul = pitchEnvOn
                                        ? std::pow(2.0, (pitchEnvAmount / 12.0) * pitchEnv.process())
                                        : 1.0;
+        // freqFactor (matrix/LFO "Pitch" target) modulates EVERY pitched generator, exactly like
+        // the pitch envelope above — otherwise a Pitch routing is inaudible on wavetable-/sub-heavy
+        // patches (e.g. whuwhu, whose loudest voice is the wavetable). osc + wavetable + sub all get it.
         for (int i = 0; i < 3; ++i)
             oscillators[i].setFrequency(baseFrequencies[i] * ratio * freqFactor * pitchEnvMul);
-        wavetable.setFrequency(baseWtFreq * ratio * pitchEnvMul);
-        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul * pitchEnvMul);
+        wavetable.setFrequency(baseWtFreq * ratio * freqFactor * pitchEnvMul);
+        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul * freqFactor * pitchEnvMul);
 
         // Apply each ACTIVE target's summed offset ONCE, reusing today's exact curve+clamp.
         if (tActive[(size_t) LFOTarget::FilterCutoff])

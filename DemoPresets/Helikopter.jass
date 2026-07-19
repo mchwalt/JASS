@@ -1,5 +1,5 @@
 {
-  "FormatVersion": 3,
+  "FormatVersion": 4,
   "Name": "Helikopter",
   "Modified": false,
   "Filter": {
@@ -133,7 +133,7 @@
     "Feedback": 0.0
   },
   "CrossMod": {
-    "On": true,
+    "On": false,
     "Mode": "FM",
     "SrcA": "OSC 1",
     "SrcB": "OSC 2"
@@ -154,11 +154,27 @@
     "SyncDiv": "Free",
     "Depth": 0.5
   },
+  "Lfo3": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 2.0,
+    "SyncDiv": "Free",
+    "Depth": 0.5
+  },
+  "Lfo4": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 2.0,
+    "SyncDiv": "Free",
+    "Depth": 0.5
+  },
   "ModMatrix": {
-    "On": false,
+    "On": true,
     "Slot1Source": "LFO 1",
-    "Slot1Target": "Off",
-    "Slot1Amount": 0.0,
+    "Slot1Target": "Amplitude",
+    "Slot1Amount": 1.0,
     "Slot2Source": "LFO 1",
     "Slot2Target": "Off",
     "Slot2Amount": 0.0,
@@ -167,7 +183,13 @@
     "Slot3Amount": 0.0,
     "Slot4Source": "LFO 1",
     "Slot4Target": "Off",
-    "Slot4Amount": 0.0
+    "Slot4Amount": 0.0,
+    "Slot5Source": "LFO 1",
+    "Slot5Target": "Off",
+    "Slot5Amount": 0.5,
+    "Slot6Source": "LFO 1",
+    "Slot6Target": "Off",
+    "Slot6Amount": 0.5
   },
   "Karplus": {
     "Enabled": false,

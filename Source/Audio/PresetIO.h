@@ -435,6 +435,7 @@ namespace PresetIO
         using namespace detail;
         static constexpr int kLfoSrc[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                    (int) ModSource::LFO3, (int) ModSource::LFO4 };
+        bool migratedAny = false;
         for (int i = 1; i <= kNumLFOs; ++i)
         {
             if (! rawB(a, ID::lfoOn(i))) continue;                 // LFO off => nothing was routing
@@ -445,9 +446,16 @@ namespace PresetIO
                 setRaw(a, ID::modSlotSource(n), (float) kLfoSrc[i - 1]);
                 setRaw(a, ID::modSlotTarget(n), (float) matrixTgt);
                 setRaw(a, ID::modSlotAmount(n), 1.0f);
+                migratedAny = true;
                 break;
             }
         }
+        // An LFO's built-in target used to modulate INDEPENDENTLY of the MOD MATRIX master switch.
+        // Now the matrix is the only route, so a patch that relied on that routing (ModMatrixOn was
+        // often false) must have the matrix turned ON — otherwise the migrated slot is silent and the
+        // preset loses its modulation (e.g. Helikopter's amp chop, whuwhu's pitch wobble).
+        if (migratedAny)
+            setRaw(a, ID::modMatrixOn, 1.0f);
     }
 
     // One-time conversion at startup: bring every preset (+ LiveState) up to the current format.
