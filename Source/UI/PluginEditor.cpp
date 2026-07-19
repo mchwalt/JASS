@@ -328,13 +328,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 {
     setLookAndFeel(&lnf);
 
-    // Preset Save / Load (shared .synthy JSON)
+    // Preset Save / Load (JASS .jass JSON)
     addAndMakeVisible(saveBtn);
     addAndMakeVisible(loadBtn);
     saveBtn.onClick = [this]
     {
         presetChooser = std::make_unique<juce::FileChooser>(
-            "Save preset", PresetIO::presetsFolder(), "*.synthy");
+            "Save preset", PresetIO::presetsFolder(), "*.jass");
         auto flags = juce::FileBrowserComponent::saveMode
                    | juce::FileBrowserComponent::canSelectFiles
                    | juce::FileBrowserComponent::warnAboutOverwriting;
@@ -342,7 +342,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         {
             auto f = fc.getResult();
             if (f == juce::File{}) return;
-            if (! f.hasFileExtension("synthy")) f = f.withFileExtension("synthy");
+            if (! f.hasFileExtension("jass")) f = f.withFileExtension("jass");
             PresetIO::saveToFile(processor.getAPVTS(), f, f.getFileNameWithoutExtension());
             processor.markPresetClean();   // current state now matches the saved file
             setPresetName(f.getFileNameWithoutExtension());
@@ -351,7 +351,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     loadBtn.onClick = [this]
     {
         presetChooser = std::make_unique<juce::FileChooser>(
-            "Load preset", PresetIO::presetsFolder(), "*.synthy");
+            "Load preset", PresetIO::presetsFolder(), "*.jass");
         auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
         presetChooser->launchAsync(flags, [this](const juce::FileChooser& fc)
         {
@@ -826,7 +826,7 @@ void SynthyEditor::showZoneHelp(rack::Rack::Zone zone)
 
 juce::File SynthyEditor::uiLanguageFile()
 {
-    return PresetIO::synthyFolder().getChildFile("ui-language.txt");
+    return PresetIO::jassFolder().getChildFile("ui-language.txt");
 }
 
 juce::String SynthyEditor::loadUiLanguage()
@@ -848,7 +848,7 @@ void SynthyEditor::saveUiLanguage(const juce::String& lang)
 
 juce::File SynthyEditor::titleAnimFile()
 {
-    return PresetIO::synthyFolder().getChildFile("title-anim.txt");
+    return PresetIO::jassFolder().getChildFile("title-anim.txt");
 }
 
 bool SynthyEditor::loadTitleAnimated()
@@ -943,23 +943,8 @@ void SynthyEditor::buildRack()
     // OSC 1-3 — spec-driven (OscSpecs.h). FREQ display-transform + AMP ring come from the spec.
     for (int i = 1; i <= 3; ++i)
         rackBody->addModule(makeModuleDescriptor(Modules::osc(i)));
-    // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
-    // which a static spec can't capture). Lit = mixModeOn AND both SELECTED source OSCs enabled.
-    {
-        auto d = makeModuleDescriptor(Modules::crossmod());
-        auto* selA = apvts.getRawParameterValue (P::mixSrcA);
-        auto* selB = apvts.getRawParameterValue (P::mixSrcB);
-        std::array<std::atomic<float>*, 3> oscOn { apvts.getRawParameterValue (P::oscOn (1)),
-                                                   apvts.getRawParameterValue (P::oscOn (2)),
-                                                   apvts.getRawParameterValue (P::oscOn (3)) };
-        d.enabledWhen = [selA, selB, oscOn]
-        {
-            const int a = juce::jlimit (0, 2, (int) selA->load());
-            const int b = juce::jlimit (0, 2, (int) selB->load());
-            return oscOn[(size_t) a]->load() >= 0.5f && oscOn[(size_t) b]->load() >= 0.5f;
-        };
-        rackBody->addModule(std::move(d));
-    }
+    // CROSS MOD now lives in the MODULATION zone (it shapes the oscillators, it is not a source).
+    // Added below with the other modulators so its default within-zone position is natural.
 
     rackBody->addModule(makeModuleDescriptor(Modules::sub()));
     rackBody->addModule(makeModuleDescriptor(Modules::noise()));
@@ -996,6 +981,23 @@ void SynthyEditor::buildRack()
     rackBody->addModule(makeModuleDescriptor(Modules::arpeggiator()));
     rackBody->addModule(makeModuleDescriptor(Modules::glide()));
     rackBody->addModule(makeModuleDescriptor(Modules::pitchEnv()));
+    // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
+    // which a static spec can't capture). Lit = mixModeOn AND both SELECTED operand OSCs enabled.
+    {
+        auto d = makeModuleDescriptor(Modules::crossmod());
+        auto* selA = apvts.getRawParameterValue (P::mixSrcA);
+        auto* selB = apvts.getRawParameterValue (P::mixSrcB);
+        std::array<std::atomic<float>*, 3> oscOn { apvts.getRawParameterValue (P::oscOn (1)),
+                                                   apvts.getRawParameterValue (P::oscOn (2)),
+                                                   apvts.getRawParameterValue (P::oscOn (3)) };
+        d.enabledWhen = [selA, selB, oscOn]
+        {
+            const int a = juce::jlimit (0, 2, (int) selA->load());
+            const int b = juce::jlimit (0, 2, (int) selB->load());
+            return oscOn[(size_t) a]->load() >= 0.5f && oscOn[(size_t) b]->load() >= 0.5f;
+        };
+        rackBody->addModule(std::move(d));
+    }
     rackBody->addModule(makeModuleDescriptor(Modules::modMatrix()));
 
     // ---- PROCESSING (spec-driven) ----

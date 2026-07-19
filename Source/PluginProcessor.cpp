@@ -12,6 +12,10 @@ SynthyProcessor::SynthyProcessor()
         synth.addVoice(new SynthVoice());
     synth.addSound(new SynthSound());
 
+    // One-time rebrand of the app-data folder (%AppData%\Synthy -> JASS, *.synthy -> *.jass).
+    // MUST run before anything touches jassFolder() (which would create JASS and suppress it).
+    PresetIO::migrateLegacyAppData();
+
     // Ship the demo presets into the user's Presets folder on first run (idempotent).
     PresetIO::seedDemoPresets();
 
@@ -21,6 +25,10 @@ SynthyProcessor::SynthyProcessor()
     // Epic 5: keep the MIX MODE source selectors distinct (both standalone + plugin).
     apvts.addParameterListener(Parameters::ID::mixSrcA, this);
     apvts.addParameterListener(Parameters::ID::mixSrcB, this);
+    // CROSS MOD enable coupling: needs mixModeOn + the three oscOn to auto-enable / drop.
+    apvts.addParameterListener(Parameters::ID::mixModeOn, this);
+    for (int i = 1; i <= 3; ++i)
+        apvts.addParameterListener(Parameters::ID::oscOn(i), this);
 
     // Convenience: auto-enable a modulation source module when a matrix slot starts routing it
     // (source picked + DEST != Off) — otherwise a route silently does nothing because the source
@@ -63,6 +71,9 @@ SynthyProcessor::~SynthyProcessor()
     keyboardState.removeListener(this);
     apvts.removeParameterListener(Parameters::ID::mixSrcA, this);
     apvts.removeParameterListener(Parameters::ID::mixSrcB, this);
+    apvts.removeParameterListener(Parameters::ID::mixModeOn, this);
+    for (int i = 1; i <= 3; ++i)
+        apvts.removeParameterListener(Parameters::ID::oscOn(i), this);
     for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
     {
         apvts.removeParameterListener(Parameters::ID::modSlotSource(n), this);
@@ -200,32 +211,95 @@ void SynthyProcessor::updateMatrixModuleEnables()
     }
 }
 
+void SynthyProcessor::syncCrossModEnables(const juce::String& changed)
+{
+    using namespace Parameters;
+    auto isOn = [this](const juce::String& id) { return *apvts.getRawParameterValue(id) >= 0.5f; };
+    auto setP = [this](const juce::String& id, float v)
+                { if (auto* p = apvts.getParameter(id)) p->setValueNotifyingHost(v); };
+
+    const int a = juce::jlimit(0, 2, (int) *apvts.getRawParameterValue(ID::mixSrcA));
+    const int b = juce::jlimit(0, 2, (int) *apvts.getRawParameterValue(ID::mixSrcB));
+    const juce::String oscA = ID::oscOn(a + 1);
+    const juce::String oscB = ID::oscOn(b + 1);
+    const bool mixOn = isOn(ID::mixModeOn);
+
+    const bool oscChanged = (changed == ID::oscOn(1) || changed == ID::oscOn(2) || changed == ID::oscOn(3));
+
+    // A used operand OSC was switched OFF → CROSS MOD can no longer work, so switch it off too
+    // (previously it was only shown dimmed while mixModeOn stayed set). Then undo the operands we
+    // auto-enabled ourselves (an OSC that was on for its own sake keeps its state — see below).
+    if (mixOn && oscChanged && (changed == oscA || changed == oscB) && (! isOn(oscA) || ! isOn(oscB)))
+    {
+        setP(ID::mixModeOn, 0.0f);
+        for (auto& kv : crossModAutoEnabled)
+            if (kv.second && isOn(kv.first))
+                setP(kv.first, 0.0f);
+        crossModAutoEnabled.clear();
+        return;
+    }
+
+    // CROSS MOD toggled or an operand re-selected: while on, keep BOTH operand OSCs enabled
+    // (remember the ones we switch on); when off, undo exactly those again. An OSC that was
+    // already on (its own voice) is not remembered, so it is never auto-disabled.
+    const bool routeChanged = (changed == ID::mixModeOn || changed == ID::mixSrcA || changed == ID::mixSrcB);
+    if (routeChanged)
+    {
+        if (mixOn)
+        {
+            for (const auto& osc : { oscA, oscB })
+                if (! isOn(osc)) { setP(osc, 1.0f); crossModAutoEnabled[osc] = true; }
+            // an operand we auto-enabled earlier but no longer use (operand switched) → undo it
+            for (auto& kv : crossModAutoEnabled)
+                if (kv.second && kv.first != oscA && kv.first != oscB && isOn(kv.first))
+                    { setP(kv.first, 0.0f); kv.second = false; }
+        }
+        else
+        {
+            for (auto& kv : crossModAutoEnabled)
+                if (kv.second && isOn(kv.first))
+                    setP(kv.first, 0.0f);
+            crossModAutoEnabled.clear();
+        }
+    }
+}
+
 void SynthyProcessor::parameterChanged(const juce::String& paramId, float newValue)
 {
     using namespace Parameters;
     // Keep the matrix's source + target modules in step with the routing (auto-enable on wire-up,
-    // auto-undo when the last route drops). Handled before the mix-src guard so it always runs.
+    // auto-undo when the last route drops). Handled before the guard so it always runs.
     if (paramId.startsWith("modSlot"))
     {
         updateMatrixModuleEnables();
         return;
     }
 
-    // Keep the two MIX MODE source selectors distinct (Epic 5). Setting one equal to the other
-    // bumps the OTHER to a free OSC. The guard stops the bump from re-triggering us.
-    if (fixingMixSrc.exchange(true)) { return; }
+    // The remaining couplings are all CROSS-MOD-related (operand distinctness + enable coupling).
+    const bool crossModParam = (paramId == ID::mixModeOn || paramId == ID::mixSrcA || paramId == ID::mixSrcB
+                                || paramId == ID::oscOn(1) || paramId == ID::oscOn(2) || paramId == ID::oscOn(3));
+    if (! crossModParam)
+        return;
 
-    const int v = juce::jlimit(0, 2, (int) newValue);
-    auto bumpOther = [this](const char* otherId, int avoid)
+    juce::ignoreUnused(newValue);
+    if (fixingMixSrc.exchange(true))   // shared reentrancy guard: ignore our own write-backs
+        return;
+
+    // Keep the two operands distinct (Epic 5): a==b would be a no-op, so bump the OTHER to a free OSC.
+    if (paramId == ID::mixSrcA || paramId == ID::mixSrcB)
     {
-        if (auto* p = apvts.getParameter(otherId))
-            p->setValueNotifyingHost(p->convertTo0to1((float) (avoid == 0 ? 1 : 0)));   // first OSC != avoid
-    };
+        const int a = (int) *apvts.getRawParameterValue(ID::mixSrcA);
+        const int b = (int) *apvts.getRawParameterValue(ID::mixSrcB);
+        if (a == b)
+        {
+            const char* other = (paramId == ID::mixSrcA) ? ID::mixSrcB : ID::mixSrcA;
+            if (auto* p = apvts.getParameter(other))
+                p->setValueNotifyingHost(p->convertTo0to1((float) (a == 0 ? 1 : 0)));   // first OSC != a
+        }
+    }
 
-    if (paramId == ID::mixSrcA && v == (int) *apvts.getRawParameterValue(ID::mixSrcB))
-        bumpOther(ID::mixSrcB, v);
-    else if (paramId == ID::mixSrcB && v == (int) *apvts.getRawParameterValue(ID::mixSrcA))
-        bumpOther(ID::mixSrcA, v);
+    // Enable coupling: auto on/off of the operand OSCs; drop CROSS MOD when an operand goes off.
+    syncCrossModEnables(paramId);
 
     fixingMixSrc = false;
 }
