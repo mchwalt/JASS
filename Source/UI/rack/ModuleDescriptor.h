@@ -125,6 +125,9 @@ namespace rack
         SizeClass    sizeClass {};
         juce::String id;                          // stable slug (e.g. "osc1") — the layout key for
                                                   // the RackLayout model: show/hide + drag-drop (AD-10)
+        juce::String helpId;                      // online-help resource slug; empty => use id. Lets
+                                                  // instanced modules share ONE help text (LFO 1..4 =>
+                                                  // "lfo", OSC 1..3 => "osc1") instead of duplicating it.
         juce::String title;
         ModuleType   type {};
         Zone         defaultZone {};              // default rack zone (AD-10); the RackLayout model

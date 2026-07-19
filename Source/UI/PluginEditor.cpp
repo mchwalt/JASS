@@ -297,7 +297,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         if (helpPanel && helpPanel->isVisible() && currentHelpId.isNotEmpty() && rackBody)
             if (auto* f = rackBody->moduleById(currentHelpId))
                 helpPanel->setContent(f->moduleTitle(),
-                                      HelpTextStore::instance().get(currentHelpId, currentLang));
+                                      HelpTextStore::instance().get(f->helpId(), currentLang));
     };
     addAndMakeVisible(langBox);
 
@@ -580,8 +580,9 @@ void SynthyEditor::showModuleHelp(const juce::String& id)
     }
 
     auto* f = rackBody->moduleById(id);
-    const juce::String title = (f != nullptr) ? f->moduleTitle() : id;
-    helpPanel->setContent(title, HelpTextStore::instance().get(id, currentLang));   // sets size first
+    const juce::String title  = (f != nullptr) ? f->moduleTitle() : id;
+    const juce::String helpId = (f != nullptr) ? f->helpId()      : id;   // may alias (LFO 1..4 => "lfo")
+    helpPanel->setContent(title, HelpTextStore::instance().get(helpId, currentLang));   // sets size first
     currentHelpId = id;
 
     // Anchor beside the clicked module: to its right if there's room, else to its left,
