@@ -14,6 +14,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
         osc.setSampleRate(sampleRate);
     subOsc.setSampleRate(sampleRate);
     envelope.setSampleRate(sampleRate);
+    bypassGate.reset(sampleRate, 0.010);   // 10 ms anti-click gate for the ADSR-bypass path
     pitchEnv.setSampleRate(sampleRate);
     filter.setSampleRate(sampleRate);
     formant.prepare(sampleRate);
@@ -64,6 +65,8 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
 
     pitchEnv.trigger();   // (re)start the one-shot pitch sweep at note-on
     envelope.gateOn();
+    bypassGate.setCurrentAndTargetValue(0.0f);
+    bypassGate.setTargetValue(1.0f);   // fast fade-in (used only when the ADSR module is off)
     noteOn = true;
 }
 
@@ -81,10 +84,14 @@ void SynthVoice::pluckKarplus()
 void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
 {
     if (allowTailOff)
+    {
         envelope.gateOff();
+        bypassGate.setTargetValue(0.0f);   // fast fade-out (ADSR-bypass path); frees the voice in ~10 ms
+    }
     else
     {
         envelope.reset();
+        bypassGate.setCurrentAndTargetValue(0.0f);
         clearCurrentNote();
         noteOn = false;
     }
@@ -93,7 +100,10 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
 void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                                   int startSample, int numSamples)
 {
-    if (!noteOn && envelope.getStage() == AdsrEnvelope::Stage::Idle)
+    // Voice is inactive when the note is off AND its amplitude source has fully decayed: the ADSR
+    // (release => Idle) when the envelope module is on, else the fast bypass gate (reached 0).
+    if (!noteOn && (adsrOn ? envelope.getStage() == AdsrEnvelope::Stage::Idle
+                           : bypassGate.getCurrentValue() <= 0.0f))
         return;
 
     // Capture the knob frequencies; everything plays transposed by the note.
@@ -144,6 +154,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         float lfoVals[kNumLFOs];
         for (int i = 0; i < kNumLFOs; ++i) lfoVals[i] = lfos[i].process();
         const float envValue = envelope.process();
+        const float gateG    = bypassGate.getNextValue();   // advanced every sample (ADSR-bypass gain + voice-free)
         // Envelope as a mod SOURCE is gated by the ENVELOPE module enable, so a source is
         // only active when its module is on — the same rule as the LFOs (silent when off).
         // (envValue itself still drives the amplitude gain below regardless, per Story 2.4.)
@@ -240,9 +251,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         // Envelope gain. The ADSR was already advanced ONCE at the top of the loop (envValue,
         // also a mod source); reuse it here — do not advance twice. When disabled (Story 2.4)
-        // bypass it with constant gain 1.0. (The state still advanced, so toggling mid-note
-        // doesn't glitch, exactly as before.)
-        mixedSample *= (adsrOn ? envValue : 1.0f);
+        // bypass it with the fast gate (NOT constant 1.0 — that made a released note hang at full
+        // volume for the whole release time before cutting; the gate fades in/out in ~10 ms and
+        // frees the voice promptly). The envelope still advances, so toggling mid-note doesn't glitch.
+        mixedSample *= (adsrOn ? envValue : gateG);
 
         // Effects
         mixedSample = distortion.process(mixedSample);
@@ -257,7 +269,12 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         for (int channel = 0; channel < outputBuffer.getNumChannels(); ++channel)
             outputBuffer.addSample(channel, startSample + sample, mixedSample);
 
-        if (envelope.getStage() == AdsrEnvelope::Stage::Idle)
+        // Free the voice when its amplitude source has fully decayed: ADSR reaching Idle (envelope
+        // on), else the fast bypass gate reaching 0 (envelope off) — so a released note stops in
+        // ~10 ms instead of hanging for the envelope's release time at full gain.
+        const bool voiceIdle = adsrOn ? (envelope.getStage() == AdsrEnvelope::Stage::Idle)
+                                      : (gateG <= 0.0f && ! bypassGate.isSmoothing());
+        if (voiceIdle)
         {
             clearCurrentNote();
             noteOn = false;
