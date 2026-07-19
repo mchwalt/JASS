@@ -523,6 +523,11 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     if (c == 'z' || c == 'Z' || c == 'x' || c == 'X')
     {
         int dir = (c == 'z' || c == 'Z') ? -1 : 1;
+        // Release any notes held via the computer keyboard BEFORE shifting the octave. Otherwise
+        // the held key's note-off (on release) maps to the NEW octave and the OLD note stays on
+        // (stuck note). Only the keyboard's own channel — the ch.16 auto-play drone is untouched.
+        if (keyboard)
+            processor.getKeyboardState().allNotesOff(keyboard->getMidiChannel());
         kbBaseOctave = juce::jlimit(1, 7, kbBaseOctave + dir);
         if (keyboard)
             keyboard->setKeyPressBaseOctave(kbBaseOctave);
