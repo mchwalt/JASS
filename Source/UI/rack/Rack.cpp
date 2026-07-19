@@ -1,4 +1,5 @@
 #include "Rack.h"
+#include "../HelpTextStore.h"   // has()/get() for zone info icons (Story 6.1 pattern)
 #include <array>
 #include <algorithm>
 
@@ -40,6 +41,215 @@ namespace rack
     {
         // One shared look for everything beneath the rack (AD-7); children inherit it.
         setLookAndFeel (&lnf);
+        buildZoneHeaders();   // enable/reset/info controls for every zone header
+    }
+
+    juce::String Rack::zoneHelpId (Zone zone)
+    {
+        switch (zone)
+        {
+            case Zone::Generators:    return "zone-generators";
+            case Zone::Modulation:    return "zone-modulation";
+            case Zone::Processing:    return "zone-processing";
+            case Zone::Visualization: return "zone-visualization";
+            case Zone::MasterBus:     return "zone-masterbus";
+            case Zone::Input:         return "zone-input";
+        }
+        return {};
+    }
+
+    void Rack::buildZoneHeaders()
+    {
+        // One control set per zone in render order. Built up-front (modules are added later),
+        // so enable/reset exist for every zone; layout() shows/hides + positions them per pass.
+        for (auto zone : zoneOrder)
+        {
+            ZoneHeaderControls zh;
+            zh.zone = zone;
+            const auto tint = typeColour (zoneTag (zone));
+
+            // Group-bypass toggle (manual state — no APVTS attachment; syncZoneHeaderToggles
+            // keeps it aligned with the members). We drive the toggle state ourselves (no
+            // auto-flip) and derive the click target from the LIVE group state: any member on
+            // ⇒ turn the whole group off, otherwise turn it on. (Using the button's own flipped
+            // state fails for zones whose factory state isn't "all on" — e.g. CROSS MOD is off
+            // by default — where the timer would immediately snap the toggle back.)
+            zh.enableBtn = std::make_unique<juce::ToggleButton>();
+            zh.enableBtn->setClickingTogglesState (false);
+            zh.enableBtn->setColour (juce::ToggleButton::tickColourId,        tint);
+            zh.enableBtn->setColour (juce::ToggleButton::tickDisabledColourId, tint.withAlpha (0.5f));
+            zh.enableBtn->setTooltip ("Enable / bypass this whole group");
+            zh.enableBtn->onClick = [this, zone]
+            {
+                int enableable = 0, on = 0;
+                zoneEnableCounts (zone, enableable, on);
+                setZoneEnabled (zone, on == 0);   // none on ⇒ enable all; any on ⇒ bypass all
+            };
+            addAndMakeVisible (*zh.enableBtn);
+
+            zh.resetBtn = std::make_unique<IconButton> (IconButton::Kind::Reset);
+            zh.resetBtn->setTint (tint);
+            zh.resetBtn->setTooltip ("Restore this group's default modules");
+            zh.resetBtn->onClick = [this, zone] { resetZone (zone); };
+            addAndMakeVisible (*zh.resetBtn);
+
+            // Info icon only when a zone help text exists (mirrors the module info icon).
+            if (HelpTextStore::instance().has (zoneHelpId (zone)))
+            {
+                zh.infoBtn = std::make_unique<IconButton> (IconButton::Kind::Info);
+                zh.infoBtn->setTint (tint);
+                zh.infoBtn->setTooltip ("What is this group?");
+                zh.infoBtn->onClick = [this, zone] { if (onZoneHelp) onZoneHelp (zone); };
+                addAndMakeVisible (*zh.infoBtn);
+            }
+
+            zoneHeaders.push_back (std::move (zh));
+        }
+    }
+
+    Rack::ZoneHeaderControls* Rack::zoneHeaderFor (Zone zone)
+    {
+        for (auto& zh : zoneHeaders)
+            if (zh.zone == zone) return &zh;
+        return nullptr;
+    }
+
+    juce::Component* Rack::zoneInfoButton (Zone zone)
+    {
+        if (auto* zh = zoneHeaderFor (zone)) return zh->infoBtn.get();
+        return nullptr;
+    }
+
+    void Rack::setFactoryEnableDefault (const juce::String& enableParamId, float normValue)
+    {
+        if (enableParamId.isNotEmpty())
+            factoryEnableByParam[enableParamId] = normValue;
+    }
+
+    void Rack::zoneEnableCounts (Zone zone, int& enableable, int& on) const
+    {
+        enableable = 0; on = 0;
+        for (const auto& e : layoutModel)
+        {
+            if (e.zone != zone || ! e.visible) continue;
+            const auto* p = placedById (e.id);
+            if (p == nullptr || p->frame == nullptr) continue;
+            const auto pid = p->frame->enableParamId();
+            if (pid.isEmpty()) continue;
+            ++enableable;
+            if (auto* raw = apvts.getRawParameterValue (pid); raw != nullptr && raw->load() >= 0.5f)
+                ++on;
+        }
+    }
+
+    void Rack::setZoneEnabled (Zone zone, bool enabled)
+    {
+        // Group "mute with memory" over the VISIBLE enable-capable members (hidden modules stay
+        // untouched — invariant). DISABLE: remember each member's current enable value, then
+        // turn them all off. ENABLE: restore the remembered values so exactly the members that
+        // were on come back; if nothing was remembered (the group was never bypassed — e.g. all
+        // effects start off), fall back to turning the whole group ON so the toggle still acts.
+        auto* zh = zoneHeaderFor (zone);
+
+        if (! enabled)
+        {
+            if (zh != nullptr) zh->bypassSnapshot.clear();
+            for (const auto& e : layoutModel)
+            {
+                if (e.zone != zone || ! e.visible) continue;
+                const auto* p = placedById (e.id);
+                if (p == nullptr || p->frame == nullptr) continue;
+                const auto pid = p->frame->enableParamId();
+                if (pid.isEmpty()) continue;
+                if (auto* param = apvts.getParameter (pid))
+                {
+                    if (zh != nullptr) zh->bypassSnapshot[e.id] = param->getValue();   // remember
+                    param->setValueNotifyingHost (0.0f);
+                }
+            }
+        }
+        else
+        {
+            const bool haveSnapshot = (zh != nullptr && ! zh->bypassSnapshot.empty());
+            for (const auto& e : layoutModel)
+            {
+                if (e.zone != zone || ! e.visible) continue;
+                const auto* p = placedById (e.id);
+                if (p == nullptr || p->frame == nullptr) continue;
+                const auto pid = p->frame->enableParamId();
+                if (pid.isEmpty()) continue;
+                if (auto* param = apvts.getParameter (pid))
+                {
+                    float val = 1.0f;   // fallback: turn the whole group on
+                    if (haveSnapshot)
+                    {
+                        auto it = zh->bypassSnapshot.find (e.id);
+                        val = (it != zh->bypassSnapshot.end()) ? it->second : 0.0f;
+                    }
+                    param->setValueNotifyingHost (val);
+                }
+            }
+            if (zh != nullptr) zh->bypassSnapshot.clear();
+        }
+
+        syncZoneHeaderToggles();
+    }
+
+    void Rack::resetZone (Zone zone)
+    {
+        // Restore the group's default module selection: for every module whose FACTORY zone is
+        // `zone`, put its default {zone, position, visible} back. (A module dragged OUT of this
+        // zone is pulled back; a foreign module dragged IN is restored when ITS zone is reset.)
+        for (auto& e : layoutModel)
+            for (const auto& d : defaultLayout)
+                if (d.id == e.id && d.zone == zone)
+                {
+                    e.zone     = d.zone;
+                    e.position = d.position;
+                    e.visible  = d.visible;
+                    break;
+                }
+
+        // Restore DEFAULT enable state too (user-requested: reset = default visibility + enable).
+        // The factory enable value is the param's APVTS default, EXCEPT where the shipped Init
+        // patch overrides it (factoryEnableByParam — e.g. oscOn is declared 0 but Init turns it
+        // on). Using getDefaultValue() blindly would silence OSC/most generators (their declared
+        // default is 0), which is exactly the "reset turns everything off" bug. Knobs untouched.
+        if (auto* zh = zoneHeaderFor (zone)) zh->bypassSnapshot.clear();   // drop any stashed bypass
+        for (const auto& e : layoutModel)
+        {
+            if (e.zone != zone || ! e.visible) continue;
+            const auto* p = placedById (e.id);
+            if (p == nullptr || p->frame == nullptr) continue;
+            const auto pid = p->frame->enableParamId();
+            if (pid.isEmpty()) continue;
+            if (auto* param = apvts.getParameter (pid))
+            {
+                float val = param->getDefaultValue();
+                if (auto it = factoryEnableByParam.find (pid); it != factoryEnableByParam.end())
+                    val = it->second;
+                param->setValueNotifyingHost (val);
+            }
+        }
+
+        relayout();
+        writeLayoutToState();
+        enforceHiddenDisabled();     // factory-hidden modules must stay silent (invariant)
+        syncZoneHeaderToggles();
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::syncZoneHeaderToggles()
+    {
+        // The enable toggle is lit when ANY visible enable-capable member is on (so a group
+        // that is only partly on still reads as "on", and a click bypasses the whole group).
+        for (auto& zh : zoneHeaders)
+        {
+            int enableable = 0, on = 0;
+            zoneEnableCounts (zh.zone, enableable, on);
+            if (zh.enableBtn != nullptr)
+                zh.enableBtn->setToggleState (on > 0, juce::dontSendNotification);
+        }
     }
 
     Rack::~Rack() { setLookAndFeel (nullptr); }
@@ -294,7 +504,17 @@ namespace rack
     int Rack::layout (int width, bool apply)
     {
         if (apply)
+        {
             zoneBands.clear();
+            // Hide every zone-header control up-front; the loop below re-shows + positions the
+            // controls of each zone that is actually rendered this pass.
+            for (auto& zh : zoneHeaders)
+            {
+                if (zh.enableBtn) zh.enableBtn->setVisible (false);
+                if (zh.resetBtn)  zh.resetBtn->setVisible (false);
+                if (zh.infoBtn)   zh.infoBtn->setVisible (false);
+            }
+        }
 
         std::vector<ModuleFrame*> shownFrames;   // frames actually placed this pass (apply only)
 
@@ -316,8 +536,51 @@ namespace rack
 
             // --- full-width zone header band ---
             if (apply)
-                zoneBands.push_back ({ zoneText (zone), zoneTag (zone),
-                                       { gridLeft, y, gridWidth, kZoneHeaderH } });
+            {
+                ZoneBand band { zoneText (zone), zoneTag (zone),
+                                { gridLeft, y, gridWidth, kZoneHeaderH } };
+                band.lineStartX = gridLeft + kZoneLabelW;
+                band.lineEndX   = gridLeft + gridWidth - 4;   // full width until the controls trim it
+
+                // Standard controls sit at the RIGHT edge, same order/sizes as a module header
+                // (far-right: enable 24 → reset 20 → info 20). The separator line runs between
+                // the title and this cluster. Vertically centred in the header band.
+                if (auto* zh = zoneHeaderFor (zone))
+                {
+                    const int cyc = y + kZoneHeaderH / 2;
+                    const int bh  = 18, gap = 4;
+                    int cx = gridLeft + gridWidth - 4;   // right edge (matches module header pad)
+
+                    int enableable = 0, on = 0;
+                    zoneEnableCounts (zone, enableable, on);
+
+                    if (zh->enableBtn != nullptr && enableable > 0)
+                    {
+                        cx -= 24;
+                        zh->enableBtn->setBounds (cx, cyc - bh / 2, 24, bh);
+                        zh->enableBtn->setToggleState (on > 0, juce::dontSendNotification);
+                        zh->enableBtn->setVisible (true);
+                        cx -= gap;
+                    }
+                    if (zh->resetBtn != nullptr)
+                    {
+                        cx -= 20;
+                        zh->resetBtn->setBounds (cx, cyc - bh / 2, 20, bh);
+                        zh->resetBtn->setVisible (true);
+                        cx -= gap;
+                    }
+                    if (zh->infoBtn != nullptr)
+                    {
+                        cx -= 20;
+                        zh->infoBtn->setBounds (cx, cyc - bh / 2, 20, bh);
+                        zh->infoBtn->setVisible (true);
+                        cx -= gap;
+                    }
+                    band.lineEndX = cx - 2;   // separator stops just left of the cluster
+                }
+
+                zoneBands.push_back (band);
+            }
             y += kZoneHeaderH + kGutter;
 
             // --- pack this zone's frames into the cols-wide grid (row-major first-fit) ---
@@ -408,8 +671,20 @@ namespace rack
         // Frames not placed this pass (module hidden or its zone hidden) are taken out of
         // view — but kept alive with their APVTS attachments intact (hiding is UI-only).
         if (apply)
+        {
             for (auto* f : frames)
                 f->setVisible (std::find (shownFrames.begin(), shownFrames.end(), f) != shownFrames.end());
+
+            // The zone-header controls were created before any module frame (constructor vs.
+            // addModule), so they sit BEHIND the frames in z-order. Pull the visible ones to the
+            // front so a frame can never intercept a header button's click. (false = no focus.)
+            for (auto& zh : zoneHeaders)
+            {
+                if (zh.enableBtn != nullptr && zh.enableBtn->isVisible()) zh.enableBtn->toFront (false);
+                if (zh.resetBtn  != nullptr && zh.resetBtn->isVisible())  zh.resetBtn->toFront (false);
+                if (zh.infoBtn   != nullptr && zh.infoBtn->isVisible())   zh.infoBtn->toFront (false);
+            }
+        }
 
         return y + kPad;
     }
@@ -423,6 +698,10 @@ namespace rack
     {
         for (auto* f : frames)
             f->updateLiveFeed (ringByTarget, playedRatio);
+
+        // Individual module enable toggles change the params behind our back; refresh the
+        // zone-header group toggles from the live values on the same (editor) tick.
+        syncZoneHeaderToggles();
     }
 
     ModuleFrame* Rack::moduleById (const juce::String& id)
@@ -439,17 +718,23 @@ namespace rack
 
         for (const auto& z : zoneBands)
         {
-            auto b = z.bounds;
+            const auto b = z.bounds;
             const auto col = typeColour (z.tag);
 
             g.setColour (col);
             g.setFont (juce::FontOptions (15.0f, juce::Font::bold));
-            auto label = b.removeFromLeft (220);
-            g.drawText (z.text, label, juce::Justification::centredLeft);
+            g.drawText (z.text, b.withWidth (kZoneLabelW), juce::Justification::centredLeft);
 
-            const auto yMid = (float) b.getCentreY();
-            g.setColour (col.withAlpha (0.35f));
-            g.drawLine ((float) b.getX(), yMid, (float) b.getRight() - 4.0f, yMid, 1.5f);
+            // Separator line runs from just right of the title to just left of the right-edge
+            // control cluster (enable/reset/info), so it never runs under any of them.
+            const int lineX0 = juce::jmax (z.lineStartX, b.getX() + kZoneLabelW);
+            const int lineX1 = z.lineEndX;
+            if (lineX1 > lineX0 + 8)
+            {
+                const auto yMid = (float) b.getCentreY();
+                g.setColour (col.withAlpha (0.35f));
+                g.drawLine ((float) lineX0, yMid, (float) lineX1, yMid, 1.5f);
+            }
         }
     }
 }

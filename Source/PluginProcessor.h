@@ -8,6 +8,7 @@
 #include "DSP/Compressor.h"
 #include "DSP/Arpeggiator.h"
 #include <vector>
+#include <map>
 
 class SynthyProcessor : public juce::AudioProcessor,
                         private juce::Timer,
@@ -144,6 +145,16 @@ private:
     // other to a free OSC. Registered for mixSrcA/mixSrcB only.
     void parameterChanged(const juce::String& paramId, float newValue) override;
     std::atomic<bool> fixingMixSrc { false };   // reentrancy guard
+
+    // Keep the matrix's SOURCE and TARGET modules in step with the routing: an active slot
+    // (DEST != Off) needs both its source module (LFO/Envelope) AND its target module (e.g. the
+    // FILTER for Cutoff/Resonance, FORMANT for Vowel, …) enabled, else the modulation is
+    // inaudible. Turn each claimed module ON, and turn it back OFF when the LAST slot using it
+    // drops — but only if WE auto-enabled it (it was off before and isn't wired elsewhere). A
+    // module on for any other reason (user toggle, ADSR default) is never auto-disabled.
+    // Targets Pitch/Amplitude are global (no module). Re-evaluated on every slot SRC/DEST change.
+    void updateMatrixModuleEnables();
+    std::map<juce::String, bool> matrixAutoEnabled;   // enable-param id -> true if auto-enable turned it on
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)
 };

@@ -9,6 +9,7 @@
 #include <vector>
 #include <utility>
 #include <array>
+#include <cmath>
 
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
 // the rack framework owns the single shared look.
@@ -21,17 +22,28 @@
 // path re-packs and the editor re-fits height (AD-10/AD-12). Shown in a CallOutBox.
 namespace
 {
-    class RackCustomizePanel : public juce::Component
+    class RackCustomizePanel : public juce::Component,
+                               private juce::Timer
     {
     public:
-        explicit RackCustomizePanel (rack::Rack& r) : rack (r)
+        explicit RackCustomizePanel (rack::Rack& r, const juce::String& lang = "EN") : rack (r)
         {
             rebuildRows();
             addAndMakeVisible (resetBtn);
             resetBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff334155));
             resetBtn.onClick = [this] { rack.resetLayout(); rebuildRows(); repaint(); };
             setSize (kW, listHeight() + kBtnH);
+
+            // Discoverability toast (localized): drag-to-reorder isn't obvious, so after the
+            // mouse rests a moment over the list we fade in a one-line hint, then fade it out.
+            toastText = (lang == "DE")
+                ? juce::String (juce::CharPointer_UTF8 ("Tipp: Reihenfolge per Drag & Drop ändern - einfach eine Modulzeile ziehen."))
+                : juce::String ("Tip: reorder modules by drag & drop - just drag a row.");
+            lastMoveMs = juce::Time::getMillisecondCounter();
+            startTimerHz (30);
         }
+
+        ~RackCustomizePanel() override { stopTimer(); }
 
         void resized() override
         {
@@ -75,10 +87,17 @@ namespace
                 g.setColour (juce::Colours::black.withAlpha (0.30f));
                 g.drawHorizontalLine (i * kRowH, 0.0f, (float) getWidth());
             }
+
+            paintToast (g);   // drag-to-reorder hint (fades in after a rest, then out)
         }
+
+        void mouseEnter (const juce::MouseEvent& e) override { mouseInside = true; noteActivity (e); }
+        void mouseExit  (const juce::MouseEvent&)     override { mouseInside = false; }
+        void mouseMove  (const juce::MouseEvent& e) override { noteActivity (e); }
 
         void mouseDown (const juce::MouseEvent& e) override
         {
+            noteActivity (e);
             dragIndex = -1;
             const int i = e.y / kRowH;
             if (! juce::isPositiveAndBelow (i, (int) rows.size())) return;
@@ -102,6 +121,9 @@ namespace
 
         void mouseDrag (const juce::MouseEvent& e) override
         {
+            // The user is already doing exactly what the hint teaches — dismiss it.
+            if (toastActive) { toastActive = false; toastAlpha = 0.0f; repaint(); }
+            noteActivity (e);
             if (dragIndex < 0) return;
             const int target = juce::jlimit (1, (int) rows.size() - 1, e.y / kRowH);
             if (target != dragIndex)
@@ -123,6 +145,66 @@ namespace
 
     private:
         struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; };
+
+        // --- drag-to-reorder hint toast -------------------------------------------------
+        // Any mouse activity resets the rest timer and re-arms the toast (so it can show again
+        // after the next pause). lastMovePos is remembered so the banner appears near the cursor.
+        void noteActivity (const juce::MouseEvent& e)
+        {
+            lastMoveMs   = juce::Time::getMillisecondCounter();
+            lastMoveY    = e.y;
+            hoverConsumed = false;
+        }
+
+        void timerCallback() override
+        {
+            const auto now = juce::Time::getMillisecondCounter();
+
+            // Show once per rest: after kRestMs of stillness while the mouse is over the list.
+            if (mouseInside && ! toastActive && ! hoverConsumed && (now - lastMoveMs) >= kRestMs)
+            {
+                toastActive   = true;
+                toastStartMs  = now;
+                hoverConsumed = true;   // don't re-show until the mouse moves again
+            }
+
+            if (! toastActive) return;
+
+            // Fade in → hold → fade out, then retire.
+            const auto el = now - toastStartMs;
+            float a;
+            if      (el < kFadeMs)                 a = (float) el / (float) kFadeMs;
+            else if (el < kFadeMs + kHoldMs)       a = 1.0f;
+            else if (el < 2 * kFadeMs + kHoldMs)   a = 1.0f - (float) (el - kFadeMs - kHoldMs) / (float) kFadeMs;
+            else                                   { toastActive = false; a = 0.0f; }
+
+            if (std::abs (a - toastAlpha) > 0.02f || ! toastActive)
+            {
+                toastAlpha = a;
+                repaint();
+            }
+        }
+
+        void paintToast (juce::Graphics& g)
+        {
+            if (toastAlpha <= 0.01f)
+                return;
+
+            const int margin = 8, bannerH = 46;
+            const int maxY = juce::jmax (4, listHeight() - bannerH - 4);
+            const int y    = juce::jlimit (4, maxY, lastMoveY + 14);
+            auto area = juce::Rectangle<int> (margin, y, getWidth() - 2 * margin, bannerH).toFloat();
+
+            g.setColour (juce::Colour (0xff0f1420).withAlpha (0.94f * toastAlpha));
+            g.fillRoundedRectangle (area, 7.0f);
+            g.setColour (juce::Colour (0xff40c0ff).withAlpha (0.85f * toastAlpha));
+            g.drawRoundedRectangle (area, 7.0f, 1.4f);
+
+            g.setColour (juce::Colours::white.withAlpha (0.92f * toastAlpha));
+            g.setFont (juce::FontOptions (12.5f));
+            g.drawFittedText (toastText, area.toNearestInt().reduced (10, 6),
+                              juce::Justification::centredLeft, 2);
+        }
 
         // state: 0 = empty, 1 = full, 2 = partial (mixed — a thin dash)
         static void drawBox (juce::Graphics& g, juce::Rectangle<int> area, int state, juce::Colour c)
@@ -169,7 +251,21 @@ namespace
         std::vector<Row> rows;
         juce::TextButton resetBtn { "Reset layout" };
         int dragIndex = -1;
+
+        // toast state
+        juce::String  toastText;
+        juce::uint32  lastMoveMs   = 0;
+        juce::uint32  toastStartMs = 0;
+        int           lastMoveY    = 0;
+        float         toastAlpha   = 0.0f;
+        bool          toastActive  = false;
+        bool          hoverConsumed = false;
+        bool          mouseInside  = false;
+
         static constexpr int kW = 260, kRowH = 26, kBtnH = 30;
+        static constexpr juce::uint32 kRestMs = 3000;   // rest time before the hint appears
+        static constexpr juce::uint32 kFadeMs =  300;   // fade in / out duration
+        static constexpr juce::uint32 kHoldMs = 4300;   // fully-visible hold (=> ~4.9 s total)
     };
 }
 
@@ -293,11 +389,18 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     {
         currentLang = (langBox.getSelectedId() == 2) ? "DE" : "EN";
         saveUiLanguage(currentLang);
-        // Live-update an already-open panel.
+        // Live-update an already-open panel (module OR zone help).
         if (helpPanel && helpPanel->isVisible() && currentHelpId.isNotEmpty() && rackBody)
+        {
             if (auto* f = rackBody->moduleById(currentHelpId))
                 helpPanel->setContent(f->moduleTitle(),
                                       HelpTextStore::instance().get(f->helpId(), currentLang));
+            else if (currentHelpId.startsWith("zone-"))   // a group's help is showing
+                for (auto z : rackBody->zones())
+                    if (rack::Rack::zoneHelpId(z) == currentHelpId)
+                        helpPanel->setContent(rack::Rack::zoneName(z),
+                                              HelpTextStore::instance().get(currentHelpId, currentLang));
+        }
     };
     addAndMakeVisible(langBox);
 
@@ -340,6 +443,11 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     if (rackBody)
     {
         rackBody->onLayoutChanged = [this] { refitHeight(); };
+        // Tell the rack which enable params ship "on" in the Init patch despite a declared
+        // default of 0 (mirrors SynthyProcessor::resetToDefault): OSC 1..3. A zone RESET then
+        // reproduces the factory enable state instead of silencing the oscillators.
+        for (int i = 1; i <= 3; ++i)
+            rackBody->setFactoryEnableDefault(Parameters::ID::oscOn(i), 1.0f);
         rackBody->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
     }
 
@@ -361,7 +469,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     helpPanel->onClose = [this] { if (helpPanel) helpPanel->setVisible(false); };
     addChildComponent(*helpPanel);
     if (rackBody)
+    {
         rackBody->onModuleHelp = [this](const juce::String& id) { showModuleHelp(id); };
+        rackBody->onZoneHelp   = [this](rack::Rack::Zone z)    { showZoneHelp(z); };
+    }
 
     // Size the editor: fixed design width, height derived from the rack's VISIBLE content.
     // Re-run on every show/hide via Rack::onLayoutChanged (AD-12). Must be after the rack +
@@ -405,7 +516,7 @@ void SynthyEditor::showModulesMenu()
     if (! rackBody) return;
     // The reorderable customization list (Story 4.2) in a call-out anchored to the button.
     // Parent = nullptr (desktop) so the editor's auto-fit transform doesn't skew mouse coords.
-    auto panel = std::make_unique<RackCustomizePanel>(*rackBody);
+    auto panel = std::make_unique<RackCustomizePanel>(*rackBody, currentLang);
     juce::CallOutBox::launchAsynchronously(std::move(panel),
                                            modulesBtn.getScreenBounds(),
                                            nullptr);
@@ -604,6 +715,45 @@ void SynthyEditor::showModuleHelp(const juce::String& id)
     helpPanel->toFront(false);   // false = do NOT steal keyboard focus (keeps the on-screen
                                  // keyboard playable via the computer keys). ESC is handled by
                                  // the editor's keyPressed, so the panel needs no focus.
+}
+
+void SynthyEditor::showZoneHelp(rack::Rack::Zone zone)
+{
+    if (helpPanel == nullptr)
+        return;
+
+    const juce::String helpId = rack::Rack::zoneHelpId(zone);   // e.g. "zone-generators"
+
+    // Toggle: clicking the SAME group's info icon while its panel is open closes it.
+    if (helpPanel->isVisible() && currentHelpId == helpId)
+    {
+        helpPanel->setVisible(false);
+        return;
+    }
+
+    // Panel title = the group name; content = the zone's help text in the active language.
+    helpPanel->setContent(rack::Rack::zoneName(zone),
+                          HelpTextStore::instance().get(helpId, currentLang));
+    currentHelpId = helpId;
+
+    // Anchor beside the clicked info icon (it sits at the header's right edge): place the panel
+    // to its LEFT, just below the header row; fall back to the right if there's no room left.
+    int x = getWidth() / 2 - HelpPanel::kWidth / 2, y = 96;
+    if (rackBody != nullptr)
+        if (auto* anchor = rackBody->zoneInfoButton(zone))
+        {
+            auto tl = getLocalPoint(anchor, juce::Point<int>(0, 0));
+            x = tl.x - HelpPanel::kWidth - 8;
+            if (x < 8)
+                x = tl.x + anchor->getWidth() + 8;
+            y = tl.y + anchor->getHeight() + 6;
+        }
+    const int maxX = juce::jmax(8, getWidth()  - HelpPanel::kWidth      - 8);
+    const int maxY = juce::jmax(8, getHeight() - helpPanel->getHeight() - 80);
+    helpPanel->setTopLeftPosition(juce::jlimit(8, maxX, x), juce::jlimit(8, maxY, y));
+
+    helpPanel->setVisible(true);
+    helpPanel->toFront(false);
 }
 
 juce::File SynthyEditor::uiLanguageFile()

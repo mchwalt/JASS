@@ -1,6 +1,7 @@
 #include "PluginProcessor.h"
 #include "UI/PluginEditor.h"
 #include "Audio/PresetIO.h"
+#include <set>
 
 SynthyProcessor::SynthyProcessor()
     : AudioProcessor(BusesProperties()
@@ -20,6 +21,15 @@ SynthyProcessor::SynthyProcessor()
     // Epic 5: keep the MIX MODE source selectors distinct (both standalone + plugin).
     apvts.addParameterListener(Parameters::ID::mixSrcA, this);
     apvts.addParameterListener(Parameters::ID::mixSrcB, this);
+
+    // Convenience: auto-enable a modulation source module when a matrix slot starts routing it
+    // (source picked + DEST != Off) — otherwise a route silently does nothing because the source
+    // module (e.g. an LFO) is still bypassed. Listen on every slot's SRC + DEST selector.
+    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+    {
+        apvts.addParameterListener(Parameters::ID::modSlotSource(n), this);
+        apvts.addParameterListener(Parameters::ID::modSlotTarget(n), this);
+    }
 
     // The shared LiveState bridges the two standalone apps (C# <-> C++). In a
     // plugin host (e.g. REAPER) the host owns project state, so leave it alone.
@@ -53,6 +63,11 @@ SynthyProcessor::~SynthyProcessor()
     keyboardState.removeListener(this);
     apvts.removeParameterListener(Parameters::ID::mixSrcA, this);
     apvts.removeParameterListener(Parameters::ID::mixSrcB, this);
+    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+    {
+        apvts.removeParameterListener(Parameters::ID::modSlotSource(n), this);
+        apvts.removeParameterListener(Parameters::ID::modSlotTarget(n), this);
+    }
     if (wrapperType == wrapperType_Standalone)
     {
         stopTimer();
@@ -101,9 +116,101 @@ void SynthyProcessor::saveLiveState()
     PresetIO::saveToFile(apvts, PresetIO::liveStateFile(), currentPresetName, isPresetModified());
 }
 
+namespace
+{
+    // Enable-param of the module behind a matrix SOURCE (item order == ModSource in
+    // ModMatrixSpecs). Velocity has no module → empty (nothing to enable).
+    juce::String matrixSourceEnableParam (int sourceIdx)
+    {
+        using namespace Parameters;
+        switch ((ModSource) sourceIdx)
+        {
+            case ModSource::LFO1:     return ID::lfoOn (1);
+            case ModSource::Envelope: return ID::adsrOn;
+            case ModSource::Velocity: return {};
+            case ModSource::LFO2:     return ID::lfoOn (2);
+            case ModSource::LFO3:     return ID::lfoOn (3);
+            case ModSource::LFO4:     return ID::lfoOn (4);
+        }
+        return {};
+    }
+
+    // Enable-param of the module behind a matrix TARGET (item order == LFOTarget). Pitch and
+    // Amplitude are global voice parameters (always active) → empty. Cutoff/Resonance share the
+    // FILTER; Vowel → FORMANT; WT Pos → WAVETABLE; Wavefold → WAVEFOLD.
+    juce::String matrixTargetEnableParam (int targetIdx)
+    {
+        using namespace Parameters;
+        switch ((LFOTarget) targetIdx)
+        {
+            case LFOTarget::FilterCutoff:      return ID::filterOn;
+            case LFOTarget::FilterResonance:   return ID::filterOn;
+            case LFOTarget::WavetablePosition: return ID::wavetableOn;
+            case LFOTarget::FormantVowel:      return ID::formantOn;
+            case LFOTarget::WavefolderDrive:   return ID::wavefoldOn;
+            case LFOTarget::Off:
+            case LFOTarget::Frequency:
+            case LFOTarget::Amplitude:
+            default:                           return {};
+        }
+    }
+}
+
+void SynthyProcessor::updateMatrixModuleEnables()
+{
+    using namespace Parameters;
+
+    // Which modules does the matrix currently CLAIM? For every active slot (DEST != Off): its
+    // SOURCE module (LFO/Envelope) AND its TARGET module (FILTER/FORMANT/WAVETABLE/WAVEFOLD).
+    std::set<juce::String> claimed;
+    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+    {
+        const int tgt = (int) *apvts.getRawParameterValue(ID::modSlotTarget(n));
+        if (tgt <= 0)   // 0 == "Off"
+            continue;
+        if (const auto s = matrixSourceEnableParam((int) *apvts.getRawParameterValue(ID::modSlotSource(n))); s.isNotEmpty())
+            claimed.insert(s);
+        if (const auto t = matrixTargetEnableParam(tgt); t.isNotEmpty())
+            claimed.insert(t);
+    }
+
+    // Every module a slot can auto-drive: sources (LFO 1..4 + ADSR) and targets (FILTER, FORMANT,
+    // WAVETABLE, WAVEFOLD). Velocity + Pitch/Amplitude have no module.
+    const juce::String managed[] = { ID::lfoOn(1), ID::lfoOn(2), ID::lfoOn(3), ID::lfoOn(4), ID::adsrOn,
+                                     ID::filterOn, ID::formantOn, ID::wavetableOn, ID::wavefoldOn };
+    for (const auto& id : managed)
+    {
+        auto* p = apvts.getParameter(id);
+        if (p == nullptr) continue;
+        const bool isOn      = *apvts.getRawParameterValue(id) >= 0.5f;
+        const bool isClaimed = claimed.count(id) > 0;
+
+        if (isClaimed && ! isOn)
+        {
+            p->setValueNotifyingHost(1.0f);      // a route needs it → turn on…
+            matrixAutoEnabled[id] = true;        // …and remember WE did (it was off before)
+        }
+        else if (! isClaimed && matrixAutoEnabled[id])
+        {
+            p->setValueNotifyingHost(0.0f);      // no route uses it any more → undo our auto-enable
+            matrixAutoEnabled[id] = false;
+        }
+        // A source that is on for any OTHER reason (user toggle, ADSR default) keeps its state:
+        // matrixAutoEnabled stays false for it, so it is never auto-disabled here.
+    }
+}
+
 void SynthyProcessor::parameterChanged(const juce::String& paramId, float newValue)
 {
     using namespace Parameters;
+    // Keep the matrix's source + target modules in step with the routing (auto-enable on wire-up,
+    // auto-undo when the last route drops). Handled before the mix-src guard so it always runs.
+    if (paramId.startsWith("modSlot"))
+    {
+        updateMatrixModuleEnables();
+        return;
+    }
+
     // Keep the two MIX MODE source selectors distinct (Epic 5). Setting one equal to the other
     // bumps the OTHER to a free OSC. The guard stops the bump from re-triggering us.
     if (fixingMixSrc.exchange(true)) { return; }
