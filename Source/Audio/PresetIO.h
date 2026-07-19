@@ -3,6 +3,7 @@
 #include "Parameters.h"
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
+#include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
 
 // Reads/writes JASS's ".jass" JSON preset format (nested-per-module). The C# compatibility
 // (shared "%AppData%\Synthy" folder + ".synthy" extension) was dropped; migrateLegacyAppData()
@@ -106,6 +107,31 @@ namespace PresetIO
             if (data == nullptr || size <= 0)
                 continue;
             auto dest = dir.getChildFile(DemoPresets::getNamedResourceOriginalFilename(DemoPresets::namedResourceList[i]));
+            if (! dest.existsAsFile())
+                dest.replaceWithData(data, (size_t) size);
+        }
+    }
+
+    // Example wavetables live in %AppData%\Roaming\JASS\Wavetables — the LOAD WAV dialog opens here.
+    inline juce::File wavetablesFolder()
+    {
+        auto dir = jassFolder().getChildFile("Wavetables");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // First-run seeding of the shipped example wavetables (embedded from Wavetables/*.wav). Same
+    // idempotent pattern as seedDemoPresets — an existing file is never overwritten. Call once.
+    inline void seedWavetables()
+    {
+        auto dir = wavetablesFolder();
+        for (int i = 0; i < Wavetables::namedResourceListSize; ++i)
+        {
+            int size = 0;
+            const char* data = Wavetables::getNamedResource(Wavetables::namedResourceList[i], size);
+            if (data == nullptr || size <= 0)
+                continue;
+            auto dest = dir.getChildFile(Wavetables::getNamedResourceOriginalFilename(Wavetables::namedResourceList[i]));
             if (! dest.existsAsFile())
                 dest.replaceWithData(data, (size_t) size);
         }
