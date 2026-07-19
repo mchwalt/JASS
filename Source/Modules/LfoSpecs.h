@@ -15,8 +15,8 @@ namespace Modules
         m.title  = "LFO " + juce::String (i);
         m.persistObject = "Lfo" + juce::String (i);
         m.enableParamId = p + "On";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W8H1;
-        m.defaultVisible = (i == 1);
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W7H1;
+        m.defaultVisible = (i <= 3);   // LFO 1..3 visible by default; LFO 4 hidden (show via MODULES)
         m.params = {
             { p + "On",      "Enabled",  "",       ParamSpec::Kind::Bool },
             { p + "Wave",    "Waveform", "WAVE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Triangle", "Square", "Sawtooth" } },
