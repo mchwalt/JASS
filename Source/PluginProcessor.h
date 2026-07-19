@@ -93,7 +93,12 @@ private:
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
-    WaveformCapture waveformCapture { 512 };
+    // Snapshot length = the LONGEST scope window (50 ms) at the highest sample rate we
+    // expect (96 kHz): 0.050 s × 96000 = 4800. The scope shows only the first N samples of
+    // this for the selected window, so a too-small buffer would clamp 25/50 ms to identical
+    // traces. Sized once here (never reallocated) so the GUI's updateSnapshot never races a
+    // resize. (Spectrum reads at most fftSize=1024 of it, zero-padding when shorter.)
+    WaveformCapture waveformCapture { 4800 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
