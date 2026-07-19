@@ -315,11 +315,19 @@ public:
         return names;
     }
 
-    // Load a WAV and append it. Returns the new bank index, or -1 on failure.
-    // Call from the message thread only.
+    // Load a WAV and append it. Returns the bank index, or -1 on failure. Call from the message
+    // thread only. Duplicate-safe: if a bank with the same name (the file's stem) is already
+    // present, that existing index is returned instead of appending a copy — so repeatedly loading
+    // the same file just re-selects it rather than growing the list. (No in-place replace, so the
+    // audio thread never sees a slot mutated under it.)
     int loadWav(const juce::File& file)
     {
-        int n = count.load(std::memory_order_relaxed);
+        const juce::String name = file.getFileNameWithoutExtension();
+        int n = count.load(std::memory_order_acquire);
+        for (int i = 0; i < n; ++i)
+            if (banks[(size_t) i] != nullptr && banks[(size_t) i]->getName().equalsIgnoreCase(name))
+                return i;   // already loaded → re-select, don't duplicate
+
         if (n >= MaxBanks) return -1;
         auto bank = WavetableBank::loadFromWav(file);
         if (bank == nullptr) return -1;
