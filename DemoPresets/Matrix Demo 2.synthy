@@ -1,0 +1,226 @@
+{
+  "FormatVersion": 4,
+  "Name": "Matrix Demo 2",
+  "Modified": false,
+  "Filter": {
+    "Enabled": true,
+    "Type": "Lowpass",
+    "Cutoff": 600.0,
+    "Resonance": 3.0
+  },
+  "Compressor": {
+    "Enabled": false,
+    "Threshold": -18.0,
+    "Ratio": 2.0,
+    "Attack": 10.0,
+    "Release": 120.0,
+    "Makeup": 0.0
+  },
+  "Stereo": {
+    "Enabled": true,
+    "Width": 0.6,
+    "Time": 12.0
+  },
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 120.0
+  },
+  "Sub": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Octave": "-1 Oct",
+    "Level": 0.5
+  },
+  "Noise": {
+    "Enabled": false,
+    "Type": "White",
+    "Amount": 0.5
+  },
+  "Formant": {
+    "Enabled": false,
+    "Vowel": 0.5,
+    "Resonance": 0.7,
+    "Mix": 0.8
+  },
+  "Distortion": {
+    "Enabled": false,
+    "Type": "SoftClip",
+    "Drive": 0.5,
+    "Mix": 1.0
+  },
+  "Wavefold": {
+    "Enabled": false,
+    "Drive": 0.3,
+    "Symmetry": 0.0,
+    "Mix": 1.0
+  },
+  "Bitcrush": {
+    "Enabled": false,
+    "Bits": 8.0,
+    "Rate": 1.0,
+    "Mix": 1.0
+  },
+  "Phaser": {
+    "Enabled": false,
+    "Type": "Phaser",
+    "Rate": 0.5,
+    "Depth": 0.7,
+    "Feedback": 0.5,
+    "Mix": 0.5
+  },
+  "Chorus": {
+    "Enabled": false,
+    "Rate": 1.5,
+    "Depth": 0.005,
+    "Mix": 0.5
+  },
+  "Delay": {
+    "Enabled": false,
+    "Time": 0.3,
+    "SyncDiv": "Free",
+    "Feedback": 0.4,
+    "Mix": 0.3
+  },
+  "Reverb": {
+    "Enabled": true,
+    "RoomSize": 0.6,
+    "Damping": 0.4,
+    "Mix": 0.3
+  },
+  "Arp": {
+    "Enabled": false,
+    "Mode": "Up",
+    "Rate": 8.0,
+    "Octaves": 2.0,
+    "Gate": 0.5
+  },
+  "Glide": {
+    "Enabled": false,
+    "Mode": "Mono",
+    "Time": 0.3
+  },
+  "PitchEnv": {
+    "Enabled": false,
+    "Amount": 0.0,
+    "Time": 0.3
+  },
+  "Osc1": {
+    "Enabled": true,
+    "Waveform": "Sawtooth",
+    "Frequency": 262.0,
+    "Amplitude": 0.45,
+    "UnisonVoices": 3.0,
+    "UnisonDetune": 0.25,
+    "Feedback": 0.0
+  },
+  "Osc2": {
+    "Enabled": true,
+    "Waveform": "Sawtooth",
+    "Frequency": 523.0,
+    "Amplitude": 0.3,
+    "UnisonVoices": 3.0,
+    "UnisonDetune": 0.2,
+    "Feedback": 0.0
+  },
+  "Osc3": {
+    "Enabled": true,
+    "Waveform": "Sawtooth",
+    "Frequency": 131.0,
+    "Amplitude": 0.4,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.0,
+    "Feedback": 0.0
+  },
+  "CrossMod": {
+    "On": false,
+    "Mode": "RingMod",
+    "SrcA": "OSC 1",
+    "SrcB": "OSC 2"
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 0.3,
+    "SyncDiv": "Free",
+    "Depth": 0.8
+  },
+  "Lfo2": {
+    "Enabled": true,
+    "Waveform": "Triangle",
+    "Target": "Frequency",
+    "Rate": 0.13,
+    "SyncDiv": "Free",
+    "Depth": 1.0
+  },
+  "Lfo3": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 5.0,
+    "SyncDiv": "Free",
+    "Depth": 0.3
+  },
+  "Lfo4": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 2.0,
+    "SyncDiv": "Free",
+    "Depth": 0.5
+  },
+  "ModMatrix": {
+    "On": true,
+    "Slot1Source": "LFO 1",
+    "Slot1Target": "Cutoff",
+    "Slot1Amount": 0.7,
+    "Slot2Source": "LFO 2",
+    "Slot2Target": "Resonance",
+    "Slot2Amount": 0.6,
+    "Slot3Source": "LFO 3",
+    "Slot3Target": "Pitch",
+    "Slot3Amount": 0.06,
+    "Slot4Source": "Envelope",
+    "Slot4Target": "Cutoff",
+    "Slot4Amount": 0.3,
+    "Slot5Source": "LFO 1",
+    "Slot5Target": "Off",
+    "Slot5Amount": 0.0,
+    "Slot6Source": "LFO 1",
+    "Slot6Target": "Off",
+    "Slot6Amount": 0.0
+  },
+  "Karplus": {
+    "Enabled": false,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "Damping": 0.5,
+    "Stretch": 0.0
+  },
+  "Wavetable": {
+    "Enabled": false,
+    "BankIndex": 0.0,
+    "Position": 0.0,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.2
+  },
+  "Adsr": {
+    "Enabled": true,
+    "Attack": 0.25,
+    "Decay": 0.4,
+    "Sustain": 0.7,
+    "Release": 0.9
+  },
+  "Scope": {
+    "Enabled": true
+  },
+  "Spectrum": {
+    "Enabled": true
+  },
+  "Keyboard": {
+    "Enabled": true
+  }
+}
