@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <vector>
 #include <utility>
+#include <map>
 #include "ModuleDescriptor.h"
 #include "ModuleFrame.h"
 #include "SynthyLookAndFeel.h"
@@ -83,6 +84,36 @@ namespace rack
         std::vector<ModuleInfo> modulesInZone (Zone zone) const;
         const std::vector<Zone>& zones() const noexcept { return zoneOrder; }
         static juce::String zoneName (Zone zone);
+        // Help-resource slug for a zone's info icon (e.g. Generators -> "zone-generators").
+        static juce::String zoneHelpId (Zone zone);
+
+        // --- Zone-header standard controls (mirror the per-module enable/reset/info) -----
+        // ENABLE = group bypass: toggle the enable param of every VISIBLE enable-capable
+        // module in the zone (they stay visible, just dimmed). Does NOT touch visibility, so
+        // it is distinct from the MODULES-panel show/hide. Hidden modules are left off
+        // (invariant: a hidden module is never audible).
+        void setZoneEnabled (Zone zone, bool enabled);
+        // RESET = restore this group's DEFAULT module selection: every module whose factory
+        // zone is `zone` gets its default {zone, position, visible} back (re-packs, persists,
+        // enforces hidden⇒silent). Does not change any audio param value.
+        void resetZone (Zone zone);
+
+        // Called when a zone header's info icon is clicked (carries the zone) so the editor
+        // can show the shared HelpPanel with the group's help text.
+        std::function<void(Zone)> onZoneHelp;
+        // Keep the zone-header enable toggles in sync with the live enable params (called by
+        // the editor's timer, since individual module toggles change the params behind us).
+        void syncZoneHeaderToggles();
+        // The zone's info icon component (anchor for the help panel; nullptr if that zone has
+        // no help). Lets the editor place the shared HelpPanel right next to the clicked icon.
+        juce::Component* zoneInfoButton (Zone zone);
+
+        // Override the FACTORY enable value for one enable-param, for those params whose raw
+        // APVTS default does NOT equal the shipped Init state — currently only oscOn(1..3),
+        // which resetToDefault() turns on explicitly (their declared default is 0 for preset
+        // compatibility). resetZone() uses these when restoring a group's default enable state
+        // so it reproduces the factory patch instead of silencing everything.
+        void setFactoryEnableDefault (const juce::String& enableParamId, float normValue);
 
         // Called after any layout mutation (show/hide) so the editor can re-fit height.
         std::function<void()> onLayoutChanged;
@@ -105,6 +136,8 @@ namespace rack
                                                   // Sized so a 1-unit body fits name caption +
                                                   // 46px knob + value box without shrinking.
         static constexpr int kZoneHeaderH = 28;   // full-width zone separator band
+        static constexpr int kZoneLabelW  = 172;  // reserved width for the zone title before its
+                                                  // header controls (>= widest label at 15pt bold)
         static constexpr int kPad         = 8;    // inner padding around the grid
 
     private:
@@ -125,7 +158,31 @@ namespace rack
             int  position = 0;   // within-zone order
             bool visible  = true;
         };
-        struct ZoneBand { juce::String text; ModuleType tag; juce::Rectangle<int> bounds; };
+        struct ZoneBand { juce::String text; ModuleType tag; juce::Rectangle<int> bounds;
+                          int lineStartX = 0; int lineEndX = 0; };
+
+        // One set of standard controls per zone header (built once for every zone in
+        // zoneOrder). enable = group bypass (manual toggle, no APVTS attachment — its state
+        // is derived from the members and refreshed by syncZoneHeaderToggles); reset = restore
+        // the group's default module selection; info = zone help (created only when a help
+        // resource exists for the zone). Positioned/hidden by layout() per shown zone.
+        struct ZoneHeaderControls
+        {
+            Zone zone {};
+            std::unique_ptr<juce::ToggleButton> enableBtn;
+            std::unique_ptr<IconButton>         resetBtn;
+            std::unique_ptr<IconButton>         infoBtn;
+            // "Mute with memory": when the group is bypassed we stash each member's enable value
+            // here, so re-enabling restores exactly the members that were on (empty => not
+            // bypassed / nothing remembered; enable then falls back to turning the group on).
+            std::map<juce::String, float> bypassSnapshot;
+        };
+        std::vector<ZoneHeaderControls> zoneHeaders;   // one per zone in zoneOrder
+        std::map<juce::String, float> factoryEnableByParam;   // enable-param id -> factory (Init) value
+        void buildZoneHeaders();                       // create the controls (constructor)
+        ZoneHeaderControls* zoneHeaderFor (Zone zone); // lookup (nullptr if none)
+        // Count VISIBLE enable-capable modules in a zone and how many are currently ON.
+        void zoneEnableCounts (Zone zone, int& enableable, int& on) const;
 
         // footprint/frame lookup by id (nullptr if unknown)
         const Placed* placedById (const juce::String& id) const;

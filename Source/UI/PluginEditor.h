@@ -112,8 +112,9 @@ private:
     juce::ComboBox langBox;                 // EN / DE
     juce::String currentLang { "EN" };      // active help language (persisted as a global app setting)
     std::unique_ptr<HelpPanel> helpPanel;   // reused for every module; closed via ✕ / ESC
-    juce::String currentHelpId;             // module id currently shown (for live re-render on language switch)
+    juce::String currentHelpId;             // module/zone id currently shown (for live re-render on language switch)
     void showModuleHelp(const juce::String& id);
+    void showZoneHelp(rack::Rack::Zone zone);   // shared HelpPanel for a group header's info icon
     static juce::File uiLanguageFile();     // %AppData%\Synthy settings file for the language choice
     static juce::String loadUiLanguage();   // persisted language, else "EN"
     static void saveUiLanguage(const juce::String& lang);
