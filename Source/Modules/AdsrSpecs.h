@@ -11,12 +11,14 @@ namespace Modules
         ModuleSpec m;
         m.id = "envelopeadsr"; m.title = "ENVELOPE - ADSR"; m.persistObject = "Adsr"; m.enableParamId = "adsrOn";
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W4H2;
+        // Snappier defaults (user 2026-07-19): fast attack, short release so a released note
+        // stops promptly instead of ringing ~1 s. (Longer values still available on the knobs.)
         m.params = {
             { "adsrOn",   "Enabled", "",    ParamSpec::Kind::Bool, {}, 1.0f },   // default ON
-            { "attack",   "Attack",  "ATK", ParamSpec::Kind::Float, timeRange, 0.5f },
+            { "attack",   "Attack",  "ATK", ParamSpec::Kind::Float, timeRange, 0.01f },
             { "decay",    "Decay",   "DEC", ParamSpec::Kind::Float, timeRange, 0.3f },
             { "sustain",  "Sustain", "SUS", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.7f },
-            { "release",  "Release", "REL", ParamSpec::Kind::Float, timeRange, 1.0f },
+            { "release",  "Release", "REL", ParamSpec::Kind::Float, timeRange, 0.25f },
         };
         return m;
     }
