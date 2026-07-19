@@ -6,7 +6,9 @@
 class WaveformCapture
 {
 public:
-    // displayLength = what we show, ringSize = larger buffer to find trigger point
+    // displayLength = snapshot capacity in samples: it must cover the LONGEST scope window
+    // (the WaveformDisplay shows only the first `windowMs/1000 * sampleRate` of it), so pick
+    // 50 ms × the highest expected sample rate. ringSize = 3× that, to find a stable trigger.
     WaveformCapture(int displayLength = 512)
         : displayLen(displayLength),
           ringSize(displayLength * 3),
