@@ -127,7 +127,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // single-target behaviour when nothing (or only the legacy LFO) is routed.
     // Each LFO's own built-in target (0 = Off .. 7 == LFOTarget index). ModSource index for
     // each LFO (append-only order): LFO 1 -> ModSource::LFO1, LFO 2 -> ModSource::LFO2, …
-    static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2 };
+    static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
+                                                     (int) ModSource::LFO3, (int) ModSource::LFO4 };
     int lfoTgt[kNumLFOs];
     for (int i = 0; i < kNumLFOs; ++i) lfoTgt[i] = (int) lfos[i].getTarget();
 

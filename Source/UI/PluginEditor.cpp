@@ -427,7 +427,8 @@ void SynthyEditor::timerCallback()
     // sources animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
     // lfoSrcVal[src] holds each LFO's display value at its ModSource slot; non-LFO sources
     // stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
-    static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2 };
+    static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
+                                                     (int) ModSource::LFO3, (int) ModSource::LFO4 };
     std::array<float, ModMatrixConfig::kNumSources> lfoSrcVal {};
     rack::LiveModFeed feed {};
     for (int i = 0; i < kNumLFOs; ++i)
