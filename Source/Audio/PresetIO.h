@@ -4,11 +4,10 @@
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 
-// Reads/writes the shared ".synthy" JSON preset format used by both the C#
-// and the C++ Synthy. Field names and enum strings match the C# Preset class
-// exactly so a preset saved in one app loads in the other.
-//
-// Canonical enum strings == C# enum member names (no display spaces).
+// Reads/writes JASS's ".jass" JSON preset format (nested-per-module). The C# compatibility
+// (shared "%AppData%\Synthy" folder + ".synthy" extension) was dropped; migrateLegacyAppData()
+// performs a one-time rebrand of any existing Synthy folder to JASS. Enum strings are still the
+// canonical (no-space) names the old format used, so old presets keep loading after the rename.
 namespace PresetIO
 {
     inline const juce::StringArray kWaveform   { "Sine", "Sawtooth", "Square", "Triangle" };
@@ -33,31 +32,68 @@ namespace PresetIO
     constexpr int kFormatVersion = 4;   // v4 = LFO built-in target folded into matrix slots.
                                         // v3 = nested-per-module. v<3 = flat (legacy).
 
-    // Shared root: %AppData%\Roaming\Synthy (same as the C# app).
-    inline juce::File synthyFolder()
+    // App-data root: %AppData%\Roaming\JASS (renamed from "Synthy" after the C# break).
+    inline juce::File jassFolder()
     {
         auto dir = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory)
-                       .getChildFile("Synthy");
+                       .getChildFile("JASS");
         dir.createDirectory();
         return dir;
     }
 
-    // Named presets folder: %AppData%\Roaming\Synthy\Presets.
+    // One-time rebrand: move a legacy %AppData%\Synthy tree to %AppData%\JASS, renaming every
+    // *.synthy to *.jass (LiveState, presets, backups, sub-folders). Runs ONLY when JASS does
+    // not exist yet and Synthy does. MUST be called first at startup, before any jassFolder()
+    // use (jassFolder() creates the dir, which would suppress the migration). The old folder is
+    // left untouched as a safety copy.
+    inline void migrateLegacyAppData()
+    {
+        auto root   = juce::File::getSpecialLocation(juce::File::userApplicationDataDirectory);
+        auto oldDir = root.getChildFile("Synthy");
+        auto newDir = root.getChildFile("JASS");
+        if (newDir.exists() || ! oldDir.isDirectory())
+            return;   // already on JASS, or nothing to migrate
+
+        newDir.createDirectory();
+        std::function<void(const juce::File&, const juce::File&)> copyTree =
+            [&] (const juce::File& src, const juce::File& dst)
+        {
+            for (const auto& child : src.findChildFiles(juce::File::findFilesAndDirectories, false))
+            {
+                if (child.isDirectory())
+                {
+                    auto sub = dst.getChildFile(child.getFileName());
+                    sub.createDirectory();
+                    copyTree(child, sub);
+                }
+                else
+                {
+                    auto name = child.hasFileExtension("synthy")
+                                    ? child.getFileNameWithoutExtension() + ".jass"
+                                    : child.getFileName();
+                    child.copyFileTo(dst.getChildFile(name));
+                }
+            }
+        };
+        copyTree(oldDir, newDir);
+    }
+
+    // Named presets folder: %AppData%\Roaming\JASS\Presets.
     inline juce::File presetsFolder()
     {
-        auto dir = synthyFolder().getChildFile("Presets");
+        auto dir = jassFolder().getChildFile("Presets");
         dir.createDirectory();
         return dir;
     }
 
-    // Shared live state: auto-loaded on start, auto-saved on change by BOTH apps,
-    // so switching between C# and C++ keeps the current settings for A/B testing.
+    // Live state: auto-loaded on start, auto-saved on change — carries the working patch across
+    // launches (also used for A/B). %AppData%\Roaming\JASS\LiveState.jass.
     inline juce::File liveStateFile()
     {
-        return synthyFolder().getChildFile("LiveState.synthy");
+        return jassFolder().getChildFile("LiveState.jass");
     }
 
-    // First-run seeding: write each SHIPPED demo preset (embedded from DemoPresets/*.synthy via
+    // First-run seeding: write each SHIPPED demo preset (embedded from DemoPresets/*.jass via
     // juce_add_binary_data) into the user's Presets folder if it isn't already there. Idempotent —
     // an existing file (incl. one the user edited) is never overwritten. Call once at startup.
     inline void seedDemoPresets()
@@ -394,9 +430,9 @@ namespace PresetIO
     // the normal LiveState load — the scratch mutation of `a` is then overwritten by that load.
     inline void convertOldPresets(APVTS& a)
     {
-        auto files = presetsFolder().findChildFiles(juce::File::findFiles, false, "*.synthy");
+        auto files = presetsFolder().findChildFiles(juce::File::findFiles, false, "*.jass");
         files.add(liveStateFile());
-        const juce::File backupDir = synthyFolder().getChildFile("PresetsBackup");   // safety net
+        const juce::File backupDir = jassFolder().getChildFile("PresetsBackup");   // safety net
         for (const auto& f : files)
         {
             if (! f.existsAsFile()) continue;

@@ -144,7 +144,13 @@ private:
     // self-FM which is a separate future feature). When one is set equal to the other, bump the
     // other to a free OSC. Registered for mixSrcA/mixSrcB only.
     void parameterChanged(const juce::String& paramId, float newValue) override;
-    std::atomic<bool> fixingMixSrc { false };   // reentrancy guard
+    std::atomic<bool> fixingMixSrc { false };   // reentrancy guard (shared by the CROSS-MOD couplings)
+
+    // CROSS MOD enable coupling: keep the two operand OSCs enabled while CROSS MOD is on (auto-on
+    // with memory), and switch CROSS MOD off when a used operand OSC is turned off. Mirrors the
+    // MOD-MATRIX auto-enable. matrixAutoEnabled's sibling for the two OSC operands.
+    void syncCrossModEnables(const juce::String& changedParamId);
+    std::map<juce::String, bool> crossModAutoEnabled;   // oscOn id -> true if CROSS MOD switched it on
 
     // Keep the matrix's SOURCE and TARGET modules in step with the routing: an active slot
     // (DEST != Off) needs both its source module (LFO/Envelope) AND its target module (e.g. the

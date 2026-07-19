@@ -64,7 +64,7 @@ juce_add_binary_data(JASS_HelpDE HEADER_NAME HelpDE.h NAMESPACE HelpDE SOURCES $
 
 # Demo presets (shipped): embedded so the app can SEED them into the user's Presets folder on
 # first run (see PresetIO::seedDemoPresets). Same one-target-with-own-namespace pattern as help.
-file(GLOB JASS_DEMO_PRESETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/DemoPresets/*.synthy")
+file(GLOB JASS_DEMO_PRESETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/DemoPresets/*.jass")
 juce_add_binary_data(JASS_DemoPresets HEADER_NAME DemoPresets.h NAMESPACE DemoPresets SOURCES ${JASS_DEMO_PRESETS})
 
 target_compile_definitions(JASS PUBLIC

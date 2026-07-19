@@ -15,7 +15,7 @@ namespace Modules
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W8H1;
         m.params = {
             { p + "On",        "Enabled",      "",       ParamSpec::Kind::Bool },
-            { p + "Wave",      "Waveform",     "WAVE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Sawtooth", "Square", "Triangle" } },
+            { p + "Wave",      "Waveform",     "WAVE",   ParamSpec::Kind::Choice, {}, (i == 1 ? 1.0f : 0.0f), { "Sine", "Sawtooth", "Square", "Triangle" } },   // OSC 1 defaults to Sawtooth (harmonics-rich starting point); OSC 2/3 Sine
             { p + "Freq",      "Frequency",    "FREQ",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (20.0f, 10000.0f, 1.0f, 0.3f), defFreq[i - 1], {}, {}, LFOTarget::Frequency, true },
             { p + "Amp",       "Amplitude",    "AMP",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::Amplitude },
             { p + "UniVoices", "UnisonVoices", "VOICES", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (1.0f, 7.0f, 1.0f), 1.0f },
