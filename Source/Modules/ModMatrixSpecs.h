@@ -11,7 +11,7 @@ namespace Modules
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W9H2;
 
-        const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2" };            // == ModSource
+        const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
         const juce::StringArray tgt { "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" };   // == LFOTarget
 
         m.params.push_back ({ "modMatrixOn", "On", "", ParamSpec::Kind::Bool, {}, 1.0f });   // default on

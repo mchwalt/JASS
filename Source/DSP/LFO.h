@@ -13,7 +13,7 @@ enum class LFOTarget { Off, Frequency, Amplitude, FilterCutoff,
 
 // Number of LFOs, indexed like the oscillators (lfoOn(i), lfoRate(i) …). Grow HERE:
 // bumping this + appending a ModSource + the source-index map is all a new LFO needs.
-inline constexpr int kNumLFOs = 2;
+inline constexpr int kNumLFOs = 4;
 
 class LFO
 {

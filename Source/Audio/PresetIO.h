@@ -24,7 +24,7 @@ namespace PresetIO
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
     inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
     inline const juce::StringArray kGlideMode   { "Mono", "Poly" };        // Feature 4 (append-only; C# ignores)
-    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2" };   // Epic 8 (append-only; C# ignores)
+    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2", "LFO3", "LFO4" };   // Epic 8 (append-only)
     // Mod-matrix TARGET reuses kLfoTarget (identical 0=Off..7 vocabulary), so no separate array.
 
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:

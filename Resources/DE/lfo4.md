@@ -1,0 +1,9 @@
+Ein vierter, unabhängiger Niederfrequenz-Oszillator — identisch zu LFO 1. Standardmäßig ausgeblendet; über das MODULES-Panel einblenden. Modulierte Regler zeigen einen Live-Ring.
+
+- **WAVE** — Bewegungsform.
+- **TARGET** — eigenes eingebautes Ziel: Frequency (Tonhöhe, Vibrato), Amplitude (Lautstärke, Tremolo), Filter Cutoff (Helligkeit, Wah) u. a.
+- **RATE** — Geschwindigkeit (wirkt, wenn SYNC = Free).
+- **SYNC** — koppelt die Rate als Notenwert ans Tempo; *Free* nutzt den RATE-Regler.
+- **DEPTH** — Stärke.
+
+Wie die anderen LFOs ist auch LFO 4 eine Quelle in der MOD MATRIX und kann so zusätzliche Ziele treiben — über sein eigenes TARGET hinaus.
