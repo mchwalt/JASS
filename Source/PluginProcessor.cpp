@@ -310,30 +310,25 @@ void SynthyProcessor::randomize()
     using namespace Parameters;
     auto& rng = juce::Random::getSystemRandom();
 
-    // STEREO and MASTER VOLUME are global "mastering" choices, not part of the
-    // sound design → RANDOM must leave them untouched. Snapshot now, restore after.
-    const float keepStereoOn    = *apvts.getRawParameterValue(ID::stereoOn);
-    const float keepStereoWidth = *apvts.getRawParameterValue(ID::stereoWidth);
-    const float keepStereoTime  = *apvts.getRawParameterValue(ID::stereoTime);
-    const float keepMasterVol   = *apvts.getRawParameterValue(ID::masterVol);
+    // The whole MASTER BUS zone (MASTER + STEREO + COMPRESSOR) is mastering/output, not sound
+    // design → RANDOM must leave it untouched. A random masterOn=off would MUTE the patch and a
+    // random syncTempo would reharmonise every tempo-synced LFO/delay. Snapshot the zone in full,
+    // restore it verbatim after the dice roll.
+    static const char* const masterBusIds[] = {
+        ID::masterOn, ID::masterVol, ID::syncTempo,
+        ID::stereoOn, ID::stereoWidth, ID::stereoTime,
+        ID::compOn, ID::compThreshold, ID::compRatio, ID::compAttack, ID::compRelease, ID::compMakeup };
+    const int numMasterBus = (int) (sizeof (masterBusIds) / sizeof (masterBusIds[0]));
+    float keepMasterBus[sizeof (masterBusIds) / sizeof (masterBusIds[0])];
+    for (int i = 0; i < numMasterBus; ++i)
+        keepMasterBus[i] = *apvts.getRawParameterValue (masterBusIds[i]);
+
     const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
     const float keepGlideOn     = *apvts.getRawParameterValue(ID::glideOn); // glide = performance, not sound design
     const float keepKeyboardOn  = *apvts.getRawParameterValue(ID::keyboardOn); // keyboard = input surface, not sound design
-    const float keepCompOn      = *apvts.getRawParameterValue(ID::compOn);     // compressor = mastering, not sound design
 
-    // Modulation matrix (Epic 8 AC9): EXCLUDED from RANDOM in v1. Stacking random routings
-    // could pile extreme modulation onto one target and blow up the level, so leave the
-    // matrix exactly as the user set it (like the arp/glide input surfaces). Snapshot now.
-    const float keepModMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn);
-    float keepModSlot[ModMatrixConfig::kNumSlots][3];
-    for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
-    {
-        keepModSlot[n][0] = *apvts.getRawParameterValue(ID::modSlotSource(n + 1));
-        keepModSlot[n][1] = *apvts.getRawParameterValue(ID::modSlotTarget(n + 1));
-        keepModSlot[n][2] = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
-    }
-
-    // Random value for every parameter...
+    // Random value for every parameter... (the MOD MATRIX is re-rolled CONTROLLED below —
+    // it is the synth's central movement layer, so RANDOM must vary it, not leave it alone.)
     for (auto* p : getParameters())
         p->setValueNotifyingHost(rng.nextFloat());
 
@@ -374,23 +369,64 @@ void SynthyProcessor::randomize()
     set(ID::pitchEnvAmount, -6.0f + rng.nextFloat() * 12.0f);             // -6..+6 semitones
     set(ID::pitchEnvTime,   0.05f + rng.nextFloat() * 0.35f);             // 0.05..0.4 s
 
-    // Restore the global settings the dice roll overwrote (see snapshot above).
-    set(ID::stereoOn,    keepStereoOn);
-    set(ID::stereoWidth, keepStereoWidth);
-    set(ID::stereoTime,  keepStereoTime);
-    set(ID::masterVol,   keepMasterVol);
+    // Keep the tone AUDIBLE. Unconstrained oscillator/filter dice made silent patches often: a high
+    // oscillator (up to 10 kHz) behind a low low-pass, or a low tone behind a high high-pass, cuts
+    // the fundamental completely. Pin the oscillator/wavetable base pitch to a musical range, then
+    // put the filter cutoff on the RIGHT side of it for the rolled filter type so the tone passes.
+    for (int i = 1; i <= 3; ++i)
+        set(ID::oscFreq(i), 40.0f + rng.nextFloat() * 620.0f);           // ~40..660 Hz
+    set(ID::wavetableFreq,  40.0f + rng.nextFloat() * 620.0f);
+    const bool highpass = *apvts.getRawParameterValue(ID::filterType) > 0.5f;   // 0=Lowpass, 1=Highpass
+    set(ID::filterCutoff, highpass ? 20.0f   + rng.nextFloat() * 130.0f          // 20..150 Hz => lows pass
+                                   : 1500.0f + rng.nextFloat() * 13000.0f);      // 1.5..14.5 kHz => tone passes
+
+    // Restore the whole MASTER BUS zone + the performance/input surfaces the dice roll overwrote.
+    for (int i = 0; i < numMasterBus; ++i)
+        set(masterBusIds[i], keepMasterBus[i]);
     set(ID::arpOn,       keepArpOn);
     set(ID::glideOn,     keepGlideOn);
     set(ID::keyboardOn,  keepKeyboardOn);
-    set(ID::compOn,      keepCompOn);
 
-    // Restore the modulation matrix untouched (Epic 8 AC9; see snapshot above).
-    set(ID::modMatrixOn, keepModMatrixOn);
+    // Modulation matrix: RANDOM VARIES it too (it is the central movement layer). The blanket
+    // dice above already wrote random slots; redo them CONTROLLED so patches move without blowing
+    // up. Matrix ON; a few slots get UNIQUE targets (no stacking on one target — the old blow-up
+    // risk that made v1 exclude the matrix) and reined-in bipolar amounts. Any LFO/ENV chosen as a
+    // source is enabled so the routing is actually audible.
+    set(ID::modMatrixOn, 1.0f);
+    int rndTargets[] = { (int) LFOTarget::Frequency,        (int) LFOTarget::Amplitude,
+                         (int) LFOTarget::FilterCutoff,     (int) LFOTarget::WavetablePosition,
+                         (int) LFOTarget::FormantVowel,     (int) LFOTarget::FilterResonance,
+                         (int) LFOTarget::WavefolderDrive };
+    const int numRndTargets = 7;
+    for (int i = numRndTargets - 1; i > 0; --i)             // Fisher–Yates: pick distinct targets
+    {
+        const int j = rng.nextInt(i + 1);
+        const int t = rndTargets[i]; rndTargets[i] = rndTargets[j]; rndTargets[j] = t;
+    }
+
+    const int activeSlots = rng.nextInt(juce::Range<int>(2, 5));   // 2..4 routings (rest = Off)
     for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
     {
-        set(ID::modSlotSource(n + 1), keepModSlot[n][0]);
-        set(ID::modSlotTarget(n + 1), keepModSlot[n][1]);
-        set(ID::modSlotAmount(n + 1), keepModSlot[n][2]);
+        if (n >= activeSlots)
+        {
+            set(ID::modSlotTarget(n + 1), (float) (int) LFOTarget::Off);   // inactive slot
+            continue;
+        }
+        const int   src = rng.nextInt(ModMatrixConfig::kNumSources);   // LFO1/Env/Vel/LFO2..4
+        const float mag = 0.3f + rng.nextFloat() * 0.6f;              // 0.3..0.9 (audible, tame)
+        set(ID::modSlotSource(n + 1), (float) src);
+        set(ID::modSlotTarget(n + 1), (float) rndTargets[n]);
+        set(ID::modSlotAmount(n + 1), rng.nextBool() ? mag : -mag);   // bipolar
+
+        switch ((ModSource) src)   // enable the picked source so the slot is heard
+        {
+            case ModSource::LFO1: set(ID::lfoOn(1), 1.0f); break;
+            case ModSource::LFO2: set(ID::lfoOn(2), 1.0f); break;
+            case ModSource::LFO3: set(ID::lfoOn(3), 1.0f); break;
+            case ModSource::LFO4: set(ID::lfoOn(4), 1.0f); break;
+            case ModSource::Envelope: set(ID::adsrOn, 1.0f); break;
+            case ModSource::Velocity: break;
+        }
     }
 
     currentPresetName = "Random";
