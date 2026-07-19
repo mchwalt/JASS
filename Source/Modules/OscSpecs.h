@@ -11,7 +11,7 @@ namespace Modules
         static const float defFreq[3] = { 261.63f, 523.25f, 130.81f };
         const juce::String p = "osc" + juce::String (i);
         ModuleSpec m;
-        m.id = p; m.title = "OSC " + juce::String (i); m.persistObject = "Osc" + juce::String (i); m.enableParamId = p + "On";
+        m.id = p; m.helpId = "osc1"; m.title = "OSC " + juce::String (i); m.persistObject = "Osc" + juce::String (i); m.enableParamId = p + "On";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W8H1;
         m.params = {
             { p + "On",        "Enabled",      "",       ParamSpec::Kind::Bool },

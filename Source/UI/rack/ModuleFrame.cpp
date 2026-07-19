@@ -95,8 +95,10 @@ namespace rack
         }
 
         // Online-help info icon (Story 6.1): shown only when a help text exists for this
-        // module id. Clicking it asks the editor (via onHelp) to show the shared HelpPanel.
-        if (HelpTextStore::instance().has (desc.id))
+        // module's help slug (helpId(), which may alias several instances to one text).
+        // Clicking it asks the editor (via onHelp) to show the shared HelpPanel; onHelp carries
+        // the module id so the panel title stays instance-specific ("LFO 3", not "LFO 1").
+        if (HelpTextStore::instance().has (helpId()))
         {
             infoBtn = std::make_unique<IconButton> (IconButton::Kind::Info);
             infoBtn->setTint (typeColour (desc.type));

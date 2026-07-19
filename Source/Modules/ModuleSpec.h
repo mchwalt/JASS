@@ -10,6 +10,8 @@
 struct ModuleSpec
 {
     juce::String id;             // stable slug ("filter") — help id + layout key
+    juce::String helpId;         // online-help slug; empty => id. Instanced modules share one text
+                                 // (LFO 1..4 => "lfo", OSC 1..3 => "osc1") instead of duplicating help.
     juce::String title;          // display title ("FILTER")
     juce::String persistObject;  // .synthy object key ("Filter") — for the future nested format
     juce::String enableParamId;  // id of the Bool param that is the header on/off ("" => always on)
@@ -32,7 +34,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
 {
     rack::ModuleDescriptor d;
     d.sizeClass = m.size; d.type = m.type; d.defaultZone = m.zone;
-    d.defaultVisible = m.defaultVisible; d.id = m.id; d.title = m.title;
+    d.defaultVisible = m.defaultVisible; d.id = m.id; d.helpId = m.helpId; d.title = m.title;
     d.enableParam = m.enableParamId;
     d.enabledWhen = m.enabledWhen;
     d.onReset = m.onReset;

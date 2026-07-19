@@ -33,6 +33,9 @@ namespace rack
         // Module identity (stable slug from the descriptor) — used by the Rack to look a
         // module up (e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button).
         const juce::String& moduleId() const noexcept { return desc.id; }
+        // Online-help resource slug: the descriptor's helpId if set, else the module id. Lets
+        // instanced modules (LFO 1..4, OSC 1..3) share one help text without duplicating the .md.
+        juce::String helpId() const { return desc.helpId.isNotEmpty() ? desc.helpId : desc.id; }
         // Display title (for the show/hide MODULES menu, Story 4.2).
         const juce::String& moduleTitle() const noexcept { return desc.title; }
         // Enable param id ("" if the module has no on/off) — lets the Rack couple

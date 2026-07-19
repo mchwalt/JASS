@@ -10,8 +10,9 @@ namespace Modules
     {
         const juce::String p = "lfo" + juce::String (i);
         ModuleSpec m;
-        m.id    = (i == 1) ? juce::String ("lfo") : p;   // id "lfo" for LFO 1 (stable help/layout key)
-        m.title = "LFO " + juce::String (i);
+        m.id     = (i == 1) ? juce::String ("lfo") : p;   // id "lfo" for LFO 1 (stable layout key)
+        m.helpId = "lfo";                                 // LFO 1..4 share ONE help text (lfo.md)
+        m.title  = "LFO " + juce::String (i);
         m.persistObject = "Lfo" + juce::String (i);
         m.enableParamId = p + "On";
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W8H1;
