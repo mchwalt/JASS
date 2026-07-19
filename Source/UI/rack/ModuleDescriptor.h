@@ -20,7 +20,7 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W8H1, W8H2, W9H2, W12H2, W24H1, W24H2 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W8H1, W8H2, W9H2, W9H3, W12H2, W24H1, W24H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8). Append-only, mirrors LFOTarget order (None = LFO Off).
     enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff,
@@ -182,6 +182,7 @@ namespace rack
             case SizeClass::W8H1:  return {  8, 1,  8, KnobSize::Small };  // 5–6 controls   (was M; 3 per row)
             case SizeClass::W8H2:  return {  8, 2, 16, KnobSize::Small };  // knobs + curve display (was L)
             case SizeClass::W9H2:  return {  9, 2, 24, KnobSize::Small };  // MOD MATRIX (2 routing rows, ~LFO width)
+            case SizeClass::W9H3:  return {  9, 3, 36, KnobSize::Small };  // MOD MATRIX (3 routing rows = 6 slots)
             case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small };  // wide visualisers (2 per row)
             case SizeClass::W24H1: return { 24, 1, 24, KnobSize::Small };  // full-width single row  (on-screen keyboard, flat)
             case SizeClass::W24H2: return { 24, 2, 48, KnobSize::Small };  // full-width two rows    (on-screen keyboard, tall keys)

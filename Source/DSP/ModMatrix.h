@@ -22,7 +22,7 @@ struct ModSlot { int source = 0; int target = 0; float amount = 0.0f; };
 
 namespace ModMatrixConfig
 {
-    inline constexpr int kNumSlots   = 4;   // fixed routing slots (more can be APPENDED later)
+    inline constexpr int kNumSlots   = 6;   // fixed routing slots (append-only; grow here)
     inline constexpr int kNumSources = 6;   // ModSource count (LFO1, Envelope, Velocity, LFO2, LFO3, LFO4)
     inline constexpr int kNumTargets = 8;   // == LFOTarget count, including Off at index 0
 }
