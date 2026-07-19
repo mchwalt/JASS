@@ -18,6 +18,11 @@ so that the project is clean, self-explanatory and safely version-controlled off
 4. **Screenshots captured.** One or more current screenshots of the running Standalone (full rack, and optionally the MODULES panel / mod-matrix) stored under a repo path (e.g. `docs/screenshots/`) and referenced from the README.
 5. **The GitHub repo is created PRIVATE and the current `main` is pushed** with the JUCE submodule reference intact (submodule pointer only — JUCE's own files are NOT copied into the repo). **No public visibility, no release, no tags/publishing.** `gh repo create` uses `--private`.
 6. **Fresh-clone sanity (best effort):** the README build steps are accurate enough that a fresh `git clone --recurse-submodules` + documented CMake/MSBuild steps produce `JASS.exe`. (Full clean-clone build verification is a stretch goal; at minimum the steps are reviewed against the real build commands used in this project.)
+7. **`docs/` cleaned up and brought current.** The docs folder is triaged before the repo goes on GitHub:
+   - **Update stale docs:** `Synthy_Preset_Format.md` still describes the old shared `.synthy` format under `%AppData%\Synthy` — update its content to the current **nested `.jass` v4** format under `%AppData%\JASS` and rename it (e.g. `JASS_Preset_Format.md`).
+   - **Triage working notes / raw ideas:** `JASS_Ideen_chatGPT.txt`, `JASS_Ideen_Merge.md`, `Feature_Ideas.md`, `CPP_Synth_Entwicklung_Uebersicht.md` are internal brainstorming — decide per file: keep as-is, consolidate, move to an internal `docs/notes/` (or `docs/ideas/`) subfolder, or drop from the repo. (Private repo → keeping them is fine, but they shouldn't look like official docs.)
+   - **Keep + verify:** `Glossary.md`, `Modul_Architektur_Konzept.md` are current — keep; `Synth_Cheatsheet.md` / `REAPER_Keybindings_Cheatsheet.md` are personal cheat-sheets — decide keep/move.
+   - **Fix links:** any README/doc cross-links to renamed/moved files are updated so nothing 404s.
 
 ## Tasks / Subtasks
 
@@ -37,6 +42,11 @@ so that the project is clean, self-explanatory and safely version-controlled off
   - [ ] `gh repo create <owner>/JASS --private --source . --remote origin` (do NOT `--public`)
   - [ ] `git push -u origin main`; confirm `.gitmodules` / JUCE pointer pushed, JUCE files NOT bloating the repo
   - [ ] Verify on GitHub the repo is **Private** (no release, no pages)
+- [ ] Clean up `docs/` (AC: #7)
+  - [ ] Update + rename `Synthy_Preset_Format.md` → current `.jass` nested v4 / `%AppData%\JASS`
+  - [ ] Triage `JASS_Ideen_chatGPT.txt` / `JASS_Ideen_Merge.md` / `Feature_Ideas.md` / `CPP_Synth_Entwicklung_Uebersicht.md` (keep / consolidate / move to `docs/notes/` / drop)
+  - [ ] Decide on personal cheat-sheets (`Synth_Cheatsheet.md`, `REAPER_Keybindings_Cheatsheet.md`)
+  - [ ] Fix all README/doc cross-links after renames/moves
 - [ ] Fresh-clone review (AC: #6)
   - [ ] Re-read README build steps against the actual commands; adjust wording
 
