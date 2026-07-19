@@ -328,6 +328,17 @@ public:
         return n;
     }
 
+    // Drop every user-LOADED bank, keeping only the original built-in list (WAVETABLE reset).
+    // Message-thread only. The visible count is lowered FIRST (release) so the audio thread — which
+    // reads count with acquire — never dereferences a slot we then free. The built-in slots
+    // (0..builtInCount-1) are never overwritten by loadWav, so they stay valid; no rebuild needed.
+    void resetToBuiltIns()
+    {
+        count.store(builtInCount, std::memory_order_release);
+        for (int i = builtInCount; i < MaxBanks; ++i)
+            banks[(size_t) i].reset();
+    }
+
 private:
     WavetableBankStore()
     {
@@ -335,8 +346,10 @@ private:
         int n = 0;
         for (auto& b : builtIns)
             banks[(size_t) n++] = std::move(b);
+        builtInCount = n;
         count.store(n, std::memory_order_release);
     }
+    int builtInCount = 0;   // number of shipped built-in banks (the list resetToBuiltIns restores)
 
     std::array<std::unique_ptr<WavetableBank>, MaxBanks> banks;
     std::atomic<int> count{0};

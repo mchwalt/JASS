@@ -16,8 +16,9 @@ SynthyProcessor::SynthyProcessor()
     // MUST run before anything touches jassFolder() (which would create JASS and suppress it).
     PresetIO::migrateLegacyAppData();
 
-    // Ship the demo presets into the user's Presets folder on first run (idempotent).
+    // Ship the demo presets + example wavetables into the user's folders on first run (idempotent).
     PresetIO::seedDemoPresets();
+    PresetIO::seedWavetables();
 
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);

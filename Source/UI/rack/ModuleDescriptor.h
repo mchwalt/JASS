@@ -103,6 +103,8 @@ namespace rack
         juce::String label;
         std::function<void(juce::File)> onChoose;
         std::vector<juce::String> refreshes;
+        juce::File   startFolder;                 // where the chooser opens (empty => default)
+        juce::String wildcard = "*";              // file filter (e.g. "*.wav")
     };
 
     struct Caption   // static text (AD-4 "Label"); named Caption to avoid clashing with juce::Label

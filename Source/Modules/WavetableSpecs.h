@@ -14,7 +14,7 @@ namespace Modules
         m.params = {
             { "wavetableOn",        "Enabled",      "",       ParamSpec::Kind::Bool },
             { "wavetableBank",      "BankIndex",    "BANK",   ParamSpec::Kind::Int,   juce::NormalisableRange<float> (0.0f, (float) (WavetableBankStore::MaxBanks - 1), 1.0f), 0.0f },
-            { "wavetablePosition",  "Position",     "POS",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f, {}, {}, LFOTarget::WavetablePosition },
+            { "wavetablePosition",  "Position",     "POS",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.16f, {}, {}, LFOTarget::WavetablePosition },   // default 0.16: a livelier starting frame than the flat first frame (0.0)
             { "wavetableFreq",      "Frequency",    "FREQ",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (20.0f, 10000.0f, 1.0f, 0.3f), 261.63f },
             { "wavetableAmp",       "Amplitude",    "AMP",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
             { "wavetableUniVoices", "UnisonVoices", "VOICES", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (1.0f, 7.0f, 1.0f), 1.0f },

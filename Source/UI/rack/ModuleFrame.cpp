@@ -212,12 +212,14 @@ namespace rack
                 auto* btn = static_cast<juce::TextButton*> (ownedWidgets.add (new juce::TextButton (fa->label)));
                 auto cb        = fa->onChoose;
                 auto refreshes = fa->refreshes;
-                btn->onClick = [this, cb, refreshes]
+                auto startDir  = fa->startFolder;
+                auto wildcard  = fa->wildcard;
+                btn->onClick = [this, cb, refreshes, startDir, wildcard]
                 {
                     if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
-                    fileChooser = std::make_unique<juce::FileChooser> ("Select a file");
+                    fileChooser = std::make_unique<juce::FileChooser> ("Select a file", startDir, wildcard);
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
                         [this, cb, refreshes] (const juce::FileChooser& fc)
@@ -273,8 +275,13 @@ namespace rack
             else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
         }
 
-        // Extra non-param reset (e.g. the Oscilloscope's internal time-base).
+        // Extra non-param reset (e.g. the Oscilloscope's time-base, or WAVETABLE dropping its
+        // user-loaded banks). Run it, then re-poll any dynamic-provider combo so its item list
+        // reflects the post-reset state (e.g. the BANK list shrinks back to the built-ins) and the
+        // now-default selection is re-applied.
         if (desc.onReset) desc.onReset();
+        for (auto& dc : dynCombos)
+            refreshCombo (dc.paramId);
     }
 
     void ModuleFrame::resized()

@@ -323,6 +323,29 @@ void EnvelopeDisplay::paint(juce::Graphics& g)
 
 // --- SynthyEditor ---
 
+namespace
+{
+    // Left-aligns the JUCE-standalone title-bar text (right of the "Options" button, which the
+    // wrapper puts at x=8, width 60) so the whole strip reads as JUCE's standalone chrome — not
+    // part of the JASS editor below it. Only the title text is customised; the min/close buttons
+    // keep the default look. Applied to the top-level DocumentWindow in the standalone only.
+    struct StandaloneTitleLnF : juce::LookAndFeel_V4
+    {
+        void drawDocumentWindowTitleBar (juce::DocumentWindow& window, juce::Graphics& g,
+                                         int w, int h, int titleSpaceX, int titleSpaceW,
+                                         const juce::Image*, bool) override
+        {
+            if (w * h == 0) return;
+            g.fillAll (getCurrentColourScheme().getUIColour (ColourScheme::widgetBackground));
+            g.setColour (juce::Colours::white.withAlpha (window.isActiveWindow() ? 0.75f : 0.4f));
+            g.setFont (juce::FontOptions ((float) h * 0.6f, juce::Font::bold));
+            const int textX = juce::jmax (titleSpaceX, 76);                 // clear of the Options button
+            const int textW = juce::jmax (0, (titleSpaceX + titleSpaceW) - textX);
+            g.drawText (window.getName(), textX, 0, textW, h, juce::Justification::centredLeft, true);
+        }
+    };
+}
+
 SynthyEditor::SynthyEditor(SynthyProcessor& p)
     : AudioProcessorEditor(&p), processor(p)
 {
@@ -486,6 +509,26 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // Re-run on every show/hide via Rack::onLayoutChanged (AD-12). Must be after the rack +
     // all chrome exist so resized() sees every component.
     refitHeight();
+
+    // Standalone only: rebrand the JUCE wrapper's title bar to "JUCE", left-aligned next to its
+    // Options button, so it's clear that strip belongs to the JUCE standalone host (not JASS). The
+    // top-level DocumentWindow only exists once the editor is on screen → do it async.
+    if (processor.wrapperType == juce::AudioProcessor::wrapperType_Standalone)
+    {
+        juce::Component::SafePointer<SynthyEditor> self (this);
+        juce::MessageManager::callAsync ([self]
+        {
+            if (self == nullptr) return;
+            if (auto* dw = dynamic_cast<juce::DocumentWindow*> (self->getTopLevelComponent()))
+            {
+                self->standaloneTitleLnF = std::make_unique<StandaloneTitleLnF>();
+                dw->setName ("JUCE");
+                dw->setLookAndFeel (self->standaloneTitleLnF.get());
+                self->standaloneWin = dw;
+                dw->repaint();
+            }
+        });
+    }
 
     // Drive the OSC FREQ-knob display (played frequency).
     startTimerHz(30);
@@ -963,9 +1006,11 @@ void SynthyEditor::buildRack()
                               if (auto* pr = processor.getAPVTS().getParameter(P::wavetableBank))
                                   pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
                       },
-                      { juce::String(P::wavetableBank) } },   // refresh the BANK combo after load
+                      { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
+                      PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
           Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
-          K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") });
+          K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") },
+        [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release

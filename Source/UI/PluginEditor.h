@@ -116,7 +116,13 @@ class SynthyEditor : public juce::AudioProcessorEditor,
 {
 public:
     explicit SynthyEditor(SynthyProcessor&);
-    ~SynthyEditor() override { stopTimer(); setLookAndFeel(nullptr); }
+    ~SynthyEditor() override
+    {
+        stopTimer();
+        if (auto* dw = standaloneWin.getComponent())   // detach our title-bar look before it dies
+            dw->setLookAndFeel(nullptr);
+        setLookAndFeel(nullptr);
+    }
 
     void paint(juce::Graphics&) override;
     void resized() override;
@@ -148,6 +154,10 @@ private:
     // Layout bounds for paint() — the centred title band.
     juce::Rectangle<int> g_titleBounds;
     SpinningTitle3D spinningTitle;   // animated 3D "J A S S" wordmark + subtitle (fills g_titleBounds)
+    // Standalone: our look for the JUCE wrapper's title bar ("JUCE", left-aligned) + a safe handle
+    // to that top-level window so we can detach the look in the destructor.
+    std::unique_ptr<juce::LookAndFeel> standaloneTitleLnF;
+    juce::Component::SafePointer<juce::DocumentWindow> standaloneWin;
     bool title3DAnimated = true;     // persisted: 3D header animation on/off (right-click title)
     static juce::File titleAnimFile();       // %AppData%\Synthy setting for the 3D-title toggle
     static bool loadTitleAnimated();         // persisted flag, else true

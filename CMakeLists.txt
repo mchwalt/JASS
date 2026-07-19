@@ -67,6 +67,11 @@ juce_add_binary_data(JASS_HelpDE HEADER_NAME HelpDE.h NAMESPACE HelpDE SOURCES $
 file(GLOB JASS_DEMO_PRESETS CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/DemoPresets/*.jass")
 juce_add_binary_data(JASS_DemoPresets HEADER_NAME DemoPresets.h NAMESPACE DemoPresets SOURCES ${JASS_DEMO_PRESETS})
 
+# Example wavetables (shipped): embedded so the app can SEED them into %AppData%\JASS\Wavetables
+# on first run (PresetIO::seedWavetables); the LOAD WAV dialog opens there. Same pattern as above.
+file(GLOB JASS_WAVETABLES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Wavetables/*.wav")
+juce_add_binary_data(JASS_Wavetables HEADER_NAME Wavetables.h NAMESPACE Wavetables SOURCES ${JASS_WAVETABLES})
+
 target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -79,6 +84,7 @@ target_link_libraries(JASS
         JASS_HelpEN
         JASS_HelpDE
         JASS_DemoPresets
+        JASS_Wavetables
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
