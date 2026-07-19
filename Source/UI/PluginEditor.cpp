@@ -431,14 +431,10 @@ void SynthyEditor::timerCallback()
                                                      (int) ModSource::LFO3, (int) ModSource::LFO4 };
     std::array<float, ModMatrixConfig::kNumSources> lfoSrcVal {};
     rack::LiveModFeed feed {};
+    // LFOs are pure matrix sources now (no built-in target) — just record each LFO's display value
+    // at its ModSource slot; the matrix loop below lights the rings for LFO-sourced routings.
     for (int i = 0; i < kNumLFOs; ++i)
-    {
-        const float dv = processor.getLfoDisplayValue(i);
-        lfoSrcVal[(size_t) kLfoSourceIdx[i]] = dv;
-        const bool on = *apvts.getRawParameterValue(P::lfoOn(i + 1)) > 0.5f;
-        const int tgt = on ? (int) *apvts.getRawParameterValue(P::lfoTarget(i + 1)) + 1 : 0;   // implicit routing
-        if (tgt > 0 && tgt < (int) feed.size()) feed[(size_t) tgt] += dv;
-    }
+        lfoSrcVal[(size_t) kLfoSourceIdx[i]] = processor.getLfoDisplayValue(i);
     {
         const bool matrixOn = *apvts.getRawParameterValue(P::modMatrixOn) > 0.5f;
         if (matrixOn)

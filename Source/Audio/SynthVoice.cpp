@@ -125,16 +125,12 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // every active slot's target. Only these get their per-sample offset applied, so an
     // untouched target is left exactly as applyToVoice set it — byte-identical to the old
     // single-target behaviour when nothing (or only the legacy LFO) is routed.
-    // Each LFO's own built-in target (0 = Off .. 7 == LFOTarget index). ModSource index for
-    // each LFO (append-only order): LFO 1 -> ModSource::LFO1, LFO 2 -> ModSource::LFO2, …
+    // ModSource index for each LFO (append-only order): LFO 1 -> ModSource::LFO1, LFO 2 -> LFO2, …
+    // LFOs no longer have a built-in TARGET (removed 2026-07-19) — they route ONLY via matrix slots.
     static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                      (int) ModSource::LFO3, (int) ModSource::LFO4 };
-    int lfoTgt[kNumLFOs];
-    for (int i = 0; i < kNumLFOs; ++i) lfoTgt[i] = (int) lfos[i].getTarget();
 
     std::array<bool, ModMatrixConfig::kNumTargets> tActive {};
-    for (int i = 0; i < kNumLFOs; ++i)
-        if (lfoTgt[i] > 0) tActive[(size_t) lfoTgt[i]] = true;
     if (modMatrixOn)
         for (const auto& s : modSlots)
             if (s.target > 0 && s.target < ModMatrixConfig::kNumTargets && s.amount != 0.0f)
@@ -166,11 +162,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         srcVals[(size_t) ModSource::Velocity] = noteVelocity;
         for (int i = 0; i < kNumLFOs; ++i) srcVals[(size_t) kLfoSourceIdx[i]] = lfoVals[i];
 
-        // Sum the explicit slots, then fold in each LFO's own TARGET as an implicit routing
-        // (amount 1) — so a single LFO on one target stays byte-identical to before.
+        // Sum the explicit matrix slots into the per-target offset (LFOs are just sources now).
         modMatrixAccumulate(modSlots, modMatrixOn, srcVals, modOffset);
-        for (int i = 0; i < kNumLFOs; ++i)
-            if (lfoTgt[i] > 0) modOffset[(size_t) lfoTgt[i]] += lfoVals[i];
 
         // Pitch: 2^offset octaves (offset 0 => ×1 = unchanged). Always applied — freqFactor
         // multiplies the per-sample setFrequency that glide/pitch-env already require.

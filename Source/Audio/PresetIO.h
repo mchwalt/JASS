@@ -30,7 +30,8 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 3;   // v3 = nested-per-module (spec-driven). v<3 = flat (legacy).
+    constexpr int kFormatVersion = 4;   // v4 = LFO built-in target folded into matrix slots.
+                                        // v3 = nested-per-module. v<3 = flat (legacy).
 
     // Shared root: %AppData%\Roaming\Synthy (same as the C# app).
     inline juce::File synthyFolder()
@@ -363,27 +364,54 @@ namespace PresetIO
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
     }
 
-    // One-time conversion: rewrite every OLD flat preset (FormatVersion < 3) in the Presets folder
-    // (+ LiveState) into the new nested v3 format. Loads via the legacy flat reader into `a` as
-    // scratch, then re-saves nested. Idempotent (skips v3). Call once at startup BEFORE the normal
-    // LiveState load — the scratch mutation of `a` is then overwritten by that load.
-    inline void convertLegacyPresetsToV3(APVTS& a)
+    // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,
+    // so patches that routed an LFO via its own target keep working now that LFOs are pure sources.
+    // Operates on the already-loaded apvts. LFO target index i (0=Frequency…) maps to matrix target
+    // i+1 (== LFOTarget); the LFO's ModSource is kLfoSrc[i]. Skips if no slot is free.
+    inline void migrateLfoTargetsToSlots(APVTS& a)
+    {
+        using namespace detail;
+        static constexpr int kLfoSrc[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
+                                                   (int) ModSource::LFO3, (int) ModSource::LFO4 };
+        for (int i = 1; i <= kNumLFOs; ++i)
+        {
+            if (! rawB(a, ID::lfoOn(i))) continue;                 // LFO off => nothing was routing
+            const int matrixTgt = rawI(a, ID::lfoTarget(i)) + 1;   // LFO target idx -> LFOTarget/modSlotTarget
+            for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+            {
+                if (rawI(a, ID::modSlotTarget(n)) != 0) continue;  // slot occupied
+                setRaw(a, ID::modSlotSource(n), (float) kLfoSrc[i - 1]);
+                setRaw(a, ID::modSlotTarget(n), (float) matrixTgt);
+                setRaw(a, ID::modSlotAmount(n), 1.0f);
+                break;
+            }
+        }
+    }
+
+    // One-time conversion at startup: bring every preset (+ LiveState) up to the current format.
+    // v<3 flat => nested (via the legacy flat reader); v3 => fold LFO targets into matrix slots.
+    // Loads into `a` as scratch, then re-saves. Idempotent (skips current-version files). Call BEFORE
+    // the normal LiveState load — the scratch mutation of `a` is then overwritten by that load.
+    inline void convertOldPresets(APVTS& a)
     {
         auto files = presetsFolder().findChildFiles(juce::File::findFiles, false, "*.synthy");
         files.add(liveStateFile());
-        const juce::File backupDir = synthyFolder().getChildFile("PresetsBackup_v2");   // safety net
+        const juce::File backupDir = synthyFolder().getChildFile("PresetsBackup");   // safety net
         for (const auto& f : files)
         {
             if (! f.existsAsFile()) continue;
             auto v = juce::JSON::parse(f.loadFileAsString());
             if (! v.isObject()) continue;
-            if ((int) v.getProperty("FormatVersion", 1) >= 3) continue;   // already nested v3
+            const int ver = (int) v.getProperty("FormatVersion", 1);
+            if (ver >= kFormatVersion) continue;   // already current
             backupDir.createDirectory();
-            f.copyFileTo(backupDir.getChildFile(f.getFileName()));         // keep the flat original, just in case
-            applyVarFlatLegacy(a, v);                                      // load old flat into `a` (scratch)
+            f.copyFileTo(backupDir.getChildFile(f.getFileName()));   // keep the original, just in case
+            if (ver < 3) applyVarFlatLegacy(a, v);                   // flat -> apvts (scratch)
+            else         applyVar(a, v);                             // nested v3 -> apvts (scratch)
+            migrateLfoTargetsToSlots(a);                             // built-in LFO targets -> matrix slots
             const auto name = v.getProperty("Name", f.getFileNameWithoutExtension()).toString();
             const bool mod  = (bool) v.getProperty("Modified", false);
-            saveToFile(a, f, name, mod);                                   // re-save nested v3
+            saveToFile(a, f, name, mod);                             // re-save at the current version
         }
     }
 
