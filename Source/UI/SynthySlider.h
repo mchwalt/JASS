@@ -36,11 +36,6 @@ public:
     }
     float getModAmount() const { return modAmount; }
 
-    // Overrides the per-notch fine step for the mouse wheel. Use when the
-    // parameter's automation granularity is much finer than is useful for the
-    // wheel (e.g. ADSR times have a 1 ms interval but want ~10 ms wheel steps).
-    void setWheelStep(double s) { wheelStep = s; }
-
     void mouseDown(const juce::MouseEvent& e) override
     {
         if (e.mods.isRightButtonDown())
@@ -64,32 +59,32 @@ public:
 
     void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
     {
-        double interval = wheelStep > 0.0 ? wheelStep : getInterval();
-        double range    = getMaximum() - getMinimum();
-        if (interval <= 0.0 || range <= 0.0) { juce::Slider::mouseWheelMove(e, wheel); return; }
+        const double range    = getMaximum() - getMinimum();
+        const double interval = getInterval();
+        if (range <= 0.0) { juce::Slider::mouseWheelMove(e, wheel); return; }
 
-        double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
+        const double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
 
-        // Small discrete ranges (e.g. unison voices 1..7): one step per notch.
-        if (range / interval <= 24.0)
+        // Small discrete ranges (e.g. unison voices 1..7, octaves): exactly one interval per notch.
+        if (interval > 0.0 && range / interval <= 24.0)
         {
             setValue(getValue() + dir * interval, juce::sendNotificationSync);
             return;
         }
 
-        // Fine (Shift) = one granularity step; coarse = ten steps, but at least
-        // ~range/400 so wide knobs move usefully:
-        //   0..1   -> fine 0.01, coarse 0.1
-        //   0..100 -> fine 1,    coarse 10
-        //   0..10000 Hz -> fine 1 Hz, coarse ~25 Hz
-        double fine   = interval;
-        double coarse = juce::jmax(interval * 10.0, range / 400.0);
-        double step   = e.mods.isShiftDown() ? fine : coarse;
-        setValue(getValue() + dir * step, juce::sendNotificationSync);
+        // Otherwise step in NORMALISED (knob-rotation) space, NOT raw value, so the feel is even
+        // regardless of the parameter's skew — short-time knobs (ADSR: 1 ms interval, skewed) no
+        // longer crawl in 1 ms steps. Coarse = ~4% of the knob's travel per notch, fine (Shift) =
+        // ~0.5%. Guarantee at least one interval of movement so a notch never does nothing.
+        const double prop = valueToProportionOfLength(getValue());
+        const double step = e.mods.isShiftDown() ? 0.005 : 0.04;
+        double newVal = proportionOfLengthToValue(juce::jlimit(0.0, 1.0, prop + dir * step));
+        if (interval > 0.0 && std::abs(newVal - getValue()) < interval)
+            newVal = getValue() + dir * interval;
+        setValue(newVal, juce::sendNotificationSync);
     }
 
 private:
     int knobDiameter = KnobSize::Small;   // single standard size for all modules
-    double wheelStep = 0.0;   // 0 = use the parameter's own interval
     float modAmount = 0.0f;   // live LFO modulation for the ring (-1..+1)
 };
