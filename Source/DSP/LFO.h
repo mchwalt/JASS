@@ -9,7 +9,10 @@ enum class LFOWaveform { Sine, Triangle, Square, Sawtooth };
 // Append-only: new targets go at the END so the choice-index mapping stays stable
 // (LFOTarget = lfoTarget-param index + 1; Off = 0). See Parameters.h + PresetIO kLfoTarget.
 enum class LFOTarget { Off, Frequency, Amplitude, FilterCutoff,
-                       WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
+                       WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive,
+                       // Appended 2026-07 (per-voice FX/generator targets — Story: Mod-Matrix targets):
+                       DelayTime, DelayMix, ReverbMix, ChorusDepth,
+                       DistortionDrive, BitcrushMix, SubLevel, OscDetune };
 
 // Number of LFOs, indexed like the oscillators (lfoOn(i), lfoRate(i) …). Grow HERE:
 // bumping this + appending a ModSource + the source-index map is all a new LFO needs.

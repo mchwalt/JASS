@@ -18,7 +18,9 @@ namespace PresetIO
     inline const juce::StringArray kDistortion { "Off", "SoftClip", "HardClip", "Foldback" };
     inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth" };
     inline const juce::StringArray kLfoTarget  { "Off", "Frequency", "Amplitude", "FilterCutoff",
-                                                 "WavetablePosition", "FormantVowel", "FilterResonance", "WavefolderDrive" };   // append-only
+                                                 "WavetablePosition", "FormantVowel", "FilterResonance", "WavefolderDrive",   // append-only
+                                                 "DelayTime", "DelayMix", "ReverbMix", "ChorusDepth",
+                                                 "DistortionDrive", "BitcrushMix", "SubLevel", "OscDetune" };
     inline const juce::StringArray kNoiseType  { "Off", "White", "Pink", "Brown", "Blue" };
     inline const juce::StringArray kSubWave     { "Sine", "Square" };
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
