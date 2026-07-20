@@ -212,7 +212,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         if (tActive[(size_t) LFOTarget::ReverbMix])
             reverb.mix = std::clamp(baseReverbMix + modOffset[(size_t) LFOTarget::ReverbMix] * 0.5, 0.0, 1.0);
         if (tActive[(size_t) LFOTarget::ChorusDepth])
-            chorus.depth = std::clamp(baseChorusDep + modOffset[(size_t) LFOTarget::ChorusDepth] * 0.01, 0.0, 0.05);
+            chorus.depth = std::clamp(baseChorusDep + modOffset[(size_t) LFOTarget::ChorusDepth] * 0.01, 0.001, 0.02);
         if (tActive[(size_t) LFOTarget::DistortionDrive])
             distortion.drive = std::clamp(baseDistDrive + modOffset[(size_t) LFOTarget::DistortionDrive] * 0.5, 0.0, 1.0);
         if (tActive[(size_t) LFOTarget::BitcrushMix])

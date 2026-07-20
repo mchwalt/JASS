@@ -12,7 +12,7 @@ namespace Modules
         m.params = {
             { "chorusOn",    "Enabled", "",      ParamSpec::Kind::Bool },
             { "chorusRate",  "Rate",    "RATE",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 5.0f, 0.01f),      1.5f },
-            { "chorusDepth", "Depth",   "DEPTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.001f, 0.02f, 0.001f), 0.005f },
+            { "chorusDepth", "Depth",   "DEPTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.001f, 0.02f, 0.001f), 0.005f, {}, {}, LFOTarget::ChorusDepth },
             { "chorusMix",   "Mix",     "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),      0.5f },
         };
         return m;

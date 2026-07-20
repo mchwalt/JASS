@@ -40,7 +40,14 @@ I want more **MOD MATRIX destinations** — the per-voice effects and a couple o
 claude-opus-4-8[1m] (2026-07-20)
 
 ### Completion Notes List
-- (pending build + running-app verification)
+- 8 new per-voice targets implemented + applied in `SynthVoice` (tActive-gated, base-captured, restored).
+- **Ring animation**: `modTarget` set on each target's knob spec (Delay TIME/MIX, Reverb MIX, Chorus DEPTH, Dist DRIVE, Bitcrush MIX, Sub LEVEL, OSC DETUNE → all 3 OSCs).
+- **Auto-enable/disable** (symmetric, "with memory") extended to the FX targets via `matrixTargetEnableParam` + the `managed[]` list. **OscDetune deliberately ring-only** (no auto-toggle — it spans the core OSC 1-3).
+- **Generic single source** `Source/DSP/ModTargets.h` (X-macro `JASS_MOD_TARGETS`): generates the `LFOTarget` enum, `kCount`, persist strings (PresetIO `kLfoTarget`), DEST labels (ModMatrixSpecs), and the enable-param map (PluginProcessor). `rack::ModTarget` is now a type alias for `LFOTarget`; `LiveModFeed` and `ModMatrixConfig::kNumTargets` derive from `kCount`. Adding a target = ONE macro line + one object-specific apply block in SynthVoice.
+- **Demo preset** `DemoPresets/FX Motion.jass` — pad routing 4 LFOs → Delay Mix, Reverb Mix, Chorus Depth, Detune (+ Cutoff). Embedded + seeds on first run (verified seeded to AppData).
+- Clean rebuild green; demo seeded. Running-app audio/ring verification pending with the user.
+
+Delivered on branch `develop` (no push/merge — author's call).
 
 ### File List
 - `Source/DSP/LFO.h`, `Source/DSP/ModMatrix.h`, `Source/DSP/Oscillator.h`
