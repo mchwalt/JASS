@@ -1,5 +1,10 @@
 The effects chain — shapes and colours the mixed signal.
 
+> **Processing vs. Modulation:** audio flows *through* this group (audio in → audio out);
+> it shapes the sound itself. MODULATION carries no audio — it only *moves* these knobs
+> (via the MOD MATRIX). An internal LFO inside a Phaser/Chorus is part of the effect, not
+> a modulation source.
+
 - Holds FILTER, FORMANT, DISTORTION, WAVEFOLD, BITCRUSH, PHASER, CHORUS, DELAY and REVERB.
 - Processed in top-to-bottom order; reorder modules (drag in the MODULES panel) to change the chain.
 

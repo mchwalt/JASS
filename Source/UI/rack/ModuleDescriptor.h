@@ -5,6 +5,7 @@
 #include <array>
 #include <functional>
 #include "../SynthySlider.h"   // KnobSize
+#include "../../DSP/ModTargets.h"   // LFOTarget = the shared modulation-target vocabulary (dependency-free)
 
 // The unified-rack UI is data-driven (see ARCHITECTURE-SPINE AD-1/AD-4): every
 // module is a ModuleDescriptor, not a bespoke component. This header defines ONLY
@@ -22,9 +23,9 @@ namespace rack
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
     enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
-    // For live LFO rings (AD-8). Append-only, mirrors LFOTarget order (None = LFO Off).
-    enum class ModTarget  { None, Frequency, Amplitude, FilterCutoff,
-                            WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
+    // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
+    // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
+    using ModTarget = LFOTarget;
 
     // Live modulation feed for the rings (AD-8, generalized in Story 8.1). Indexed by
     // ModTarget (None = 0, unused): the ring amount currently applied to each target by
@@ -32,7 +33,7 @@ namespace rack
     // coefficient into that target. A knob lights with feed[(int) knob.modTarget]. This
     // replaces the old single-active-target feed so multiple knobs light when the matrix
     // routes the LFO to several destinations at once.
-    using LiveModFeed = std::array<float, 8>;
+    using LiveModFeed = std::array<float, (size_t) ModTargets::kCount>;   // one slot per target
 
     // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
     // its own default zone — Rack.h includes this header, so the descriptor can't reference
@@ -72,7 +73,7 @@ namespace rack
         // where the knob is wired in Story 1.4 — here we only carry the functions.
         std::function<double(double base,  double ratio)> toDisplay;
         std::function<double(double shown, double ratio)> fromDisplay;
-        ModTarget modTarget = ModTarget::None;
+        ModTarget modTarget = ModTarget::Off;
     };
 
     struct Combo

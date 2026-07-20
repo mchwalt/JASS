@@ -147,24 +147,12 @@ namespace
         return {};
     }
 
-    // Enable-param of the module behind a matrix TARGET (item order == LFOTarget). Pitch and
-    // Amplitude are global voice parameters (always active) → empty. Cutoff/Resonance share the
-    // FILTER; Vowel → FORMANT; WT Pos → WAVETABLE; Wavefold → WAVEFOLD.
+    // Enable-param of the module a matrix TARGET drives — from the single source (ModTargets.h).
+    // "" means no module to auto-toggle: global voice params (Pitch/Amplitude) and OscDetune
+    // (spans the core OSC 1-3 → ring only, never auto-enabled/disabled).
     juce::String matrixTargetEnableParam (int targetIdx)
     {
-        using namespace Parameters;
-        switch ((LFOTarget) targetIdx)
-        {
-            case LFOTarget::FilterCutoff:      return ID::filterOn;
-            case LFOTarget::FilterResonance:   return ID::filterOn;
-            case LFOTarget::WavetablePosition: return ID::wavetableOn;
-            case LFOTarget::FormantVowel:      return ID::formantOn;
-            case LFOTarget::WavefolderDrive:   return ID::wavefoldOn;
-            case LFOTarget::Off:
-            case LFOTarget::Frequency:
-            case LFOTarget::Amplitude:
-            default:                           return {};
-        }
+        return juce::String (ModTargets::enableId (targetIdx));
     }
 }
 
@@ -189,7 +177,9 @@ void SynthyProcessor::updateMatrixModuleEnables()
     // Every module a slot can auto-drive: sources (LFO 1..4 + ADSR) and targets (FILTER, FORMANT,
     // WAVETABLE, WAVEFOLD). Velocity + Pitch/Amplitude have no module.
     const juce::String managed[] = { ID::lfoOn(1), ID::lfoOn(2), ID::lfoOn(3), ID::lfoOn(4), ID::adsrOn,
-                                     ID::filterOn, ID::formantOn, ID::wavetableOn, ID::wavefoldOn };
+                                     ID::filterOn, ID::formantOn, ID::wavetableOn, ID::wavefoldOn,
+                                     ID::delayOn, ID::reverbOn, ID::chorusOn, ID::distortionOn,
+                                     ID::bitcrushOn, ID::subOn };
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);

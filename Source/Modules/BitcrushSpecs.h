@@ -13,7 +13,7 @@ namespace Modules
             { "bitcrushOn",   "Enabled", "",     ParamSpec::Kind::Bool },
             { "bitcrushBits", "Bits",    "BITS", ParamSpec::Kind::Int, juce::NormalisableRange<float> (1.0f, 16.0f, 1.0f), 8.0f },
             { "bitcrushRate", "Rate",    "RATE", ParamSpec::Kind::Int, juce::NormalisableRange<float> (1.0f, 50.0f, 1.0f), 1.0f },
-            { "bitcrushMix",  "Mix",     "MIX",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f },
+            { "bitcrushMix",  "Mix",     "MIX",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f, {}, {}, LFOTarget::BitcrushMix },
         };
         return m;
     }

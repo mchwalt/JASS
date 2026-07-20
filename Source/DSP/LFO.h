@@ -1,15 +1,14 @@
 #pragma once
 #include <cmath>
+#include "ModTargets.h"   // LFOTarget + the modulation-target vocabulary (single source of truth)
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
 #endif
 
 enum class LFOWaveform { Sine, Triangle, Square, Sawtooth };
-// Append-only: new targets go at the END so the choice-index mapping stays stable
-// (LFOTarget = lfoTarget-param index + 1; Off = 0). See Parameters.h + PresetIO kLfoTarget.
-enum class LFOTarget { Off, Frequency, Amplitude, FilterCutoff,
-                       WavetablePosition, FormantVowel, FilterResonance, WavefolderDrive };
+// LFOTarget + the full target vocabulary live in ModTargets.h (single source of truth) — add a
+// target there and the enum, persist strings, DEST labels and enable-map all update together.
 
 // Number of LFOs, indexed like the oscillators (lfoOn(i), lfoRate(i) …). Grow HERE:
 // bumping this + appending a ModSource + the source-index map is all a new LFO needs.

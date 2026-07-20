@@ -3,7 +3,8 @@
 #include "../DSP/SyncDivision.h"   // SyncDivision::kNames for the SYNC combo
 
 // LFO 1..kNumLFOs — indexed factory. LFO 1 keeps the stable id "lfo" (help/layout) and is visible;
-// further LFOs are "lfo2"/"lfo3"… and hidden by default. Body order: WAVE, TARGET, RATE, SYNC, DEPTH.
+// further LFOs are "lfo2"/"lfo3"… and hidden by default. Body order: WAVE, TARGET(hidden), SYNC, RATE,
+// DEPTH — selector combos (WAVE, SYNC) first, then knobs (RATE, DEPTH), matching every other module.
 namespace Modules
 {
     inline ModuleSpec lfo (int i)
@@ -24,8 +25,8 @@ namespace Modules
             // instead. The param is kept (hidden) only to gate the LFO on/off and to migrate old
             // presets' built-in routings into matrix slots. See PresetIO::convertOldPresets.
             { p + "Target",  "Target",   "",       ParamSpec::Kind::Choice, {}, 0.0f, { "Frequency", "Amplitude", "Filter Cutoff", "Wavetable Pos", "Formant Vowel", "Filter Reso", "Wavefold Drive" } },
-            { p + "Rate",    "Rate",     "RATE",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 20.0f, 0.1f), 2.0f },
             { p + "SyncDiv", "SyncDiv",  "SYNC",   ParamSpec::Kind::Choice, {}, 0.0f, SyncDivision::kNames },
+            { p + "Rate",    "Rate",     "RATE",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 20.0f, 0.1f), 2.0f },
             { p + "Depth",   "Depth",    "DEPTH",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
         };
         m.params[2].showInBody = false;   // TARGET: internal only, no rack control

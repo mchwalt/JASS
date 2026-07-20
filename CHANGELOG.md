@@ -11,6 +11,18 @@ contract — currently `4`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Modulation-matrix target expansion** — 8 new per-voice destinations: Delay Time,
+  Delay Mix, Reverb Mix, Chorus Depth, Dist Drive, Bitcrush, Sub Level, Detune. Each
+  shows a live modulation ring and (except Detune) auto-enables its module when routed.
+- **Single-source target catalog** (`Source/DSP/ModTargets.h`, X-macro) — the enum,
+  persist strings, DEST labels and enable-map are generated from one table.
+- **Demo preset "FX Motion"** — 4 LFOs breathing delay/reverb/chorus/detune.
+
+### Changed
+- **DELAY** and **LFO** control order aligned to the module-wide convention
+  (selector combos first, then knobs): DELAY = SYNC·TIME·FB·MIX, LFO = WAVE·SYNC·RATE·DEPTH.
+- Zone help (EN+DE) explains the Modulation-vs-Processing distinction (audio vs. control).
+
 - **CI release pipeline** (`.github/workflows/release.yml`): on every merge to `main`,
   derive the next CalVer, build **Windows + Linux** artifacts (Standalone + VST3), and
   publish them to a GitHub release. Prominent **Download** link in the README →
