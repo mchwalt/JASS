@@ -1,5 +1,9 @@
 cmake_minimum_required(VERSION 3.22)
-project(JASS VERSION 1.0.0)
+# App version = CalVer YYYY.MM.MICRO (single source of truth). CMake project(VERSION)
+# only accepts numeric components, so the month is unpadded here (2026.7.0); the UI
+# zero-pads it for display (2026.07.0) — see Source/Version.h. JUCE surfaces this as
+# ProjectInfo::versionString and as the plugin version (host-reported for VST3).
+project(JASS VERSION 2026.7.0)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

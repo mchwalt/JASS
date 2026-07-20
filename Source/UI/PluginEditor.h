@@ -159,6 +159,8 @@ private:
     std::unique_ptr<juce::LookAndFeel> standaloneTitleLnF;
     juce::Component::SafePointer<juce::DocumentWindow> standaloneWin;
     bool title3DAnimated = true;     // persisted: 3D header animation on/off (right-click title)
+    int  loadedFormatVersion = 4;    // FormatVersion of the last preset loaded via the LOAD dialog
+                                     // (shown in the right-click title info menu; AC6 of Story 9.2)
     static juce::File titleAnimFile();       // %AppData%\Synthy setting for the 3D-title toggle
     static bool loadTitleAnimated();         // persisted flag, else true
     static void saveTitleAnimated(bool on);

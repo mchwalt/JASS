@@ -116,6 +116,15 @@ Architecture concept: **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Archite
 - **[`docs/Glossary.md`](docs/Glossary.md)** — glossary
 - `docs/notes/` — internal ideas, research & cheat-sheet notes (not official docs)
 
+## Versioning
+
+JASS uses **CalVer** — `YYYY.MM.MICRO` (e.g. `2026.07.0`) — shown in the header
+subtitle and the right-click title info menu. Changes land on `main` only via pull
+requests, and each merge bumps the version. See **[`CHANGELOG.md`](CHANGELOG.md)**.
+
+The app version is independent of the preset **`FormatVersion`** (an integer schema
+contract — see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
+
 ## License
 
 JASS is released under the **[GNU GPL v3](LICENSE)**.
