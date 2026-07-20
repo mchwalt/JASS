@@ -1,0 +1,138 @@
+name: Release
+
+# Fires after a PR is merged to main (Story 9.3). Each merge derives the next CalVer,
+# builds Standalone + VST3 for Windows and Linux, and publishes one GitHub release with
+# both artifact sets. workflow_dispatch allows a manual re-run once this is on main.
+on:
+  push:
+    branches: [main]
+    paths-ignore:      # a docs-only merge doesn't warrant a cross-platform build/release
+      - '**.md'
+      - 'docs/**'
+      - '_bmad-output/**'
+      - '.githooks/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write       # create tags + releases
+
+jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      calver: ${{ steps.calc.outputs.calver }}            # display, zero-padded month (2026.07.1)
+      calver_cmake: ${{ steps.calc.outputs.calver_cmake }} # CMake numeric, unpadded month (2026.7.1)
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0     # need all tags to compute the next MICRO
+      - id: calc
+        shell: bash
+        run: |
+          YEAR=$(date -u +%Y)
+          MONTH=$(date -u +%m)                 # padded, e.g. 07
+          MONTHNUM=$((10#$MONTH))              # decimal, no leading zero, e.g. 7
+          COUNT=$(git tag -l "v${YEAR}.${MONTH}.*" | wc -l | tr -d ' ')   # MICRO = existing tags this month
+          echo "calver=${YEAR}.${MONTH}.${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "calver_cmake=${YEAR}.${MONTHNUM}.${COUNT}" >> "$GITHUB_OUTPUT"
+          echo "Next CalVer: ${YEAR}.${MONTH}.${COUNT}"
+
+  build:
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+          - os: ubuntu-latest
+            name: Linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libasound2-dev libjack-jackd2-dev \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev \
+            libfreetype6-dev libfontconfig1-dev libcurl4-openssl-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev ninja-build
+
+      - name: Cache build directory
+        uses: actions/cache@v4
+        with:
+          path: build
+          key: ${{ runner.os }}-build-${{ hashFiles('CMakeLists.txt', '.gitmodules') }}
+          restore-keys: ${{ runner.os }}-build-
+
+      - name: Configure
+        shell: bash
+        run: |
+          if [ "${{ runner.os }}" = "Windows" ]; then
+            cmake -B build -G "Visual Studio 17 2022" -DJASS_CALVER=${{ needs.version.outputs.calver_cmake }}
+          else
+            cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DJASS_CALVER=${{ needs.version.outputs.calver_cmake }}
+          fi
+
+      - name: Build
+        shell: bash
+        run: cmake --build build --config Release --target JASS_Standalone JASS_VST3 --parallel
+
+      - name: Stage artifacts
+        shell: bash
+        run: |
+          VER="${{ needs.version.outputs.calver }}"
+          OUT="JASS-${{ matrix.name }}-v${VER}"
+          mkdir -p "stage/${OUT}"
+          # Locate the produced artefact dirs regardless of the generator's config subfolder.
+          SA=$(find build -type d -path '*JASS_artefacts*' -name Standalone | head -1)
+          V3=$(find build -type d -path '*JASS_artefacts*' -name VST3 | head -1)
+          echo "Standalone: $SA"
+          echo "VST3:       $V3"
+          [ -n "$SA" ] && cp -r "$SA"/. "stage/${OUT}/" || echo "WARN: no Standalone dir"
+          [ -n "$V3" ] && cp -r "$V3"/. "stage/${OUT}/" || echo "WARN: no VST3 dir"
+          ls -R "stage/${OUT}"
+          echo "OUT=${OUT}" >> "$GITHUB_ENV"
+
+      - name: Zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path "stage/$env:OUT/*" -DestinationPath "$env:OUT.zip"
+
+      - name: Zip (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        run: (cd stage && zip -r "../${OUT}.zip" "${OUT}")
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.OUT }}
+          path: ${{ env.OUT }}.zip
+
+  release:
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: List artifacts
+        run: ls -R dist
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${{ needs.version.outputs.calver }}"
+          gh release create "v${VER}" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "v${VER}" \
+            --notes "Automated release for v${VER} (CalVer). Windows and Linux builds (Standalone + VST3) attached below. See CHANGELOG.md. VST3 is experimental." \
+            dist/*.zip
