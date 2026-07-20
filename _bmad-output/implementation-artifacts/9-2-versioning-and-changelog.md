@@ -1,6 +1,6 @@
 # Story 9.2: App versioning (CalVer), CHANGELOG & robust preset migration
 
-Status: in-review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

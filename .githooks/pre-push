@@ -1,0 +1,15 @@
+#!/bin/sh
+# JASS workflow guard: no direct pushes to main — changes reach main only via PR merge.
+# (Server-side branch protection needs GitHub Pro on a private repo; this is the local
+# substitute. Bypass in a genuine emergency with:  git push --no-verify)
+#
+# Enable this hook in your clone:  git config core.hooksPath .githooks
+protected="refs/heads/main"
+while read local_ref local_sha remote_ref remote_sha; do
+    if [ "$remote_ref" = "$protected" ]; then
+        echo "✗ Direct push to 'main' is blocked (JASS workflow: use a feature branch + PR)." 1>&2
+        echo "  If you really must: git push --no-verify" 1>&2
+        exit 1
+    fi
+done
+exit 0

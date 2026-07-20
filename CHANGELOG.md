@@ -10,6 +10,13 @@ contract — currently `4`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **CI release pipeline** (`.github/workflows/release.yml`): on every merge to `main`,
+  derive the next CalVer, build **Windows + Linux** artifacts (Standalone + VST3), and
+  publish them to a GitHub release. Prominent **Download** link in the README →
+  `releases/latest`.
+- **Versioned no-direct-push hook** (`.githooks/pre-push`) with `git config core.hooksPath .githooks`.
+
 ## [2026.07.0] – 2026-07-20
 
 First versioned release. Summarises the project's notable state up to this point.
@@ -57,17 +64,20 @@ First versioned release. Summarises the project's notable state up to this point
 
 ## Releasing
 
-Work reaches `main` **only via pull requests** — no direct pushes. **Each PR merged to
-`main` bumps the CalVer.** As part of the PR (or immediately before merging):
+Work reaches `main` **only via pull requests** — no direct pushes (enforced locally by
+`.githooks/pre-push`). **Each PR merged to `main` bumps the CalVer**, and the CI pipeline
+(`.github/workflows/release.yml`) does the rest **automatically**:
 
-1. Bump the CalVer in `CMakeLists.txt` — `project(JASS VERSION YYYY.M.MICRO)` (month
-   unpadded for CMake; the UI displays it zero-padded). Use the current year/month with
-   `MICRO = 0`, or increment `MICRO` for a further merge in the same month.
-2. Move the `Unreleased` notes into a new `## [YYYY.MM.MICRO] – YYYY-MM-DD` section.
-3. After the PR is merged, tag and publish from `main`:
-   ```powershell
-   git tag vYYYY.MM.MICRO
-   git push origin vYYYY.MM.MICRO
-   gh release create vYYYY.MM.MICRO --title "vYYYY.MM.MICRO" --notes-from-tag
-   ```
-   The repository is **private**, so a release is visible only to collaborators.
+1. Move any `Unreleased` notes into a new `## [YYYY.MM.MICRO] – YYYY-MM-DD` section as part
+   of the PR.
+2. On merge, the pipeline derives `YYYY.MM.MICRO` (current year/month; `MICRO` = existing
+   `vYYYY.MM.*` tag count), builds Windows + Linux artifacts, and creates the tag +
+   GitHub release with them attached. No manual tagging needed.
+
+Manual fallback (if the pipeline is unavailable), from `main` after merge:
+```powershell
+git tag vYYYY.MM.MICRO
+git push origin vYYYY.MM.MICRO
+gh release create vYYYY.MM.MICRO --title "vYYYY.MM.MICRO" --notes-from-tag
+```
+The repository is **private**, so releases are visible only to collaborators.

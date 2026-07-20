@@ -3,7 +3,14 @@ cmake_minimum_required(VERSION 3.22)
 # only accepts numeric components, so the month is unpadded here (2026.7.0); the UI
 # zero-pads it for display (2026.07.0) — see Source/Version.h. JUCE surfaces this as
 # ProjectInfo::versionString and as the plugin version (host-reported for VST3).
-project(JASS VERSION 2026.7.0)
+#
+# The CI release pipeline (Story 9.3) overrides the MICRO/date at configure time via
+# -DJASS_CALVER=YYYY.M.MICRO so release artifacts carry the exact per-merge CalVer,
+# WITHOUT committing a bump back to main. Local/dev builds use the default below.
+if(NOT DEFINED JASS_CALVER)
+    set(JASS_CALVER "2026.7.0")
+endif()
+project(JASS VERSION ${JASS_CALVER})
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
