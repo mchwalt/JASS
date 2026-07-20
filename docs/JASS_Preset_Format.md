@@ -1,21 +1,15 @@
 # JASS `.jass` Preset Format (nested, v4)
 
-JASS stores patches as **JSON** files with the extension `.jass`. As of the
-2026‑07 rework the format is **nested** (one object per module) and versioned;
-the current version is **`FormatVersion: 4`**.
-
-> **History / C# compatibility dropped.** JASS was once built twice (C# WPF +
-> C++ JUCE) and shared a *flat* `.synthy` format under `%AppData%\Synthy`. That
-> compatibility was **dropped on 2026‑07‑18**. Presets are now `.jass` under
-> `%AppData%\JASS`; a one‑time auto‑migration copies the old `Synthy` folder on
-> first run. The legacy flat readers survive only to convert old files once.
+JASS stores patches as **JSON** files with the extension `.jass`. The format is
+**nested** (one object per module) and versioned; the current version is
+**`FormatVersion: 4`**.
 
 - **Format:** JSON, UTF‑8. File extension `.jass`.
-- **Canonical source:** the C++ side is now the reference. Each module declares
-  its own parameters and JSON shape in `Source/Modules/<Name>Specs.h`; the
-  serializer walks those specs (`Modules::writeState` / `readState`), so the
-  spec files — not this document — are the single source of truth for field
-  names. This doc describes the *structure*.
+- **Canonical source:** each module declares its own parameters and JSON shape in
+  `Source/Modules/<Name>Specs.h`; the serializer walks those specs
+  (`Modules::writeState` / `readState`), so the spec files — not this document —
+  are the single source of truth for field names. This doc describes the
+  *structure*.
 - **Serializer:** `Source/Audio/PresetIO.h`.
 
 ## Locations (`%AppData%\Roaming\JASS\`)
