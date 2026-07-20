@@ -4,6 +4,12 @@ A polyphonic software synthesizer written in **C++20 / [JUCE 8](https://juce.com
 with an interface styled as a **19″ rack**. It runs as a **standalone** app, which
 is the main focus.
 
+### ⬇ Download
+
+**[Get the latest release](https://github.com/mchwalt/JASS/releases/latest)** —
+Windows & Linux builds (Standalone + VST3), produced automatically on every merge to
+`main` by the CI pipeline.
+
 > **VST3:** a VST3 build is produced as well, but it has so far only been tested
 > **very superficially in vPlayer 4 Lite** — treat plugin support as experimental.
 
@@ -124,6 +130,17 @@ requests, and each merge bumps the version. See **[`CHANGELOG.md`](CHANGELOG.md)
 
 The app version is independent of the preset **`FormatVersion`** (an integer schema
 contract — see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
+
+**Releases / CI.** A GitHub Actions pipeline (`.github/workflows/release.yml`) runs on
+every merge to `main`: it derives the next CalVer, builds Windows + Linux artifacts
+(Standalone + VST3), and publishes them to a GitHub release (see the Download link above).
+
+**Contributing.** Don't push to `main` directly — use a feature branch + PR. Enable the
+local guard hook once per clone:
+
+```sh
+git config core.hooksPath .githooks
+```
 
 ## License
 
