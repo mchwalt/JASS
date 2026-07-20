@@ -23,7 +23,7 @@ jobs:
       calver: ${{ steps.calc.outputs.calver }}            # display, zero-padded month (2026.07.1)
       calver_cmake: ${{ steps.calc.outputs.calver_cmake }} # CMake numeric, unpadded month (2026.7.1)
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0     # need all tags to compute the next MICRO
       - id: calc
@@ -49,7 +49,7 @@ jobs:
             name: Linux
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           submodules: recursive
 
@@ -64,7 +64,7 @@ jobs:
             libwebkit2gtk-4.1-dev libgtk-3-dev ninja-build
 
       - name: Cache build directory
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: build
           key: ${{ runner.os }}-build-${{ hashFiles('CMakeLists.txt', '.gitmodules') }}
@@ -112,7 +112,7 @@ jobs:
         run: (cd stage && zip -r "../${OUT}.zip" "${OUT}")
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ env.OUT }}
           path: ${{ env.OUT }}.zip
@@ -121,7 +121,7 @@ jobs:
     needs: [version, build]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
