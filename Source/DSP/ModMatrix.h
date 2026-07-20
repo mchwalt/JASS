@@ -24,7 +24,7 @@ namespace ModMatrixConfig
 {
     inline constexpr int kNumSlots   = 6;   // fixed routing slots (append-only; grow here)
     inline constexpr int kNumSources = 6;   // ModSource count (LFO1, Envelope, Velocity, LFO2, LFO3, LFO4)
-    inline constexpr int kNumTargets = 16;  // == LFOTarget count, including Off at index 0
+    inline constexpr int kNumTargets = ModTargets::kCount;   // single source: ModTargets.h (incl. Off at 0)
 }
 
 // Sum every ACTIVE explicit slot's contribution into offsetOut[target] (indexed by LFOTarget:

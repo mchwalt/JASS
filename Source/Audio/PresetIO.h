@@ -17,10 +17,9 @@ namespace PresetIO
     inline const juce::StringArray kFilterType { "Off", "Lowpass", "Highpass" };
     inline const juce::StringArray kDistortion { "Off", "SoftClip", "HardClip", "Foldback" };
     inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth" };
-    inline const juce::StringArray kLfoTarget  { "Off", "Frequency", "Amplitude", "FilterCutoff",
-                                                 "WavetablePosition", "FormantVowel", "FilterResonance", "WavefolderDrive",   // append-only
-                                                 "DelayTime", "DelayMix", "ReverbMix", "ChorusDepth",
-                                                 "DistortionDrive", "BitcrushMix", "SubLevel", "OscDetune" };
+    // Persisted target names — generated from the single source (ModTargets.h). Index == LFOTarget.
+    inline const juce::StringArray kLfoTarget = [] { juce::StringArray a;
+        for (int i = 0; i < ModTargets::kCount; ++i) a.add (ModTargets::persist (i)); return a; }();
     inline const juce::StringArray kNoiseType  { "Off", "White", "Pink", "Brown", "Blue" };
     inline const juce::StringArray kSubWave     { "Sine", "Square" };
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };

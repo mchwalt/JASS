@@ -13,7 +13,7 @@ namespace Modules
             { "reverbOn",   "Enabled",  "",     ParamSpec::Kind::Bool },
             { "reverbRoom", "RoomSize", "ROOM", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.7f },
             { "reverbDamp", "Damping",  "DAMP", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
-            { "reverbMix",  "Mix",      "MIX",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f },
+            { "reverbMix",  "Mix",      "MIX",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.3f, {}, {}, LFOTarget::ReverbMix },
         };
         return m;
     }

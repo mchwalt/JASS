@@ -161,7 +161,7 @@ namespace rack
                         apvts, k->paramId, *s));
                 }
 
-                if (k->modTarget != ModTarget::None)
+                if (k->modTarget != ModTarget::Off)
                     ringKnobs.push_back ({ s, k->modTarget });
 
                 cells.push_back ({ s, makeCaption (ownedCaptions, k->label), 1 });
