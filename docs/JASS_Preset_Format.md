@@ -73,7 +73,13 @@ nested format on load.
 - **`FormatVersion`** is reserved for *value* migrations (a field whose meaning
   changed). Merely adding new fields needs no version bump — the missing⇒default
   rule handles that. `v4` folded the LFO's built‑in target into modulation‑matrix
-  slots.
+  slots. This integer contract is independent of the app's CalVer version.
+- **Migration & backups.** Presets older than the current `FormatVersion` are
+  upgraded to the current format — both by the startup batch pass (`convertOldPresets`)
+  and when you open an older file via the LOAD dialog. **Before rewriting, the original
+  is copied to `%AppData%\JASS\PresetsBackup\`.** The direct LOAD path also **fails
+  loudly** (a visible message) on a corrupt / non‑JASS file instead of silently
+  resetting to defaults, and it tells you when a file was migrated (from which version).
 - **Quantization:** values snap to each parameter's step, so a round‑trip may
   differ by less than one step.
 - **Enum fields** are stored as the choice string (e.g. `"Lowpass"`,
