@@ -1,6 +1,6 @@
 # Story 9.1: Prepare the repository for GitHub (private, not yet published)
 
-Status: ready-for-dev
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -76,8 +76,29 @@ so that the project is clean, self-explanatory and safely version-controlled off
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (2026-07-20)
+
 ### Debug Log References
+
+- `gh repo view mchwalt/JASS` → `PRIVATE` (visibility verified).
+- `git ls-tree HEAD JUCE` → `160000 commit …` (submodule pointer only, JUCE files not in repo).
 
 ### Completion Notes List
 
+- **AC1 README** rewritten: C++/JASS framing (C# frozen, C# compat dropped, `.jass` under `%AppData%\JASS` + one-time auto-migration), feature overview, build+run guide (submodule init → CMake VS17 2022 → MSBuild `JASS_Standalone`, output `build/JASS_artefacts/Release/Standalone/JASS.exe`, VST3 target `JASS_VST3`), embedded screenshot, GPLv3 + JUCE dual-licensing note.
+- **AC2 LICENSE** = **GPLv3** (maintainer decision), canonical FSF text (35 KB). JUCE dual-licensing noted in README.
+- **AC3** `.gitattributes` added (`* text=auto`, `*.wav`/`*.jass`/`*.png`/… `binary`) — ends CRLF warnings. `.gitignore` reviewed: build/, .vs/, *.user, _bmad junction, .claude/skills, settings.local.json covered; no large/secret files tracked (JUCE is submodule pointer).
+- **AC4** Screenshot `docs/screenshots/rack.png` (full rack, maintainer-supplied). Optional 2nd (MODULES panel) left to maintainer to drop as `docs/screenshots/modules.png`.
+- **AC5** Private repo created (`gh repo create mchwalt/JASS --private --source . --remote origin`), `git push -u origin main`. Verified PRIVATE + submodule pointer.
+- **AC6** README build steps reviewed against actual project targets/paths.
+- **AC7 docs/** cleanup: internal notes → `docs/notes/` (ideas, research, cheatsheets); `Synthy_Preset_Format.md` → `docs/JASS_Preset_Format.md` (rewritten for nested `.jass` v4 / `%AppData%\JASS`); README cross-links updated. Kept in `docs/`: `Glossary.md`, `Modul_Architektur_Konzept.md`, `JASS_Preset_Format.md`.
+
 ### File List
+
+- `README.md` (rewritten)
+- `LICENSE` (new, GPLv3)
+- `.gitattributes` (new)
+- `docs/JASS_Preset_Format.md` (new; replaces `docs/Synthy_Preset_Format.md`)
+- `docs/notes/*` (moved: ideas/research/cheatsheets)
+- `docs/screenshots/rack.png` (new)
+- `_bmad-output/implementation-artifacts/9-1-github-repo-preparation.md` (status/record)

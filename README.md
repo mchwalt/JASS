@@ -49,6 +49,12 @@ als **VST3** (getestet in REAPER).
 - **Presets** im `.jass`-Format + auto-gespeicherter LiveState; Demo-Presets &
   Beispiel-Wavetables sind eingebettet und werden beim ersten Start angelegt
 
+Über den **MODULES**-Button lassen sich alle Module zonenweise ein-/ausblenden
+und per Drag&Drop neu anordnen (Layout wird gespeichert, „Reset layout" stellt
+die Werksanordnung wieder her):
+
+<img src="docs/screenshots/Modules.png" alt="MODULES-Panel" width="360">
+
 ## Bauen & Starten
 
 **Voraussetzungen:** Visual Studio 2022 (C++-Desktop-Workload), CMake, Git.
