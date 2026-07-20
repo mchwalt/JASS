@@ -1,8 +1,11 @@
 # JASS – Just Another Simple Synthesizer
 
 A polyphonic software synthesizer written in **C++20 / [JUCE 8](https://juce.com/)**,
-with an interface styled as a **19″ rack**. Runs as a **standalone** app and as a
-**VST3** plugin (tested in REAPER).
+with an interface styled as a **19″ rack**. It runs as a **standalone** app, which
+is the main focus.
+
+> **VST3:** a VST3 build is produced as well, but it has so far only been tested
+> **very superficially in vPlayer 4 Lite** — treat plugin support as experimental.
 
 ## Why this project
 
