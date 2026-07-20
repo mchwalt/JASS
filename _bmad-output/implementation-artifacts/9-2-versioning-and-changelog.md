@@ -1,6 +1,6 @@
 # Story 9.2: App versioning (CalVer), CHANGELOG & robust preset migration
 
-Status: ready-for-dev
+Status: in-review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -78,8 +78,28 @@ The 2026‑07 nested‑format rework (`.synthy` flat → `.jass` nested v4) conv
 
 ### Agent Model Used
 
+claude-opus-4-8[1m] (2026-07-20)
+
 ### Debug Log References
+
+- Release build of `JASS_Standalone.vcxproj` after the CMake version change: exit 0, `JASS.exe` produced.
 
 ### Completion Notes List
 
+- **AC1** CalVer single source: `project(JASS VERSION 2026.7.0)` in `CMakeLists.txt` (CMake needs unpadded month). `Source/Version.h` → `JASS::versionString()` derives the display string (`2026.07.0`, zero-padded month) from `ProjectInfo::versionString`. No duplicated literal.
+- **AC2** Version shown in header subtitle (`SpinningTitle3D::paint`: "Just Another Simple Synthesizer · v2026.07.0") and in the right-click title info menu.
+- **AC5** `PresetIO::loadFromFile` now returns `LoadResult{ok,fileVersion,migrated}`: older files are backed up to `%AppData%\JASS\PresetsBackup\`, migrated (flat<3 / nested v3 → apvts + `migrateLfoTargetsToSlots`), and rewritten in place at the current version. The editor LOAD handler shows a **loud** `NativeMessageBox` on a corrupt/non-JASS file (no silent default-reset) and an info box when a file was migrated. The `modMatrixOn` guard in `migrateLfoTargetsToSlots` (fixed in `cf9244e`) covers the muted-routing class of bug.
+- **AC6** Loaded preset's `FormatVersion` surfaced in the right-click title info menu; migration is announced via the info message box.
+- **AC3/AC4** `CHANGELOG.md` (Keep a Changelog) with a back-filled `[2026.07.0]` entry + a "Releasing" section. **AC4 note:** the first tag/release is now cut **after** the PR merges (per the new no-direct-push-to-main + CalVer-per-merge rule), not before.
+- **AC7** README gained a "Versioning" section (CalVer + CHANGELOG link); `docs/JASS_Preset_Format.md` documents the FormatVersion contract + backup/migration + backup location.
+- **AC8** Standalone rebuilt green; existing v4 demo presets unaffected (migration path only triggers for `FormatVersion < 4`). Running-app verification pending with the user.
+- **Workflow change (2026-07-20):** delivered on branch `feat/9.2-versioning-changelog` via PR (no direct push to `main`). Server-side branch protection is **not available** (private repo on GitHub Free → HTTP 403, needs Pro/public). CI pipeline (build artifacts + set CalVer on merge) tracked as a follow-up (proposed Story 9.3).
+
 ### File List
+
+- `CMakeLists.txt` (version)
+- `Source/Version.h` (new)
+- `Source/UI/PluginEditor.cpp`, `Source/UI/PluginEditor.h` (subtitle version, info menu, LOAD handler)
+- `Source/Audio/PresetIO.h` (`LoadResult`, hardened `loadFromFile`)
+- `CHANGELOG.md` (new)
+- `README.md`, `docs/JASS_Preset_Format.md` (docs)

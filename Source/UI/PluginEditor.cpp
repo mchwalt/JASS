@@ -3,6 +3,7 @@
 #include "HelpTextStore.h"           // embedded EN/DE help texts (Story 6.1)
 #include "../Audio/PresetIO.h"
 #include "../Audio/Parameters.h"   // Parameters::ID for the rack
+#include "../Version.h"            // JASS::versionString() (CalVer)
 #include "../Modules/AllModules.h"  // spec-driven module descriptors (makeModuleDescriptor + Modules::*)
 #include <map>
 #include <memory>
@@ -380,10 +381,42 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         {
             auto f = fc.getResult();
             if (f == juce::File{}) return;
-            PresetIO::loadFromFile(processor.getAPVTS(), f);
+
+            const auto res = PresetIO::loadFromFile(processor.getAPVTS(), f);
+            if (! res.ok)
+            {
+                // Fail LOUDLY — a corrupt / non-JASS file must not silently reset to defaults.
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::WarningIcon,
+                    currentLang == "DE" ? "Laden fehlgeschlagen" : "Load failed",
+                    (currentLang == "DE"
+                        ? "\xe2\x80\x9e" + f.getFileNameWithoutExtension()
+                              + "\xe2\x80\x9c konnte nicht geladen werden (defekt oder kein JASS-Preset)."
+                        : "\"" + f.getFileNameWithoutExtension()
+                              + "\" could not be loaded (corrupt or not a JASS preset)."));
+                return;
+            }
+
+            loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
             processor.markPresetClean();   // current state now matches the loaded file
             setPresetName(f.getFileNameWithoutExtension());
             if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3)
+
+            if (res.migrated)
+            {
+                // Surface the conversion (AC6): the user should know a format upgrade happened
+                // and that the original was backed up.
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::InfoIcon,
+                    currentLang == "DE" ? "Preset migriert" : "Preset migrated",
+                    (currentLang == "DE"
+                        ? "Von Format v" + juce::String(res.fileVersion) + " auf v"
+                              + juce::String(PresetIO::kFormatVersion)
+                              + " aktualisiert.\nEine Sicherung liegt im Ordner PresetsBackup."
+                        : "Upgraded from format v" + juce::String(res.fileVersion) + " to v"
+                              + juce::String(PresetIO::kFormatVersion)
+                              + ".\nA backup was saved to the PresetsBackup folder."));
+            }
         });
     };
 
@@ -785,8 +818,8 @@ void SpinningTitle3D::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xff8899aa));
     g.setFont(juce::FontOptions(13.0f));
-    g.drawText("Just Another Simple Synthesizer", subArea.toNearestInt(),
-               juce::Justification::centred);
+    g.drawText("Just Another Simple Synthesizer   \xc2\xb7   v" + JASS::versionString(),
+               subArea.toNearestInt(), juce::Justification::centred);
 }
 
 void SynthyEditor::showModuleHelp(const juce::String& id)
@@ -916,6 +949,12 @@ void SynthyEditor::mouseDown(const juce::MouseEvent& e)
         return;
 
     juce::PopupMenu m;
+    // "About"-style info (disabled items): app version (CalVer) + the format version of the
+    // currently loaded preset (Story 9.2, AC2/AC6).
+    m.addItem(100, "JASS " + JASS::versionString(), false, false);
+    m.addItem(101, (currentLang == "DE" ? "Preset-Format v" : "Preset format v")
+                       + juce::String(loadedFormatVersion), false, false);
+    m.addSeparator();
     m.addItem(1, (currentLang == "DE" ? "3D-Titel animieren" : "Animate 3D title"),
               true, title3DAnimated);
     m.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(
