@@ -13,7 +13,7 @@ namespace Modules
         m.params = {
             { "distortionOn",    "Enabled", "",      ParamSpec::Kind::Bool },
             { "distortionType",  "Type",    "TYPE",  ParamSpec::Kind::Choice, {}, 0.0f, { "SoftClip", "HardClip", "Foldback" }, { "Soft Clip", "Hard Clip", "Foldback" } },
-            { "distortionDrive", "Drive",   "DRIVE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
+            { "distortionDrive", "Drive",   "DRIVE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::DistortionDrive },
             { "distortionMix",   "Mix",     "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 1.0f },
         };
         return m;

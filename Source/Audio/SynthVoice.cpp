@@ -116,6 +116,17 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const double basePos   = wavetable.getPosition();
     const double baseVowel = formant.vowel;
     const double baseFold  = wavefolder.drive;
+    // Base values for the appended per-voice FX/generator targets (captured once; modulated around).
+    const double baseDelayTime = delay.time;
+    const double baseDelayMix  = delay.mix;
+    const double baseReverbMix = reverb.mix;
+    const double baseChorusDep = chorus.depth;
+    const double baseDistDrive = distortion.drive;
+    const double baseCrushMix  = bitcrusher.mix;
+    const double baseSubLevel  = subOsc.getAmplitude();
+    const std::array<double, 3> baseDetune { oscillators[0].getDetuneAmount(),
+                                             oscillators[1].getDetuneAmount(),
+                                             oscillators[2].getDetuneAmount() };
 
     // Sub-oscillator octave multiplier (constant across the block).
     const double subMul = std::pow(2.0, subOctave);
@@ -192,6 +203,25 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             filter.setResonance(std::clamp(baseReso * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterResonance] * 1.5), 0.1, 10.0));
         if (tActive[(size_t) LFOTarget::WavefolderDrive])
             wavefolder.drive = std::clamp(baseFold + modOffset[(size_t) LFOTarget::WavefolderDrive] * 0.5, 0.0, 1.0);
+        // Appended per-voice targets. Each modulates around its captured base and is clamped to the
+        // parameter's own range; only audible when the owning effect/generator is enabled.
+        if (tActive[(size_t) LFOTarget::DelayTime])
+            delay.time = std::clamp(baseDelayTime + modOffset[(size_t) LFOTarget::DelayTime] * 0.2, 0.01, 2.0);
+        if (tActive[(size_t) LFOTarget::DelayMix])
+            delay.mix = std::clamp(baseDelayMix + modOffset[(size_t) LFOTarget::DelayMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::ReverbMix])
+            reverb.mix = std::clamp(baseReverbMix + modOffset[(size_t) LFOTarget::ReverbMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::ChorusDepth])
+            chorus.depth = std::clamp(baseChorusDep + modOffset[(size_t) LFOTarget::ChorusDepth] * 0.01, 0.001, 0.02);
+        if (tActive[(size_t) LFOTarget::DistortionDrive])
+            distortion.drive = std::clamp(baseDistDrive + modOffset[(size_t) LFOTarget::DistortionDrive] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::BitcrushMix])
+            bitcrusher.mix = std::clamp(baseCrushMix + modOffset[(size_t) LFOTarget::BitcrushMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::SubLevel])
+            subOsc.setAmplitude(std::clamp(baseSubLevel + modOffset[(size_t) LFOTarget::SubLevel] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::OscDetune])
+            for (int i = 0; i < 3; ++i)
+                oscillators[i].setDetuneAmount(std::clamp(baseDetune[(size_t) i] + modOffset[(size_t) LFOTarget::OscDetune] * 50.0, 0.0, 100.0));
 
         // Mix oscillators according to the mix mode. When Mix-Mode is disabled (Story 2.4)
         // the OSCs are summed plainly, regardless of the selected mode.
@@ -288,4 +318,12 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     filter.setResonance(baseReso);
     formant.vowel = baseVowel;
     wavefolder.drive = baseFold;
+    delay.time = baseDelayTime;
+    delay.mix = baseDelayMix;
+    reverb.mix = baseReverbMix;
+    chorus.depth = baseChorusDep;
+    distortion.drive = baseDistDrive;
+    bitcrusher.mix = baseCrushMix;
+    subOsc.setAmplitude(baseSubLevel);
+    for (int i = 0; i < 3; ++i) oscillators[i].setDetuneAmount(baseDetune[(size_t) i]);
 }

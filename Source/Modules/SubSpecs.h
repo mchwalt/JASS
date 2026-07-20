@@ -15,7 +15,7 @@ namespace Modules
             { "subOn",     "Enabled",  "",      ParamSpec::Kind::Bool },
             { "subWave",   "Waveform", "WAVE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Square" } },
             { "subOctave", "Octave",   "",      ParamSpec::Kind::Choice, {}, 0.0f, { "-1 Oct", "-2 Oct" } },
-            { "subLevel",  "Level",    "LEVEL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
+            { "subLevel",  "Level",    "LEVEL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::SubLevel },
         };
         m.params[2].showInBody = false;   // subOctave: APVTS param without a rack control (as today)
         return m;

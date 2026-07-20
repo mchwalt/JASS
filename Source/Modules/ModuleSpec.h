@@ -49,7 +49,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
         else
         {
             rack::Knob k { p.id, p.uiLabel };
-            k.modTarget = (rack::ModTarget) (int) p.modTarget;   // LFOTarget and ModTarget share order
+            k.modTarget = p.modTarget;   // same type now (rack::ModTarget is an alias for LFOTarget)
             if (p.freqDisplay)
             {
                 k.toDisplay   = [] (double base,  double ratio) { return base  * ratio; };

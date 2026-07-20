@@ -14,7 +14,8 @@ namespace Modules
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W16H2;
 
         const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
-        const juce::StringArray tgt { "Off", "Pitch", "Amplitude", "Cutoff", "WT Pos", "Vowel", "Resonance", "Wavefold" };   // == LFOTarget
+        juce::StringArray tgt;   // DEST labels — generated from the single source (ModTargets.h)
+        for (int i = 0; i < ModTargets::kCount; ++i) tgt.add (ModTargets::label (i));
 
         m.params.push_back ({ "modMatrixOn", "On", "", ParamSpec::Kind::Bool, {}, 1.0f });   // default on
         for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)

@@ -1,5 +1,10 @@
 Die Effektkette — formt und färbt das gemischte Signal.
 
+> **Processing vs. Modulation:** Audio fließt *durch* diese Gruppe (Audio rein → Audio raus);
+> sie formt den Klang selbst. MODULATION führt kein Audio — sie *bewegt* nur diese Regler
+> (über die MOD MATRIX). Ein interner LFO in Phaser/Chorus gehört zum Effekt, ist keine
+> Modulationsquelle.
+
 - Enthält FILTER, FORMANT, DISTORTION, WAVEFOLD, BITCRUSH, PHASER, CHORUS, DELAY und REVERB.
 - Verarbeitung von oben nach unten; Module umsortieren (im MODULES-Panel ziehen) ändert die Kette.
 

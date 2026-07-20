@@ -27,6 +27,7 @@ public:
     bool isEnabled() const { return enabled; }
     double getFrequency() const { return frequency; }
     double getAmplitude() const { return amplitude; }
+    double getDetuneAmount() const { return detuneCents; }
     WaveformType getWaveform() const { return waveform; }
 
     float nextSample(double fmOffset = 0.0);
