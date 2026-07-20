@@ -485,15 +485,54 @@ namespace PresetIO
         }
     }
 
-    inline bool loadFromFile(APVTS& a, const juce::File& file)
+    // Outcome of a preset load. `ok`=false means the file was missing or not a valid JASS
+    // preset (caller should report it loudly, not silently fall back to defaults). `migrated`
+    // is set when the file was an older FormatVersion and was upgraded in place (a backup was
+    // written to jassFolder()/PresetsBackup first). `fileVersion` is the version read from disk.
+    struct LoadResult
     {
+        bool ok = false;
+        int  fileVersion = 0;
+        bool migrated = false;
+    };
+
+    inline LoadResult loadFromFile(APVTS& a, const juce::File& file)
+    {
+        LoadResult r;
         if (! file.existsAsFile())
-            return false;
+            return r;
         auto v = juce::JSON::parse(file.loadFileAsString());
         if (! v.isObject())
-            return false;
-        applyVar(a, v);
-        return true;
+            return r;   // corrupt / not JSON / not an object → ok stays false (loud fail upstream)
+
+        r.fileVersion = (int) v.getProperty("FormatVersion", 1);
+
+        if (r.fileVersion < kFormatVersion)
+        {
+            // Older format: back up the original BEFORE we rewrite it, then migrate + re-save in
+            // place at the current version (same scheme as the startup convertOldPresets). This is
+            // the direct-LOAD counterpart to that batch pass, so a hand-picked old file is upgraded
+            // dependably instead of silently mis-loading (e.g. a flat file through the nested reader).
+            const juce::File backupDir = jassFolder().getChildFile("PresetsBackup");
+            backupDir.createDirectory();
+            file.copyFileTo(backupDir.getChildFile(file.getFileName()));
+
+            if (r.fileVersion < 3) applyVarFlatLegacy(a, v);   // flat legacy → apvts
+            else                   applyVar(a, v);             // nested v3 → apvts
+            migrateLfoTargetsToSlots(a);                       // fold built-in LFO targets into matrix slots
+
+            const auto name = v.getProperty("Name", file.getFileNameWithoutExtension()).toString();
+            const bool mod  = (bool) v.getProperty("Modified", false);
+            saveToFile(a, file, name, mod);                    // rewrite at the current version
+            r.migrated = true;
+        }
+        else
+        {
+            applyVar(a, v);
+        }
+
+        r.ok = true;
+        return r;
     }
 
     // Reads just the "Name" field of a preset file (empty if absent/unreadable).
