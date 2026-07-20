@@ -818,7 +818,7 @@ void SpinningTitle3D::paint(juce::Graphics& g)
 
     g.setColour(juce::Colour(0xff8899aa));
     g.setFont(juce::FontOptions(13.0f));
-    g.drawText("Just Another Simple Synthesizer   \xc2\xb7   v" + JASS::versionString(),
+    g.drawText("Just Another Simple Synthesizer  (v" + JASS::versionString() + ")",
                subArea.toNearestInt(), juce::Justification::centred);
 }
 
