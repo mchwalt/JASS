@@ -212,6 +212,12 @@ namespace rack
         // load/reset (there visibility + enables are restored independently).
         void driveEnable (const juce::String& id, bool show);
 
+        // Preset-load reconciliation (complement of enforceHiddenDisabled): a module the loaded
+        // preset left ENABLED must be visible — you can't play through a module you can't see, and
+        // a preset that uses a default-hidden module (e.g. COMPRESSOR) has no custom layout. Marks
+        // such modules visible WITHOUT touching their enable. Returns true if anything changed.
+        bool revealEnabledModules();
+
         // --- Layout persistence helpers (Story 4.3) ---
         juce::var layoutToVar() const;                  // model → JSON var (array of {id,zone,pos,vis})
         void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)

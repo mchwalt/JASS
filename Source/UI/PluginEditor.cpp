@@ -672,38 +672,50 @@ void SynthyEditor::timerCallback()
     // preset name and to live edits flipping the "modified" flag.
     updatePresetLabel();
 
-    // Preset bank F1..F12: poll global key state (the on-screen keyboard owns keyboard focus, so
-    // these keys never reach keyPressed). Only while JASS is frontmost, so F-keys don't hijack
-    // another app. Edge-detected: a key-down on a filled slot loads at once; holding >= 2 s opens
-    // the assign dialog (once per hold). An empty-slot tap does nothing (assign via hold / dbl-click).
-    if (presetBank != nullptr && juce::Process::isForegroundProcess())
-    {
-        const juce::uint32 now = juce::Time::getMillisecondCounter();
+    // Safety net for the F1..F12 bank: keyStateChanged catches PRESSES reliably, but a RELEASE
+    // event can occasionally be missed (consumed / not delivered while playing), leaving fKeyDown
+    // stuck true so the next press is ignored until another key event re-syncs it. Re-arm here from
+    // the real key state — timing-uncritical (only clears a stale "down"), so a busy timer is fine.
+    if (presetBank != nullptr)
         for (int i = 0; i < 12; ++i)
-        {
-            const bool down = juce::KeyPress::isKeyCurrentlyDown(juce::KeyPress::F1Key + i);
-            if (down && ! fKeyDown[i])                 // down edge
-            {
-                fKeyDown[i] = true;
-                fKeyDownMs[i] = now;
-                fKeyMenuOpened[i] = false;
-                if (presetBank->isAssigned(i))         // tap loads now; empty slot => nothing
-                    triggerPresetSlot(i);
-            }
-            else if (down && fKeyDown[i])              // still held
-            {
-                if (! fKeyMenuOpened[i] && now - fKeyDownMs[i] >= 2000)
-                {
-                    fKeyMenuOpened[i] = true;
-                    assignPresetSlot(i);
-                }
-            }
-            else if (! down && fKeyDown[i])            // up edge
-            {
+            if (fKeyDown[i] && ! juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::F1Key + i))
                 fKeyDown[i] = false;
+}
+
+// Preset bank F1..F12 — driven by real key events (keyStateChanged), NOT the GUI timer. The
+// on-screen keyboard owns keyboard focus, but it only consumes its note keys (keyStateChanged
+// returns false for anything else), so F-key transitions bubble up here. Event-driven means a
+// short tap is never missed while the timer is busy repainting during play; edge detection on the
+// physical key state keeps it immune to auto-repeat. Single press = load; double press = assign.
+bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
+{
+    if (presetBank == nullptr) return false;
+    const juce::uint32 now = juce::Time::getMillisecondCounter();
+    constexpr juce::uint32 kDoublePressMs = 500;   // two presses within this window = "double press"
+    for (int i = 0; i < 12; ++i)
+    {
+        const bool phys = juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::F1Key + i);
+        if (phys && ! fKeyDown[i])                 // press edge
+        {
+            fKeyDown[i] = true;
+            if (now - fKeyLastPressMs[i] <= kDoublePressMs)
+            {
+                fKeyLastPressMs[i] = 0;            // consume, so a third press starts fresh
+                assignPresetSlot (i);             // second quick press => assign dialog
+            }
+            else
+            {
+                fKeyLastPressMs[i] = now;
+                if (presetBank->isAssigned (i))   // first press => load (empty slot: nothing)
+                    triggerPresetSlot (i);
             }
         }
+        else if (! phys && fKeyDown[i])            // release edge
+        {
+            fKeyDown[i] = false;
+        }
     }
+    return false;   // observe only; let the event propagate normally
 }
 
 // A loaded-and-untouched preset shows its name; once any parameter changes
@@ -747,9 +759,14 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     }
 
     loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
-    processor.markPresetClean();   // current state now matches the loaded file
     setPresetName(f.getFileNameWithoutExtension());
-    if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3)
+    if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3);
+                                                       // this can still adjust enable params
+                                                       // (enforceHiddenDisabled forces hidden
+                                                       // modules off — e.g. the now-hidden-by-
+                                                       // default COMPRESSOR).
+    processor.markPresetClean();   // snapshot the SETTLED state AFTER layout enforcement, so a
+                                   // freshly loaded preset reads as clean (not "Current State").
 
     if (res.migrated)
     {
@@ -799,9 +816,27 @@ void SynthyEditor::assignPresetSlot(int slot)
     {
         auto f = fc.getResult();
         if (f == juce::File{}) return;
-        presetSlots[(size_t) slot] = f.getFileNameWithoutExtension();
+        const auto name = f.getFileNameWithoutExtension();
+
+        // No duplicate assignments: the same preset must not sit on two keys. If it is already
+        // on another slot, reject (keep everything as-is) and say where it lives.
+        for (int other = 0; other < (int) presetSlots.size(); ++other)
+            if (other != slot && presetSlots[(size_t) other] == name)
+            {
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::InfoIcon,
+                    currentLang == "DE" ? "Bereits belegt" : "Already assigned",
+                    (currentLang == "DE"
+                        ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c liegt bereits auf F" + juce::String(other + 1)
+                              + ".\nBitte diese Taste zuerst neu belegen."
+                        : "\"" + name + "\" is already on F" + juce::String(other + 1)
+                              + ".\nReassign that key first."));
+                return;
+            }
+
+        presetSlots[(size_t) slot] = name;
         PresetIO::savePresetBanks(presetSlots);
-        if (presetBank) presetBank->setAssignment(slot, presetSlots[(size_t) slot]);
+        if (presetBank) presetBank->setAssignment(slot, name);
     });
 }
 
@@ -1129,6 +1164,15 @@ void SynthyEditor::buildRack()
         presetBank = panel;
         rackOwned.add(panel);
         presetSlots = PresetIO::loadPresetBanks();
+        // Defensive: enforce uniqueness in case the file ever holds duplicates (hand-edited / older).
+        // Keep the first occurrence, clear later ones; self-heal the file if anything changed.
+        bool deduped = false;
+        for (int a = 0; a < (int) presetSlots.size(); ++a)
+            if (presetSlots[(size_t) a].isNotEmpty())
+                for (int b = a + 1; b < (int) presetSlots.size(); ++b)
+                    if (presetSlots[(size_t) b] == presetSlots[(size_t) a])
+                    { presetSlots[(size_t) b].clear(); deduped = true; }
+        if (deduped) PresetIO::savePresetBanks(presetSlots);
         panel->setAllAssignments(presetSlots);
         panel->onLoadSlot   = [this](int i) { triggerPresetSlot(i); };
         panel->onAssignSlot = [this](int i) { assignPresetSlot(i); };
