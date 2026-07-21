@@ -184,6 +184,11 @@ namespace Parameters
         // module carries a working enabler for a future use. Append-only, default true.
         constexpr const char* keyboardOn = "keyboardOn";
 
+        // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
+        // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
+        // so only this enabler is an APVTS param. Append-only, default true.
+        constexpr const char* presetBankOn = "presetBankOn";
+
         // Modulation matrix (Story 8.1 / Epic 8). N routing slots, each {Source, Target,
         // Amount}, plus a master enable. Append-only, indexed helpers (mirror oscFreq(i)).
         inline juce::String modSlotSource(int n) { return "modSlot" + juce::String(n) + "Source"; }

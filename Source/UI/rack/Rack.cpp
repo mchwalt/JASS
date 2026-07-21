@@ -260,11 +260,12 @@ namespace rack
         const auto zone = desc.defaultZone;                 // AD-10: zone declared on descriptor
         const auto id   = desc.id;
         const bool vis  = desc.defaultVisible;              // factory visibility (Story 4.3)
+        const bool alignR = desc.alignRight;                // per-module H-alignment within the zone
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
-        placed.push_back ({ id, f, spec.cols, spec.units });
+        placed.push_back ({ id, f, spec.cols, spec.units, alignR });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
         // default layout reproduces today's insertion-order packing. Factory visibility from
@@ -272,8 +273,8 @@ namespace rack
         int pos = 0;
         for (const auto& e : layoutModel)
             if (e.zone == zone) ++pos;
-        layoutModel.push_back ({ id, zone, pos, vis });
-        defaultLayout.push_back ({ id, zone, pos, vis });   // stock layout (for reset + isDefault)
+        layoutModel.push_back ({ id, zone, pos, vis, alignR });
+        defaultLayout.push_back ({ id, zone, pos, vis, alignR });   // stock layout (for reset + isDefault)
     }
 
     const Rack::Placed* Rack::placedById (const juce::String& id) const
@@ -315,6 +316,17 @@ namespace rack
         if (! changed) return;
         driveEnable (id, visible);
         relayout();
+        writeLayoutToState();
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::setModuleAlignRight (const juce::String& id, bool alignRight)
+    {
+        bool changed = false;
+        for (auto& e : layoutModel)
+            if (e.id == id && e.alignRight != alignRight) { e.alignRight = alignRight; changed = true; }
+        if (! changed) return;
+        relayout();                 // UI-only: no enable coupling (unlike setModuleVisible)
         writeLayoutToState();
         if (onLayoutChanged) onLayoutChanged();
     }
@@ -363,6 +375,7 @@ namespace rack
             o->setProperty ("zone", zoneName (e.zone));
             o->setProperty ("pos",  e.position);
             o->setProperty ("vis",  e.visible);
+            o->setProperty ("alignR", e.alignRight);
             arr.add (juce::var (o));
         }
         return arr;
@@ -382,9 +395,10 @@ namespace rack
                 for (auto& e : layoutModel)
                     if (e.id == id)
                     {
-                        e.zone     = zoneFromName (item.getProperty ("zone", {}).toString());
-                        e.position = (int)  item.getProperty ("pos", e.position);
-                        e.visible  = (bool) item.getProperty ("vis", e.visible);
+                        e.zone       = zoneFromName (item.getProperty ("zone", {}).toString());
+                        e.position   = (int)  item.getProperty ("pos", e.position);
+                        e.visible    = (bool) item.getProperty ("vis", e.visible);
+                        e.alignRight = (bool) item.getProperty ("alignR", e.alignRight);
                         break;
                     }
             }
@@ -401,7 +415,8 @@ namespace rack
             for (const auto& d : defaultLayout)
                 if (d.id == e.id)
                 {
-                    if (d.zone != e.zone || d.position != e.position || e.visible != d.visible) return false;
+                    if (d.zone != e.zone || d.position != e.position || e.visible != d.visible
+                        || e.alignRight != d.alignRight) return false;
                     matched = true; break;
                 }
             if (! matched) return false;
@@ -438,7 +453,16 @@ namespace rack
             relayout();
             if (onLayoutChanged) onLayoutChanged();
         }
-        enforceHiddenDisabled();   // never leave a hidden module audible
+        // BEFORE enforcing the hidden⇒silent invariant: reveal any module the preset left enabled
+        // but that the layout hides (e.g. a preset using the default-hidden COMPRESSOR). Otherwise
+        // enforceHiddenDisabled would silence it and the user would never see it was in the patch.
+        if (revealEnabledModules())
+        {
+            relayout();
+            writeLayoutToState();
+            if (onLayoutChanged) onLayoutChanged();
+        }
+        enforceHiddenDisabled();   // any STILL-hidden module ⇒ silent (invariant)
     }
 
     void Rack::enforceHiddenDisabled()
@@ -446,6 +470,21 @@ namespace rack
         for (const auto& e : layoutModel)
             if (! e.visible)
                 driveEnable (e.id, false);   // hidden ⇒ silent (invariant)
+    }
+
+    bool Rack::revealEnabledModules()
+    {
+        bool changed = false;
+        for (auto& e : layoutModel)
+            if (! e.visible)
+                if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
+                {
+                    const auto pid = p->frame->enableParamId();
+                    if (pid.isNotEmpty())
+                        if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() > 0.5f)
+                        { e.visible = true; changed = true; }   // enabled ⇒ show (leave the enable as-is)
+                }
+        return changed;
     }
 
     void Rack::setZoneVisible (Zone zone, bool visible)
@@ -489,7 +528,7 @@ namespace rack
             juce::String title = e->id;
             if (const auto* p = placedById (e->id); p != nullptr && p->frame != nullptr)
                 title = p->frame->moduleTitle();
-            out.push_back ({ e->id, title, e->visible });
+            out.push_back ({ e->id, title, e->visible, e->alignRight });
         }
         return out;
     }
@@ -604,7 +643,7 @@ namespace rack
                 return true;
             };
 
-            struct Placement { ModuleFrame* frame; int fc, fr, fcols, funits; };
+            struct Placement { ModuleFrame* frame; int fc, fr, fcols, funits; bool alignRight; };
             std::vector<Placement> zonePlaced;
             int maxRowUsed = -1, maxColUsed = -1;
 
@@ -618,6 +657,12 @@ namespace rack
             std::stable_sort (entries.begin(), entries.end(),
                               [] (const RackLayoutEntry* a, const RackLayoutEntry* b)
                               { return a->position < b->position; });
+            // Within the zone, pack LEFT-aligned modules before RIGHT-aligned ones (stable, so
+            // position order is preserved inside each group). This guarantees a left-aligned
+            // module (PRESETS) claims the leftmost columns regardless of where the right-aligned
+            // ones (STEREO/MASTER) sit in the position order. No-op for zones with no right group.
+            std::stable_partition (entries.begin(), entries.end(),
+                                   [] (const RackLayoutEntry* e) { return ! e->alignRight; });
 
             for (const auto* e : entries)
             {
@@ -638,7 +683,7 @@ namespace rack
                         occ[(size_t) rr][(size_t) cc] = 1;
 
                 if (apply)
-                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits });
+                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits, e->alignRight });
 
                 maxRowUsed = juce::jmax (maxRowUsed, fr + funits - 1);
                 maxColUsed = juce::jmax (maxColUsed, fc + fcols - 1);
@@ -646,13 +691,30 @@ namespace rack
 
             if (apply)
             {
-                // The MASTER BUS zone hugs the RIGHT edge (it visually balances the zone
-                // title on the left); every other zone packs flush left. A uniform column
-                // shift right-aligns the whole block (exact for the single-row master bus).
-                const bool alignRight = (zone == Zone::MasterBus);
-                const int colShift = (alignRight && maxColUsed >= 0) ? (cols - 1 - maxColUsed) : 0;
+                // Per-module horizontal alignment (AD-10 follow-up): right-aligned modules are
+                // shifted, as one block, to hug the right edge; left-aligned modules keep their
+                // flush-left column. The MASTER BUS uses this to keep PRESETS on the left and
+                // STEREO/MASTER/COMPRESSOR on the right (balancing the zone title). Zones with no
+                // right-aligned module get shift 0 everywhere = the old flush-left packing.
+                // Computed PER ROW (a zone can be multi-row): each row's right-aligned block is
+                // shifted so its rightmost column lands on the last grid column. Exact for the
+                // single-row master bus and correct for right-aligned modules in wider zones.
+                std::vector<int> rightMaxCol ((size_t) juce::jmax (0, maxRowUsed + 1), -1);
+                for (const auto& t : zonePlaced)
+                    if (t.alignRight)
+                        for (int rr = t.fr; rr < t.fr + t.funits && rr < (int) rightMaxCol.size(); ++rr)
+                            rightMaxCol[(size_t) rr] = juce::jmax (rightMaxCol[(size_t) rr], t.fc + t.fcols - 1);
+
                 for (const auto& t : zonePlaced)
                 {
+                    int colShift = 0;
+                    if (t.alignRight)
+                    {
+                        int rmax = -1;   // tightest right col over the rows this frame occupies
+                        for (int rr = t.fr; rr < t.fr + t.funits && rr < (int) rightMaxCol.size(); ++rr)
+                            rmax = juce::jmax (rmax, rightMaxCol[(size_t) rr]);
+                        if (rmax >= 0) colShift = cols - 1 - rmax;
+                    }
                     const int px = gridLeft + (t.fc + colShift) * (wc + kGutter);
                     const int py = zoneTopY + t.fr * (kHu + kGutter);
                     const int pw = t.fcols * wc + (t.fcols - 1) * kGutter;

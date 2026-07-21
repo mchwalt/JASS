@@ -10,6 +10,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "master"; m.title = "MASTER"; m.persistObject = "Master"; m.enableParamId = "masterOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::MasterBus; m.size = rack::SizeClass::W3H1;
+        m.alignRight = true;   // MASTER BUS: hug the right edge (PRESETS holds the left)
         m.params = {
             { "masterOn",  "On",     "",      ParamSpec::Kind::Bool,  {}, 1.0f },   // default ON
             { "masterVol", "Volume", "VOL",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),   0.5f },

@@ -157,6 +157,13 @@ namespace rack
         // a reset ↺ even if it has no resettable params, and doReset() calls this after writing
         // any param defaults. Used by the VISUALIZATION modules (Story 6.1 follow-up).
         std::function<void()> onReset;
+
+        // Horizontal alignment WITHIN the zone row. false (default) => the module packs flush
+        // left; true => it is shifted (as a block with the other right-aligned modules) to hug
+        // the right edge. Used by the MASTER BUS: PRESETS stays left, STEREO/MASTER/COMPRESSOR
+        // hug the right (balancing the zone title). Zones with no right-aligned module pack fully
+        // left exactly as before.
+        bool alignRight = false;
     };
 
     // --- Size-class table (AD-2) ------------------------------------------

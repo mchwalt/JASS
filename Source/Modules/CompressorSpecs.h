@@ -10,6 +10,8 @@ namespace Modules
         ModuleSpec m;
         m.id = "compressor"; m.title = "COMPRESSOR"; m.persistObject = "Compressor"; m.enableParamId = "compOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::MasterBus; m.size = rack::SizeClass::W8H1;
+        m.defaultVisible = false;   // hidden by default (show via MODULES menu) — keeps the MASTER BUS row compact
+        m.alignRight = true;        // MASTER BUS: hug the right edge (PRESETS holds the left)
         m.params = {
             { "compOn",        "Enabled",   "",       ParamSpec::Kind::Bool },
             { "compThreshold", "Threshold", "THRESH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-60.0f, 0.0f, 0.1f),        -18.0f },
