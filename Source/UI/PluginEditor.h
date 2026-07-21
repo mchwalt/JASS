@@ -3,6 +3,7 @@
 #include "../PluginProcessor.h"
 #include "WaveformDisplay.h"
 #include "SpectrumDisplay.h"
+#include "PresetBankPanel.h"          // PRESETS quick-access bank (F1..F12)
 #include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
 #include "rack/Rack.h"
 #include "HelpPanel.h"                // movable per-module help panel (Story 6.1)
@@ -144,6 +145,21 @@ private:
     juce::String shownLabel;                     // last text pushed to the label (change-detect)
     void setPresetName(const juce::String& name);
     void updatePresetLabel();                    // composes "Preset: X" / "Current State"
+    void loadPresetFile(const juce::File& f);    // shared LOAD path (LOAD button + bank F-keys)
+
+    // Preset quick-access bank (F1..F12) — a MASTER BUS module. The 12 slot assignments are a
+    // GLOBAL app setting (PresetIO::PresetBanks.json), not per-preset.
+    PresetBankPanel* presetBank = nullptr;             // owned by rackOwned; typed handle for the F-keys
+    std::array<juce::String, 12> presetSlots;          // slot -> preset name (mirrors the panel + the file)
+    void triggerPresetSlot(int slot);                  // load the preset assigned to a slot (no-op if empty)
+    void assignPresetSlot(int slot);                   // open the assign dialog for a slot
+    void clearPresetBank();                            // wipe all F1..F12 assignments (RESET button)
+    // F1..F12 polling (focus-robust: the on-screen keyboard owns keyboard focus, so a KeyListener
+    // wouldn't see these). Edge-detected in timerCallback while JASS is the foreground process:
+    // a key-down on a filled slot loads at once; holding >= 2 s opens the assign dialog.
+    bool          fKeyDown[12]       { };
+    juce::uint32  fKeyDownMs[12]     { };
+    bool          fKeyMenuOpened[12] { };
 
     // On-screen keyboard (auto-play drone is handled automatically by the processor)
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)

@@ -260,11 +260,12 @@ namespace rack
         const auto zone = desc.defaultZone;                 // AD-10: zone declared on descriptor
         const auto id   = desc.id;
         const bool vis  = desc.defaultVisible;              // factory visibility (Story 4.3)
+        const bool alignR = desc.alignRight;                // per-module H-alignment within the zone
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
-        placed.push_back ({ id, f, spec.cols, spec.units });
+        placed.push_back ({ id, f, spec.cols, spec.units, alignR });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
         // default layout reproduces today's insertion-order packing. Factory visibility from
@@ -604,7 +605,7 @@ namespace rack
                 return true;
             };
 
-            struct Placement { ModuleFrame* frame; int fc, fr, fcols, funits; };
+            struct Placement { ModuleFrame* frame; int fc, fr, fcols, funits; bool alignRight; };
             std::vector<Placement> zonePlaced;
             int maxRowUsed = -1, maxColUsed = -1;
 
@@ -618,6 +619,14 @@ namespace rack
             std::stable_sort (entries.begin(), entries.end(),
                               [] (const RackLayoutEntry* a, const RackLayoutEntry* b)
                               { return a->position < b->position; });
+            // Within the zone, pack LEFT-aligned modules before RIGHT-aligned ones (stable, so
+            // position order is preserved inside each group). This guarantees a left-aligned
+            // module (PRESETS) claims the leftmost columns regardless of where the right-aligned
+            // ones (STEREO/MASTER) sit in the position order. No-op for zones with no right group.
+            std::stable_partition (entries.begin(), entries.end(),
+                                   [this] (const RackLayoutEntry* e)
+                                   { const auto* p = placedById (e->id);
+                                     return p == nullptr || ! p->alignRight; });
 
             for (const auto* e : entries)
             {
@@ -638,7 +647,7 @@ namespace rack
                         occ[(size_t) rr][(size_t) cc] = 1;
 
                 if (apply)
-                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits });
+                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits, pl->alignRight });
 
                 maxRowUsed = juce::jmax (maxRowUsed, fr + funits - 1);
                 maxColUsed = juce::jmax (maxColUsed, fc + fcols - 1);
@@ -646,13 +655,22 @@ namespace rack
 
             if (apply)
             {
-                // The MASTER BUS zone hugs the RIGHT edge (it visually balances the zone
-                // title on the left); every other zone packs flush left. A uniform column
-                // shift right-aligns the whole block (exact for the single-row master bus).
-                const bool alignRight = (zone == Zone::MasterBus);
-                const int colShift = (alignRight && maxColUsed >= 0) ? (cols - 1 - maxColUsed) : 0;
+                // Per-module horizontal alignment (AD-10 follow-up): right-aligned modules are
+                // shifted, as one block, to hug the right edge; left-aligned modules keep their
+                // flush-left column. The MASTER BUS uses this to keep PRESETS on the left and
+                // STEREO/MASTER/COMPRESSOR on the right (balancing the zone title). Zones with no
+                // right-aligned module get shift 0 everywhere = the old flush-left packing.
+                // Exact for the single-row master bus; the shift is derived from the right group's
+                // own rightmost column so the block lands flush against the last grid column.
+                int rightMaxCol = -1;
+                for (const auto& t : zonePlaced)
+                    if (t.alignRight)
+                        rightMaxCol = juce::jmax (rightMaxCol, t.fc + t.fcols - 1);
+                const int rightShift = (rightMaxCol >= 0) ? (cols - 1 - rightMaxCol) : 0;
+
                 for (const auto& t : zonePlaced)
                 {
+                    const int colShift = t.alignRight ? rightShift : 0;
                     const int px = gridLeft + (t.fc + colShift) * (wc + kGutter);
                     const int py = zoneTopY + t.fr * (kHu + kGutter);
                     const int pw = t.fcols * wc + (t.fcols - 1) * kGutter;
