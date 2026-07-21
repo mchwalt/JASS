@@ -80,11 +80,17 @@ namespace
                 else
                 {
                     drawBox (g, box, row.visible ? 1 : 0, juce::Colours::white);
+                    // Right cluster (carved right→left): drag hint, then the R and L align tags.
+                    auto drag = rb.removeFromRight (18);
+                    auto rBox = rb.removeFromRight (18);
+                    auto lBox = rb.removeFromRight (18);
                     g.setColour (juce::Colours::white.withAlpha (row.visible ? 0.9f : 0.4f));
                     g.setFont (juce::FontOptions (13.0f));
                     g.drawText (row.title, rb.reduced (12, 0), juce::Justification::centredLeft);
+                    drawAlignTag (g, lBox, "L", ! row.alignRight);   // left-aligned (default)
+                    drawAlignTag (g, rBox, "R",   row.alignRight);   // right-aligned
                     g.setColour (juce::Colours::white.withAlpha (0.22f));
-                    g.drawText ("::", rb.removeFromRight (18), juce::Justification::centred);   // drag hint
+                    g.drawText ("::", drag, juce::Justification::centred);   // drag hint
                 }
                 g.setColour (juce::Colours::black.withAlpha (0.30f));
                 g.drawHorizontalLine (i * kRowH, 0.0f, (float) getWidth());
@@ -118,6 +124,14 @@ namespace
                 repaint();
                 return;
             }
+            if (! row.header)   // L / R alignment tags on the right of a module row
+            {
+                const int w = getWidth();
+                if (e.x >= w - 36 && e.x < w - 18)        // R tag
+                { row.alignRight = true;  rack.setModuleAlignRight (row.id, true);  repaint(); return; }
+                if (e.x >= w - 54 && e.x < w - 36)        // L tag
+                { row.alignRight = false; rack.setModuleAlignRight (row.id, false); repaint(); return; }
+            }
             if (! row.header) dragIndex = i;   // only module rows are draggable
         }
 
@@ -146,7 +160,7 @@ namespace
         }
 
     private:
-        struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; };
+        struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; bool alignRight; };
 
         // --- drag-to-reorder hint toast -------------------------------------------------
         // Any mouse activity resets the rest timer and re-arms the toast (so it can show again
@@ -208,6 +222,17 @@ namespace
                               juce::Justification::centredLeft, 2);
         }
 
+        // A small L / R alignment tag: filled/blue when active, faint outline when not.
+        static void drawAlignTag (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& t, bool active)
+        {
+            auto b = area.withSizeKeepingCentre (16, 16).toFloat();
+            if (active) { g.setColour (juce::Colour (0xff4aa3ff)); g.fillRoundedRectangle (b, 3.0f); }
+            else        { g.setColour (juce::Colours::white.withAlpha (0.20f)); g.drawRoundedRectangle (b, 3.0f, 1.0f); }
+            g.setColour (active ? juce::Colours::white : juce::Colours::white.withAlpha (0.55f));
+            g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+            g.drawText (t, area, juce::Justification::centred);
+        }
+
         // state: 0 = empty, 1 = full, 2 = partial (mixed — a thin dash)
         static void drawBox (juce::Graphics& g, juce::Rectangle<int> area, int state, juce::Colour c)
         {
@@ -229,9 +254,9 @@ namespace
             rows.clear();
             for (auto z : rack.zones())
             {
-                rows.push_back ({ true, z, {}, {}, true });
+                rows.push_back ({ true, z, {}, {}, true, false });
                 for (const auto& m : rack.modulesInZone (z))
-                    rows.push_back ({ false, z, m.id, m.title, m.visible });
+                    rows.push_back ({ false, z, m.id, m.title, m.visible, m.alignRight });
             }
         }
 
@@ -264,7 +289,7 @@ namespace
         bool          hoverConsumed = false;
         bool          mouseInside  = false;
 
-        static constexpr int kW = 260, kRowH = 26, kBtnH = 30;
+        static constexpr int kW = 300, kRowH = 26, kBtnH = 30;   // +40 vs. before for the L/R align tags
         static constexpr juce::uint32 kRestMs = 3000;   // rest time before the hint appears
         static constexpr juce::uint32 kFadeMs =  300;   // fade in / out duration
         static constexpr juce::uint32 kHoldMs = 4300;   // fully-visible hold (=> ~4.9 s total)
