@@ -55,6 +55,12 @@ _Epic 8 — Modulation Matrix (added 2026-07-14):_
 FR26: Modulation is routed through a **matrix of `{source, target, amount}` slots** instead of a single hard-wired source→target. Multiple slots may target the same destination; their bipolar amounts **sum** and are applied **once** around the captured base value, reusing the existing per-target application curves/clamps. Source vocabulary v1: LFO 1, Envelope (ADSR), Velocity. Target vocabulary v1 = the seven currently-modulatable destinations (Pitch, Amplitude, Filter Cutoff, Filter Resonance, WT Position, Formant Vowel, Wavefold Drive). Both vocabularies are append-only (LFO 2–4, Macros, Voice-Random, Evolution, Pan, FM-Amount… are later stories). The change replaces the single-target if/else apply in `SynthVoice` and the single-target mod-ring system; it is the enabler for macros, per-voice random, an evolution module, and additional LFOs. Second sanctioned DSP change; kept surgical (engine + slots + the MOD MATRIX module + ring generalization). Default (no active slots) is audibly identical to before.
 FR27: The matrix persists **append-only, interop-safe**: N fixed slots as appended APVTS params (`modSlot{n}Source/Target/Amount` + `modMatrixOn`), serialized to `.synthy` as appended fields and to DAW state via APVTS; **no `kFormatVersion` bump**, no existing ID renamed/reordered. A preset lacking them (older build or the C# app) loads with all slots Off / matrix on (missing ⇒ default), so old presets and C# are unaffected. The existing LFO's built-in TARGET/DEPTH continue to work as an implicit routing on the same engine (zero-regression back-compat).
 
+_Epic 10 — Spatialization (added 2026-07-21):_
+FR28: Each generator (OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE) can be placed in the **stereo field** via a per-generator **PAN** control (−1 L … +1 R, default 0 = center). The per-voice mix becomes 2-channel: each generator's contribution is equal-power panned into L/R before the effect chain. Append-only param (`<gen>Pan`, missing ⇒ center), no `FormatVersion` bump; the default (all centered) is audibly identical to today's mono sum folded to both channels. This is the mono→N-channel voice refactor and a future mod-matrix target (Pan). Ships to every device/host.
+FR29: **Optional** SURROUND output (Quad 4.0 / 4.1 / 5.1) the user selects when the device/host grants a multi-channel output bus. Each generator can be assigned a discrete channel — **FL, FR, FM (front-center ≈ mono), RL, RR**, plus SUB/LFE for `.1` — generalizing FR28's pan. When the surround bus is unavailable the engine renders internally and **down-mixes to stereo** so no preset is silent. First change to the output bus (`isBusesLayoutSupported` + alternative `BusesProperties`). Opt-in, gated on a surround-capable test setup.
+FR31: **Binaural (Kunstkopf)** output mode — the per-generator spatial/surround placement rendered to **stereo via HRTF** so it is heard in 3D on ordinary headphones (no surround hardware). JUCE has no built-in HRTF renderer/data; implementable via `juce::dsp::Convolution` with embedded HRIRs (dataset, licence check) or a lighter **parametric** binaural (ITD + ILD + head-shadow low-pass, no assets — recommended first). Consumes the same position data as FR28/FR29; it is a rendering mode, always available (stereo out).
+FR30: Spatialization is a switchable **Output Mode** — **Mono / Pseudo-Stereo / Stereo-Pan / Surround / Binaural** — NOT a replacement. The existing **mono sum and pseudo-stereo** paths are preserved verbatim as the first two modes (default = Pseudo-Stereo, exactly as today); PAN and channel assignment only take effect in Stereo-Pan / Surround. The mode is an append-only persisted param (missing ⇒ Pseudo-Stereo), so every existing preset is byte-identical. Hard user constraint: the current solution must not be broken.
+
 ### NonFunctional Requirements
 
 NFR1: Maintainability — no module defines its own `resized()` geometry; layout is data-driven via the framework. Primary engineering win and a success gate.
@@ -125,6 +131,10 @@ FR24: Epic 7 — tighten module size classes to fit control counts (UI polish)
 FR25: Epic 7 — finer 24-column grid + column-based size-class names (enabler)
 FR26: Epic 8 — accumulating modulation matrix (source→target slots, sum-per-target) replacing the single-target apply
 FR27: Epic 8 — append-only, interop-safe matrix persistence + implicit legacy-LFO routing (zero regression)
+FR28: Epic 10 — per-generator stereo PAN (mono→2-channel voice mix; ships to everyone)
+FR29: Epic 10 — optional surround output (4.0/4.1/5.1) + per-generator channel assignment (FL/FR/FM/RL/RR + LFE), stereo down-mix fallback
+FR30: Epic 10 — switchable Output Mode (Mono / Pseudo-Stereo / Stereo-Pan / Surround / Binaural); legacy mono + pseudo-stereo preserved as default (not broken)
+FR31: Epic 10 — binaural (Kunstkopf/HRTF) rendering to stereo headphones (dsp::Convolution + HRIR, or parametric ITD/ILD)
 
 ## Epic List
 
@@ -162,6 +172,10 @@ Tighten module sizing so each module's footprint matches its real control count.
 ### Epic 8: Modulation Matrix
 Give JASS the "movement layer" (`docs/JASS_Ideen_Merge.md` §2): replace the single hard-wired source→target modulation with an **accumulating matrix** of `{source, target, amount}` slots. 8.1 builds the engine (decouple source from target, sum per target, apply once) + the source set (LFO 1, Envelope, Velocity) + the seven existing targets + N generic slots + the MOD MATRIX module + generalized mod rings + append-only persistence — with the existing LFO folded in as an implicit routing so the default is byte-identical. This is the **foundation** that makes the rest of the roadmap cheap: later stories add LFO 2–4, Macros + A/B morph, a Per-Voice-Random/Drift source, an Evolution module, and new targets (Pan, FM-Amount, FX mixes) — each just "another source/target on the matrix". Answers the 2026-07-14 LFO question (multiply vs. extend): neither — sources become value providers on the matrix. Second sanctioned DSP change, kept surgical.
 **FRs covered:** FR26, FR27.
+
+### Epic 10: Spatialization (per-generator panning & optional surround)
+Move JASS out of mono: place each generator in space. **10.1** (ships to everyone) gives every generator a **PAN** control and refactors the per-voice mix from mono to 2-channel (equal-power L/R) — the foundation, with the default byte-identical to today. **10.2** (opt-in) adds a user-selectable **surround** output (4.0/4.1/5.1) with per-generator **channel assignment** (FL/FR/FM-center/RL/RR + LFE) when the device/host grants a multi-channel bus, and an automatic stereo down-mix otherwise. First change to the output bus and the largest sanctioned DSP change so far → staged, stereo-first, surround gated on a surround-capable test setup. **Hard invariant:** it is a switchable **Output Mode** (Mono / Pseudo-Stereo / Stereo-Pan / Surround / **Binaural**) — the existing mono + pseudo-stereo paths are preserved verbatim (default), never broken. **10.3** adds **Binaural/Kunstkopf** (HRTF) rendering so the spatial mix is heard in 3D on ordinary headphones — likely the most practical way to deliver "surround" to typical users. Full design, feasibility ("does it make sense"), and open questions in `_bmad-output/implementation-artifacts/10-1-spatialization-panning-surround.md`.
+**FRs covered:** FR28, FR29, FR30, FR31.
 
 ### Epic 9: Release Readiness & Versioning
 Make JASS shippable and trackable. **9.1** prepared the repository and pushed it to a **private** GitHub repo (README, LICENSE/GPLv3, `.gitattributes`, docs cleanup, screenshots). **9.2** adds a **CalVer** app version (shown in the UI/About), a `CHANGELOG.md` (Keep a Changelog style) coupled to GitHub releases/tags, and hardens **preset-format versioning & migration** (robust conversion with backups, fix silent conversion failures, surface the preset's format version) — motivated by the 2026-07 conversion mishaps (Helikopter/whuwhu) that showed migration needs to be dependable. The app CalVer and the preset `FormatVersion` integer remain independent contracts.
@@ -545,3 +559,62 @@ so that JASS gains the movement layer and macros / per-voice random / evolution 
 **And** it is RT-safe (no alloc/lock in the callback; fixed-size per-voice slot array), builds clean, and is verified by ear per the story's test list.
 
 _See `_bmad-output/implementation-artifacts/8-1-modulation-matrix.md` for full dev context, the exact apply-block to replace, and the Open Design Questions (LFO-target keep-vs-fold, slot count, source set, RANDOM handling, module-vs-panel presentation)._
+
+## Epic 10: Spatialization (per-generator panning & optional surround)
+
+Take JASS from mono to spatial. Built stereo-first so it benefits every device/host, with true
+surround as an opt-in that degrades gracefully to a stereo down-mix. First change to the output bus;
+largest sanctioned DSP change so far → surgical and staged, default byte-identical. Verification =
+clean build + running app + ear (no unit tests).
+
+### Story 10.1: Per-generator stereo PAN (mono → 2-channel voice mix)
+
+As a JASS sound designer,
+I want a PAN control on each generator,
+so that I can place OSC 1–3, SUB, NOISE, KARPLUS and WAVETABLE across the stereo field.
+
+**Acceptance Criteria:**
+
+**Given** the mono voice engine (generators summed to one mono sample in `SynthVoice`)
+**When** each generator gains an append-only `<gen>Pan` param (default 0 = center) with a PAN knob in
+its module body
+**Then** each generator's contribution is equal-power panned into a 2-channel per-voice mix before the
+effect chain, the default (all centered) is audibly identical to today's mono sum folded to L/R
+(regression gate), pans round-trip append-only (missing ⇒ center, no `FormatVersion` bump), it is
+RT-safe, and PAN is exposed for a later mod-matrix Pan target.
+
+### Story 10.2: Optional surround output + per-generator channel assignment
+
+As a JASS sound designer with a surround setup,
+I want to output 4.0/4.1/5.1 and assign each generator to a channel (FL/FR/FM/RL/RR + LFE),
+so that I can build a discrete multi-speaker patch.
+
+**Acceptance Criteria:**
+
+**Given** Story 10.1's channel-agnostic voice mix
+**When** the user selects a surround mode AND the device/host grants a ≥4/≥6-channel output bus
+**Then** each generator can be routed to a discrete channel (FL, FR, FM/center, RL, RR; SUB/LFE for
+`.1`); when the surround bus is unavailable the engine down-mixes to stereo (no silent preset); the
+effect-chain placement decision (dry-pan + shared FX bus, per §5 of the brief) is implemented;
+stereo stays the default and stereo users see no regression; persistence stays append-only.
+
+### Story 10.3: Binaural (Kunstkopf / HRTF) rendering over headphones
+
+As a JASS player on ordinary headphones,
+I want a binaural output mode,
+so that the spatial/surround placement is heard in 3D without any surround hardware.
+
+**Acceptance Criteria:**
+
+**Given** the per-generator position data (Story 10.1/10.2) and a stereo output
+**When** the user selects the Binaural output mode
+**Then** each generator's position is rendered to binaural stereo — via a parametric model
+(ITD fractional-delay + ILD + head-shadow low-pass; no external assets, recommended first) or HRIR
+convolution (`juce::dsp::Convolution` with an embedded HRIR set; licence-checked) — giving a 3D image
+on headphones; it is RT-safe; and it is one selectable mode among the others (default unchanged).
+
+_See `_bmad-output/implementation-artifacts/10-1-spatialization-panning-surround.md` for the full
+feasibility assessment ("does it make sense"), the staged Phase A/B plan, dev anchors (mono sum in
+`SynthVoice`, stereo bus in `PluginProcessor.cpp:7-8`, pseudo-stereo `DSP/StereoWidth.h`), and the
+Open Design Questions (stereo-first vs surround-first, discrete-channel vs continuous panner, where
+the effects run, fate of the pseudo-stereo STEREO module, LFE handling, standalone device config)._

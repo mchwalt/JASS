@@ -21,3 +21,5 @@ Es öffnet sich ein Datei-Dialog im Presets-Ordner — wähle das `.jass`-Preset
 - Beim **Überfahren** mit der Maus scrollt der volle Name durch, falls er nicht ganz passt.
 
 Die Belegungen sind eine **globale** Einstellung (in `PresetBanks.json` gespeichert), unabhängig vom geladenen Preset — sie bleiben beim Preset-Wechsel erhalten und überstehen einen Neustart.
+
+Ab Werk sind **F1–F4 mit den vier Demo-Presets vorbelegt** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). Der **RESET**-Knopf in der Kopfzeile stellt diese Werksbelegung wieder her.
