@@ -54,6 +54,10 @@ namespace rack
         // the editor (onLayoutChanged) so it can auto-fit the window height (AD-12). Hiding
         // is UI-only: the frame keeps its APVTS attachments + audio (it is just not placed).
         void setModuleVisible (const juce::String& id, bool visible);
+
+        // Set a module's horizontal alignment within its zone row (MODULES panel L/R toggle).
+        // Persisted like visibility/order; RESET restores the descriptor default.
+        void setModuleAlignRight (const juce::String& id, bool alignRight);
         // Bulk convenience: set the visibility of ALL modules in a zone (one re-pack). There is
         // NO separate zone-visibility state — a zone's header is derived (shown iff the zone has
         // ≥1 visible module), so an emptied zone auto-disappears (AD-10 single source of truth).
@@ -80,7 +84,7 @@ namespace rack
         static constexpr const char* kLayoutStateProp = "rackLayout";
 
         // Menu data: the modules of a zone in placement order, with title + visibility.
-        struct ModuleInfo { juce::String id, title; bool visible; };
+        struct ModuleInfo { juce::String id, title; bool visible; bool alignRight; };
         std::vector<ModuleInfo> modulesInZone (Zone zone) const;
         const std::vector<Zone>& zones() const noexcept { return zoneOrder; }
         static juce::String zoneName (Zone zone);
@@ -156,8 +160,9 @@ namespace rack
         {
             juce::String id;
             Zone zone {};
-            int  position = 0;   // within-zone order
+            int  position = 0;      // within-zone order
             bool visible  = true;
+            bool alignRight = false;// pack right within the zone row (user-editable; persisted)
         };
         struct ZoneBand { juce::String text; ModuleType tag; juce::Rectangle<int> bounds;
                           int lineStartX = 0; int lineEndX = 0; };

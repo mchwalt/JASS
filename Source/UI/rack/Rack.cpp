@@ -273,8 +273,8 @@ namespace rack
         int pos = 0;
         for (const auto& e : layoutModel)
             if (e.zone == zone) ++pos;
-        layoutModel.push_back ({ id, zone, pos, vis });
-        defaultLayout.push_back ({ id, zone, pos, vis });   // stock layout (for reset + isDefault)
+        layoutModel.push_back ({ id, zone, pos, vis, alignR });
+        defaultLayout.push_back ({ id, zone, pos, vis, alignR });   // stock layout (for reset + isDefault)
     }
 
     const Rack::Placed* Rack::placedById (const juce::String& id) const
@@ -316,6 +316,17 @@ namespace rack
         if (! changed) return;
         driveEnable (id, visible);
         relayout();
+        writeLayoutToState();
+        if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::setModuleAlignRight (const juce::String& id, bool alignRight)
+    {
+        bool changed = false;
+        for (auto& e : layoutModel)
+            if (e.id == id && e.alignRight != alignRight) { e.alignRight = alignRight; changed = true; }
+        if (! changed) return;
+        relayout();                 // UI-only: no enable coupling (unlike setModuleVisible)
         writeLayoutToState();
         if (onLayoutChanged) onLayoutChanged();
     }
@@ -364,6 +375,7 @@ namespace rack
             o->setProperty ("zone", zoneName (e.zone));
             o->setProperty ("pos",  e.position);
             o->setProperty ("vis",  e.visible);
+            o->setProperty ("alignR", e.alignRight);
             arr.add (juce::var (o));
         }
         return arr;
@@ -383,9 +395,10 @@ namespace rack
                 for (auto& e : layoutModel)
                     if (e.id == id)
                     {
-                        e.zone     = zoneFromName (item.getProperty ("zone", {}).toString());
-                        e.position = (int)  item.getProperty ("pos", e.position);
-                        e.visible  = (bool) item.getProperty ("vis", e.visible);
+                        e.zone       = zoneFromName (item.getProperty ("zone", {}).toString());
+                        e.position   = (int)  item.getProperty ("pos", e.position);
+                        e.visible    = (bool) item.getProperty ("vis", e.visible);
+                        e.alignRight = (bool) item.getProperty ("alignR", e.alignRight);
                         break;
                     }
             }
@@ -402,7 +415,8 @@ namespace rack
             for (const auto& d : defaultLayout)
                 if (d.id == e.id)
                 {
-                    if (d.zone != e.zone || d.position != e.position || e.visible != d.visible) return false;
+                    if (d.zone != e.zone || d.position != e.position || e.visible != d.visible
+                        || e.alignRight != d.alignRight) return false;
                     matched = true; break;
                 }
             if (! matched) return false;
@@ -490,7 +504,7 @@ namespace rack
             juce::String title = e->id;
             if (const auto* p = placedById (e->id); p != nullptr && p->frame != nullptr)
                 title = p->frame->moduleTitle();
-            out.push_back ({ e->id, title, e->visible });
+            out.push_back ({ e->id, title, e->visible, e->alignRight });
         }
         return out;
     }
@@ -624,9 +638,7 @@ namespace rack
             // module (PRESETS) claims the leftmost columns regardless of where the right-aligned
             // ones (STEREO/MASTER) sit in the position order. No-op for zones with no right group.
             std::stable_partition (entries.begin(), entries.end(),
-                                   [this] (const RackLayoutEntry* e)
-                                   { const auto* p = placedById (e->id);
-                                     return p == nullptr || ! p->alignRight; });
+                                   [] (const RackLayoutEntry* e) { return ! e->alignRight; });
 
             for (const auto* e : entries)
             {
@@ -647,7 +659,7 @@ namespace rack
                         occ[(size_t) rr][(size_t) cc] = 1;
 
                 if (apply)
-                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits, pl->alignRight });
+                    zonePlaced.push_back ({ pl->frame, fc, fr, fcols, funits, e->alignRight });
 
                 maxRowUsed = juce::jmax (maxRowUsed, fr + funits - 1);
                 maxColUsed = juce::jmax (maxColUsed, fc + fcols - 1);
@@ -660,17 +672,25 @@ namespace rack
                 // flush-left column. The MASTER BUS uses this to keep PRESETS on the left and
                 // STEREO/MASTER/COMPRESSOR on the right (balancing the zone title). Zones with no
                 // right-aligned module get shift 0 everywhere = the old flush-left packing.
-                // Exact for the single-row master bus; the shift is derived from the right group's
-                // own rightmost column so the block lands flush against the last grid column.
-                int rightMaxCol = -1;
+                // Computed PER ROW (a zone can be multi-row): each row's right-aligned block is
+                // shifted so its rightmost column lands on the last grid column. Exact for the
+                // single-row master bus and correct for right-aligned modules in wider zones.
+                std::vector<int> rightMaxCol ((size_t) juce::jmax (0, maxRowUsed + 1), -1);
                 for (const auto& t : zonePlaced)
                     if (t.alignRight)
-                        rightMaxCol = juce::jmax (rightMaxCol, t.fc + t.fcols - 1);
-                const int rightShift = (rightMaxCol >= 0) ? (cols - 1 - rightMaxCol) : 0;
+                        for (int rr = t.fr; rr < t.fr + t.funits && rr < (int) rightMaxCol.size(); ++rr)
+                            rightMaxCol[(size_t) rr] = juce::jmax (rightMaxCol[(size_t) rr], t.fc + t.fcols - 1);
 
                 for (const auto& t : zonePlaced)
                 {
-                    const int colShift = t.alignRight ? rightShift : 0;
+                    int colShift = 0;
+                    if (t.alignRight)
+                    {
+                        int rmax = -1;   // tightest right col over the rows this frame occupies
+                        for (int rr = t.fr; rr < t.fr + t.funits && rr < (int) rightMaxCol.size(); ++rr)
+                            rmax = juce::jmax (rmax, rightMaxCol[(size_t) rr]);
+                        if (rmax >= 0) colShift = cols - 1 - rmax;
+                    }
                     const int px = gridLeft + (t.fc + colShift) * (wc + kGutter);
                     const int py = zoneTopY + t.fr * (kHu + kGutter);
                     const int pw = t.fcols * wc + (t.fcols - 1) * kGutter;
