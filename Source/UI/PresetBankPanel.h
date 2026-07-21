@@ -105,6 +105,10 @@ public:
 
     void mouseDown(const juce::MouseEvent& e) override
     {
+        // Left click only. JUCE delivers mouseDown for BOTH clicks of a double-click, so gate on
+        // getNumberOfClicks()==1: a double-click loads once (first click) then assigns via
+        // mouseDoubleClick — matching the keyboard path (one load, not two).
+        if (! e.mods.isLeftButtonDown() || e.getNumberOfClicks() != 1) return;
         const int i = slotAt(e.getPosition());
         if (i >= 0 && isAssigned(i) && onLoadSlot)
             onLoadSlot(i);
@@ -112,6 +116,7 @@ public:
 
     void mouseDoubleClick(const juce::MouseEvent& e) override
     {
+        if (! e.mods.isLeftButtonDown()) return;
         const int i = slotAt(e.getPosition());
         if (i >= 0 && onAssignSlot)
             onAssignSlot(i);

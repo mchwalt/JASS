@@ -418,7 +418,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(resetBtn);
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
-                                clearPresetBank();                          // also wipe the F1..F12 assignments
+                                resetPresetBank();                          // restore the demo presets on F1..F4
                                 if (rackBody) rackBody->resetLayout(); };   // factory: sound Init + default layout/visibility
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
@@ -672,24 +672,23 @@ void SynthyEditor::timerCallback()
     // preset name and to live edits flipping the "modified" flag.
     updatePresetLabel();
 
-    // Safety net for the F1..F12 bank: keyStateChanged catches PRESSES reliably, but a RELEASE
-    // event can occasionally be missed (consumed / not delivered while playing), leaving fKeyDown
-    // stuck true so the next press is ignored until another key event re-syncs it. Re-arm here from
-    // the real key state — timing-uncritical (only clears a stale "down"), so a busy timer is fine.
-    if (presetBank != nullptr)
-        for (int i = 0; i < 12; ++i)
-            if (fKeyDown[i] && ! juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::F1Key + i))
-                fKeyDown[i] = false;
+    // F1..F12 bank fallback: poll the physical key state here too, but ONLY while JASS is the
+    // foreground app (so F-keys never fire for another program). This covers the cases keyStateChanged
+    // can't — a MODULES call-out or a combo dropdown owns focus (its own top-level window), so key
+    // events don't reach the editor. Shared fKeyDown[] state means no double-trigger with keyStateChanged;
+    // it also re-arms a stuck "down" if a release event was ever missed.
+    if (juce::Process::isForegroundProcess())
+        pollPresetHotkeys();
 }
 
-// Preset bank F1..F12 — driven by real key events (keyStateChanged), NOT the GUI timer. The
-// on-screen keyboard owns keyboard focus, but it only consumes its note keys (keyStateChanged
-// returns false for anything else), so F-key transitions bubble up here. Event-driven means a
-// short tap is never missed while the timer is busy repainting during play; edge detection on the
-// physical key state keeps it immune to auto-repeat. Single press = load; double press = assign.
-bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
+// Preset bank F1..F12 edge detection — shared by keyStateChanged (low-latency, fires the instant a
+// key transitions while WE hold focus) and the GUI timer (fallback: catches presses when key events
+// don't reach us — e.g. a MODULES call-out or a combo dropdown has focus). Both share fKeyDown[], so
+// whichever observes the edge first handles it once; the other sees no new edge (no double-trigger).
+// Edge detection on the physical key state is immune to auto-repeat. Single press = load; double = assign.
+void SynthyEditor::pollPresetHotkeys()
 {
-    if (presetBank == nullptr) return false;
+    if (presetBank == nullptr) return;
     const juce::uint32 now = juce::Time::getMillisecondCounter();
     constexpr juce::uint32 kDoublePressMs = 500;   // two presses within this window = "double press"
     for (int i = 0; i < 12; ++i)
@@ -715,7 +714,12 @@ bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
             fKeyDown[i] = false;
         }
     }
-    return false;   // observe only; let the event propagate normally
+}
+
+bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
+{
+    pollPresetHotkeys();   // we have focus here → lowest-latency path
+    return false;          // observe only; let the event propagate normally
 }
 
 // A loaded-and-untouched preset shows its name; once any parameter changes
@@ -794,11 +798,11 @@ void SynthyEditor::triggerPresetSlot(int slot)
     loadPresetFile(PresetIO::presetsFolder().getChildFile(name + ".jass"));
 }
 
-// Preset quick-access bank: clear every F1..F12 assignment (invoked by RESET). Wipes the display,
-// the in-memory slots, and the persisted global file.
-void SynthyEditor::clearPresetBank()
+// Preset quick-access bank: restore the FACTORY default (the four demo presets on F1..F4, rest
+// empty), invoked by RESET. Updates the display, the in-memory slots, and the persisted global file.
+void SynthyEditor::resetPresetBank()
 {
-    presetSlots.fill(juce::String());
+    presetSlots = PresetIO::defaultPresetBank();
     PresetIO::savePresetBanks(presetSlots);
     if (presetBank) presetBank->setAllAssignments(presetSlots);
 }
@@ -817,6 +821,20 @@ void SynthyEditor::assignPresetSlot(int slot)
         auto f = fc.getResult();
         if (f == juce::File{}) return;
         const auto name = f.getFileNameWithoutExtension();
+
+        // The bank stores only the NAME and re-resolves it inside the Presets folder at trigger time.
+        // So a file picked from ELSEWHERE would silently resolve to a different (or missing) preset —
+        // reject anything outside the Presets folder and say why.
+        if (f.getParentDirectory() != PresetIO::presetsFolder())
+        {
+            juce::NativeMessageBox::showMessageBoxAsync(
+                juce::MessageBoxIconType::InfoIcon,
+                currentLang == "DE" ? "Ordner" : "Folder",
+                (currentLang == "DE"
+                    ? juce::String("Bitte ein Preset aus dem Presets-Ordner w\xc3\xa4hlen.")
+                    : juce::String("Please choose a preset from the Presets folder.")));
+            return;
+        }
 
         // No duplicate assignments: the same preset must not sit on two keys. If it is already
         // on another slot, reject (keep everything as-is) and say where it lives.
