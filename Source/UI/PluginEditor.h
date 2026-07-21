@@ -3,6 +3,7 @@
 #include "../PluginProcessor.h"
 #include "WaveformDisplay.h"
 #include "SpectrumDisplay.h"
+#include "PresetBankPanel.h"          // PRESETS quick-access bank (F1..F12)
 #include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
 #include "rack/Rack.h"
 #include "HelpPanel.h"                // movable per-module help panel (Story 6.1)
@@ -127,6 +128,7 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
+    bool keyStateChanged(bool isKeyDown) override;   // F1..F12 preset-bank triggers (event-driven)
     void mouseDown(const juce::MouseEvent& e) override;   // right-click title => 3D-anim toggle menu
     void timerCallback() override;
 
@@ -144,6 +146,20 @@ private:
     juce::String shownLabel;                     // last text pushed to the label (change-detect)
     void setPresetName(const juce::String& name);
     void updatePresetLabel();                    // composes "Preset: X" / "Current State"
+    void loadPresetFile(const juce::File& f);    // shared LOAD path (LOAD button + bank F-keys)
+
+    // Preset quick-access bank (F1..F12) — a MASTER BUS module. The 12 slot assignments are a
+    // GLOBAL app setting (PresetIO::PresetBanks.json), not per-preset.
+    PresetBankPanel* presetBank = nullptr;             // owned by rackOwned; typed handle for the F-keys
+    std::array<juce::String, 12> presetSlots;          // slot -> preset name (mirrors the panel + the file)
+    void triggerPresetSlot(int slot);                  // load the preset assigned to a slot (no-op if empty)
+    void assignPresetSlot(int slot);                   // open the assign dialog for a slot
+    void clearPresetBank();                            // wipe all F1..F12 assignments (RESET button)
+    // F1..F12 (preset bank) — handled in keyStateChanged (event-driven): the on-screen keyboard
+    // consumes only its note keys, so F-key transitions bubble up. A single press on a filled slot
+    // loads; a DOUBLE press opens the assign dialog.
+    bool          fKeyDown[12]       { };   // last observed physical state (press/release edge detect)
+    juce::uint32  fKeyLastPressMs[12]{ };   // time of the previous press (double-press detection)
 
     // On-screen keyboard (auto-play drone is handled automatically by the processor)
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)

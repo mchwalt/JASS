@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <array>
 #include "Parameters.h"
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
@@ -93,6 +94,39 @@ namespace PresetIO
     inline juce::File liveStateFile()
     {
         return jassFolder().getChildFile("LiveState.jass");
+    }
+
+    // ---- Preset quick-access bank (F1..F12) --------------------------------------------------
+    // The 12 slot->preset assignments are a GLOBAL app setting (like the UI language / 3D-title
+    // toggle), NOT part of any preset — so they live in their own tiny JSON file, independent of
+    // the loaded patch. Each slot stores a preset NAME (without extension); the loader resolves it
+    // to presetsFolder()/<name>.jass at trigger time (robust if the folder moves). Empty = unassigned.
+    inline constexpr int kNumPresetSlots = 12;
+
+    // %AppData%\Roaming\JASS\PresetBanks.json
+    inline juce::File presetBanksFile()
+    {
+        return jassFolder().getChildFile("PresetBanks.json");
+    }
+
+    // Load the 12 slot assignments; missing file / short array => empty slots.
+    inline std::array<juce::String, kNumPresetSlots> loadPresetBanks()
+    {
+        std::array<juce::String, kNumPresetSlots> slots;   // default-constructed (empty strings)
+        auto v = juce::JSON::parse(presetBanksFile().loadFileAsString());
+        if (auto* arr = v.getArray())
+            for (int i = 0; i < juce::jmin((int) arr->size(), kNumPresetSlots); ++i)
+                slots[(size_t) i] = (*arr)[i].toString();
+        return slots;
+    }
+
+    // Persist the 12 slot assignments as a JSON array of strings.
+    inline void savePresetBanks(const std::array<juce::String, kNumPresetSlots>& slots)
+    {
+        juce::Array<juce::var> arr;
+        for (const auto& s : slots)
+            arr.add(s);
+        presetBanksFile().replaceWithText(juce::JSON::toString(juce::var(arr), false));
     }
 
     // First-run seeding: write each SHIPPED demo preset (embedded from DemoPresets/*.jass via

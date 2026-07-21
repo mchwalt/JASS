@@ -54,6 +54,10 @@ namespace rack
         // the editor (onLayoutChanged) so it can auto-fit the window height (AD-12). Hiding
         // is UI-only: the frame keeps its APVTS attachments + audio (it is just not placed).
         void setModuleVisible (const juce::String& id, bool visible);
+
+        // Set a module's horizontal alignment within its zone row (MODULES panel L/R toggle).
+        // Persisted like visibility/order; RESET restores the descriptor default.
+        void setModuleAlignRight (const juce::String& id, bool alignRight);
         // Bulk convenience: set the visibility of ALL modules in a zone (one re-pack). There is
         // NO separate zone-visibility state — a zone's header is derived (shown iff the zone has
         // ≥1 visible module), so an emptied zone auto-disappears (AD-10 single source of truth).
@@ -80,7 +84,7 @@ namespace rack
         static constexpr const char* kLayoutStateProp = "rackLayout";
 
         // Menu data: the modules of a zone in placement order, with title + visibility.
-        struct ModuleInfo { juce::String id, title; bool visible; };
+        struct ModuleInfo { juce::String id, title; bool visible; bool alignRight; };
         std::vector<ModuleInfo> modulesInZone (Zone zone) const;
         const std::vector<Zone>& zones() const noexcept { return zoneOrder; }
         static juce::String zoneName (Zone zone);
@@ -146,6 +150,7 @@ namespace rack
             juce::String id;           // stable module id (RackLayout key, AD-10)
             ModuleFrame* frame = nullptr;
             int cols = 1, units = 1;   // footprint from the size class
+            bool alignRight = false;   // pack right within the zone row (from the descriptor)
         };
         // AD-10: the ordered, editable placement model — the single source of truth for
         // WHERE each module sits. `layout()` walks this (per zone, by position, visible only)
@@ -155,8 +160,9 @@ namespace rack
         {
             juce::String id;
             Zone zone {};
-            int  position = 0;   // within-zone order
+            int  position = 0;      // within-zone order
             bool visible  = true;
+            bool alignRight = false;// pack right within the zone row (user-editable; persisted)
         };
         struct ZoneBand { juce::String text; ModuleType tag; juce::Rectangle<int> bounds;
                           int lineStartX = 0; int lineEndX = 0; };
@@ -205,6 +211,12 @@ namespace rack
         // defaults to disabled). Writes the module's enableParam if it has one. NOT used on
         // load/reset (there visibility + enables are restored independently).
         void driveEnable (const juce::String& id, bool show);
+
+        // Preset-load reconciliation (complement of enforceHiddenDisabled): a module the loaded
+        // preset left ENABLED must be visible — you can't play through a module you can't see, and
+        // a preset that uses a default-hidden module (e.g. COMPRESSOR) has no custom layout. Marks
+        // such modules visible WITHOUT touching their enable. Returns true if anything changed.
+        bool revealEnabledModules();
 
         // --- Layout persistence helpers (Story 4.3) ---
         juce::var layoutToVar() const;                  // model → JSON var (array of {id,zone,pos,vis})

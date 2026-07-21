@@ -80,11 +80,17 @@ namespace
                 else
                 {
                     drawBox (g, box, row.visible ? 1 : 0, juce::Colours::white);
+                    // Right cluster (carved right→left): drag hint, then the R and L align tags.
+                    auto drag = rb.removeFromRight (18);
+                    auto rBox = rb.removeFromRight (18);
+                    auto lBox = rb.removeFromRight (18);
                     g.setColour (juce::Colours::white.withAlpha (row.visible ? 0.9f : 0.4f));
                     g.setFont (juce::FontOptions (13.0f));
                     g.drawText (row.title, rb.reduced (12, 0), juce::Justification::centredLeft);
+                    drawAlignTag (g, lBox, "L", ! row.alignRight);   // left-aligned (default)
+                    drawAlignTag (g, rBox, "R",   row.alignRight);   // right-aligned
                     g.setColour (juce::Colours::white.withAlpha (0.22f));
-                    g.drawText ("::", rb.removeFromRight (18), juce::Justification::centred);   // drag hint
+                    g.drawText ("::", drag, juce::Justification::centred);   // drag hint
                 }
                 g.setColour (juce::Colours::black.withAlpha (0.30f));
                 g.drawHorizontalLine (i * kRowH, 0.0f, (float) getWidth());
@@ -118,6 +124,14 @@ namespace
                 repaint();
                 return;
             }
+            if (! row.header)   // L / R alignment tags on the right of a module row
+            {
+                const int w = getWidth();
+                if (e.x >= w - 36 && e.x < w - 18)        // R tag
+                { row.alignRight = true;  rack.setModuleAlignRight (row.id, true);  repaint(); return; }
+                if (e.x >= w - 54 && e.x < w - 36)        // L tag
+                { row.alignRight = false; rack.setModuleAlignRight (row.id, false); repaint(); return; }
+            }
             if (! row.header) dragIndex = i;   // only module rows are draggable
         }
 
@@ -146,7 +160,7 @@ namespace
         }
 
     private:
-        struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; };
+        struct Row { bool header; rack::Rack::Zone zone; juce::String id, title; bool visible; bool alignRight; };
 
         // --- drag-to-reorder hint toast -------------------------------------------------
         // Any mouse activity resets the rest timer and re-arms the toast (so it can show again
@@ -208,6 +222,17 @@ namespace
                               juce::Justification::centredLeft, 2);
         }
 
+        // A small L / R alignment tag: filled/blue when active, faint outline when not.
+        static void drawAlignTag (juce::Graphics& g, juce::Rectangle<int> area, const juce::String& t, bool active)
+        {
+            auto b = area.withSizeKeepingCentre (16, 16).toFloat();
+            if (active) { g.setColour (juce::Colour (0xff4aa3ff)); g.fillRoundedRectangle (b, 3.0f); }
+            else        { g.setColour (juce::Colours::white.withAlpha (0.20f)); g.drawRoundedRectangle (b, 3.0f, 1.0f); }
+            g.setColour (active ? juce::Colours::white : juce::Colours::white.withAlpha (0.55f));
+            g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+            g.drawText (t, area, juce::Justification::centred);
+        }
+
         // state: 0 = empty, 1 = full, 2 = partial (mixed — a thin dash)
         static void drawBox (juce::Graphics& g, juce::Rectangle<int> area, int state, juce::Colour c)
         {
@@ -229,9 +254,9 @@ namespace
             rows.clear();
             for (auto z : rack.zones())
             {
-                rows.push_back ({ true, z, {}, {}, true });
+                rows.push_back ({ true, z, {}, {}, true, false });
                 for (const auto& m : rack.modulesInZone (z))
-                    rows.push_back ({ false, z, m.id, m.title, m.visible });
+                    rows.push_back ({ false, z, m.id, m.title, m.visible, m.alignRight });
             }
         }
 
@@ -264,7 +289,7 @@ namespace
         bool          hoverConsumed = false;
         bool          mouseInside  = false;
 
-        static constexpr int kW = 260, kRowH = 26, kBtnH = 30;
+        static constexpr int kW = 300, kRowH = 26, kBtnH = 30;   // +40 vs. before for the L/R align tags
         static constexpr juce::uint32 kRestMs = 3000;   // rest time before the hint appears
         static constexpr juce::uint32 kFadeMs =  300;   // fade in / out duration
         static constexpr juce::uint32 kHoldMs = 4300;   // fully-visible hold (=> ~4.9 s total)
@@ -381,42 +406,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         {
             auto f = fc.getResult();
             if (f == juce::File{}) return;
-
-            const auto res = PresetIO::loadFromFile(processor.getAPVTS(), f);
-            if (! res.ok)
-            {
-                // Fail LOUDLY — a corrupt / non-JASS file must not silently reset to defaults.
-                juce::NativeMessageBox::showMessageBoxAsync(
-                    juce::MessageBoxIconType::WarningIcon,
-                    currentLang == "DE" ? "Laden fehlgeschlagen" : "Load failed",
-                    (currentLang == "DE"
-                        ? "\xe2\x80\x9e" + f.getFileNameWithoutExtension()
-                              + "\xe2\x80\x9c konnte nicht geladen werden (defekt oder kein JASS-Preset)."
-                        : "\"" + f.getFileNameWithoutExtension()
-                              + "\" could not be loaded (corrupt or not a JASS preset)."));
-                return;
-            }
-
-            loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
-            processor.markPresetClean();   // current state now matches the loaded file
-            setPresetName(f.getFileNameWithoutExtension());
-            if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3)
-
-            if (res.migrated)
-            {
-                // Surface the conversion (AC6): the user should know a format upgrade happened
-                // and that the original was backed up.
-                juce::NativeMessageBox::showMessageBoxAsync(
-                    juce::MessageBoxIconType::InfoIcon,
-                    currentLang == "DE" ? "Preset migriert" : "Preset migrated",
-                    (currentLang == "DE"
-                        ? "Von Format v" + juce::String(res.fileVersion) + " auf v"
-                              + juce::String(PresetIO::kFormatVersion)
-                              + " aktualisiert.\nEine Sicherung liegt im Ordner PresetsBackup."
-                        : "Upgraded from format v" + juce::String(res.fileVersion) + " to v"
-                              + juce::String(PresetIO::kFormatVersion)
-                              + ".\nA backup was saved to the PresetsBackup folder."));
-            }
+            loadPresetFile(f);
         });
     };
 
@@ -428,6 +418,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     addAndMakeVisible(resetBtn);
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
+                                clearPresetBank();                          // also wipe the F1..F12 assignments
                                 if (rackBody) rackBody->resetLayout(); };   // factory: sound Init + default layout/visibility
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
@@ -680,6 +671,51 @@ void SynthyEditor::timerCallback()
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.
     updatePresetLabel();
+
+    // Safety net for the F1..F12 bank: keyStateChanged catches PRESSES reliably, but a RELEASE
+    // event can occasionally be missed (consumed / not delivered while playing), leaving fKeyDown
+    // stuck true so the next press is ignored until another key event re-syncs it. Re-arm here from
+    // the real key state — timing-uncritical (only clears a stale "down"), so a busy timer is fine.
+    if (presetBank != nullptr)
+        for (int i = 0; i < 12; ++i)
+            if (fKeyDown[i] && ! juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::F1Key + i))
+                fKeyDown[i] = false;
+}
+
+// Preset bank F1..F12 — driven by real key events (keyStateChanged), NOT the GUI timer. The
+// on-screen keyboard owns keyboard focus, but it only consumes its note keys (keyStateChanged
+// returns false for anything else), so F-key transitions bubble up here. Event-driven means a
+// short tap is never missed while the timer is busy repainting during play; edge detection on the
+// physical key state keeps it immune to auto-repeat. Single press = load; double press = assign.
+bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
+{
+    if (presetBank == nullptr) return false;
+    const juce::uint32 now = juce::Time::getMillisecondCounter();
+    constexpr juce::uint32 kDoublePressMs = 500;   // two presses within this window = "double press"
+    for (int i = 0; i < 12; ++i)
+    {
+        const bool phys = juce::KeyPress::isKeyCurrentlyDown (juce::KeyPress::F1Key + i);
+        if (phys && ! fKeyDown[i])                 // press edge
+        {
+            fKeyDown[i] = true;
+            if (now - fKeyLastPressMs[i] <= kDoublePressMs)
+            {
+                fKeyLastPressMs[i] = 0;            // consume, so a third press starts fresh
+                assignPresetSlot (i);             // second quick press => assign dialog
+            }
+            else
+            {
+                fKeyLastPressMs[i] = now;
+                if (presetBank->isAssigned (i))   // first press => load (empty slot: nothing)
+                    triggerPresetSlot (i);
+            }
+        }
+        else if (! phys && fKeyDown[i])            // release edge
+        {
+            fKeyDown[i] = false;
+        }
+    }
+    return false;   // observe only; let the event propagate normally
 }
 
 // A loaded-and-untouched preset shows its name; once any parameter changes
@@ -700,6 +736,108 @@ void SynthyEditor::setPresetName(const juce::String& name)
 {
     processor.setCurrentPresetName(name);   // keep the processor (LiveState) in sync
     updatePresetLabel();
+}
+
+// Shared LOAD path: used by the LOAD button and by the preset-bank F-keys. Loads a .jass file,
+// fails loudly on a bad file, keeps the header label in sync, reflects the loaded layout, and
+// surfaces a format migration. (Was inline in loadBtn.onClick; extracted for reuse.)
+void SynthyEditor::loadPresetFile(const juce::File& f)
+{
+    const auto res = PresetIO::loadFromFile(processor.getAPVTS(), f);
+    if (! res.ok)
+    {
+        // Fail LOUDLY — a corrupt / non-JASS / missing file must not silently reset to defaults.
+        juce::NativeMessageBox::showMessageBoxAsync(
+            juce::MessageBoxIconType::WarningIcon,
+            currentLang == "DE" ? "Laden fehlgeschlagen" : "Load failed",
+            (currentLang == "DE"
+                ? "\xe2\x80\x9e" + f.getFileNameWithoutExtension()
+                      + "\xe2\x80\x9c konnte nicht geladen werden (defekt oder kein JASS-Preset)."
+                : "\"" + f.getFileNameWithoutExtension()
+                      + "\" could not be loaded (corrupt or not a JASS preset)."));
+        return;
+    }
+
+    loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
+    setPresetName(f.getFileNameWithoutExtension());
+    if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3);
+                                                       // this can still adjust enable params
+                                                       // (enforceHiddenDisabled forces hidden
+                                                       // modules off — e.g. the now-hidden-by-
+                                                       // default COMPRESSOR).
+    processor.markPresetClean();   // snapshot the SETTLED state AFTER layout enforcement, so a
+                                   // freshly loaded preset reads as clean (not "Current State").
+
+    if (res.migrated)
+    {
+        // Surface the conversion (AC6): the user should know a format upgrade happened
+        // and that the original was backed up.
+        juce::NativeMessageBox::showMessageBoxAsync(
+            juce::MessageBoxIconType::InfoIcon,
+            currentLang == "DE" ? "Preset migriert" : "Preset migrated",
+            (currentLang == "DE"
+                ? "Von Format v" + juce::String(res.fileVersion) + " auf v"
+                      + juce::String(PresetIO::kFormatVersion)
+                      + " aktualisiert.\nEine Sicherung liegt im Ordner PresetsBackup."
+                : "Upgraded from format v" + juce::String(res.fileVersion) + " to v"
+                      + juce::String(PresetIO::kFormatVersion)
+                      + ".\nA backup was saved to the PresetsBackup folder."));
+    }
+}
+
+// Preset quick-access bank: load the preset assigned to a slot (F-key tap / single click).
+void SynthyEditor::triggerPresetSlot(int slot)
+{
+    if (slot < 0 || slot >= (int) presetSlots.size()) return;
+    const auto name = presetSlots[(size_t) slot];
+    if (name.isEmpty()) return;   // empty slot => nothing to load
+    loadPresetFile(PresetIO::presetsFolder().getChildFile(name + ".jass"));
+}
+
+// Preset quick-access bank: clear every F1..F12 assignment (invoked by RESET). Wipes the display,
+// the in-memory slots, and the persisted global file.
+void SynthyEditor::clearPresetBank()
+{
+    presetSlots.fill(juce::String());
+    PresetIO::savePresetBanks(presetSlots);
+    if (presetBank) presetBank->setAllAssignments(presetSlots);
+}
+
+// Preset quick-access bank: open the assign dialog for a slot (double-click / long-hold). The
+// chosen preset name is stored in the slot, persisted globally, and shown on the button.
+void SynthyEditor::assignPresetSlot(int slot)
+{
+    if (slot < 0 || slot >= (int) presetSlots.size()) return;
+    presetChooser = std::make_unique<juce::FileChooser>(
+        (currentLang == "DE" ? "Preset auf F" : "Assign preset to F") + juce::String(slot + 1),
+        PresetIO::presetsFolder(), "*.jass");
+    auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    presetChooser->launchAsync(chooserFlags, [this, slot](const juce::FileChooser& fc)
+    {
+        auto f = fc.getResult();
+        if (f == juce::File{}) return;
+        const auto name = f.getFileNameWithoutExtension();
+
+        // No duplicate assignments: the same preset must not sit on two keys. If it is already
+        // on another slot, reject (keep everything as-is) and say where it lives.
+        for (int other = 0; other < (int) presetSlots.size(); ++other)
+            if (other != slot && presetSlots[(size_t) other] == name)
+            {
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::InfoIcon,
+                    currentLang == "DE" ? "Bereits belegt" : "Already assigned",
+                    (currentLang == "DE"
+                        ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c liegt bereits auf F" + juce::String(other + 1)
+                              + ".\nBitte diese Taste zuerst neu belegen."
+                        : "\"" + name + "\" is already on F" + juce::String(other + 1)
+                              + ".\nReassign that key first."));
+                return;
+            }
+
+        presetSlots[(size_t) slot] = name;
+        PresetIO::savePresetBanks(presetSlots);
+        if (presetBank) presetBank->setAssignment(slot, name);
+    });
 }
 
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
@@ -1017,6 +1155,31 @@ void SynthyEditor::buildRack()
     // module" before we formalise FR14 / the XS size class via correct-course.
     // COMPRESSOR: master-bus glue (runs on the summed mix in processBlock). id "compressor".
     // MASTER BUS — spec-driven (Modules::*). See Source/Modules/*Specs.h.
+    // PRESETS quick-access bank (F1..F12): a custom panel the editor owns (like the scope/keyboard),
+    // injected as a Display. The 12 slot assignments are a GLOBAL app setting (PresetIO), not
+    // per-preset; they are loaded here and re-persisted whenever a slot is (re)assigned. Added
+    // FIRST so it is the left-most MASTER BUS module (it is left-aligned; the others hug the right).
+    {
+        auto* panel = new PresetBankPanel();
+        presetBank = panel;
+        rackOwned.add(panel);
+        presetSlots = PresetIO::loadPresetBanks();
+        // Defensive: enforce uniqueness in case the file ever holds duplicates (hand-edited / older).
+        // Keep the first occurrence, clear later ones; self-heal the file if anything changed.
+        bool deduped = false;
+        for (int a = 0; a < (int) presetSlots.size(); ++a)
+            if (presetSlots[(size_t) a].isNotEmpty())
+                for (int b = a + 1; b < (int) presetSlots.size(); ++b)
+                    if (presetSlots[(size_t) b] == presetSlots[(size_t) a])
+                    { presetSlots[(size_t) b].clear(); deduped = true; }
+        if (deduped) PresetIO::savePresetBanks(presetSlots);
+        panel->setAllAssignments(presetSlots);
+        panel->onLoadSlot   = [this](int i) { triggerPresetSlot(i); };
+        panel->onAssignSlot = [this](int i) { assignPresetSlot(i); };
+        add(Rack::Zone::MasterBus, SizeClass::W8H1, ModuleType::Processor, "PRESETS",
+            P::presetBankOn, { Display{ panel, 8 } }, [] {});
+    }
+
     rackBody->addModule(makeModuleDescriptor(Modules::compressor()));
     rackBody->addModule(makeModuleDescriptor(Modules::stereo()));
     rackBody->addModule(makeModuleDescriptor(Modules::master()));
