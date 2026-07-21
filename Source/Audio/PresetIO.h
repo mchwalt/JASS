@@ -109,9 +109,26 @@ namespace PresetIO
         return jassFolder().getChildFile("PresetBanks.json");
     }
 
-    // Load the 12 slot assignments; missing file / short array => empty slots.
+    // Factory-default bank: the four shipped demo presets pre-assigned to F1..F4 (rest empty).
+    // RESET restores this and first run seeds it. Names MUST match the DemoPresets/*.jass basenames
+    // (they are seeded into the Presets folder on first run by seedDemoPresets).
+    inline std::array<juce::String, kNumPresetSlots> defaultPresetBank()
+    {
+        std::array<juce::String, kNumPresetSlots> slots;   // default-constructed (empty strings)
+        slots[0] = "Matrix Demo";
+        slots[1] = "Matrix Demo 2";
+        slots[2] = "FX Motion";
+        slots[3] = "Helikopter";
+        return slots;
+    }
+
+    // Load the 12 slot assignments. Missing file => factory default (demos on F1..F4); an existing
+    // file is honoured as-is (a short array leaves the rest empty).
     inline std::array<juce::String, kNumPresetSlots> loadPresetBanks()
     {
+        if (! presetBanksFile().existsAsFile())
+            return defaultPresetBank();   // first run: pre-assign the demo presets
+
         std::array<juce::String, kNumPresetSlots> slots;   // default-constructed (empty strings)
         auto v = juce::JSON::parse(presetBanksFile().loadFileAsString());
         if (auto* arr = v.getArray())
