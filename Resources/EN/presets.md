@@ -10,7 +10,7 @@ Each slot maps to the matching function key on your keyboard.
 
 **Assign / change a slot**
 
-- **Hold** a function key for **2 seconds**, or
+- **Double-press** a function key (twice in quick succession), or
 - **Double-click** a button.
 
 A file dialog opens in your Presets folder — pick the `.jass` preset to put on that key.

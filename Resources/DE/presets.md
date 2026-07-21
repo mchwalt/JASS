@@ -10,7 +10,7 @@ Jeder Platz ist der gleichnamigen Funktionstaste auf deiner Tastatur zugeordnet.
 
 **Belegen / ändern**
 
-- Funktionstaste **2 Sekunden halten**, oder
+- Funktionstaste **zweimal schnell hintereinander drücken**, oder
 - Button **doppelklicken**.
 
 Es öffnet sich ein Datei-Dialog im Presets-Ordner — wähle das `.jass`-Preset für diese Taste.

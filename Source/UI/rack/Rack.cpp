@@ -453,7 +453,16 @@ namespace rack
             relayout();
             if (onLayoutChanged) onLayoutChanged();
         }
-        enforceHiddenDisabled();   // never leave a hidden module audible
+        // BEFORE enforcing the hidden⇒silent invariant: reveal any module the preset left enabled
+        // but that the layout hides (e.g. a preset using the default-hidden COMPRESSOR). Otherwise
+        // enforceHiddenDisabled would silence it and the user would never see it was in the patch.
+        if (revealEnabledModules())
+        {
+            relayout();
+            writeLayoutToState();
+            if (onLayoutChanged) onLayoutChanged();
+        }
+        enforceHiddenDisabled();   // any STILL-hidden module ⇒ silent (invariant)
     }
 
     void Rack::enforceHiddenDisabled()
@@ -461,6 +470,21 @@ namespace rack
         for (const auto& e : layoutModel)
             if (! e.visible)
                 driveEnable (e.id, false);   // hidden ⇒ silent (invariant)
+    }
+
+    bool Rack::revealEnabledModules()
+    {
+        bool changed = false;
+        for (auto& e : layoutModel)
+            if (! e.visible)
+                if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
+                {
+                    const auto pid = p->frame->enableParamId();
+                    if (pid.isNotEmpty())
+                        if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() > 0.5f)
+                        { e.visible = true; changed = true; }   // enabled ⇒ show (leave the enable as-is)
+                }
+        return changed;
     }
 
     void Rack::setZoneVisible (Zone zone, bool visible)

@@ -128,6 +128,7 @@ public:
     void paint(juce::Graphics&) override;
     void resized() override;
     bool keyPressed(const juce::KeyPress& key) override;
+    bool keyStateChanged(bool isKeyDown) override;   // F1..F12 preset-bank triggers (event-driven)
     void mouseDown(const juce::MouseEvent& e) override;   // right-click title => 3D-anim toggle menu
     void timerCallback() override;
 
@@ -154,12 +155,11 @@ private:
     void triggerPresetSlot(int slot);                  // load the preset assigned to a slot (no-op if empty)
     void assignPresetSlot(int slot);                   // open the assign dialog for a slot
     void clearPresetBank();                            // wipe all F1..F12 assignments (RESET button)
-    // F1..F12 polling (focus-robust: the on-screen keyboard owns keyboard focus, so a KeyListener
-    // wouldn't see these). Edge-detected in timerCallback while JASS is the foreground process:
-    // a key-down on a filled slot loads at once; holding >= 2 s opens the assign dialog.
-    bool          fKeyDown[12]       { };
-    juce::uint32  fKeyDownMs[12]     { };
-    bool          fKeyMenuOpened[12] { };
+    // F1..F12 (preset bank) — handled in keyStateChanged (event-driven): the on-screen keyboard
+    // consumes only its note keys, so F-key transitions bubble up. A single press on a filled slot
+    // loads; a DOUBLE press opens the assign dialog.
+    bool          fKeyDown[12]       { };   // last observed physical state (press/release edge detect)
+    juce::uint32  fKeyLastPressMs[12]{ };   // time of the previous press (double-press detection)
 
     // On-screen keyboard (auto-play drone is handled automatically by the processor)
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
