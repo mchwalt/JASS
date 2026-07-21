@@ -19,6 +19,7 @@ struct ModuleSpec
     rack::Zone       zone {};
     rack::SizeClass  size {};
     bool defaultVisible = true;
+    bool alignRight = false;     // pack right within the zone row (MASTER BUS: STEREO/MASTER/COMPRESSOR)
     std::vector<ParamSpec> params;
 
     // Optional hooks for the few non-pure modules (CROSS MOD, STRING, WAVETABLE, displays):
@@ -36,6 +37,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
     d.sizeClass = m.size; d.type = m.type; d.defaultZone = m.zone;
     d.defaultVisible = m.defaultVisible; d.id = m.id; d.helpId = m.helpId; d.title = m.title;
     d.enableParam = m.enableParamId;
+    d.alignRight = m.alignRight;
     d.enabledWhen = m.enabledWhen;
     d.onReset = m.onReset;
 

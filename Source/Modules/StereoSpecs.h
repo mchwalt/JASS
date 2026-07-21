@@ -9,6 +9,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "stereo"; m.title = "STEREO"; m.persistObject = "Stereo"; m.enableParamId = "stereoOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::MasterBus; m.size = rack::SizeClass::W3H1;
+        m.alignRight = true;   // MASTER BUS: hug the right edge (PRESETS holds the left)
         m.params = {
             { "stereoOn",    "Enabled", "",      ParamSpec::Kind::Bool, {}, 1.0f },   // default ON (factory: pseudo-stereo on)
             { "stereoWidth", "Width",   "WIDTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  0.5f },

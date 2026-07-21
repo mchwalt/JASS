@@ -146,6 +146,7 @@ namespace rack
             juce::String id;           // stable module id (RackLayout key, AD-10)
             ModuleFrame* frame = nullptr;
             int cols = 1, units = 1;   // footprint from the size class
+            bool alignRight = false;   // pack right within the zone row (from the descriptor)
         };
         // AD-10: the ordered, editable placement model — the single source of truth for
         // WHERE each module sits. `layout()` walks this (per zone, by position, visible only)

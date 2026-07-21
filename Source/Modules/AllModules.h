@@ -29,13 +29,14 @@
 #include "WavetableSpecs.h"
 #include "AdsrSpecs.h"
 #include "DisplaySpecs.h"
+#include "PresetBankSpecs.h"
 
 namespace Modules
 {
     inline std::vector<ModuleSpec> all()
     {
         return {
-            filter(), compressor(), stereo(), master(), sub(), noise(),
+            filter(), compressor(), stereo(), master(), presetBank(), sub(), noise(),
             formant(), distortion(), wavefold(), bitcrush(), phaser(), chorus(),
             delay(), reverb(), arpeggiator(), glide(), pitchEnv(),
             osc(1), osc(2), osc(3), crossmod(), lfo(1), lfo(2), lfo(3), lfo(4), modMatrix(),
