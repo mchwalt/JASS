@@ -154,7 +154,8 @@ private:
     std::array<juce::String, 12> presetSlots;          // slot -> preset name (mirrors the panel + the file)
     void triggerPresetSlot(int slot);                  // load the preset assigned to a slot (no-op if empty)
     void assignPresetSlot(int slot);                   // open the assign dialog for a slot
-    void clearPresetBank();                            // wipe all F1..F12 assignments (RESET button)
+    void resetPresetBank();                            // restore factory bank (demos on F1..F4) — RESET button
+    void pollPresetHotkeys();                          // F1..F12 edge detection (keyStateChanged + timer fallback)
     // F1..F12 (preset bank) — handled in keyStateChanged (event-driven): the on-screen keyboard
     // consumes only its note keys, so F-key transitions bubble up. A single press on a filled slot
     // loads; a DOUBLE press opens the assign dialog.

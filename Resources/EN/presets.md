@@ -21,3 +21,5 @@ A file dialog opens in your Presets folder — pick the `.jass` preset to put on
 - **Hover** a button and the full name scrolls across it if it is too long to fit.
 
 The assignments are a **global** setting (stored in `PresetBanks.json`), independent of the loaded preset — they stay put when you switch patches and survive a restart.
+
+Out of the box, **F1–F4 come pre-assigned with the four demo presets** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). The header **RESET** button restores this factory bank.
