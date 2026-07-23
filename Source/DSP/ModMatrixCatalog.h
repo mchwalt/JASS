@@ -49,6 +49,7 @@ namespace ModDest
         { "OSC 1",      "osc1On",        0, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
         { "OSC 2",      "osc2On",        1, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
         { "OSC 3",      "osc3On",        2, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
+        { "PHASER",     "phaserOn",     -1, { { "DEPTH",  LFOTarget::PhaserDepth }, { "FB", LFOTarget::PhaserFeedback }, { "MIX", LFOTarget::PhaserMix }, { "RATE", LFOTarget::PhaserRate } }, 4 },
         { "REVERB",     "reverbOn",     -1, { { "DAMP",   LFOTarget::ReverbDamp }, { "MIX", LFOTarget::ReverbMix }, { "ROOM", LFOTarget::ReverbRoom } }, 3 },
         { "SUB",        "subOn",        -1, { { "LEVEL",  LFOTarget::SubLevel } }, 1 },
         { "WAVEFOLD",   "wavefoldOn",   -1, { { "DRIVE",  LFOTarget::WavefolderDrive }, { "MIX", LFOTarget::WavefolderMix }, { "SYM", LFOTarget::WavefolderSym } }, 3 },

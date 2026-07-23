@@ -149,6 +149,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const double baseDelayFb      = delay.feedback;
     const double baseReverbRoom   = reverb.roomSize;
     const double baseReverbDamp   = reverb.damping;
+    const double basePhaserRate   = phaser.rate;
+    const double basePhaserDepth  = phaser.depth;
+    const double basePhaserFb     = phaser.feedback;
+    const double basePhaserMix    = phaser.mix;
 
     // Sub-oscillator octave multiplier (constant across the block).
     const double subMul = std::pow(2.0, subOctave);
@@ -217,27 +221,28 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // (LFOs are just sources now).
         modMatrixAccumulate(modSlots, modMatrixOn, srcVals, modOffset, oscOffset);
 
-        // Pitch: 2^offset octaves (offset 0 => ×1 = unchanged). Always applied — freqFactor
-        // multiplies the per-sample setFrequency that glide/pitch-env already require.
-        // freqFactor is the GLOBAL ("Alle OSC") FREQ routing; each oscillator additionally gets its
-        // OWN per-OSC FREQ offset (2^oscOffset.pitch[i]) so a routing to a single OSC moves only it.
-        const double freqFactor = std::pow(2.0, modOffset[(size_t) LFOTarget::Frequency]);
+        // Pitch: 2^offset octaves (offset 0 => ×1 = unchanged). The GLOBAL ("Alle OSC") FREQ routing
+        // and each oscillator's OWN per-OSC FREQ offset SUM in octave space; the total is CLAMPED to
+        // ±kMaxPitchOct so many stacked slots can't drive the pitch into absurd, aliased territory
+        // (every other FREQ-like target already clamps to its range). Small/single routings unaffected.
+        constexpr double kMaxPitchOct = 4.0;   // ±4 octaves ceiling on summed FREQ modulation
+        const double gPitch = modOffset[(size_t) LFOTarget::Frequency];   // global "Alle OSC" octaves
         // Pitch envelope: one-shot 1→0 sweep, applied as a pitch multiplier to all
         // pitched generators (osc/wavetable/sub; the plucked Karplus string is excluded).
         const double pitchEnvMul = pitchEnvOn
                                        ? std::pow(2.0, (pitchEnvAmount / 12.0) * pitchEnv.process())
                                        : 1.0;
-        // The GLOBAL freqFactor modulates EVERY pitched generator (osc + wavetable + sub), exactly
-        // like the pitch envelope — otherwise "Alle OSC" Pitch would be inaudible on wavetable-/sub-
-        // heavy patches. Wavetable/sub follow the global factor only (they are their own MOD modules).
+        // The GLOBAL octaves modulate EVERY pitched generator (osc + wavetable + sub); each oscillator
+        // adds its own per-OSC offset, the wavetable its own WT-Freq offset, both clamped after summing.
         for (int i = 0; i < 3; ++i)
-            oscillators[i].setFrequency(baseFrequencies[i] * ratio * freqFactor
-                                        * std::pow(2.0, oscOffset.pitch[i]) * pitchEnvMul);
-        // Wavetable frequency also takes its OWN pitch-like mod target (WT Freq), on top of the
-        // global "Alle OSC" freqFactor. modOffset is 0 when unrouted (2^0 = ×1), so this is neutral then.
-        wavetable.setFrequency(baseWtFreq * ratio * freqFactor
-                               * std::pow(2.0, modOffset[(size_t) LFOTarget::WavetableFreq]) * pitchEnvMul);
-        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul * freqFactor * pitchEnvMul);
+        {
+            const double oct = std::clamp(gPitch + oscOffset.pitch[i], -kMaxPitchOct, kMaxPitchOct);
+            oscillators[i].setFrequency(baseFrequencies[i] * ratio * std::pow(2.0, oct) * pitchEnvMul);
+        }
+        const double wtOct = std::clamp(gPitch + modOffset[(size_t) LFOTarget::WavetableFreq], -kMaxPitchOct, kMaxPitchOct);
+        wavetable.setFrequency(baseWtFreq * ratio * std::pow(2.0, wtOct) * pitchEnvMul);
+        subOsc.setFrequency(baseFrequencies[0] * ratio * subMul
+                            * std::pow(2.0, std::clamp(gPitch, -kMaxPitchOct, kMaxPitchOct)) * pitchEnvMul);
 
         // Apply each ACTIVE target's summed offset ONCE, reusing today's exact curve+clamp.
         if (tActive[(size_t) LFOTarget::FilterCutoff])
@@ -299,6 +304,14 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             reverb.roomSize = std::clamp(baseReverbRoom + modOffset[(size_t) LFOTarget::ReverbRoom] * 0.5, 0.0, 1.0);
         if (tActive[(size_t) LFOTarget::ReverbDamp])
             reverb.damping = std::clamp(baseReverbDamp + modOffset[(size_t) LFOTarget::ReverbDamp] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::PhaserRate])
+            phaser.rate = std::clamp(basePhaserRate + modOffset[(size_t) LFOTarget::PhaserRate] * 2.0, 0.05, 5.0);
+        if (tActive[(size_t) LFOTarget::PhaserDepth])
+            phaser.depth = std::clamp(basePhaserDepth + modOffset[(size_t) LFOTarget::PhaserDepth] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::PhaserFeedback])
+            phaser.feedback = std::clamp(basePhaserFb + modOffset[(size_t) LFOTarget::PhaserFeedback] * 0.4, 0.0, 0.95);
+        if (tActive[(size_t) LFOTarget::PhaserMix])
+            phaser.mix = std::clamp(basePhaserMix + modOffset[(size_t) LFOTarget::PhaserMix] * 0.5, 0.0, 1.0);
 
         // Detune: base + GLOBAL ("Alle OSC") offset + this OSC's OWN offset. Only re-applied when a
         // detune routing exists (else the base set by applyToVoice stands — no per-sample writes).
