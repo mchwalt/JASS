@@ -31,13 +31,14 @@ SynthyProcessor::SynthyProcessor()
     for (int i = 1; i <= 3; ++i)
         apvts.addParameterListener(Parameters::ID::oscOn(i), this);
 
-    // Convenience: auto-enable a modulation source module when a matrix slot starts routing it
-    // (source picked + DEST != Off) — otherwise a route silently does nothing because the source
-    // module (e.g. an LFO) is still bypassed. Listen on every slot's SRC + DEST selector.
+    // Convenience: auto-enable a matrix slot's SOURCE and TARGET modules when it starts routing
+    // (source picked + module != Off) — otherwise a route silently does nothing because the source
+    // (e.g. an LFO) or the target module is still bypassed. The enabled TARGET now depends on the
+    // MODULE selector (per-OSC → oscOn(N)), so listen on every slot's SRC + MOD selector.
     for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
     {
         apvts.addParameterListener(Parameters::ID::modSlotSource(n), this);
-        apvts.addParameterListener(Parameters::ID::modSlotTarget(n), this);
+        apvts.addParameterListener(Parameters::ID::modSlotModule(n), this);
     }
 
     // The shared LiveState bridges the two standalone apps (C# <-> C++). In a
@@ -78,7 +79,7 @@ SynthyProcessor::~SynthyProcessor()
     for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
     {
         apvts.removeParameterListener(Parameters::ID::modSlotSource(n), this);
-        apvts.removeParameterListener(Parameters::ID::modSlotTarget(n), this);
+        apvts.removeParameterListener(Parameters::ID::modSlotModule(n), this);
     }
     if (wrapperType == wrapperType_Standalone)
     {
@@ -147,12 +148,12 @@ namespace
         return {};
     }
 
-    // Enable-param of the module a matrix TARGET drives — from the single source (ModTargets.h).
-    // "" means no module to auto-toggle: global voice params (Pitch/Amplitude) and OscDetune
-    // (spans the core OSC 1-3 → ring only, never auto-enabled/disabled).
-    juce::String matrixTargetEnableParam (int targetIdx)
+    // Enable-param of the MODULE a matrix slot drives — from the single source (ModMatrixCatalog.h).
+    // "" means no module to auto-toggle: "Alle OSC" (global voice params) has no single enable.
+    // A per-OSC module (OSC 1/2/3) returns its own oscNOn, so a per-OSC routing enables just that OSC.
+    juce::String matrixModuleEnableParam (int moduleIdx)
     {
-        return juce::String (ModTargets::enableId (targetIdx));
+        return juce::String (ModDest::enableIdOf (moduleIdx));
     }
 }
 
@@ -165,18 +166,20 @@ void SynthyProcessor::updateMatrixModuleEnables()
     std::set<juce::String> claimed;
     for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
     {
-        const int tgt = (int) *apvts.getRawParameterValue(ID::modSlotTarget(n));
-        if (tgt <= 0)   // 0 == "Off"
+        const int mod = (int) *apvts.getRawParameterValue(ID::modSlotModule(n));
+        if (mod <= 0)   // 0 == "Off"
             continue;
         if (const auto s = matrixSourceEnableParam((int) *apvts.getRawParameterValue(ID::modSlotSource(n))); s.isNotEmpty())
             claimed.insert(s);
-        if (const auto t = matrixTargetEnableParam(tgt); t.isNotEmpty())
+        if (const auto t = matrixModuleEnableParam(mod); t.isNotEmpty())   // per-OSC → oscNOn; "Alle OSC" → none
             claimed.insert(t);
     }
 
-    // Every module a slot can auto-drive: sources (LFO 1..4 + ADSR) and targets (FILTER, FORMANT,
-    // WAVETABLE, WAVEFOLD). Velocity + Pitch/Amplitude have no module.
+    // Every module a slot can auto-drive: sources (LFO 1..4 + ADSR) and target modules — now incl.
+    // OSC 1..3 (a per-OSC FREQ/AMP/DETUNE routing enables just that oscillator). "Alle OSC",
+    // Velocity and Envelope-less globals have no single enable, so they are never toggled here.
     const juce::String managed[] = { ID::lfoOn(1), ID::lfoOn(2), ID::lfoOn(3), ID::lfoOn(4), ID::adsrOn,
+                                     ID::oscOn(1), ID::oscOn(2), ID::oscOn(3),
                                      ID::filterOn, ID::formantOn, ID::wavetableOn, ID::wavefoldOn,
                                      ID::delayOn, ID::reverbOn, ID::chorusOn, ID::distortionOn,
                                      ID::bitcrushOn, ID::subOn };
@@ -383,11 +386,16 @@ void SynthyProcessor::randomize()
     // risk that made v1 exclude the matrix) and reined-in bipolar amounts. Any LFO/ENV chosen as a
     // source is enabled so the routing is actually audible.
     set(ID::modMatrixOn, 1.0f);
+    // A diverse pool across modules (Epic 8.3 full coverage). fromLegacyTarget maps each to its
+    // (module, param); OSC-scoped ones may then be re-pointed to a single oscillator below.
     int rndTargets[] = { (int) LFOTarget::Frequency,        (int) LFOTarget::Amplitude,
-                         (int) LFOTarget::FilterCutoff,     (int) LFOTarget::WavetablePosition,
-                         (int) LFOTarget::FormantVowel,     (int) LFOTarget::FilterResonance,
-                         (int) LFOTarget::WavefolderDrive };
-    const int numRndTargets = 7;
+                         (int) LFOTarget::OscDetune,        (int) LFOTarget::FilterCutoff,
+                         (int) LFOTarget::FilterResonance,  (int) LFOTarget::WavetablePosition,
+                         (int) LFOTarget::FormantVowel,     (int) LFOTarget::WavefolderDrive,
+                         (int) LFOTarget::ChorusDepth,      (int) LFOTarget::DelayMix,
+                         (int) LFOTarget::ReverbMix,        (int) LFOTarget::BitcrushMix,
+                         (int) LFOTarget::DistortionDrive,  (int) LFOTarget::SubLevel };
+    const int numRndTargets = (int) (sizeof(rndTargets) / sizeof(rndTargets[0]));
     for (int i = numRndTargets - 1; i > 0; --i)             // Fisher–Yates: pick distinct targets
     {
         const int j = rng.nextInt(i + 1);
@@ -399,13 +407,22 @@ void SynthyProcessor::randomize()
     {
         if (n >= activeSlots)
         {
-            set(ID::modSlotTarget(n + 1), (float) (int) LFOTarget::Off);   // inactive slot
+            set(ID::modSlotModule(n + 1), 0.0f);   // 0 == "Off" (inactive slot)
             continue;
         }
         const int   src = rng.nextInt(ModMatrixConfig::kNumSources);   // LFO1/Env/Vel/LFO2..4
         const float mag = 0.3f + rng.nextFloat() * 0.6f;              // 0.3..0.9 (audible, tame)
+        auto        mp  = ModDest::fromLegacyTarget(rndTargets[n]);   // LFOTarget → (module, param)
+        // Showcase per-OSC: FREQ/AMP/DETUNE sometimes target a SINGLE oscillator, not just "Alle OSC".
+        if (ModDest::oscParamSlot(ModDest::targetOf(mp.module, mp.param)) >= 0)
+        {
+            static const char* const oscMods[4] = { "OSC 1", "OSC 2", "OSC 3", "Alle OSC" };
+            if (const int m = ModDest::moduleIndexForLabel(oscMods[rng.nextInt(4)]); m >= 0)
+                mp.module = m;
+        }
         set(ID::modSlotSource(n + 1), (float) src);
-        set(ID::modSlotTarget(n + 1), (float) rndTargets[n]);
+        set(ID::modSlotModule(n + 1), (float) mp.module);
+        set(ID::modSlotParam (n + 1), (float) mp.param);
         set(ID::modSlotAmount(n + 1), rng.nextBool() ? mag : -mag);   // bipolar
 
         switch ((ModSource) src)   // enable the picked source so the slot is heard
@@ -780,11 +797,39 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
     copyXmlToBinary(*xml, destData);
 }
 
+namespace
+{
+    // v4→v5 DAW-state migration: a host project saved before the MOD MATRIX DEST split still stores
+    // <PARAM id="modSlotNTarget" value="<LFOTarget index>">. Translate each present slot into the new
+    // modSlotNModule + modSlotNParam params so an old session keeps its routing (global
+    // Pitch/Amp/Detune → "Alle OSC"). APVTS stores DENORMALISED values in the tree, so the legacy
+    // "value" attribute is the LFOTarget index directly. Idempotent: skips an already-migrated slot.
+    void migrateLegacyMatrixXml (juce::XmlElement& state)
+    {
+        using namespace Parameters;
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            auto* tgt = state.getChildByAttribute ("id", ID::modSlotTargetLegacy (n));
+            if (tgt == nullptr) continue;                                          // not an old project
+            if (state.getChildByAttribute ("id", ID::modSlotModule (n)) != nullptr) continue;   // done
+            const int  legacy = (int) tgt->getDoubleAttribute ("value");          // LFOTarget index
+            const auto mp = ModDest::fromLegacyTarget (legacy);
+            auto* mEl = state.createNewChildElement ("PARAM");
+            mEl->setAttribute ("id", ID::modSlotModule (n)); mEl->setAttribute ("value", (double) mp.module);
+            auto* pEl = state.createNewChildElement ("PARAM");
+            pEl->setAttribute ("id", ID::modSlotParam  (n)); pEl->setAttribute ("value", (double) mp.param);
+        }
+    }
+}
+
 void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
 {
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml && xml->hasTagName(apvts.state.getType()))
+    {
+        migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
+    }
 }
 
 juce::AudioProcessorEditor* SynthyProcessor::createEditor()
