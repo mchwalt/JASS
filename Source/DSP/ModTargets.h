@@ -33,7 +33,28 @@
     X(DistortionDrive,   "DistortionDrive",  "Dist Drive",   "distortionOn")                      \
     X(BitcrushMix,       "BitcrushMix",      "Bitcrush",     "bitcrushOn")                         \
     X(SubLevel,          "SubLevel",         "Sub Level",    "subOn")                             \
-    X(OscDetune,         "OscDetune",        "Detune",       "")
+    X(OscDetune,         "OscDetune",        "Detune",       "")                                  \
+    /* Epic 8.3 — full per-module coverage. Labels/enableId columns are now informational only    \
+       (the MOD MATRIX combo + auto-enable are driven by ModMatrixCatalog); persist strings are   \
+       used solely by the v4→v5 migration, which never encounters these new targets. Append-only.*/\
+    X(WavetableFreq,     "WavetableFreq",    "WT Freq",      "wavetableOn")                       \
+    X(WavetableAmp,      "WavetableAmp",     "WT Amp",       "wavetableOn")                       \
+    X(FormantReso,       "FormantReso",      "Formant Reso", "formantOn")                         \
+    X(FormantMix,        "FormantMix",       "Formant Mix",  "formantOn")                         \
+    X(WavefolderSym,     "WavefolderSym",    "Wavefold Sym", "wavefoldOn")                        \
+    X(WavefolderMix,     "WavefolderMix",    "Wavefold Mix", "wavefoldOn")                        \
+    X(DistortionMix,     "DistortionMix",    "Dist Mix",     "distortionOn")                      \
+    X(BitcrushBits,      "BitcrushBits",     "Bitcrush Bits","bitcrushOn")                        \
+    X(BitcrushRate,      "BitcrushRate",     "Bitcrush Rate","bitcrushOn")                        \
+    X(ChorusRate,        "ChorusRate",       "Chorus Rate",  "chorusOn")                          \
+    X(ChorusMix,         "ChorusMix",        "Chorus Mix",   "chorusOn")                          \
+    X(DelayFeedback,     "DelayFeedback",    "Delay FB",     "delayOn")                           \
+    X(ReverbRoom,        "ReverbRoom",       "Reverb Room",  "reverbOn")                          \
+    X(ReverbDamp,        "ReverbDamp",       "Reverb Damp",  "reverbOn")                          \
+    X(OscFeedback,       "OscFeedback",      "Feedback",     "")                                  \
+    X(OscVoices,         "OscVoices",        "Voices",       "")                                  \
+    X(WavetableVoices,   "WavetableVoices",  "WT Voices",    "wavetableOn")                       \
+    X(WavetableDetune,   "WavetableDetune",  "WT Detune",    "wavetableOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget

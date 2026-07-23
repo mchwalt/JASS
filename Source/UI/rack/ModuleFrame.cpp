@@ -1,5 +1,6 @@
 #include "ModuleFrame.h"
 #include "../HelpTextStore.h"
+#include "../../DSP/ModMatrixCatalog.h"   // ModDest::oscParamSlot — per-OSC ring routing
 
 namespace rack
 {
@@ -33,12 +34,34 @@ namespace rack
         buildHeader();
         buildBody();
 
+        // Make THIS frame's OWN controls never grab keyboard focus on click, so a module revealed
+        // AFTER the editor's one-time dropFocus pass (auto-shown on preset load) doesn't steal focus
+        // from the on-screen keyboard. ONLY the frame's own widgets are touched (ownedWidgets + the
+        // header icons) — NOT external Display components (the KEYBOARD, scope, spectrum, ADSR curve),
+        // which the frame merely hosts; the keyboard must stay the sole keyboard-focus holder. Value
+        // boxes still grab focus on demand (their TextEditor is created per-edit, unaffected here).
+        auto noFocus = [] (juce::Component* c)
+        {
+            if (c != nullptr) { c->setWantsKeyboardFocus (false); c->setMouseClickGrabsKeyboardFocus (false); }
+        };
+        for (auto* w : ownedWidgets) noFocus (w);
+        noFocus (enableBtn.get());
+        noFocus (&resetBtn);
+        noFocus (infoBtn.get());
+
         if (desc.enableParam.isNotEmpty())
             enableValue = apvts.getRawParameterValue (desc.enableParam);
 
+        // Seed the dependent-combo watch cache with the current values so the first poll only fires
+        // on a REAL change (e.g. a user picking a MODULE, or a preset load), not on startup.
+        lastWatched.resize (desc.comboDeps.size(), 0);
+        for (size_t i = 0; i < desc.comboDeps.size(); ++i)
+            if (auto* raw = apvts.getRawParameterValue (desc.comboDeps[i].watchParamId))
+                lastWatched[i] = (int) raw->load();
+
         // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
-        // dynamic active state — either a single enable param or a derived predicate.
-        if (enableValue != nullptr || desc.enabledWhen)
+        // dynamic active state — an enable param, a derived predicate, or dependent combos.
+        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty())
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -178,8 +201,25 @@ namespace rack
                     dynCombos.push_back ({ c->paramId, box, *provider });   // re-pollable via refreshCombo
                 }
                 addAndMakeVisible (*box);
-                comboAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
-                    apvts, c->paramId, *box));
+                if (c->indexIsValue)
+                {
+                    // Item INDEX == param value. Bypass ComboBoxParameterAttachment (its value is
+                    // index/(numItems-1), which mismaps a variable item count against a fixed range —
+                    // MOD MATRIX PARAM). Sync combo→param by index; param→combo via refreshCombo.
+                    if (auto* raw = apvts.getRawParameterValue (c->paramId))
+                        box->setSelectedItemIndex ((int) raw->load(), juce::dontSendNotification);
+                    juce::ComboBox* boxPtr = box;
+                    const juce::String pid = c->paramId;
+                    box->onChange = [this, boxPtr, pid]
+                    {
+                        if (auto* pp = apvts.getParameter (pid))
+                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) juce::jmax (0, boxPtr->getSelectedItemIndex())));
+                    };
+                    indexValueCombos.push_back ({ c->paramId, box });   // timer resyncs it from the param
+                }
+                else
+                    comboAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
+                        apvts, c->paramId, *box));
                 // A combo needs more width than a knob to show its item text — give it
                 // two internal slots so the dropdown isn't cramped/truncated.
                 cells.push_back ({ box, makeCaption (ownedCaptions, c->label), 2 });
@@ -425,6 +465,33 @@ namespace rack
 
     void ModuleFrame::timerCallback()
     {
+        // Dependent combos (MOD MATRIX): when a watched param (MODULE) changes, let the descriptor
+        // clamp the dependent param (PARAM) if it is now out of range, then re-list the PARAM combo.
+        for (size_t i = 0; i < desc.comboDeps.size(); ++i)
+        {
+            const auto& dep = desc.comboDeps[i];
+            auto* raw = apvts.getRawParameterValue (dep.watchParamId);
+            if (raw == nullptr) continue;
+            const int now = (int) raw->load();
+            if (now == lastWatched[i]) continue;
+            lastWatched[i] = now;
+            if (dep.onWatchChanged) dep.onWatchChanged (now);   // e.g. clamp the PARAM param
+            refreshCombo (dep.refreshParamId);                  // re-list the dependent combo
+        }
+
+        // Resync indexIsValue combos whose param changed WITHOUT a MODULE change (preset load / host
+        // automation) — they have no attachment, so nothing else would update their displayed item.
+        for (auto& iv : indexValueCombos)
+        {
+            if (iv.second == nullptr) continue;
+            if (auto* raw = apvts.getRawParameterValue (iv.first))
+            {
+                const int want = (int) raw->load();
+                if (want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
+                    iv.second->setSelectedItemIndex (want, juce::dontSendNotification);
+            }
+        }
+
         if (enableValue == nullptr && ! desc.enabledWhen) return;
         const bool en = moduleEnabled();
         // A derived (predicate) enabler has no attachment — keep its display toggle in sync.
@@ -442,8 +509,21 @@ namespace rack
         // periodic (LFO) modulation shows the moving ring, driven by that target's summed
         // amount; the rest are driven to 0. A disabled module shows no rings. The
         // SynthySlider itself repaints only on a meaningful change (NFR5).
+        // Per-OSC (Epic 8.3): an OSC module's FREQ/AMP/DETUNE knob also picks up its own
+        // oscillator's ring amount, so a routing to a single OSC lights only that OSC's knob
+        // (the global "Alle OSC" amount still arrives via byTarget).
+        int oscIdx = -1;
+        if (desc.id.length() == 4 && desc.id.startsWith ("osc"))
+            if (const int d = desc.id[3] - '0'; d >= 1 && d <= 3) oscIdx = d - 1;
+
         for (auto& rk : ringKnobs)
-            rk.slider->setModAmount (en ? ringByTarget[(size_t) rk.target] : 0.0f);
+        {
+            float amt = ringByTarget.byTarget[(size_t) rk.target];
+            if (oscIdx >= 0)
+                if (const int slot = ModDest::oscParamSlot (rk.target); slot >= 0)
+                    amt += ringByTarget.osc[oscIdx][slot];
+            rk.slider->setModAmount (en ? amt : 0.0f);
+        }
 
         // Display transforms: show base × ratio. Guard (AD-4): a disabled module or a
         // non-positive ratio (no note sounding) => identity, so we never divide a stale

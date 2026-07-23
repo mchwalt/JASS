@@ -6,11 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 JASS uses **CalVer** versioning: `YYYY.MM.MICRO` (e.g. `2026.07.0`), where `MICRO`
 increments for additional releases within the same month. This is the app/release
 version and is independent of the preset **`FormatVersion`** (an integer schema
-contract — currently `4`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
+contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
 
 ## [Unreleased]
 
 ### Added
+- **MOD MATRIX destination = MODULE → PARAM** — the DEST is now chosen in two steps
+  (a **MOD** combo, then a **PARAM** combo whose items follow the picked module). Both lists
+  are sorted A→Z. PARAM labels match the target module's own knobs (FREQ, CUTOFF, DRIVE, …),
+  removing the old abstract names (e.g. "Pitch" → OSC · **FREQ**).
+- **Per-oscillator modulation** — FREQ / AMP / DETUNE / FB / VOICES can target a SINGLE
+  oscillator (OSC 1/2/3) instead of all at once; "Alle OSC" keeps the classic global
+  behaviour. A per-OSC routing auto-enables just that oscillator and lights only its ring.
+- **Full per-module target coverage** — essentially every continuous knob is now a matrix
+  destination: WAVETABLE FREQ/AMP/VOICES/DETUNE, FILTER RESO, FORMANT RESO/MIX, WAVEFOLD
+  SYM/MIX, DISTORTION MIX, BITCRUSH BITS/RATE, CHORUS RATE/MIX, DELAY FB, REVERB ROOM/DAMP,
+  OSC FB/VOICES — each with its own live ring.
+- **MOD MATRIX grown to 8 routing slots** (was 6), full-width layout.
+- Preset **FormatVersion 6** with automatic migration (`.jass` files): the legacy single
+  "Target" per slot converts to MODULE + PARAM (global Pitch/Amp/Detune → "Alle OSC"), and
+  the A→Z reorder remaps the persisted PARAM index. Older presets are backed up before upgrade.
 - **Modulation-matrix target expansion** — 8 new per-voice destinations: Delay Time,
   Delay Mix, Reverb Mix, Chorus Depth, Dist Drive, Bitcrush, Sub Level, Detune. Each
   shows a live modulation ring and (except Detune) auto-enables its module when routed.

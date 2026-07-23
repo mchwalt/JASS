@@ -626,11 +626,20 @@ void SynthyEditor::timerCallback()
         if (matrixOn)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
             {
-                const int src = (int) *apvts.getRawParameterValue(P::modSlotSource(n));
-                const int tgt = (int) *apvts.getRawParameterValue(P::modSlotTarget(n));
+                const int   src = (int) *apvts.getRawParameterValue(P::modSlotSource(n));
+                const int   mod = (int) *apvts.getRawParameterValue(P::modSlotModule(n));
+                const int   par = (int) *apvts.getRawParameterValue(P::modSlotParam(n));
                 const float amt = *apvts.getRawParameterValue(P::modSlotAmount(n));
-                if (tgt > 0 && tgt < (int) feed.size() && src >= 0 && src < (int) lfoSrcVal.size())
-                    feed[(size_t) tgt] += amt * lfoSrcVal[(size_t) src];   // Env/Vel contribute 0 (no idle ring)
+                if (mod <= 0 || src < 0 || src >= (int) lfoSrcVal.size()) continue;   // Off / bad source
+                const int   tgt = (int) ModDest::targetOf(mod, par);
+                const float val = amt * lfoSrcVal[(size_t) src];   // Env/Vel contribute 0 (no idle ring)
+                if (const int oscIdx = ModDest::oscIndexOf(mod); oscIdx >= 0 && oscIdx < 3)
+                {
+                    if (const int slot = ModDest::oscParamSlot((LFOTarget) tgt); slot >= 0)
+                        feed.osc[oscIdx][slot] += val;   // per-OSC: light only that oscillator's knob
+                }
+                else if (tgt > 0 && tgt < (int) feed.byTarget.size())
+                    feed.byTarget[(size_t) tgt] += val;   // global (incl. "Alle OSC")
             }
     }
 
@@ -1228,8 +1237,8 @@ void SynthyEditor::buildRack()
                       },
                       { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
                       PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
-          Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), K(P::wavetableFreq, "FREQ"), K(P::wavetableAmp, "AMP"),
-          K(P::wavetableUniVoices, "VOICES"), K(P::wavetableUniDetune, "DETUNE") },
+          Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq), Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),
+          Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune) },
         [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
 
     // ---- MODULATION ----
@@ -1263,7 +1272,52 @@ void SynthyEditor::buildRack()
         };
         rackBody->addModule(std::move(d));
     }
-    rackBody->addModule(makeModuleDescriptor(Modules::modMatrix()));
+    // MOD MATRIX — APVTS params are spec-driven (ModMatrixSpecs.h), but the BODY is hand-built here:
+    // each slot's PARAM combo is DEPENDENT on its MODULE selection (which params exist depends on the
+    // picked module), and a static spec can't read APVTS. The editor supplies the per-slot provider +
+    // ComboDependency (clamp PARAM if out of range, then re-list) where apvts is available.
+    {
+        ModuleDescriptor d;
+        d.sizeClass = SizeClass::W24H2; d.type = ModuleType::Modulator;   // full width: 8 slots (4/row × 2),
+        d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
+        d.enableParam = P::modMatrixOn;
+
+        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
+        juce::StringArray modItems;
+        for (int i = 0; i < ModDest::kNumModules; ++i) modItems.add (ModDest::moduleLabel (i));   // == ModDest order
+
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            const juce::String modId = P::modSlotModule (n);
+            const juce::String parId = P::modSlotParam  (n);
+            d.body.push_back (C (P::modSlotSource (n), "SRC", srcItems));
+            d.body.push_back (C (modId,                "MOD", modItems));
+            // PARAM: the params of whichever MODULE this slot currently selects (re-listed on change).
+            // indexIsValue: the selected item index IS the param value (0/1/2), so a 2-item module
+            // maps its 2nd entry to 1 (not the ComboBoxAttachment's index/(numItems-1) mismap).
+            Combo paramCombo { parId, "PARAM",
+                std::function<juce::StringArray()> ([this, modId]
+                {
+                    const int m = (int) processor.getAPVTS().getRawParameterValue (modId)->load();
+                    juce::StringArray items;
+                    for (int p = 0; p < ModDest::numParams (m); ++p) items.add (ModDest::paramLabel (m, p));
+                    return items;
+                }) };
+            paramCombo.indexIsValue = true;
+            d.body.push_back (paramCombo);
+            d.body.push_back (K (P::modSlotAmount (n), "AMT"));
+            // MODULE changed → if PARAM is now beyond the new module's param count, snap it back to 0.
+            d.comboDeps.push_back (ComboDependency { modId, parId,
+                [this, parId] (int newModule)
+                {
+                    auto& a = processor.getAPVTS();
+                    if (auto* pp = a.getParameter (parId))
+                        if ((int) a.getRawParameterValue (parId)->load() >= ModDest::numParams (newModule))
+                            pp->setValueNotifyingHost (pp->convertTo0to1 (0.0f));
+                } });
+        }
+        rackBody->addModule (std::move (d));
+    }
 
     // ---- PROCESSING (spec-driven) ----
     rackBody->addModule(makeModuleDescriptor(Modules::filter()));

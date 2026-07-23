@@ -1,0 +1,216 @@
+{
+  "FormatVersion": 6,
+  "Name": "Matrix Showcase",
+  "Modified": false,
+  "Filter": {
+    "Enabled": true,
+    "Type": "Lowpass",
+    "Cutoff": 800.0,
+    "Resonance": 0.7
+  },
+  "Compressor": {
+    "Enabled": false,
+    "Threshold": -18.0,
+    "Ratio": 2.0,
+    "Attack": 10.0,
+    "Release": 120.0,
+    "Makeup": 0.0
+  },
+  "Stereo": {
+    "Enabled": true,
+    "Width": 0.6,
+    "Time": 12.0
+  },
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 120.0
+  },
+  "Sub": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Octave": "-1 Oct",
+    "Level": 0.5
+  },
+  "Noise": {
+    "Enabled": false,
+    "Type": "White",
+    "Amount": 0.5
+  },
+  "Formant": {
+    "Enabled": false,
+    "Vowel": 0.0,
+    "Resonance": 0.5,
+    "Mix": 1.0
+  },
+  "Distortion": {
+    "Enabled": false,
+    "Type": "SoftClip",
+    "Drive": 0.5,
+    "Mix": 1.0
+  },
+  "Wavefold": {
+    "Enabled": false,
+    "Drive": 0.3,
+    "Symmetry": 0.0,
+    "Mix": 1.0
+  },
+  "Bitcrush": {
+    "Enabled": false,
+    "Bits": 8.0,
+    "Rate": 1.0,
+    "Mix": 1.0
+  },
+  "Phaser": {
+    "Enabled": false,
+    "Type": "Phaser",
+    "Rate": 0.5,
+    "Depth": 0.7,
+    "Feedback": 0.5,
+    "Mix": 0.5
+  },
+  "Chorus": {
+    "Enabled": true,
+    "Rate": 0.5,
+    "Depth": 0.005,
+    "Mix": 0.4
+  },
+  "Delay": {
+    "Enabled": true,
+    "Time": 0.375,
+    "SyncDiv": "Free",
+    "Feedback": 0.35,
+    "Mix": 0.22
+  },
+  "Reverb": {
+    "Enabled": true,
+    "RoomSize": 0.6,
+    "Damping": 0.4,
+    "Mix": 0.3
+  },
+  "Arp": {
+    "Enabled": false,
+    "Mode": "Up",
+    "Rate": 8.0,
+    "Octaves": 2.0,
+    "Gate": 0.5
+  },
+  "Glide": {
+    "Enabled": false,
+    "Mode": "Mono",
+    "Time": 0.3
+  },
+  "PitchEnv": {
+    "Enabled": false,
+    "Amount": 0.0,
+    "Time": 0.3
+  },
+  "Osc1": {
+    "Enabled": true,
+    "Waveform": "Sawtooth",
+    "Frequency": 262.0,
+    "Amplitude": 0.35,
+    "UnisonVoices": 5.0,
+    "UnisonDetune": 0.25,
+    "Feedback": 0.0
+  },
+  "Osc2": {
+    "Enabled": true,
+    "Waveform": "Sawtooth",
+    "Frequency": 523.0,
+    "Amplitude": 0.22,
+    "UnisonVoices": 3.0,
+    "UnisonDetune": 0.18,
+    "Feedback": 0.0
+  },
+  "Osc3": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Frequency": 131.0,
+    "Amplitude": 0.3,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.0,
+    "Feedback": 0.0
+  },
+  "CrossMod": {
+    "On": false,
+    "Mode": "RingMod",
+    "SrcA": "OSC 1",
+    "SrcB": "OSC 2"
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 0.15,
+    "SyncDiv": "Free",
+    "Depth": 1.0
+  },
+  "Lfo2": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 0.1,
+    "SyncDiv": "Free",
+    "Depth": 1.0
+  },
+  "Lfo3": {
+    "Enabled": true,
+    "Waveform": "Triangle",
+    "Target": "Frequency",
+    "Rate": 0.25,
+    "SyncDiv": "Free",
+    "Depth": 1.0
+  },
+  "Lfo4": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "Rate": 5.0,
+    "SyncDiv": "Free",
+    "Depth": 1.0
+  },
+  "ModMatrix": {
+    "On": true,
+    "Slot1Source": "Envelope",  "Slot1Module": "FILTER",   "Slot1Param": 0.0, "Slot1Amount": 0.5,
+    "Slot2Source": "Velocity",  "Slot2Module": "FILTER",   "Slot2Param": 0.0, "Slot2Amount": 0.3,
+    "Slot3Source": "LFO 1",     "Slot3Module": "Alle OSC", "Slot3Param": 1.0, "Slot3Amount": 0.4,
+    "Slot4Source": "LFO 1",     "Slot4Module": "OSC 1",    "Slot4Param": 2.0, "Slot4Amount": 0.18,
+    "Slot5Source": "LFO 2",     "Slot5Module": "REVERB",   "Slot5Param": 2.0, "Slot5Amount": 0.3,
+    "Slot6Source": "LFO 3",     "Slot6Module": "CHORUS",   "Slot6Param": 2.0, "Slot6Amount": 0.35,
+    "Slot7Source": "LFO 4",     "Slot7Module": "OSC 2",    "Slot7Param": 3.0, "Slot7Amount": 0.03,
+    "Slot8Source": "LFO 2",     "Slot8Module": "DELAY",    "Slot8Param": 1.0, "Slot8Amount": 0.3
+  },
+  "Karplus": {
+    "Enabled": false,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "Damping": 0.5,
+    "Stretch": 0.0
+  },
+  "Wavetable": {
+    "Enabled": false,
+    "BankIndex": 0.0,
+    "Position": 0.0,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.2
+  },
+  "Adsr": {
+    "Enabled": true,
+    "Attack": 0.4,
+    "Decay": 0.8,
+    "Sustain": 0.7,
+    "Release": 1.8
+  },
+  "Scope": {
+    "Enabled": true
+  },
+  "Spectrum": {
+    "Enabled": true
+  },
+  "Keyboard": {
+    "Enabled": true
+  }
+}
