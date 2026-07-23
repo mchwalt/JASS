@@ -285,10 +285,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             wavefolder.mix = std::clamp(baseWavefoldMix + modOffset[(size_t) LFOTarget::WavefolderMix] * 0.5, 0.0, 1.0);
         if (tActive[(size_t) LFOTarget::DistortionMix])
             distortion.mix = std::clamp(baseDistMix + modOffset[(size_t) LFOTarget::DistortionMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::BitcrushBits])
-            bitcrusher.bits = std::clamp(baseBits + modOffset[(size_t) LFOTarget::BitcrushBits] * 8.0, 1.0, 16.0);
-        if (tActive[(size_t) LFOTarget::BitcrushRate])
-            bitcrusher.rate = std::clamp(baseRate + modOffset[(size_t) LFOTarget::BitcrushRate] * 25.0, 1.0, 50.0);
+        if (tActive[(size_t) LFOTarget::BitcrushBits])   // whole steps (integer bit depth)
+            bitcrusher.bits = (double) juce::roundToInt(std::clamp(baseBits + modOffset[(size_t) LFOTarget::BitcrushBits] * 8.0, 1.0, 16.0));
+        if (tActive[(size_t) LFOTarget::BitcrushRate])   // whole steps (integer hold factor)
+            bitcrusher.rate = (double) juce::roundToInt(std::clamp(baseRate + modOffset[(size_t) LFOTarget::BitcrushRate] * 25.0, 1.0, 50.0));
         if (tActive[(size_t) LFOTarget::ChorusRate])
             chorus.rate = std::clamp(baseChorusRate + modOffset[(size_t) LFOTarget::ChorusRate] * 2.0, 0.1, 5.0);
         if (tActive[(size_t) LFOTarget::ChorusMix])

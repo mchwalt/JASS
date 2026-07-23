@@ -124,6 +124,7 @@ namespace PresetIO
         slots[1] = "Matrix Demo 2";
         slots[2] = "FX Motion";
         slots[3] = "Helikopter";
+        slots[4] = "Matrix Showcase";   // full MOD MATRIX demo (per-OSC + full coverage + 8 slots)
         return slots;
     }
 
@@ -619,7 +620,8 @@ namespace PresetIO
             else         applyVar(a, v);                             // nested v3 -> apvts (scratch)
             migrateSlotTargetsToModuleParam(a, v);                   // v4 SlotNTarget -> Module+Param
             migrateV5ParamOrder(a, v);                               // v5 SlotNParam int -> A→Z reorder
-            migrateLfoTargetsToSlots(a);                             // built-in LFO targets -> matrix slots
+            if (ver < 4) migrateLfoTargetsToSlots(a);                // v3→v4 ONLY: v4+ already route LFOs
+                                                                     // via the matrix — re-folding doubles them
             const auto name = v.getProperty("Name", f.getFileNameWithoutExtension()).toString();
             const bool mod  = (bool) v.getProperty("Modified", false);
             saveToFile(a, f, name, mod);                             // re-save at the current version
@@ -662,7 +664,7 @@ namespace PresetIO
             else                   applyVar(a, v);             // nested v3 → apvts
             migrateSlotTargetsToModuleParam(a, v);             // v4 SlotNTarget → Module+Param
             migrateV5ParamOrder(a, v);                         // v5 SlotNParam int → A→Z reorder
-            migrateLfoTargetsToSlots(a);                       // fold built-in LFO targets into matrix slots
+            if (r.fileVersion < 4) migrateLfoTargetsToSlots(a);   // v3→v4 ONLY (v4+ re-fold doubles LFOs)
 
             const auto name = v.getProperty("Name", file.getFileNameWithoutExtension()).toString();
             const bool mod  = (bool) v.getProperty("Modified", false);
