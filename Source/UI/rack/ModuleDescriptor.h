@@ -27,13 +27,17 @@ namespace rack
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
     using ModTarget = LFOTarget;
 
-    // Live modulation feed for the rings (AD-8, generalized in Story 8.1). Indexed by
-    // ModTarget (None = 0, unused): the ring amount currently applied to each target by
-    // PERIODIC (LFO) sources — the display LFO value times the summed LFO-sourced routing
-    // coefficient into that target. A knob lights with feed[(int) knob.modTarget]. This
-    // replaces the old single-active-target feed so multiple knobs light when the matrix
-    // routes the LFO to several destinations at once.
-    using LiveModFeed = std::array<float, (size_t) ModTargets::kCount>;   // one slot per target
+    // Live modulation feed for the rings (AD-8, generalized in Story 8.1). `byTarget` is indexed by
+    // ModTarget (None = 0, unused): the ring amount applied to each target by PERIODIC (LFO) sources
+    // — the display LFO value times the summed LFO-sourced routing coefficient into that target. A
+    // knob lights with feed.byTarget[(int) knob.modTarget]. `osc` adds the PER-OSCILLATOR amounts
+    // (Epic 8.3): osc[oscIndex 0..2][slot 0=FREQ,1=AMP,2=DETUNE], so a routing to a single OSC lights
+    // only that oscillator's knob (the global "Alle OSC" contribution still comes from byTarget).
+    struct LiveModFeed
+    {
+        std::array<float, (size_t) ModTargets::kCount> byTarget {};
+        float osc[3][5] {};   // [oscIndex 0..2][slot 0=FREQ,1=AMP,2=DETUNE,3=FB,4=VOICES] (ModDest::oscParamSlot)
+    };
 
     // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
     // its own default zone — Rack.h includes this header, so the descriptor can't reference
@@ -84,12 +88,26 @@ namespace rack
         // Wavetable bank list — refreshed declaratively via Action/FileAction
         // .refreshes in Story 1.5).
         std::variant<juce::StringArray, std::function<juce::StringArray()>> items;
+        // When true, the selected ITEM INDEX is written straight to the parameter (index==value),
+        // bypassing ComboBoxParameterAttachment — whose value = index/(numItems-1) mismaps when the
+        // item count varies against a fixed param range (MOD MATRIX PARAM: 1..N items, range 0..N-1).
+        bool indexIsValue = false;
     };
 
     struct Toggle
     {
         juce::String paramId;
         juce::String label;
+    };
+
+    // Links one combo's items to another param's value: when `watchParamId` changes, the frame
+    // calls onWatchChanged(newValue) (e.g. to clamp) and then re-polls `refreshParamId`'s provider.
+    // Used by the MOD MATRIX so each slot's PARAM combo lists the params of the picked MODULE.
+    struct ComboDependency
+    {
+        juce::String watchParamId;
+        juce::String refreshParamId;
+        std::function<void(int)> onWatchChanged;   // optional; receives the new watched value
     };
 
     struct Action   // a non-parameter trigger button (e.g. Karplus PLUCK)
@@ -164,6 +182,10 @@ namespace rack
         // hug the right (balancing the zone title). Zones with no right-aligned module pack fully
         // left exactly as before.
         bool alignRight = false;
+
+        // Dependent-combo links (see ComboDependency). Polled in the frame's timer (message thread),
+        // so a MODULE change re-lists its slot's PARAM combo without touching the audio thread.
+        std::vector<ComboDependency> comboDeps;
     };
 
     // --- Size-class table (AD-2) ------------------------------------------

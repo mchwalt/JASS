@@ -15,8 +15,8 @@ namespace Modules
         m.params = {
             { "formantOn",    "Enabled",   "",      ParamSpec::Kind::Bool },
             { "formantVowel", "Vowel",     "VOWEL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::FormantVowel },
-            { "formantReso",  "Resonance", "RESO",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.7f },
-            { "formantMix",   "Mix",       "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.8f },
+            { "formantReso",  "Resonance", "RESO",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.7f, {}, {}, LFOTarget::FormantReso },
+            { "formantMix",   "Mix",       "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.8f, {}, {}, LFOTarget::FormantMix },
         };
         return m;
     }

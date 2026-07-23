@@ -11,6 +11,7 @@
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/SyncDivision.h"
 #include "../DSP/ModMatrix.h"
+#include "../DSP/ModMatrixCatalog.h"      // ModDest: MOD MATRIX destination = MODULE → PARAM
 #include "../Modules/ModuleRegistry.h"   // spec-driven modules — generates APVTS params (audio-safe)
 
 namespace Parameters
@@ -189,11 +190,15 @@ namespace Parameters
         // so only this enabler is an APVTS param. Append-only, default true.
         constexpr const char* presetBankOn = "presetBankOn";
 
-        // Modulation matrix (Story 8.1 / Epic 8). N routing slots, each {Source, Target,
+        // Modulation matrix (Story 8.1 / Epic 8). N routing slots, each {Source, Module, Param,
         // Amount}, plus a master enable. Append-only, indexed helpers (mirror oscFreq(i)).
+        // v5 (Epic 8.3): the flat DEST target became MODULE (ModDest module index) + PARAM (param
+        // index within that module). The legacy modSlotTarget id is migrated away (PresetIO / XML).
         inline juce::String modSlotSource(int n) { return "modSlot" + juce::String(n) + "Source"; }
-        inline juce::String modSlotTarget(int n) { return "modSlot" + juce::String(n) + "Target"; }
+        inline juce::String modSlotModule(int n) { return "modSlot" + juce::String(n) + "Module"; }
+        inline juce::String modSlotParam (int n) { return "modSlot" + juce::String(n) + "Param"; }
         inline juce::String modSlotAmount(int n) { return "modSlot" + juce::String(n) + "Amount"; }
+        inline juce::String modSlotTargetLegacy(int n) { return "modSlot" + juce::String(n) + "Target"; }   // v4 and older
         constexpr const char* modMatrixOn = "modMatrixOn";
     }
 
@@ -230,9 +235,12 @@ namespace Parameters
         modMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f;
         for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
         {
-            modSlots[n].source = (int) *apvts.getRawParameterValue(ID::modSlotSource(n + 1));
-            modSlots[n].target = (int) *apvts.getRawParameterValue(ID::modSlotTarget(n + 1));
-            modSlots[n].amount = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
+            const int mod = (int) *apvts.getRawParameterValue(ID::modSlotModule(n + 1));
+            const int par = (int) *apvts.getRawParameterValue(ID::modSlotParam (n + 1));
+            modSlots[n].source   = (int) *apvts.getRawParameterValue(ID::modSlotSource(n + 1));
+            modSlots[n].target   = (int) ModDest::targetOf(mod, par);   // (module,param) → LFOTarget
+            modSlots[n].oscIndex = ModDest::oscIndexOf(mod);            // 0..2 per-OSC; -1 global
+            modSlots[n].amount   = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
         }
 
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
