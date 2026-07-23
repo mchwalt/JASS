@@ -16,7 +16,7 @@ Essentially every continuous knob on every module is a target. Highlights:
 
 - **OSC 1 / OSC 2 / OSC 3** — modulate a SINGLE oscillator: FREQ · AMP · DETUNE · FB · VOICES. A routing here moves only that one oscillator.
 - **Alle OSC** — the same params applied to ALL oscillators at once (classic global vibrato / tremolo).
-- **WAVETABLE** (POS · FREQ · AMP · VOICES · DETUNE), **SUB** (LEVEL), **FILTER** (CUTOFF · RESO), **FORMANT** (VOWEL · RESO · MIX), **WAVEFOLD** (DRIVE · SYM · MIX), **DISTORTION** (DRIVE · MIX), **BITCRUSH** (BITS · RATE · MIX), **CHORUS** (RATE · DEPTH · MIX), **DELAY** (TIME · FB · MIX), **REVERB** (ROOM · DAMP · MIX).
+- **WAVETABLE** (POS · FREQ · AMP · VOICES · DETUNE), **SUB** (LEVEL), **FILTER** (CUTOFF · RESO), **FORMANT** (VOWEL · RESO · MIX), **WAVEFOLD** (DRIVE · SYM · MIX), **DISTORTION** (DRIVE · MIX), **BITCRUSH** (BITS · RATE · MIX), **CHORUS** (RATE · DEPTH · MIX), **PHASER** (RATE · DEPTH · FB · MIX), **DELAY** (TIME · FB · MIX), **REVERB** (ROOM · DAMP · MIX).
 
 Choosing a MODULE (other than "Alle OSC") auto-enables it — and a per-OSC routing switches that oscillator on — so the routing is actually heard; clearing the row (MOD = Off) undoes an enable JASS made itself.
 
