@@ -116,6 +116,10 @@ namespace rack
         struct DynCombo { juce::String paramId; juce::ComboBox* box; std::function<juce::StringArray()> provider; };
         std::vector<DynCombo> dynCombos;
 
+        // Dependent combos (MOD MATRIX): desc.comboDeps links a watched param to a combo to re-list.
+        // lastWatched caches each watched value so the timer only reacts to real changes.
+        std::vector<int> lastWatched;
+
         std::vector<juce::Button*> actionButtons;   // Action-button widgets, in body order (for clickFirstAction)
 
         static constexpr int kHeaderH = 22;

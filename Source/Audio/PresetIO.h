@@ -27,12 +27,17 @@ namespace PresetIO
     inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
     inline const juce::StringArray kGlideMode   { "Mono", "Poly" };        // Feature 4 (append-only; C# ignores)
     inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2", "LFO3", "LFO4" };   // Epic 8 (append-only)
-    // Mod-matrix TARGET reuses kLfoTarget (identical 0=Off..7 vocabulary), so no separate array.
+    // Mod-matrix MODULE names — generated from the single source (ModMatrixCatalog.h). Index == ModDest.
+    inline const juce::StringArray kModModule = [] { juce::StringArray a;
+        for (int i = 0; i < ModDest::kNumModules; ++i) a.add (ModDest::moduleLabel (i)); return a; }();
+    // kLfoTarget (above) is still used to READ the legacy v4 "SlotNTarget" strings during migration.
 
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 4;   // v4 = LFO built-in target folded into matrix slots.
+    constexpr int kFormatVersion = 6;   // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
+                                        // v5 = MOD MATRIX DEST split into MODULE + PARAM (per-OSC targets).
+                                        // v4 = LFO built-in target folded into matrix slots.
                                         // v3 = nested-per-module. v<3 = flat (legacy).
 
     // App-data root: %AppData%\Roaming\JASS (renamed from "Synthy" after the C# break).
@@ -384,7 +389,11 @@ namespace PresetIO
         {
             const juce::String p = "ModSlot" + juce::String(n);
             setChoice(a, ID::modSlotSource(n), kModSource, v[juce::Identifier(p + "Source")], rawI(a, ID::modSlotSource(n)));
-            setChoice(a, ID::modSlotTarget(n), kLfoTarget, v[juce::Identifier(p + "Target")], rawI(a, ID::modSlotTarget(n)));
+            // v<3 flat presets predate the matrix entirely: no Module/Param keys. Reset to Off so a
+            // reused scratch APVTS never carries a stale routing; migrateSlotTargetsToModuleParam
+            // (below) converts any legacy "Target" string when one is present.
+            setRaw   (a, ID::modSlotModule(n), 0.0f);   // 0 == "Off"
+            setRaw   (a, ID::modSlotParam(n),  0.0f);
             setRaw   (a, ID::modSlotAmount(n), (float) jnum(v, (p + "Amount").toRawUTF8(), rawF(a, ID::modSlotAmount(n))));
         }
 
@@ -491,12 +500,14 @@ namespace PresetIO
         for (int i = 1; i <= kNumLFOs; ++i)
         {
             if (! rawB(a, ID::lfoOn(i))) continue;                 // LFO off => nothing was routing
-            const int matrixTgt = rawI(a, ID::lfoTarget(i)) + 1;   // LFO target idx -> LFOTarget/modSlotTarget
+            const int matrixTgt = rawI(a, ID::lfoTarget(i)) + 1;   // LFO target idx -> LFOTarget
+            const auto mp = ModDest::fromLegacyTarget(matrixTgt);  // v5: LFOTarget -> (module, param)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
             {
-                if (rawI(a, ID::modSlotTarget(n)) != 0) continue;  // slot occupied
+                if (rawI(a, ID::modSlotModule(n)) != 0) continue;  // slot occupied (module != Off)
                 setRaw(a, ID::modSlotSource(n), (float) kLfoSrc[i - 1]);
-                setRaw(a, ID::modSlotTarget(n), (float) matrixTgt);
+                setRaw(a, ID::modSlotModule(n), (float) mp.module);
+                setRaw(a, ID::modSlotParam(n),  (float) mp.param);
                 setRaw(a, ID::modSlotAmount(n), 1.0f);
                 migratedAny = true;
                 break;
@@ -508,6 +519,82 @@ namespace PresetIO
         // preset loses its modulation (e.g. Helikopter's amp chop, whuwhu's pitch wobble).
         if (migratedAny)
             setRaw(a, ID::modMatrixOn, 1.0f);
+    }
+
+    // v4→v5 step: the matrix DEST used to be a single "SlotNTarget" LFOTarget string. Convert each
+    // present legacy target into the new MODULE + PARAM pair (global Pitch/Amp/Detune → "Alle OSC",
+    // so old patches keep their all-oscillator behaviour). Reads the ORIGINAL parsed file `v`; the
+    // spec-driven readState already reset Module/Param to Off (their keys are absent in a v4 file).
+    inline void migrateSlotTargetsToModuleParam(APVTS& a, const juce::var& v)
+    {
+        using namespace detail;
+        const auto mm = v[juce::Identifier("ModMatrix")];
+        if (! mm.isObject()) return;   // no nested matrix object (pre-v4 / flat) — nothing to convert
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            const juce::var tv = mm[juce::Identifier("Slot" + juce::String(n) + "Target")];
+            if (! tv.isString()) continue;                         // slot carried no legacy target
+            const int legacy = kLfoTarget.indexOf(tv.toString());  // target string -> LFOTarget index
+            if (legacy <= 0) continue;                             // 0 / unknown == Off (slot inactive)
+            const auto mp = ModDest::fromLegacyTarget(legacy);
+            setRaw(a, ID::modSlotModule(n), (float) mp.module);
+            setRaw(a, ID::modSlotParam(n),  (float) mp.param);
+        }
+    }
+
+    // v5→v6 step: the MOD MATRIX modules + params were reordered A→Z (ModMatrixCatalog). Modules
+    // persist as a string (self-correcting on load), but PARAM persists as an INT index — so a v5
+    // file's SlotNParam points into the OLD (append-order) param list and must be remapped to the new
+    // alphabetical index. The v5 param order was append-only stable, so this table interprets every
+    // v5 file (early or late in the session) correctly. Demos are v4 → handled by fromLegacyTarget.
+    inline int v5ParamRemap (const juce::String& moduleLabel, int oldIdx)
+    {
+        using T = LFOTarget;
+        static const std::vector<T> oscOrder  { T::Frequency, T::Amplitude, T::OscDetune, T::OscFeedback, T::OscVoices };
+        static const std::vector<T> wtOrder   { T::WavetablePosition, T::WavetableFreq, T::WavetableAmp, T::WavetableVoices, T::WavetableDetune };
+        static const std::vector<T> filtOrder { T::FilterCutoff, T::FilterResonance };
+        static const std::vector<T> formOrder { T::FormantVowel, T::FormantReso, T::FormantMix };
+        static const std::vector<T> foldOrder { T::WavefolderDrive, T::WavefolderSym, T::WavefolderMix };
+        static const std::vector<T> distOrder { T::DistortionDrive, T::DistortionMix };
+        static const std::vector<T> crushOrd  { T::BitcrushMix, T::BitcrushBits, T::BitcrushRate };
+        static const std::vector<T> chorOrder { T::ChorusDepth, T::ChorusRate, T::ChorusMix };
+        static const std::vector<T> delOrder  { T::DelayTime, T::DelayMix, T::DelayFeedback };
+        static const std::vector<T> revOrder  { T::ReverbMix, T::ReverbRoom, T::ReverbDamp };
+        static const std::vector<T> subOrder  { T::SubLevel };
+        const std::vector<T>* ord = nullptr;
+        if      (moduleLabel.startsWith ("OSC") || moduleLabel == "Alle OSC") ord = &oscOrder;
+        else if (moduleLabel == "WAVETABLE")  ord = &wtOrder;
+        else if (moduleLabel == "FILTER")     ord = &filtOrder;
+        else if (moduleLabel == "FORMANT")    ord = &formOrder;
+        else if (moduleLabel == "WAVEFOLD")   ord = &foldOrder;
+        else if (moduleLabel == "DISTORTION") ord = &distOrder;
+        else if (moduleLabel == "BITCRUSH")   ord = &crushOrd;
+        else if (moduleLabel == "CHORUS")     ord = &chorOrder;
+        else if (moduleLabel == "DELAY")      ord = &delOrder;
+        else if (moduleLabel == "REVERB")     ord = &revOrder;
+        else if (moduleLabel == "SUB")        ord = &subOrder;
+        if (ord == nullptr || oldIdx < 0 || oldIdx >= (int) ord->size())
+            return oldIdx;                                   // unknown module / out of range → leave as-is
+        const T target = (*ord)[(size_t) oldIdx];
+        const int m = ModDest::moduleIndexForLabel (moduleLabel.toRawUTF8());
+        if (m < 0) return oldIdx;
+        for (int p = 0; p < ModDest::numParams (m); ++p)     // find the target's NEW alphabetical index
+            if (ModDest::targetOf (m, p) == target) return p;
+        return oldIdx;
+    }
+
+    inline void migrateV5ParamOrder (APVTS& a, const juce::var& v)
+    {
+        using namespace detail;
+        const auto mm = v[juce::Identifier ("ModMatrix")];
+        if (! mm.isObject()) return;
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            const juce::var modV = mm[juce::Identifier ("Slot" + juce::String (n) + "Module")];
+            if (! modV.isString()) continue;   // not a v5 file (v4 has SlotNTarget; pre-v4 has nothing)
+            const int oldIdx = (int) mm[juce::Identifier ("Slot" + juce::String (n) + "Param")];
+            setRaw (a, ID::modSlotParam (n), (float) v5ParamRemap (modV.toString(), oldIdx));
+        }
     }
 
     // One-time conversion at startup: bring every preset (+ LiveState) up to the current format.
@@ -530,6 +617,8 @@ namespace PresetIO
             f.copyFileTo(backupDir.getChildFile(f.getFileName()));   // keep the original, just in case
             if (ver < 3) applyVarFlatLegacy(a, v);                   // flat -> apvts (scratch)
             else         applyVar(a, v);                             // nested v3 -> apvts (scratch)
+            migrateSlotTargetsToModuleParam(a, v);                   // v4 SlotNTarget -> Module+Param
+            migrateV5ParamOrder(a, v);                               // v5 SlotNParam int -> A→Z reorder
             migrateLfoTargetsToSlots(a);                             // built-in LFO targets -> matrix slots
             const auto name = v.getProperty("Name", f.getFileNameWithoutExtension()).toString();
             const bool mod  = (bool) v.getProperty("Modified", false);
@@ -571,6 +660,8 @@ namespace PresetIO
 
             if (r.fileVersion < 3) applyVarFlatLegacy(a, v);   // flat legacy → apvts
             else                   applyVar(a, v);             // nested v3 → apvts
+            migrateSlotTargetsToModuleParam(a, v);             // v4 SlotNTarget → Module+Param
+            migrateV5ParamOrder(a, v);                         // v5 SlotNParam int → A→Z reorder
             migrateLfoTargetsToSlots(a);                       // fold built-in LFO targets into matrix slots
 
             const auto name = v.getProperty("Name", file.getFileNameWithoutExtension()).toString();

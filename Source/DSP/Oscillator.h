@@ -28,6 +28,8 @@ public:
     double getFrequency() const { return frequency; }
     double getAmplitude() const { return amplitude; }
     double getDetuneAmount() const { return detuneCents; }
+    double getFeedback() const { return feedbackAmount; }
+    int getUnisonCount() const { return unisonCount; }
     WaveformType getWaveform() const { return waveform; }
 
     float nextSample(double fmOffset = 0.0);

@@ -12,8 +12,8 @@ namespace Modules
         m.params = {
             { "wavefoldOn",       "Enabled",  "",      ParamSpec::Kind::Bool },
             { "wavefoldDrive",    "Drive",    "DRIVE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  0.3f, {}, {}, LFOTarget::WavefolderDrive },
-            { "wavefoldSymmetry", "Symmetry", "SYM",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f },
-            { "wavefoldMix",      "Mix",      "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  1.0f },
+            { "wavefoldSymmetry", "Symmetry", "SYM",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::WavefolderSym },
+            { "wavefoldMix",      "Mix",      "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  1.0f, {}, {}, LFOTarget::WavefolderMix },
         };
         return m;
     }
