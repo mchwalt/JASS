@@ -72,8 +72,11 @@ info** so nothing is hidden and every control explains itself.
 - **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
   double-press assigns; assignments are global
 
-Use the **MODULES** button to show/hide modules per zone and reorder them by
-drag & drop (the layout is saved; "Reset layout" restores the factory arrangement):
+Use the **MODULES** button to show/hide modules per zone, reorder them by drag &
+drop, and set each module's **left/right alignment** within its zone row via the
+**L/R tags** (e.g. keep MASTER BUS modules hugging the right). The whole layout —
+visibility, order and alignment — is saved; "Reset layout" restores the factory
+arrangement:
 
 <img src="docs/screenshots/Modules.png" alt="MODULES panel" width="360">
 
