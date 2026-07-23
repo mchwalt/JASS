@@ -34,6 +34,22 @@ namespace rack
         buildHeader();
         buildBody();
 
+        // Keep the on-screen keyboard as the SOLE keyboard-focus holder — even for frames created
+        // AFTER the editor's one-time dropFocus pass (a module revealed on preset load / via MODULES).
+        // Otherwise clicking this frame's enable/reset/info button or a knob steals focus and the
+        // computer keys stop playing until the user clicks the keyboard again. Value boxes still grab
+        // focus on demand (their TextEditor is created per-edit, unaffected by these flags).
+        std::function<void(juce::Component&)> dropFocus = [&dropFocus] (juce::Component& c)
+        {
+            for (auto* ch : c.getChildren())
+            {
+                ch->setWantsKeyboardFocus (false);
+                ch->setMouseClickGrabsKeyboardFocus (false);
+                dropFocus (*ch);
+            }
+        };
+        dropFocus (*this);
+
         if (desc.enableParam.isNotEmpty())
             enableValue = apvts.getRawParameterValue (desc.enableParam);
 
@@ -200,6 +216,7 @@ namespace rack
                         if (auto* pp = apvts.getParameter (pid))
                             pp->setValueNotifyingHost (pp->convertTo0to1 ((float) juce::jmax (0, boxPtr->getSelectedItemIndex())));
                     };
+                    indexValueCombos.push_back ({ c->paramId, box });   // timer resyncs it from the param
                 }
                 else
                     comboAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
@@ -461,6 +478,19 @@ namespace rack
             lastWatched[i] = now;
             if (dep.onWatchChanged) dep.onWatchChanged (now);   // e.g. clamp the PARAM param
             refreshCombo (dep.refreshParamId);                  // re-list the dependent combo
+        }
+
+        // Resync indexIsValue combos whose param changed WITHOUT a MODULE change (preset load / host
+        // automation) — they have no attachment, so nothing else would update their displayed item.
+        for (auto& iv : indexValueCombos)
+        {
+            if (iv.second == nullptr) continue;
+            if (auto* raw = apvts.getRawParameterValue (iv.first))
+            {
+                const int want = (int) raw->load();
+                if (want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
+                    iv.second->setSelectedItemIndex (want, juce::dontSendNotification);
+            }
         }
 
         if (enableValue == nullptr && ! desc.enabledWhen) return;
