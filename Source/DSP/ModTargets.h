@@ -54,7 +54,11 @@
     X(OscFeedback,       "OscFeedback",      "Feedback",     "")                                  \
     X(OscVoices,         "OscVoices",        "Voices",       "")                                  \
     X(WavetableVoices,   "WavetableVoices",  "WT Voices",    "wavetableOn")                       \
-    X(WavetableDetune,   "WavetableDetune",  "WT Detune",    "wavetableOn")
+    X(WavetableDetune,   "WavetableDetune",  "WT Detune",    "wavetableOn")                       \
+    X(PhaserRate,        "PhaserRate",       "Phaser Rate",  "phaserOn")                          \
+    X(PhaserDepth,       "PhaserDepth",      "Phaser Depth", "phaserOn")                          \
+    X(PhaserFeedback,    "PhaserFeedback",   "Phaser FB",    "phaserOn")                          \
+    X(PhaserMix,         "PhaserMix",        "Phaser Mix",   "phaserOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget

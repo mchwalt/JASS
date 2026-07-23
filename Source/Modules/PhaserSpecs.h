@@ -12,10 +12,10 @@ namespace Modules
         m.params = {
             { "phaserOn",       "Enabled",  "",      ParamSpec::Kind::Bool },
             { "phaserType",     "Type",     "TYPE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Phaser", "Flanger" } },
-            { "phaserRate",     "Rate",     "RATE",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.05f, 5.0f, 0.01f, 0.4f), 0.5f },
-            { "phaserDepth",    "Depth",    "DEPTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),        0.7f },
-            { "phaserFeedback", "Feedback", "FB",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 0.95f, 0.01f),       0.5f },
-            { "phaserMix",      "Mix",      "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),        0.5f },
+            { "phaserRate",     "Rate",     "RATE",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.05f, 5.0f, 0.01f, 0.4f), 0.5f, {}, {}, LFOTarget::PhaserRate },
+            { "phaserDepth",    "Depth",    "DEPTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),        0.7f, {}, {}, LFOTarget::PhaserDepth },
+            { "phaserFeedback", "Feedback", "FB",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 0.95f, 0.01f),       0.5f, {}, {}, LFOTarget::PhaserFeedback },
+            { "phaserMix",      "Mix",      "MIX",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),        0.5f, {}, {}, LFOTarget::PhaserMix },
         };
         return m;
     }

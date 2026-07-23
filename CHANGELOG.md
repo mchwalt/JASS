@@ -23,6 +23,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   SYM/MIX, DISTORTION MIX, BITCRUSH BITS/RATE, CHORUS RATE/MIX, DELAY FB, REVERB ROOM/DAMP,
   OSC FB/VOICES — each with its own live ring.
 - **MOD MATRIX grown to 8 routing slots** (was 6), full-width layout.
+- **PHASER added as a matrix destination** (RATE · DEPTH · FB · MIX) — the last effect
+  module that was missing from full coverage; auto-enables + rings like the others.
+- **FREQ modulation clamped** to ±4 octaves (OSC/Alle-OSC/WAVETABLE) so stacked slots
+  can't drive the pitch into absurd, aliased territory.
 - Preset **FormatVersion 6** with automatic migration (`.jass` files): the legacy single
   "Target" per slot converts to MODULE + PARAM (global Pitch/Amp/Detune → "Alle OSC"), and
   the A→Z reorder remaps the persisted PARAM index. Older presets are backed up before upgrade.

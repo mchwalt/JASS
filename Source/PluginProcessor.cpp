@@ -182,7 +182,7 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      ID::oscOn(1), ID::oscOn(2), ID::oscOn(3),
                                      ID::filterOn, ID::formantOn, ID::wavetableOn, ID::wavefoldOn,
                                      ID::delayOn, ID::reverbOn, ID::chorusOn, ID::distortionOn,
-                                     ID::bitcrushOn, ID::subOn };
+                                     ID::bitcrushOn, ID::phaserOn, ID::subOn };
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);
