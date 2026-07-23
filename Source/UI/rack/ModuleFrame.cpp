@@ -34,21 +34,20 @@ namespace rack
         buildHeader();
         buildBody();
 
-        // Keep the on-screen keyboard as the SOLE keyboard-focus holder — even for frames created
-        // AFTER the editor's one-time dropFocus pass (a module revealed on preset load / via MODULES).
-        // Otherwise clicking this frame's enable/reset/info button or a knob steals focus and the
-        // computer keys stop playing until the user clicks the keyboard again. Value boxes still grab
-        // focus on demand (their TextEditor is created per-edit, unaffected by these flags).
-        std::function<void(juce::Component&)> dropFocus = [&dropFocus] (juce::Component& c)
+        // Make THIS frame's OWN controls never grab keyboard focus on click, so a module revealed
+        // AFTER the editor's one-time dropFocus pass (auto-shown on preset load) doesn't steal focus
+        // from the on-screen keyboard. ONLY the frame's own widgets are touched (ownedWidgets + the
+        // header icons) — NOT external Display components (the KEYBOARD, scope, spectrum, ADSR curve),
+        // which the frame merely hosts; the keyboard must stay the sole keyboard-focus holder. Value
+        // boxes still grab focus on demand (their TextEditor is created per-edit, unaffected here).
+        auto noFocus = [] (juce::Component* c)
         {
-            for (auto* ch : c.getChildren())
-            {
-                ch->setWantsKeyboardFocus (false);
-                ch->setMouseClickGrabsKeyboardFocus (false);
-                dropFocus (*ch);
-            }
+            if (c != nullptr) { c->setWantsKeyboardFocus (false); c->setMouseClickGrabsKeyboardFocus (false); }
         };
-        dropFocus (*this);
+        for (auto* w : ownedWidgets) noFocus (w);
+        noFocus (enableBtn.get());
+        noFocus (&resetBtn);
+        noFocus (infoBtn.get());
 
         if (desc.enableParam.isNotEmpty())
             enableValue = apvts.getRawParameterValue (desc.enableParam);
