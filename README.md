@@ -45,8 +45,12 @@ info** so nothing is hidden and every control explains itself.
 **Envelopes & modulation**
 - **ADSR** + **pitch envelope**
 - **4 LFOs** (sine/triangle/square/saw), tempo sync
-- **Modulation matrix** — 6 slots, free source→target wiring with amount;
-  routing auto-enables the source and the target module
+- **Modulation matrix** — **8 slots**, two-step **MODULE → PARAM** routing: pick a
+  module, then any of its parameters (sorted A→Z, named exactly like the knobs).
+  **Per-oscillator** targets (route FREQ/AMP/DETUNE/FB/VOICES to a *single* OSC, or
+  "Alle OSC" for all), plus near-**full coverage** of every module's continuous
+  parameters. Sources: LFO 1–4 / envelope / velocity. Each routing has a bipolar
+  amount, auto-enables its source + target module, and shows a live modulation ring.
 - **Poly glide** (mono/legato/poly), **arpeggiator** (up/down/up-down/random)
 
 **Processing & effects**
@@ -62,8 +66,11 @@ info** so nothing is hidden and every control explains itself.
 - Show/hide and reorder modules (persisted), **randomize** & **reset**
 - **Oscilloscope + spectrum analyzer** (FFT)
 - **3D spinning JASS logo** in the header (toggle off via right-click)
-- **Presets** in the `.jass` format + an auto-saved live state; demo presets and
-  example wavetables ship embedded and seed on first run
+- **Presets** in the `.jass` format + an auto-saved live state; demo presets
+  (incl. **"Matrix Showcase"**, which exercises the whole mod matrix) and example
+  wavetables ship embedded and seed on first run
+- **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
+  double-press assigns; assignments are global
 
 Use the **MODULES** button to show/hide modules per zone and reorder them by
 drag & drop (the layout is saved; "Reset layout" restores the factory arrangement):
@@ -106,7 +113,7 @@ Source/
 │                         <Name>Specs.h generate APVTS params + rack descriptor
 ├─ Audio/
 │  ├─ Parameters.h        parameter IDs + applyToVoice()
-│  ├─ PresetIO.h          .jass import/export (nested v4)
+│  ├─ PresetIO.h          .jass import/export (nested v6, migration)
 │  └─ SynthVoice.*        one voice (oscillators, generators, effects)
 ├─ DSP/                   Oscillator, Noise, KarplusStrong, WavetableBank,
 │                         BiquadFilter, LFO, ADSR, Effects, ModMatrix …
@@ -117,7 +124,7 @@ Architecture concept: **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Archite
 
 ## Docs
 
-- **[`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)** — `.jass` preset format (nested v4)
+- **[`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)** — `.jass` preset format (nested v6)
 - **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Architektur_Konzept.md)** — declarative module-spec architecture
 - **[`docs/Glossary.md`](docs/Glossary.md)** — glossary
 - `docs/notes/` — internal ideas, research & cheat-sheet notes (not official docs)
