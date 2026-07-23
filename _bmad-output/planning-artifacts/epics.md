@@ -618,3 +618,27 @@ feasibility assessment ("does it make sense"), the staged Phase A/B plan, dev an
 `SynthVoice`, stereo bus in `PluginProcessor.cpp:7-8`, pseudo-stereo `DSP/StereoWidth.h`), and the
 Open Design Questions (stereo-first vs surround-first, discrete-channel vs continuous panner, where
 the effects run, fate of the pseudo-stereo STEREO module, LFE handling, standalone device config)._
+
+---
+
+## Epic 11: Robustness & RT-Safety Hardening
+
+Correctness/real-time-safety pass (no new features) from the 2026-07-24 full-codebase BMAD review.
+Make the audio thread allocation-free & lock-free, fix latent teardown crashes and a few DSP bugs.
+All items are **pre-existing** (not from the MOD MATRIX work); none block releases.
+
+- **Story 11.1 — Audio thread allocation-free & lock-free (CRITICAL):** string-free `applyToVoice`
+  (cache atomic ptrs), move auto-enable/cross-mod reconciliation off the audio thread + fix the
+  `std::map` data race, Karplus/Wavetable no audio-thread alloc/free, reserve arp/glide MidiBuffers,
+  drop `dynamic_cast` in the voice loop.
+- **Story 11.2 — DSP correctness:** fix Pink/Blue noise (broken Voss-McCartney), cap foldback loop,
+  clamp only the wet path in Dist/Wavefold/Bitcrush, guard Reverb empty-buffer/`reset()`, clamp Delay
+  time before int-cast, advance oscillator phase when amplitude≈0.
+- **Story 11.3 — UI/lifetime & threading:** SafePointer on async callbacks (CallOutBox, PopupMenu,
+  FileChooser, ctor callAsync), guard EnvelopeDisplay timer, fix member destruction order, race-free
+  WaveformCapture, spectrum reads trailing window, guard rack layout loop, `markPresetClean` in
+  `setStateInformation`.
+- **Story 11.4 — Low-priority consistency (opportunistic).**
+
+_Full findings with `file:line` anchors, fix approaches and acceptance criteria:
+`_bmad-output/implementation-artifacts/11-1-rt-safety-hardening.md`._
