@@ -11,7 +11,7 @@ namespace Modules
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W3H1;
         m.params = {
             { "pitchEnvOn",     "Enabled", "",       ParamSpec::Kind::Bool },
-            { "pitchEnvAmount", "Amount",  "AMOUNT", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-48.0f, 48.0f, 0.1f),        0.0f },
+            { "pitchEnvAmount", "Amount",  "AMOUNT", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-48.0f, 48.0f, 0.1f),        0.0f, {}, {}, LFOTarget::PitchEnvAmount },
             { "pitchEnvTime",   "Time",    "TIME",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.005f, 2.0f, 0.001f, 0.4f), 0.3f },
         };
         return m;

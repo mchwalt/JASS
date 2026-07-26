@@ -15,6 +15,7 @@ class NoiseGenerator
 public:
     void setType(NoiseType t) { type = t; }
     void setAmplitude(double amp) { amplitude = amp; }
+    double getAmplitude() const { return amplitude; }   // base capture for per-voice modulation
 
     float nextSample()
     {

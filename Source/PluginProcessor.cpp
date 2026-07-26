@@ -182,7 +182,12 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      ID::oscOn(1), ID::oscOn(2), ID::oscOn(3),
                                      ID::filterOn, ID::formantOn, ID::wavetableOn, ID::wavefoldOn,
                                      ID::delayOn, ID::reverbOn, ID::chorusOn, ID::distortionOn,
-                                     ID::bitcrushOn, ID::phaserOn, ID::subOn };
+                                     ID::bitcrushOn, ID::phaserOn, ID::subOn,
+                                     // appended 2026-07-26 target modules (per-voice + global master-bus).
+                                     // MASTER/STEREO default ON, so routing never actually toggles them
+                                     // (auto-disable only undoes an enable WE made) — safe to list.
+                                     ID::noiseOn, ID::karplusOn, ID::pitchEnvOn,
+                                     ID::compOn, ID::stereoOn, ID::masterOn };
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);
@@ -503,6 +508,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 
     stereoWidth.prepare(sampleRate);
     compressor.prepare(sampleRate);
+    prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
     for (auto& l : uiLfos) l.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     arpHeldScratch.reserve(128);
@@ -556,6 +562,35 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (auto pos = ph->getPosition())
             if (auto hostBpm = pos->getBpm())
                 syncBpm = *hostBpm;
+
+    // ── Global (master-bus) modulation offsets ──────────────────────────────────────────────
+    // STEREO / MASTER / COMPRESSOR run on the SUMMED mix (further below), not per voice, so their
+    // MOD MATRIX routings are applied HERE at block rate. Source values are the GLOBAL uiLfo values
+    // from the PREVIOUS block (lfoDisplayValues, advanced after the render) — a one-block lag that is
+    // inaudible. Only LFO sources drive global targets (Velocity/Envelope have no single global
+    // value), which matches the editor's ring feed exactly, so ring == audio.
+    std::array<double, ModMatrixConfig::kNumTargets> gMod {};
+    {
+        using namespace Parameters;
+        static constexpr int kLfoSrc[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
+                                                   (int) ModSource::LFO3, (int) ModSource::LFO4 };
+        if (*apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f)
+            for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+            {
+                const int mod = (int) *apvts.getRawParameterValue(ID::modSlotModule(n));
+                if (mod <= 0) continue;   // Off
+                const int   src = (int) *apvts.getRawParameterValue(ID::modSlotSource(n));
+                const int   par = (int) *apvts.getRawParameterValue(ID::modSlotParam(n));
+                const float amt = *apvts.getRawParameterValue(ID::modSlotAmount(n));
+                float sv = 0.0f;
+                for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = lfoDisplayValues[i].load();
+                const int tgt = (int) ModDest::targetOf(mod, par);
+                if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
+            }
+    }
+    // MASTER · TEMPO — wobble the Tempo-Sync BPM so synced LFOs/delay drift around the beat (applied
+    // to the resolved tempo, host or internal, ±40 BPM at full modulation).
+    syncBpm = juce::jlimit(40.0, 250.0, syncBpm + gMod[(size_t) LFOTarget::MasterTempo] * 90.0);
 
     // Per-LFO effective rate (Tempo-Sync resolved once per block; Free => raw RATE knob).
     double lfoRateHz[kNumLFOs];
@@ -770,24 +805,28 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     {
         using namespace Parameters;
         compressor.enabled   = *apvts.getRawParameterValue(ID::compOn) > 0.5f;
-        compressor.threshold = *apvts.getRawParameterValue(ID::compThreshold);
-        compressor.ratio     = *apvts.getRawParameterValue(ID::compRatio);
-        compressor.attackMs  = *apvts.getRawParameterValue(ID::compAttack);
-        compressor.releaseMs = *apvts.getRawParameterValue(ID::compRelease);
-        compressor.makeupDb  = *apvts.getRawParameterValue(ID::compMakeup);
+        // Base + MOD MATRIX offset (gMod), each clamped to the param's own range.
+        compressor.threshold = juce::jlimit(-60.0f, 0.0f,   (float) (*apvts.getRawParameterValue(ID::compThreshold) + gMod[(size_t) LFOTarget::CompThreshold] * 12.0));
+        compressor.ratio     = juce::jlimit(1.0f, 20.0f,    (float) (*apvts.getRawParameterValue(ID::compRatio)     + gMod[(size_t) LFOTarget::CompRatio]     * 4.0));
+        compressor.attackMs  = juce::jlimit(0.1f, 100.0f,   (float) (*apvts.getRawParameterValue(ID::compAttack)    + gMod[(size_t) LFOTarget::CompAttack]    * 20.0));
+        compressor.releaseMs = juce::jlimit(10.0f, 1000.0f, (float) (*apvts.getRawParameterValue(ID::compRelease)   + gMod[(size_t) LFOTarget::CompRelease]   * 100.0));
+        compressor.makeupDb  = juce::jlimit(0.0f, 24.0f,    (float) (*apvts.getRawParameterValue(ID::compMakeup)    + gMod[(size_t) LFOTarget::CompMakeup]    * 6.0));
         compressor.process(buffer);
     }
 
     // Final pseudo-stereo stage: turns the mono mix into a wide stereo image.
     stereoWidth.enabled = *apvts.getRawParameterValue(Parameters::ID::stereoOn) > 0.5f;
-    stereoWidth.width   = *apvts.getRawParameterValue(Parameters::ID::stereoWidth);
-    stereoWidth.timeMs  = *apvts.getRawParameterValue(Parameters::ID::stereoTime);
+    stereoWidth.width   = juce::jlimit(0.0f, 1.0f,  (float) (*apvts.getRawParameterValue(Parameters::ID::stereoWidth) + gMod[(size_t) LFOTarget::StereoWidth] * 1.0));
+    stereoWidth.timeMs  = juce::jlimit(1.0f, 15.0f, (float) (*apvts.getRawParameterValue(Parameters::ID::stereoTime)  + gMod[(size_t) LFOTarget::StereoTime]  * 7.0));
     stereoWidth.process(buffer);
 
-    // Master volume — gated by masterOn (Story 2.4): off => silent output.
+    // Master volume — gated by masterOn (Story 2.4): off => silent output. Base + MOD MATRIX offset,
+    // applied as a per-block RAMP (prev→cur) so LFO-modulated VOL doesn't zipper.
     const bool  masterOn   = *apvts.getRawParameterValue(Parameters::ID::masterOn) > 0.5f;
-    const float masterGain = masterOn ? apvts.getRawParameterValue(Parameters::ID::masterVol)->load() : 0.0f;
-    buffer.applyGain(masterGain);
+    const float masterVol  = juce::jlimit(0.0f, 1.0f, (float) (apvts.getRawParameterValue(Parameters::ID::masterVol)->load() + gMod[(size_t) LFOTarget::MasterVol] * 1.0));
+    const float masterGain = masterOn ? masterVol : 0.0f;
+    buffer.applyGainRamp(0, buffer.getNumSamples(), prevMasterGain, masterGain);
+    prevMasterGain = masterGain;
 }
 
 void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
