@@ -45,7 +45,8 @@ struct OscModOffsets
     double detune[3]   { 0.0, 0.0, 0.0 };   // detune offset (scaled + clamped in the voice)
     double feedback[3] { 0.0, 0.0, 0.0 };   // self-FM feedback offset (scaled + clamped in the voice)
     double voices[3]   { 0.0, 0.0, 0.0 };   // unison voice-count offset (scaled + clamped in the voice)
-    void clear() noexcept { for (int i = 0; i < 3; ++i) { pitch[i] = amp[i] = detune[i] = feedback[i] = voices[i] = 0.0; } }
+    double pan[3]      { 0.0, 0.0, 0.0 };   // stereo-pan offset (Epic 10; applied per OSC in Stereo-Pan mode)
+    void clear() noexcept { for (int i = 0; i < 3; ++i) { pitch[i] = amp[i] = detune[i] = feedback[i] = voices[i] = pan[i] = 0.0; } }
 };
 
 inline void modMatrixAccumulate (const ModSlot* slots, bool matrixOn,
@@ -74,6 +75,7 @@ inline void modMatrixAccumulate (const ModSlot* slots, bool matrixOn,
                         case LFOTarget::OscDetune:   oscOut.detune[sl.oscIndex]   += v; break;
                         case LFOTarget::OscFeedback: oscOut.feedback[sl.oscIndex] += v; break;
                         case LFOTarget::OscVoices:   oscOut.voices[sl.oscIndex]   += v; break;
+                        case LFOTarget::OscPan:      oscOut.pan[sl.oscIndex]      += v; break;
                         default:                     offsetOut[(size_t) sl.target] += v; break;   // defensive
                     }
                 }

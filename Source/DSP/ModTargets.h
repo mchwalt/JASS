@@ -79,7 +79,15 @@
     X(CompRatio,         "CompRatio",        "Comp Ratio",   "compOn")                            \
     X(CompAttack,        "CompAttack",       "Comp Attack",  "compOn")                            \
     X(CompRelease,       "CompRelease",      "Comp Release", "compOn")                            \
-    X(CompMakeup,        "CompMakeup",       "Comp Makeup",  "compOn")
+    X(CompMakeup,        "CompMakeup",       "Comp Makeup",  "compOn")                            \
+    /* Spatialization (Epic 10): per-generator stereo PAN as a mod target (auto-panning). OscPan is  \
+       per-oscillator (oscIndex-scoped, like Frequency); the others are per generator. Only audible   \
+       in Stereo-Pan output mode. Applied in SynthVoice by re-deriving the per-generator pan gains.*/ \
+    X(OscPan,            "OscPan",           "Pan",          "")                                  \
+    X(SubPan,            "SubPan",           "Sub Pan",      "subOn")                             \
+    X(NoisePan,          "NoisePan",         "Noise Pan",    "noiseOn")                           \
+    X(KarplusPan,        "KarplusPan",       "Karplus Pan",  "karplusOn")                         \
+    X(WavetablePan,      "WavetablePan",     "WT Pan",       "wavetableOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget
