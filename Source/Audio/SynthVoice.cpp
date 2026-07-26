@@ -31,6 +31,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
         s.reverb.prepare(sampleRate);
     }
     for (auto& b : binaural) b.prepare(sampleRate);   // 10.3: size the per-generator ITD delay lines once
+    for (auto& h : hrtf)     h.prepare(sampleRate);   // 10.3: init HRIR panners (clear history, center kernel)
 }
 
 void SynthVoice::startNote(int midiNoteNumber, float velocity,
@@ -67,6 +68,7 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     noise.reset();
     wavetable.reset();
     for (auto& b : binaural) b.reset();   // 10.3: clear ITD tails so a new note doesn't click
+    for (auto& h : hrtf)     h.reset();   // 10.3: clear HRIR history so a new note doesn't click
     if (pluckEnabled)
         pluckKarplus();   // pluck at the transposed pitch (skipped for the drone)
 
@@ -212,7 +214,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Channel count for this block: 1 (Mono / Pseudo-Stereo — byte-identical mono path) or 2
     // (Stereo-Pan). Per-generator equal-power pan gains, computed once per block (no trig per sample).
     const bool binauralMode = (outputMode == (int) OutputMode::Binaural);
-    const int nCh = (outputMode == (int) OutputMode::StereoPan || binauralMode) ? kMaxOutChannels : 1;
+    const bool hrtfMode     = (outputMode == (int) OutputMode::Kunstkopf);   // 10.3: HRIR convolution (2-ch)
+    const int nCh = (outputMode == (int) OutputMode::StereoPan || binauralMode || hrtfMode) ? kMaxOutChannels : 1;
     for (int g = 0; g < kNumPanGenerators; ++g)
         positionToGains(generatorPan[(size_t) g], nCh, panGains[g]);
     // Effective per-generator pan value (base + modulation) — the binaural renderer needs the pan
@@ -220,6 +223,11 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // mod routing is active (then refreshed per sample alongside curGains, below).
     float effPan[kNumPanGenerators];
     for (int g = 0; g < kNumPanGenerators; ++g) effPan[g] = generatorPan[g];
+
+    // HRTF (Kunstkopf) selects each generator's HRIR kernel ONCE PER BLOCK (anti-zipper granularity);
+    // under an active PAN mod it is refreshed a few times per block inside the sample loop (throttled).
+    if (hrtfMode)
+        for (int g = 0; g < kNumPanGenerators; ++g) hrtf[(size_t) g].setPanForBlock(effPan[g]);
 
     // PAN as a mod target (Epic 10): auto-panning. Only meaningful in Stereo-Pan (nCh>1). When active,
     // the per-generator pan gains are re-derived PER SAMPLE from the base pan + the modulation; else the
@@ -431,6 +439,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 effPan[g] = (float) std::clamp(p, -1.0, 1.0);
                 positionToGains(effPan[g], nCh, curGains[g]);
             }
+            // HRTF auto-pan: refresh each generator's HRIR kernel a few times per block (every 64
+            // samples) — cheap enough, smooth enough, and far below per-sample cost (128-tap reselect).
+            if (hrtfMode && (sample & 63) == 0)
+                for (int g = 0; g < kNumPanGenerators; ++g) hrtf[(size_t) g].setPanForBlock(effPan[g]);
         }
 
         float channel[kMaxOutChannels] = {};
@@ -439,6 +451,11 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             if (binauralMode)   // 10.3: per-generator ITD/ILD/head-shadow render to L/R (headphones 3D)
             {
                 const auto o = binaural[(size_t) gen].process(s, effPan[gen]);
+                channel[0] += o.l; channel[1] += o.r;
+            }
+            else if (hrtfMode)  // 10.3: per-generator HRIR convolution → measured L/R (Kunstkopf 3D)
+            {
+                const auto o = hrtf[(size_t) gen].process(s, effPan[gen]);
                 channel[0] += o.l; channel[1] += o.r;
             }
             else

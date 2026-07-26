@@ -15,7 +15,7 @@ namespace Modules
             // Global OUTPUT MODE (Epic 10). Mono = the raw mono sum to both channels; Pseudo-Stereo (default,
             // unchanged) = the Haas WIDTH/TIME widener below; Stereo-Pan = per-generator PAN into true L/R.
             // WIDTH/TIME only apply in Pseudo-Stereo. Append-only (Surround/Binaural appended later).
-            { "outputMode",  "Mode",    "MODE",  ParamSpec::Kind::Choice, {}, 1.0f, { "Mono", "Pseudo-Stereo", "Stereo-Pan", "Binaural" } },   // Binaural = 3D on headphones (Kunstkopf)
+            { "outputMode",  "Mode",    "MODE",  ParamSpec::Kind::Choice, {}, 1.0f, { "Mono", "Pseudo-Stereo", "Stereo-Pan", "Binaural", "Kunstkopf (HRTF)" } },   // Binaural = parametric 3D on headphones; Kunstkopf = measured MIT-KEMAR HRIR convolution
             { "stereoWidth", "Width",   "WIDTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  0.5f, {}, {}, LFOTarget::StereoWidth },
             { "stereoTime",  "Time",    "TIME",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (1.0f, 15.0f, 0.1f), 12.0f, {}, {}, LFOTarget::StereoTime },
         };

@@ -58,7 +58,11 @@ info** so nothing is hidden and every control explains itself.
 - **Distortion** (soft/hard clip, foldback), **wavefolding**, **bitcrusher**
 - **Compressor**, **phaser/flanger**
 - **Delay** (tempo sync), **chorus**, **reverb**
-- **Pseudo-stereo** master stage (on by default)
+- **STEREO output stage** with a per-generator **PAN** and five modes: Mono,
+  **Pseudo-stereo** (Haas widener, on by default), **Stereo-Pan**, **Binaural**
+  (parametric headphone 3-D) and **Kunstkopf (HRTF)** — real out-of-head placement
+  by convolving each generator with a measured **MIT KEMAR** head impulse response.
+  PAN is a mod-matrix target, so any source can auto-pan a voice in 3-D.
 
 **Playing & workflow**
 - **19″ rack UI** with zones; every module and zone has **enable / reset / info**
@@ -159,3 +163,13 @@ JASS is released under the **[GNU GPL v3](LICENSE)**.
 JASS embeds **JUCE** as a submodule. JUCE is dual-licensed (**GPLv3 or a
 commercial JUCE licence**); the GPLv3 choice covers free JUCE use. Distributing
 JASS under other terms requires an appropriate JUCE licence.
+
+### Third-party data
+
+The **Kunstkopf (HRTF)** output mode uses the **MIT KEMAR** HRTF measurements
+(Bill Gardner & Keith Martin, MIT Media Lab, 1994), embedded as
+[`Source/DSP/KemarHrir.h`](Source/DSP/KemarHrir.h). The data is provided free with
+no restrictions on use, provided the authors are cited — see
+<https://sound.media.mit.edu/resources/KEMAR.html>. The embedded header is
+regenerated from the original set by [`tools/gen_kemar_hrir.py`](tools/gen_kemar_hrir.py)
+(see [`tools/README.md`](tools/README.md)).
