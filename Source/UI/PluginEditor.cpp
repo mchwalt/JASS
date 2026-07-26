@@ -599,6 +599,10 @@ void SynthyEditor::showModulesMenu()
 
 void SynthyEditor::timerCallback()
 {
+    // RT-safety (11.1): run any auto-enable coupling deferred from the audio thread (host automation)
+    // here on the message thread — where allocating + setValueNotifyingHost is safe.
+    processor.reconcileParamCouplingsIfDirty();
+
     double ratio = processor.getCurrentNoteRatio();
 
     // Live modulation rings (Story 8.1): build the amount currently applied to each
