@@ -1257,10 +1257,11 @@ void SynthyEditor::buildRack()
 
     rackBody->addModule(makeModuleDescriptor(Modules::sub()));
     rackBody->addModule(makeModuleDescriptor(Modules::noise()));
-    add(Rack::Zone::Generators, SizeClass::W6H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
+    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,   // W8: PLUCK + 5 knobs incl. PAN
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
-          K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR") });
+          K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
+          K(P::karplusPan, "PAN") });   // Epic 10: stereo placement
     add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+6 knobs incl. PAN
         { Combo{ P::wavetableBank, "BANK",
                  std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
