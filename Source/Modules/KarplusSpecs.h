@@ -16,6 +16,7 @@ namespace Modules
             { "karplusAmp",     "Amplitude", "AMP",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::KarplusAmp },
             { "karplusDamping", "Damping",   "DAMP", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::KarplusDamping },
             { "karplusStretch", "Stretch",   "STR",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::KarplusStretch },
+            { "karplusPan",     "Pan",       "PAN",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f },   // Epic 10: stereo placement
         };
         return m;
     }

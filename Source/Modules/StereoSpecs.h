@@ -8,10 +8,14 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "stereo"; m.title = "STEREO"; m.persistObject = "Stereo"; m.enableParamId = "stereoOn";
-        m.type = rack::ModuleType::Processor; m.zone = rack::Zone::MasterBus; m.size = rack::SizeClass::W3H1;
+        m.type = rack::ModuleType::Processor; m.zone = rack::Zone::MasterBus; m.size = rack::SizeClass::W5H1;
         m.alignRight = true;   // MASTER BUS: hug the right edge (PRESETS holds the left)
         m.params = {
             { "stereoOn",    "Enabled", "",      ParamSpec::Kind::Bool, {}, 1.0f },   // default ON (factory: pseudo-stereo on)
+            // Global OUTPUT MODE (Epic 10). Mono = the raw mono sum to both channels; Pseudo-Stereo (default,
+            // unchanged) = the Haas WIDTH/TIME widener below; Stereo-Pan = per-generator PAN into true L/R.
+            // WIDTH/TIME only apply in Pseudo-Stereo. Append-only (Surround/Binaural appended later).
+            { "outputMode",  "Mode",    "MODE",  ParamSpec::Kind::Choice, {}, 1.0f, { "Mono", "Pseudo-Stereo", "Stereo-Pan" } },
             { "stereoWidth", "Width",   "WIDTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  0.5f, {}, {}, LFOTarget::StereoWidth },
             { "stereoTime",  "Time",    "TIME",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (1.0f, 15.0f, 0.1f), 12.0f, {}, {}, LFOTarget::StereoTime },
         };

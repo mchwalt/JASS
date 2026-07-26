@@ -1257,11 +1257,12 @@ void SynthyEditor::buildRack()
 
     rackBody->addModule(makeModuleDescriptor(Modules::sub()));
     rackBody->addModule(makeModuleDescriptor(Modules::noise()));
-    add(Rack::Zone::Generators, SizeClass::W6H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,
+    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,   // W8: PLUCK + 5 knobs incl. PAN
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
-          K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR") });
-    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,
+          K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
+          K(P::karplusPan, "PAN") });   // Epic 10: stereo placement
+    add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+6 knobs incl. PAN
         { Combo{ P::wavetableBank, "BANK",
                  std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
           FileAction{ "LOAD WAV",
@@ -1275,7 +1276,8 @@ void SynthyEditor::buildRack()
                       { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
                       PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
           Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq), Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),
-          Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune) },
+          Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
+          K(P::wavetablePan, "PAN") },   // Epic 10: stereo placement
         [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
 
     // ---- MODULATION ----

@@ -21,7 +21,7 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
@@ -234,6 +234,10 @@ namespace rack
             case SizeClass::W16H2: return { 16, 2, 32, KnobSize::Small };  // MOD MATRIX wide: 2 rows × 3 slots
             case SizeClass::W24H1: return { 24, 1, 24, KnobSize::Small };  // full-width single row  (on-screen keyboard, flat)
             case SizeClass::W24H2: return { 24, 2, 48, KnobSize::Small };  // full-width two rows    (on-screen keyboard, tall keys)
+            case SizeClass::W10H1: return { 10, 1, 10, KnobSize::Small };  // ~7-8 controls single row (WAVETABLE + PAN)
+            case SizeClass::W12H1: return { 12, 1, 12, KnobSize::Small };  // widest single row (WAVETABLE: BANK+LOAD+6 knobs)
+            case SizeClass::W13H1: return { 13, 1, 13, KnobSize::Small };  // WAVETABLE (BANK+LOAD+6 knobs, roomier)
+            case SizeClass::W14H1: return { 14, 1, 14, KnobSize::Small };  // WAVETABLE with PAN (BANK+LOAD+6 knobs)
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };
