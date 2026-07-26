@@ -477,6 +477,30 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     keyboard->setAvailableRange(21, 108);  // A0 .. C8 (full 88-key piano)
     keyboard->setKeyWidth(20.0f);          // FillWidthKeyboard::resized() spreads keys to fill its width
     keyboard->setKeyPressBaseOctave(kbBaseOctave);
+    // Custom computer-key → note map for a German (QWERTZ) keyboard: HOME row = white keys, TOP row =
+    // black keys, spanning the full width from 'a' up to the 'ä'/'#' keys (~2.5 octaves). JUCE polls
+    // playing via KeyPress::isCurrentlyDown → VkKeyScan (Windows), which resolves each character to
+    // the physical key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
+    keyboard->clearKeyMappings();
+    {
+        // Letters use CHARACTERS — JUCE resolves them to the active layout via VkKeyScan. The keys
+        // PAST the letter block are addressed by their raw virtual-key CODE (physical key) instead of
+        // the layout character (ö/ä/#/+), so they don't depend on the German character assignment.
+        // 0x10000 == JUCE's Windows extendedKeyModifier: it tells isCurrentlyDown "the low bits are a
+        // raw VK, don't run VkKeyScan". (Non-Windows falls back to the character.)
+        struct KM { int code; int offsetFromC; };
+       #if JUCE_WINDOWS
+        constexpr int E = 0x10000;
+        const int keyOe = E | 0xC0, keyAe = E | 0xDE, keyHash = E | 0xBF, keyPlus = E | 0xBB;   // VK_OEM_3/7/2/PLUS
+       #else
+        const int keyOe = L'ö', keyAe = L'ä', keyHash = '#', keyPlus = '+';
+       #endif
+        const KM whites[] = { {'a',0},{'s',2},{'d',4},{'f',5},{'g',7},{'h',9},{'j',11},
+                              {'k',12},{'l',14},{keyOe,16},{keyAe,17},{keyHash,19} };   // C D E F G A B C D E F G
+        const KM blacks[] = { {'w',1},{'e',3},{'t',6},{'z',8},{'u',10},{'o',13},{'p',15},{keyPlus,18} };   // C# D# F# G# A# C# D# F#
+        for (const auto& k : whites) keyboard->setKeyPressForNote(juce::KeyPress(k.code, juce::ModifierKeys(), 0), k.offsetFromC);
+        for (const auto& k : blacks) keyboard->setKeyPressForNote(juce::KeyPress(k.code, juce::ModifierKeys(), 0), k.offsetFromC);
+    }
     keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
     // z / x shift the octave; the keyboard must have focus — grabbed on launch/click).
@@ -887,11 +911,11 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         helpPanel->setVisible(false);
         return true;
     }
-    // z / x shift the computer-keyboard octave (these keys aren't note keys).
-    auto c = key.getTextCharacter();
-    if (c == 'z' || c == 'Z' || c == 'x' || c == 'X')
+    // Up / Down arrows shift the computer-keyboard octave. (Moved off z/x — those are now note keys,
+    // so the whole letter area from 'a' to the 'ä'/'#' keys is free for playing.)
+    if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
     {
-        int dir = (c == 'z' || c == 'Z') ? -1 : 1;
+        int dir = (key == juce::KeyPress::upKey) ? 1 : -1;
         // Release any notes held via the computer keyboard BEFORE shifting the octave. Otherwise
         // the held key's note-off (on release) maps to the NEW octave and the OLD note stays on
         // (stuck note). Only the keyboard's own channel — the ch.16 auto-play drone is untouched.
