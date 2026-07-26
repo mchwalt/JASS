@@ -4,13 +4,13 @@
 
 static double distortionFoldback(double x)
 {
-    // Fold signal back when it exceeds ±1
-    while (x > 1.0 || x < -1.0)
-    {
-        if (x > 1.0) x = 2.0 - x;
-        if (x < -1.0) x = -2.0 - x;
-    }
-    return x;
+    // Fold the signal back into [-1,1]. The old iterative `while (x>1||x<-1)` had no cap: a ±Inf
+    // input looped forever and a very large finite input was O(n). This is the same triangle fold
+    // in closed form (period 4), so it is O(1) and hang-proof; non-finite input maps to silence.
+    if (! std::isfinite(x)) return 0.0;
+    double y = std::fmod(x - 1.0, 4.0);
+    if (y < 0.0) y += 4.0;              // y in [0,4)
+    return std::fabs(y - 2.0) - 1.0;   // triangle wave in [-1,1]
 }
 
 float DistortionEffect::process(float input)
@@ -29,8 +29,11 @@ float DistortionEffect::process(float input)
         default:                       distorted = driven; break;
     }
 
-    double output = input * (1.0 - mix) + distorted * mix;
-    return static_cast<float>(std::clamp(output, -1.0, 1.0));
+    // Clamp only the WET path; do NOT clamp the crossfade output, or the DRY signal (input) gets
+    // hard-clipped whenever |input|>1 — audible at mix<1 (esp. mix==0). The voice applies the final
+    // ±1 clamp after the whole chain (matches Delay/Chorus/Reverb, which never clamp their mix).
+    const double wet = std::clamp(distorted, -1.0, 1.0);
+    return static_cast<float>(input * (1.0 - mix) + wet * mix);
 }
 
 // --- Wavefolder ---
@@ -45,10 +48,11 @@ float WavefolderEffect::process(float input)
     // Asymmetric gain per half-cycle adds even harmonics while keeping f(0)=0
     // (so no DC offset is introduced).
     double asym = (input >= 0.0f) ? (1.0 + symmetry) : (1.0 - symmetry);
-    double folded = std::sin(static_cast<double>(input) * g * asym * PI * 0.5);
+    double folded = std::sin(static_cast<double>(input) * g * asym * PI * 0.5);   // already in [-1,1]
 
-    double output = input * (1.0 - mix) + folded * mix;
-    return static_cast<float>(std::clamp(output, -1.0, 1.0));
+    // Clamp only the wet path (folded is bounded); leave the dry (input) unclipped — the voice
+    // applies the final ±1 clamp for the whole chain.
+    return static_cast<float>(input * (1.0 - mix) + folded * mix);
 }
 
 // --- Bitcrusher ---
@@ -69,8 +73,9 @@ float BitcrusherEffect::process(float input)
     double step = 2.0 / levels;
     s = step * std::floor(s / step + 0.5);
 
-    double output = input * (1.0 - mix) + s * mix;
-    return static_cast<float>(std::clamp(output, -1.0, 1.0));
+    // Clamp only the wet path; leave the dry unclipped (the voice applies the final ±1 clamp).
+    const double wet = std::clamp(s, -1.0, 1.0);
+    return static_cast<float>(input * (1.0 - mix) + wet * mix);
 }
 
 // --- Delay ---
@@ -89,7 +94,9 @@ float DelayEffect::process(float input)
     if (!enabled || buffer.empty()) return input;
 
     int bufSize = static_cast<int>(buffer.size());
-    int delaySamples = std::clamp(static_cast<int>(time * sr), 1, bufSize - 1);
+    // Clamp in DOUBLE before the int cast: at a degenerate/near-zero host tempo `time*sr` can exceed
+    // INT_MAX, and casting an out-of-range double to int is undefined behaviour.
+    int delaySamples = static_cast<int>(std::clamp(time * sr, 1.0, static_cast<double>(bufSize - 1)));
     int readPos = (writePos - delaySamples + bufSize) % bufSize;
 
     float delayed = buffer[readPos];
@@ -287,6 +294,7 @@ void ChorusEffect::reset()
 
 float ReverbEffect::CombFilter::process(float input, float fb, float damp)
 {
+    if (buffer.empty()) return 0.0f;   // degenerate size guard (never index an empty buffer)
     float output = buffer[pos];
     filterStore = output * (1.0f - damp) + filterStore * damp;
     buffer[pos] = input + filterStore * fb;
@@ -296,6 +304,7 @@ float ReverbEffect::CombFilter::process(float input, float fb, float damp)
 
 float ReverbEffect::AllpassFilter::process(float input)
 {
+    if (buffer.empty()) return input;   // degenerate size guard
     float delayed = buffer[pos];
     float output = -input + delayed;
     buffer[pos] = input + delayed * 0.5f;
@@ -306,12 +315,13 @@ float ReverbEffect::AllpassFilter::process(float input)
 void ReverbEffect::prepare(double sampleRate)
 {
     double scale = sampleRate / 44100.0;
-    combs[0].init(static_cast<int>(1116 * scale));
-    combs[1].init(static_cast<int>(1188 * scale));
-    combs[2].init(static_cast<int>(1277 * scale));
-    combs[3].init(static_cast<int>(1356 * scale));
-    allpasses[0].init(static_cast<int>(556 * scale));
-    allpasses[1].init(static_cast<int>(441 * scale));
+    // std::max(1,…): a degenerate sample rate must never produce a zero-length delay line.
+    combs[0].init(std::max(1, static_cast<int>(1116 * scale)));
+    combs[1].init(std::max(1, static_cast<int>(1188 * scale)));
+    combs[2].init(std::max(1, static_cast<int>(1277 * scale)));
+    combs[3].init(std::max(1, static_cast<int>(1356 * scale)));
+    allpasses[0].init(std::max(1, static_cast<int>(556 * scale)));
+    allpasses[1].init(std::max(1, static_cast<int>(441 * scale)));
     initialized = true;
 }
 
@@ -336,5 +346,9 @@ float ReverbEffect::process(float input)
 
 void ReverbEffect::reset()
 {
-    initialized = false;
+    // Clear the tail WITHOUT tearing down the filters: setting initialized=false here left the reverb
+    // permanently bypassed (process() returns dry until prepare() runs again). Keep the prepared
+    // buffers, just zero their state.
+    for (auto& c : combs)     c.clear();
+    for (auto& a : allpasses) a.clear();
 }
