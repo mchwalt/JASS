@@ -186,6 +186,17 @@ namespace rack
         // Dependent-combo links (see ComboDependency). Polled in the frame's timer (message thread),
         // so a MODULE change re-lists its slot's PARAM combo without touching the audio thread.
         std::vector<ComboDependency> comboDeps;
+
+        // Per-slot activity highlight (MOD MATRIX). The body is a repeating run of `groupSize`
+        // controls (a routing slot = SRC·MOD·PARAM·AMT = 4). isActive(slotIndex) reports whether
+        // that slot is "wired" (its MOD != Off), so the frame can DIM inactive slots and mark active
+        // ones with a lit dot. Polled in the frame timer (message thread). groupSize 0 => feature off.
+        struct SlotActivity
+        {
+            int groupSize = 0;
+            std::function<bool(int slotIndex)> isActive;
+        };
+        SlotActivity slotActivity;
     };
 
     // --- Size-class table (AD-2) ------------------------------------------

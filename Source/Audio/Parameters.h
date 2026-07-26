@@ -19,14 +19,31 @@ namespace Parameters
     // Parameter IDs
     namespace ID
     {
-        // Oscillators
-        inline juce::String oscOn(int i)    { return "osc" + juce::String(i) + "On"; }
-        inline juce::String oscWave(int i)  { return "osc" + juce::String(i) + "Wave"; }
-        inline juce::String oscFreq(int i)  { return "osc" + juce::String(i) + "Freq"; }
-        inline juce::String oscAmp(int i)   { return "osc" + juce::String(i) + "Amp"; }
-        inline juce::String oscUniVoices(int i) { return "osc" + juce::String(i) + "UniVoices"; }
-        inline juce::String oscUniDetune(int i) { return "osc" + juce::String(i) + "UniDetune"; }
-        inline juce::String oscFeedback(int i)  { return "osc" + juce::String(i) + "Feedback"; }  // Self-FM depth (append-only)
+        // Indexed parameter IDs (RT-safety, Story 11.1): these used to build a fresh juce::String on
+        // every call — ~550 heap allocations per audio block once applyToVoice reads them 8×/block.
+        // Each now returns a reference into a static cache built ONCE (lazily, then warmed on the
+        // message thread via warmIndexedIds()), so the audio thread never constructs a String here.
+        // `count` is the max 1-based index the helper is ever called with; the index is clamped.
+        #define JASS_INDEXED_ID(fn, count, prefix, suffix)                                              \
+            inline const juce::String& fn (int i)                                                       \
+            {                                                                                           \
+                static const auto cache = []                                                            \
+                {                                                                                       \
+                    std::array<juce::String, (size_t) (count)> a;                                       \
+                    for (int k = 0; k < (count); ++k) a[(size_t) k] = juce::String (prefix) + juce::String (k + 1) + suffix; \
+                    return a;                                                                           \
+                }();                                                                                    \
+                return cache[(size_t) (juce::jlimit (1, (int) (count), i) - 1)];                        \
+            }
+
+        // Oscillators (max index 3)
+        JASS_INDEXED_ID (oscOn,        3, "osc", "On")
+        JASS_INDEXED_ID (oscWave,      3, "osc", "Wave")
+        JASS_INDEXED_ID (oscFreq,      3, "osc", "Freq")
+        JASS_INDEXED_ID (oscAmp,       3, "osc", "Amp")
+        JASS_INDEXED_ID (oscUniVoices, 3, "osc", "UniVoices")
+        JASS_INDEXED_ID (oscUniDetune, 3, "osc", "UniDetune")
+        JASS_INDEXED_ID (oscFeedback,  3, "osc", "Feedback")   // Self-FM depth (append-only)
 
         // Mix mode
         constexpr const char* mixMode = "mixMode";
@@ -128,12 +145,12 @@ namespace Parameters
 
         // LFO — indexed 1..kNumLFOs, exactly like the oscillators (oscOn(i) …). lfoOn(1)="lfo1On".
         // A new LFO = bump kNumLFOs (LFO.h) + append a ModSource; every layer loops over these.
-        inline juce::String lfoOn(int i)      { return "lfo" + juce::String(i) + "On"; }
-        inline juce::String lfoWave(int i)    { return "lfo" + juce::String(i) + "Wave"; }
-        inline juce::String lfoRate(int i)    { return "lfo" + juce::String(i) + "Rate"; }
-        inline juce::String lfoDepth(int i)   { return "lfo" + juce::String(i) + "Depth"; }
-        inline juce::String lfoTarget(int i)  { return "lfo" + juce::String(i) + "Target"; }
-        inline juce::String lfoSyncDiv(int i) { return "lfo" + juce::String(i) + "SyncDiv"; }
+        JASS_INDEXED_ID (lfoOn,      kNumLFOs, "lfo", "On")       // max index kNumLFOs
+        JASS_INDEXED_ID (lfoWave,    kNumLFOs, "lfo", "Wave")
+        JASS_INDEXED_ID (lfoRate,    kNumLFOs, "lfo", "Rate")
+        JASS_INDEXED_ID (lfoDepth,   kNumLFOs, "lfo", "Depth")
+        JASS_INDEXED_ID (lfoTarget,  kNumLFOs, "lfo", "Target")
+        JASS_INDEXED_ID (lfoSyncDiv, kNumLFOs, "lfo", "SyncDiv")
 
         // Reverb
         constexpr const char* reverbOn   = "reverbOn";
@@ -194,12 +211,25 @@ namespace Parameters
         // Amount}, plus a master enable. Append-only, indexed helpers (mirror oscFreq(i)).
         // v5 (Epic 8.3): the flat DEST target became MODULE (ModDest module index) + PARAM (param
         // index within that module). The legacy modSlotTarget id is migrated away (PresetIO / XML).
-        inline juce::String modSlotSource(int n) { return "modSlot" + juce::String(n) + "Source"; }
-        inline juce::String modSlotModule(int n) { return "modSlot" + juce::String(n) + "Module"; }
-        inline juce::String modSlotParam (int n) { return "modSlot" + juce::String(n) + "Param"; }
-        inline juce::String modSlotAmount(int n) { return "modSlot" + juce::String(n) + "Amount"; }
-        inline juce::String modSlotTargetLegacy(int n) { return "modSlot" + juce::String(n) + "Target"; }   // v4 and older
+        JASS_INDEXED_ID (modSlotSource,       ModMatrixConfig::kNumSlots, "modSlot", "Source")   // max index kNumSlots
+        JASS_INDEXED_ID (modSlotModule,       ModMatrixConfig::kNumSlots, "modSlot", "Module")
+        JASS_INDEXED_ID (modSlotParam,        ModMatrixConfig::kNumSlots, "modSlot", "Param")
+        JASS_INDEXED_ID (modSlotAmount,       ModMatrixConfig::kNumSlots, "modSlot", "Amount")
+        JASS_INDEXED_ID (modSlotTargetLegacy, ModMatrixConfig::kNumSlots, "modSlot", "Target")   // v4 and older
         constexpr const char* modMatrixOn = "modMatrixOn";
+
+        #undef JASS_INDEXED_ID
+
+        // Warm every indexed-ID static cache on the MESSAGE thread (call from prepareToPlay) so the
+        // audio thread never triggers a first-call static initialisation (which would take a one-time
+        // guard lock). After this, all indexed-ID lookups on the audio thread are alloc- and lock-free.
+        inline void warmIndexedIds()
+        {
+            for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
+            for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); }
+            for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+                { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); }
+        }
     }
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()

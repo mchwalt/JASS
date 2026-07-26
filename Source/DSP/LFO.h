@@ -56,6 +56,7 @@ public:
 
         phase += rate / sampleRate;
         if (phase >= 1.0) phase -= 1.0;
+        if (phase < 0.0)  phase += 1.0;   // wrap for a negative rate too (mirrors the oscillator)
 
         return static_cast<float>(value * depth);
     }

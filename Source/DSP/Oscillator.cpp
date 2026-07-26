@@ -18,7 +18,10 @@ double Oscillator::generateSample(double ph) const
 
 float Oscillator::nextSample(double fmOffset)
 {
-    if (!enabled || amplitude < 0.001)
+    // Only bail when the oscillator is OFF. Do NOT early-out on a tiny amplitude: that skipped the
+    // phase increment below, so amplitude modulated to ~0 (tremolo trough) froze the phase and the
+    // pitch drifted when it came back. The output is naturally ~0 here anyway (sum * amplitude).
+    if (!enabled)
         return 0.0f;
 
     // Self-FM: offset the read phase by the previous (pre-gain) output. Using the

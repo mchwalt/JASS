@@ -54,6 +54,18 @@ namespace ModDest
         { "SUB",        "subOn",        -1, { { "LEVEL",  LFOTarget::SubLevel } }, 1 },
         { "WAVEFOLD",   "wavefoldOn",   -1, { { "DRIVE",  LFOTarget::WavefolderDrive }, { "MIX", LFOTarget::WavefolderMix }, { "SYM", LFOTarget::WavefolderSym } }, 3 },
         { "WAVETABLE",  "wavetableOn",  -1, { { "AMP",    LFOTarget::WavetableAmp }, { "DETUNE", LFOTarget::WavetableDetune }, { "FREQ", LFOTarget::WavetableFreq }, { "POS", LFOTarget::WavetablePosition }, { "VOICES", LFOTarget::WavetableVoices } }, 5 },
+        // APPENDED (2026-07-26): previously-missing modules. They go at the END so the persisted MOD
+        // combo index of every module above is unchanged (no preset/DAW migration). The combo is thus
+        // no longer strictly A→Z for these six — the append-only contract wins over display ordering.
+        // COMPRESSOR/MASTER/STEREO are GLOBAL master-bus stages: their targets are applied in
+        // PluginProcessor::processBlock (block-rate, LFO sources only), not per voice. NOISE/KARPLUS/
+        // PITCH ENV are per-voice like the rest. KARPLUS omits FREQ (pitch is fixed at pluck time).
+        { "COMPRESSOR", "compOn",       -1, { { "ATK",    LFOTarget::CompAttack }, { "GAIN", LFOTarget::CompMakeup }, { "RATIO", LFOTarget::CompRatio }, { "REL", LFOTarget::CompRelease }, { "THRESH", LFOTarget::CompThreshold } }, 5 },
+        { "KARPLUS",    "karplusOn",    -1, { { "AMP",    LFOTarget::KarplusAmp }, { "DAMP", LFOTarget::KarplusDamping }, { "STR", LFOTarget::KarplusStretch } }, 3 },
+        { "MASTER",     "masterOn",     -1, { { "TEMPO",  LFOTarget::MasterTempo }, { "VOL", LFOTarget::MasterVol } }, 2 },
+        { "NOISE",      "noiseOn",      -1, { { "AMP",    LFOTarget::NoiseLevel } }, 1 },
+        { "PITCH ENV",  "pitchEnvOn",   -1, { { "AMOUNT", LFOTarget::PitchEnvAmount } }, 1 },
+        { "STEREO",     "stereoOn",     -1, { { "TIME",   LFOTarget::StereoTime }, { "WIDTH", LFOTarget::StereoWidth } }, 2 },
     };
 
     inline constexpr int kNumModules = (int) (sizeof (modules) / sizeof (modules[0]));

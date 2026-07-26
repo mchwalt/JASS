@@ -14,8 +14,18 @@ public:
     void setAmplitude(double a) { amplitude = a; }
     void setDamping(double d) { damping = d; }   // 0 = bright/long, 1 = muffled/short
     void setStretch(double s) { stretch = s; }   // 0 = normal, 1 = inharmonic/bell-like
-    void setSampleRate(double sr) { sampleRate = sr; }
+    void setSampleRate(double sr)
+    {
+        sampleRate = sr;
+        // RT-safety (11.1): pre-allocate the longest possible delay line ONCE here (message thread).
+        // Longest = lowest pluckable pitch (20 Hz guard in pluck()) → sr/20 samples. pluck() then only
+        // rewrites the active region, never reallocating on the audio thread.
+        buffer.assign((size_t) ((int) (sr / 20.0) + 2), 0.0f);
+    }
     double getFrequency() const { return frequency; }
+    double getAmplitude() const { return amplitude; }   // base captures for per-voice modulation
+    double getDamping()   const { return damping; }
+    double getStretch()   const { return stretch; }
 
     // Trigger (pluck) the string — fills the delay buffer with noise.
     void pluck()
@@ -24,7 +34,10 @@ public:
             return;
 
         bufferLength = std::max(2, (int) (sampleRate / frequency));
-        buffer.assign((size_t) bufferLength, 0.0f);
+        // Safety net only: the buffer is pre-sized in setSampleRate to the longest possible length,
+        // so this never grows on the audio thread in practice (guards a missed prepare).
+        if ((size_t) bufferLength > buffer.size())
+            buffer.resize((size_t) bufferLength, 0.0f);
         writePos = 0;
         prevSample = 0.0f;
 

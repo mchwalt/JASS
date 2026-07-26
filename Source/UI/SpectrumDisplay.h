@@ -173,10 +173,14 @@ private:
         auto& snapshot = captureRef.getSnapshot();
         int len = static_cast<int>(snapshot.size());
 
-        // Fill FFT buffer (zero-pad if snapshot is shorter than fftSize)
+        // Fill FFT buffer from the TRAILING fftSize samples (the most recent) — the snapshot spans
+        // ~displayLen samples from the trigger, so reading the FIRST fftSize showed the OLDEST slice
+        // and the spectrum lagged the audio by ~(displayLen-fftSize)/sr. Zero-pad if shorter.
         std::array<float, fftSize * 2> fftData{};
-        for (int i = 0; i < std::min(len, fftSize); ++i)
-            fftData[i] = snapshot[i];
+        const int take  = std::min(len, fftSize);
+        const int start = len - take;   // most-recent `take` samples
+        for (int i = 0; i < take; ++i)
+            fftData[i] = snapshot[(size_t) (start + i)];
 
         window.multiplyWithWindowingTable(fftData.data(), fftSize);
         fft.performFrequencyOnlyForwardTransform(fftData.data());

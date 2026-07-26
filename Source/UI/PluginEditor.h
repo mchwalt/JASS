@@ -52,6 +52,7 @@ public:
 private:
     void timerCallback() override
     {
+        if (pA == nullptr || pD == nullptr || pS == nullptr || pR == nullptr) return;   // paint() guards too
         const float a = pA->load(), d = pD->load(), s = pS->load(), r = pR->load();
         if (a != lA || d != lD || s != lS || r != lR)
         {
@@ -120,6 +121,10 @@ public:
     ~SynthyEditor() override
     {
         stopTimer();
+        // Dismiss the MODULES call-out NOW (before rackBody is destroyed): its RackCustomizePanel
+        // holds a reference to *rackBody, so a callout left open when the editor closes would dangle.
+        if (auto* co = modulesCallout.getComponent())
+            co->dismiss();
         if (auto* dw = standaloneWin.getComponent())   // detach our title-bar look before it dies
             dw->setLookAndFeel(nullptr);
         setLookAndFeel(nullptr);
@@ -175,6 +180,7 @@ private:
     // to that top-level window so we can detach the look in the destructor.
     std::unique_ptr<juce::LookAndFeel> standaloneTitleLnF;
     juce::Component::SafePointer<juce::DocumentWindow> standaloneWin;
+    juce::Component::SafePointer<juce::CallOutBox> modulesCallout;   // MODULES call-out; dismissed on teardown
     bool title3DAnimated = true;     // persisted: 3D header animation on/off (right-click title)
     int  loadedFormatVersion = 4;    // FormatVersion of the last preset loaded via the LOAD dialog
                                      // (shown in the right-click title info menu; AC6 of Story 9.2)
@@ -186,8 +192,12 @@ private:
     // buildRack() assembles every module as a declarative descriptor (AD-1) and
     // the Rack owns all placement (AD-2). The header chrome + keyboard sit in their own
     // bands.
-    std::unique_ptr<rack::Rack> rackBody;
+    // DECLARATION ORDER MATTERS (members destruct in reverse): rackOwned holds the Display
+    // components (ADSR curve, scope, spectrum, preset bank) that the rack's ModuleFrames reference
+    // by raw pointer. rackBody MUST be declared AFTER rackOwned so it is destroyed FIRST — otherwise
+    // the frames would dangle over already-freed Displays during teardown.
     juce::OwnedArray<juce::Component> rackOwned;   // owns the rack's Display components (ADSR curve, scope, spectrum)
+    std::unique_ptr<rack::Rack> rackBody;
     void buildRack();
 
     // Online help (Story 6.1): a header language selector + one shared movable HelpPanel.
