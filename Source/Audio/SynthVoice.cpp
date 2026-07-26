@@ -30,6 +30,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
         s.chorus.prepare(sampleRate);
         s.reverb.prepare(sampleRate);
     }
+    for (auto& b : binaural) b.prepare(sampleRate);   // 10.3: size the per-generator ITD delay lines once
 }
 
 void SynthVoice::startNote(int midiNoteNumber, float velocity,
@@ -65,6 +66,7 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     for (auto& l : lfos) l.reset();
     noise.reset();
     wavetable.reset();
+    for (auto& b : binaural) b.reset();   // 10.3: clear ITD tails so a new note doesn't click
     if (pluckEnabled)
         pluckKarplus();   // pluck at the transposed pitch (skipped for the drone)
 
@@ -209,9 +211,15 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // ── Spatialization (Epic 10) ────────────────────────────────────────────────────────────
     // Channel count for this block: 1 (Mono / Pseudo-Stereo — byte-identical mono path) or 2
     // (Stereo-Pan). Per-generator equal-power pan gains, computed once per block (no trig per sample).
-    const int nCh = (outputMode == (int) OutputMode::StereoPan) ? kMaxOutChannels : 1;
+    const bool binauralMode = (outputMode == (int) OutputMode::Binaural);
+    const int nCh = (outputMode == (int) OutputMode::StereoPan || binauralMode) ? kMaxOutChannels : 1;
     for (int g = 0; g < kNumPanGenerators; ++g)
         positionToGains(generatorPan[(size_t) g], nCh, panGains[g]);
+    // Effective per-generator pan value (base + modulation) — the binaural renderer needs the pan
+    // VALUE (curGains carries only the equal-power amplitude/ILD gains). Static per block unless a PAN
+    // mod routing is active (then refreshed per sample alongside curGains, below).
+    float effPan[kNumPanGenerators];
+    for (int g = 0; g < kNumPanGenerators; ++g) effPan[g] = generatorPan[g];
 
     // PAN as a mod target (Epic 10): auto-panning. Only meaningful in Stereo-Pan (nCh>1). When active,
     // the per-generator pan gains are re-derived PER SAMPLE from the base pan + the modulation; else the
@@ -420,12 +428,22 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 else if (g == PanNoise)       p += modOffset[(size_t) LFOTarget::NoisePan];
                 else if (g == PanKarplus)     p += modOffset[(size_t) LFOTarget::KarplusPan];
                 else if (g == PanWavetable)   p += modOffset[(size_t) LFOTarget::WavetablePan];
-                positionToGains((float) std::clamp(p, -1.0, 1.0), nCh, curGains[g]);
+                effPan[g] = (float) std::clamp(p, -1.0, 1.0);
+                positionToGains(effPan[g], nCh, curGains[g]);
             }
         }
 
         float channel[kMaxOutChannels] = {};
-        auto addPanned = [&] (float s, int gen) { for (int c = 0; c < nCh; ++c) channel[c] += s * curGains[gen][c]; };
+        auto addPanned = [&] (float s, int gen)
+        {
+            if (binauralMode)   // 10.3: per-generator ITD/ILD/head-shadow render to L/R (headphones 3D)
+            {
+                const auto o = binaural[(size_t) gen].process(s, effPan[gen]);
+                channel[0] += o.l; channel[1] += o.r;
+            }
+            else
+                for (int c = 0; c < nCh; ++c) channel[c] += s * curGains[gen][c];
+        };
 
         if (mixModeOn && a != b && mixMode == MixMode::FM)
         {
