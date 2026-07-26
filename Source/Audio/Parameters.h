@@ -12,6 +12,7 @@
 #include "../DSP/SyncDivision.h"
 #include "../DSP/ModMatrix.h"
 #include "../DSP/ModMatrixCatalog.h"      // ModDest: MOD MATRIX destination = MODULE → PARAM
+#include "../DSP/ChannelStrip.h"          // Epic 10: ChannelStrip (per-channel FX), OutputMode, pans
 #include "../Modules/ModuleRegistry.h"   // spec-driven modules — generates APVTS params (audio-safe)
 
 namespace Parameters
@@ -44,6 +45,7 @@ namespace Parameters
         JASS_INDEXED_ID (oscUniVoices, 3, "osc", "UniVoices")
         JASS_INDEXED_ID (oscUniDetune, 3, "osc", "UniDetune")
         JASS_INDEXED_ID (oscFeedback,  3, "osc", "Feedback")   // Self-FM depth (append-only)
+        JASS_INDEXED_ID (oscPan,       3, "osc", "Pan")        // Epic 10: per-oscillator stereo pan
 
         // Mix mode
         constexpr const char* mixMode = "mixMode";
@@ -115,6 +117,7 @@ namespace Parameters
         constexpr const char* stereoOn    = "stereoOn";
         constexpr const char* stereoWidth = "stereoWidth";
         constexpr const char* stereoTime  = "stereoTime";
+        constexpr const char* outputMode  = "outputMode";   // Epic 10: Mono / Pseudo-Stereo / Stereo-Pan
 
         // Master-bus compressor (append-only)
         constexpr const char* compOn        = "compOn";
@@ -129,6 +132,7 @@ namespace Parameters
         constexpr const char* subWave   = "subWave";
         constexpr const char* subOctave = "subOctave";
         constexpr const char* subLevel  = "subLevel";
+        constexpr const char* subPan    = "subPan";         // Epic 10: stereo placement
 
         // Delay
         constexpr const char* delayOn       = "delayOn";
@@ -162,6 +166,7 @@ namespace Parameters
         constexpr const char* noiseOn   = "noiseOn";
         constexpr const char* noiseType = "noiseType";
         constexpr const char* noiseAmp  = "noiseAmp";
+        constexpr const char* noisePan  = "noisePan";       // Epic 10: stereo placement
 
         // Karplus-Strong
         constexpr const char* karplusOn      = "karplusOn";
@@ -169,6 +174,7 @@ namespace Parameters
         constexpr const char* karplusAmp     = "karplusAmp";
         constexpr const char* karplusDamping = "karplusDamping";
         constexpr const char* karplusStretch = "karplusStretch";
+        constexpr const char* karplusPan     = "karplusPan";   // Epic 10: stereo placement
 
         // Wavetable
         constexpr const char* wavetableOn        = "wavetableOn";
@@ -178,6 +184,7 @@ namespace Parameters
         constexpr const char* wavetableAmp       = "wavetableAmp";
         constexpr const char* wavetableUniVoices = "wavetableUniVoices";
         constexpr const char* wavetableUniDetune = "wavetableUniDetune";
+        constexpr const char* wavetablePan       = "wavetablePan";   // Epic 10: stereo placement
 
         // Master
         constexpr const char* masterVol = "masterVol";
@@ -226,7 +233,7 @@ namespace Parameters
         inline void warmIndexedIds()
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
-            for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); }
+            for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
                 { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); }
         }
@@ -247,18 +254,14 @@ namespace Parameters
     // Apply all parameters to a voice
     inline void applyToVoice(juce::AudioProcessorValueTreeState& apvts,
                               Oscillator* oscillators, AdsrEnvelope& env,
-                              BiquadFilter& filter, DistortionEffect& distortion,
-                              WavefolderEffect& wavefolder, BitcrusherEffect& bitcrusher,
-                              PhaserEffect& phaser,
-                              DelayEffect& delay,
-                              ChorusEffect& chorus, ReverbEffect& reverb,
-                              FormantFilter& formant,
+                              std::array<ChannelStrip, kMaxOutChannels>& strips,   // Epic 10: per-channel FX
                               LFO* lfos, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
                               bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB,
                               PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
                               ModSlot* modSlots, bool& modMatrixOn,
+                              int& outputModeOut, float* generatorPanOut,   // Epic 10: output mode + 7 pans
                               const double* lfoRateHz, double delayTimeSec)
     {
         // Modulation matrix (Story 8.1): read the master enable + N slots into the voice.
@@ -303,6 +306,14 @@ namespace Parameters
         env.setDecay(*apvts.getRawParameterValue(ID::decay));
         env.setSustain(*apvts.getRawParameterValue(ID::sustain));
         env.setRelease(*apvts.getRawParameterValue(ID::release));
+
+        // Effect base config → set on EVERY channel strip identically (Epic 10). Local aliases keep the
+        // existing lines verbatim; strip 0 is the mono / Pseudo-Stereo chain, strips 1.. the pan channels.
+        for (auto& strip : strips)
+        {
+            auto& filter = strip.filter; auto& distortion = strip.distortion; auto& wavefolder = strip.wavefolder;
+            auto& bitcrusher = strip.bitcrusher; auto& phaser = strip.phaser; auto& delay = strip.delay;
+            auto& chorus = strip.chorus; auto& reverb = strip.reverb; auto& formant = strip.formant;
 
         // The choice params no longer carry an "Off" entry — a separate <x>On bool gates
         // them. When on, the choice index maps to the enum +1 (the enum keeps its Off=0).
@@ -354,6 +365,18 @@ namespace Parameters
         formant.vowel     = *apvts.getRawParameterValue(ID::formantVowel);
         formant.resonance = *apvts.getRawParameterValue(ID::formantReso);
         formant.mix       = *apvts.getRawParameterValue(ID::formantMix);
+        }   // end per-strip effect config (Epic 10)
+
+        // Spatialization (Epic 10): output mode + the 7 generator pans → the voice (used at the top of
+        // renderNextBlock to build per-channel gains). Append-only; missing ⇒ Pseudo-Stereo / center.
+        outputModeOut = (int) *apvts.getRawParameterValue(ID::outputMode);
+        generatorPanOut[PanOsc1]      = *apvts.getRawParameterValue(ID::oscPan(1));
+        generatorPanOut[PanOsc2]      = *apvts.getRawParameterValue(ID::oscPan(2));
+        generatorPanOut[PanOsc3]      = *apvts.getRawParameterValue(ID::oscPan(3));
+        generatorPanOut[PanSub]       = *apvts.getRawParameterValue(ID::subPan);
+        generatorPanOut[PanNoise]     = *apvts.getRawParameterValue(ID::noisePan);
+        generatorPanOut[PanKarplus]   = *apvts.getRawParameterValue(ID::karplusPan);
+        generatorPanOut[PanWavetable] = *apvts.getRawParameterValue(ID::wavetablePan);
 
         // LFOs — one loop for all (Tempo-Sync resolved per LFO in processBlock => lfoRateHz[i]).
         for (int i = 0; i < kNumLFOs; ++i)
