@@ -153,6 +153,13 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const double basePhaserDepth  = phaser.depth;
     const double basePhaserFb     = phaser.feedback;
     const double basePhaserMix    = phaser.mix;
+    // Per-voice generator/modulator targets appended 2026-07-26 (NOISE/KARPLUS/PITCH ENV). Karplus
+    // FREQ is deliberately not modulatable — its pitch is baked into the delay line at pluck time.
+    const double baseNoiseAmp     = noise.getAmplitude();
+    const double baseKarplusAmp   = karplus.getAmplitude();
+    const double baseKarplusDamp  = karplus.getDamping();
+    const double baseKarplusStr   = karplus.getStretch();
+    const double basePitchEnvAmt  = pitchEnvAmount;
 
     // Sub-oscillator octave multiplier (constant across the block).
     const double subMul = std::pow(2.0, subOctave);
@@ -271,6 +278,21 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             bitcrusher.mix = std::clamp(baseCrushMix + modOffset[(size_t) LFOTarget::BitcrushMix] * 0.5, 0.0, 1.0);
         if (tActive[(size_t) LFOTarget::SubLevel])
             subOsc.setAmplitude(std::clamp(baseSubLevel + modOffset[(size_t) LFOTarget::SubLevel] * 0.5, 0.0, 1.0));
+
+        // NOISE / KARPLUS / PITCH ENV (appended 2026-07-26). Same base+offset+clamp shape; only
+        // audible when the owning module is enabled. Karplus AMP/DAMP/STR update the ringing string
+        // live (FREQ is fixed at pluck time, so it is intentionally not a target). PITCH ENV amount
+        // is read by the one-shot sweep, so it only bites during a note's initial pitch transient.
+        if (tActive[(size_t) LFOTarget::NoiseLevel])
+            noise.setAmplitude(std::clamp(baseNoiseAmp + modOffset[(size_t) LFOTarget::NoiseLevel] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::KarplusAmp])
+            karplus.setAmplitude(std::clamp(baseKarplusAmp + modOffset[(size_t) LFOTarget::KarplusAmp] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::KarplusDamping])
+            karplus.setDamping(std::clamp(baseKarplusDamp + modOffset[(size_t) LFOTarget::KarplusDamping] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::KarplusStretch])
+            karplus.setStretch(std::clamp(baseKarplusStr + modOffset[(size_t) LFOTarget::KarplusStretch] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::PitchEnvAmount])
+            pitchEnvAmount = std::clamp(basePitchEnvAmt + modOffset[(size_t) LFOTarget::PitchEnvAmount] * 24.0, -48.0, 48.0);
 
         // Epic 8.3 — full per-module coverage. Each modulates around its captured base, clamped to the
         // parameter's own range (see the module specs); only audible when the owning module is enabled.

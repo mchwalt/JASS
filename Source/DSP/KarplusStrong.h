@@ -16,6 +16,9 @@ public:
     void setStretch(double s) { stretch = s; }   // 0 = normal, 1 = inharmonic/bell-like
     void setSampleRate(double sr) { sampleRate = sr; }
     double getFrequency() const { return frequency; }
+    double getAmplitude() const { return amplitude; }   // base captures for per-voice modulation
+    double getDamping()   const { return damping; }
+    double getStretch()   const { return stretch; }
 
     // Trigger (pluck) the string — fills the delay buffer with noise.
     void pluck()

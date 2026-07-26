@@ -104,6 +104,8 @@ private:
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
     std::atomic<float> lfoDisplayValues[kNumLFOs] {};
+    float prevMasterGain = 0.0f;   // last block's applied master gain — ramp target so LFO-modulated
+                                   // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
 

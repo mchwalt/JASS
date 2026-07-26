@@ -58,7 +58,28 @@
     X(PhaserRate,        "PhaserRate",       "Phaser Rate",  "phaserOn")                          \
     X(PhaserDepth,       "PhaserDepth",      "Phaser Depth", "phaserOn")                          \
     X(PhaserFeedback,    "PhaserFeedback",   "Phaser FB",    "phaserOn")                          \
-    X(PhaserMix,         "PhaserMix",        "Phaser Mix",   "phaserOn")
+    X(PhaserMix,         "PhaserMix",        "Phaser Mix",   "phaserOn")                          \
+    /* Per-VOICE generators/modulators previously missing from the matrix (append-only). NOISE     \
+       level, KARPLUS amp/damp/stretch (FREQ is fixed at pluck time → intentionally NOT a target), \
+       PITCH ENV amount. Applied in SynthVoice like the other per-voice targets. */                \
+    X(NoiseLevel,        "NoiseLevel",       "Noise Level",  "noiseOn")                           \
+    X(KarplusAmp,        "KarplusAmp",       "Karplus Amp",  "karplusOn")                         \
+    X(KarplusDamping,    "KarplusDamping",   "Karplus Damp", "karplusOn")                         \
+    X(KarplusStretch,    "KarplusStretch",   "Karplus Str",  "karplusOn")                         \
+    X(PitchEnvAmount,    "PitchEnvAmount",   "Pitch Env Amt","pitchEnvOn")                        \
+    /* GLOBAL master-bus targets (STEREO/MASTER/COMPRESSOR). Unlike everything above these run on  \
+       the summed mix in PluginProcessor::processBlock, NOT per voice — so they are applied there  \
+       at block rate from the GLOBAL uiLfo values (LFO sources only; Velocity/Envelope have no     \
+       single global value). MasterTempo modulates the Tempo-Sync BPM (wobbling synced beats). */  \
+    X(StereoWidth,       "StereoWidth",      "Stereo Width", "stereoOn")                          \
+    X(StereoTime,        "StereoTime",       "Stereo Time",  "stereoOn")                          \
+    X(MasterVol,         "MasterVol",        "Master Vol",   "masterOn")                          \
+    X(MasterTempo,       "MasterTempo",      "Master Tempo", "masterOn")                          \
+    X(CompThreshold,     "CompThreshold",    "Comp Thresh",  "compOn")                            \
+    X(CompRatio,         "CompRatio",        "Comp Ratio",   "compOn")                            \
+    X(CompAttack,        "CompAttack",       "Comp Attack",  "compOn")                            \
+    X(CompRelease,       "CompRelease",      "Comp Release", "compOn")                            \
+    X(CompMakeup,        "CompMakeup",       "Comp Makeup",  "compOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget
