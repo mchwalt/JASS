@@ -11,6 +11,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Spatialization / STEREO output modes** — a per-generator **PAN** feeds a new STEREO
+  output stage with five modes: **Mono**, **Pseudo-Stereo** (the existing Haas widener,
+  still default), **Stereo-Pan** (true amplitude L/R), **Binaural** (parametric headphone
+  3-D: ITD + head-shadow) and **Kunstkopf (HRTF)** — real out-of-head placement by
+  convolving each generator with the measured **MIT KEMAR** head impulse response for its
+  PAN azimuth (embedded, no external assets; headphones only). PAN is also a mod-matrix
+  target, so any source can **auto-pan** a voice in 3-D. Append-only — old presets load
+  unchanged (FormatVersion stays 6). See the STEREO module's info for mode details, and
+  the [License](README.md#third-party-data) for the KEMAR attribution.
 - **MOD MATRIX destination = MODULE → PARAM** — the DEST is now chosen in two steps
   (a **MOD** combo, then a **PARAM** combo whose items follow the picked module). Both lists
   are sorted A→Z. PARAM labels match the target module's own knobs (FREQ, CUTOFF, DRIVE, …),
