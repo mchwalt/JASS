@@ -36,7 +36,7 @@ namespace rack
     struct LiveModFeed
     {
         std::array<float, (size_t) ModTargets::kCount> byTarget {};
-        float osc[3][5] {};   // [oscIndex 0..2][slot 0=FREQ,1=AMP,2=DETUNE,3=FB,4=VOICES] (ModDest::oscParamSlot)
+        float osc[3][6] {};   // [oscIndex 0..2][slot 0=FREQ,1=AMP,2=DETUNE,3=FB,4=VOICES,5=PAN] (ModDest::oscParamSlot)
     };
 
     // Rack zones (AD-10). Defined HERE (not inside Rack) so a ModuleDescriptor can carry
