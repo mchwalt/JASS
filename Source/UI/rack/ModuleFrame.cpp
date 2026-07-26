@@ -260,17 +260,19 @@ namespace rack
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
                     fileChooser = std::make_unique<juce::FileChooser> ("Select a file", startDir, wildcard);
+                    juce::Component::SafePointer<ModuleFrame> self (this);
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                        [this, cb, refreshes] (const juce::FileChooser& fc)
+                        [self, cb, refreshes] (const juce::FileChooser& fc)
                         {
+                            if (self == nullptr) return;   // frame destroyed while the dialog was open
                             auto f = fc.getResult();
                             if (cb && f.existsAsFile())
                             {
                                 cb (f);
-                                for (const auto& id : refreshes) refreshCombo (id);   // re-list bank combo
+                                for (const auto& id : refreshes) self->refreshCombo (id);   // re-list bank combo
                             }
-                            fileChooserActive = false;   // dialog closed — allow the next open
+                            self->fileChooserActive = false;   // dialog closed — allow the next open
                         });
                 };
                 addAndMakeVisible (*btn);
@@ -346,6 +348,7 @@ namespace rack
         auto infoSlot = header.removeFromRight (20);
         if (infoBtn != nullptr)
             infoBtn->setBounds (infoSlot);
+        header.removeFromLeft (11);   // room for the status-LED dot painted at the header's left edge
         titleLabel.setBounds (header);
 
         // --- body slot grid (the single body-layout site) ---
@@ -452,15 +455,62 @@ namespace rack
         g.setColour (juce::Colours::black.withAlpha (0.5f));
         g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 6.0f, 1.0f);
         g.drawHorizontalLine (kHeaderH, 0.0f, (float) getWidth());
+
+        // Module status LED (left of the title): lit green when the module is active (enabled), a
+        // hollow grey ring when off. Same language as the MOD MATRIX per-slot dots — one glance tells
+        // you what's live. resized() insets the title to leave room. (Painted after the header so it
+        // sits on top; updated whenever the frame repaints on an enable change.)
+        {
+            juce::Rectangle<float> dot (6.0f, kHeaderH * 0.5f - 3.0f, 6.0f, 6.0f);
+            if (moduleEnabled()) { g.setColour (juce::Colour (0xff7bd88f)); g.fillEllipse (dot); }
+            else                 { g.setColour (juce::Colours::white.withAlpha (0.28f)); g.drawEllipse (dot, 1.0f); }
+        }
     }
 
     void ModuleFrame::paintOverChildren (juce::Graphics& g)
     {
-        if (! dimmed) return;
-        // dim the BODY only; the header stays lit (FR7)
-        auto body = getLocalBounds().withTrimmedTop (kHeaderH);
-        g.setColour (juce::Colour (0xff15181d).withAlpha (0.55f));
-        g.fillRect (body);
+        if (dimmed)
+        {
+            // dim the BODY only; the header stays lit (FR7)
+            auto body = getLocalBounds().withTrimmedTop (kHeaderH);
+            g.setColour (juce::Colour (0xff15181d).withAlpha (0.55f));
+            g.fillRect (body);
+        }
+
+        // Per-slot activity (MOD MATRIX): dim inactive (Off) slots and mark each slot with a dot —
+        // filled/lit when the slot is wired, hollow when Off — so it's obvious at a glance which of
+        // the routing slots are live. Purely visual (drawn over the children); the controls stay
+        // fully clickable so an Off slot can still be assigned.
+        if (desc.slotActivity.groupSize > 0 && ! slotActiveCache.empty())
+        {
+            const int gs = desc.slotActivity.groupSize;
+            for (int gi = 0; gi < (int) slotActiveCache.size(); ++gi)
+            {
+                juce::Rectangle<int> b; bool has = false;
+                for (int c = gi * gs; c < gi * gs + gs && c < (int) cells.size(); ++c)
+                {
+                    if (auto* w = cells[(size_t) c].widget)
+                    {
+                        auto wb = w->getBounds();
+                        if (cells[(size_t) c].caption != nullptr) wb = wb.getUnion (cells[(size_t) c].caption->getBounds());
+                        b = has ? b.getUnion (wb) : wb; has = true;
+                    }
+                }
+                if (! has) continue;
+
+                const bool active = slotActiveCache[(size_t) gi] != 0;
+                if (! active)   // dim the whole inactive slot
+                {
+                    g.setColour (juce::Colour (0xff15181d).withAlpha (0.45f));
+                    g.fillRect (b.expanded (2));
+                }
+                // Status dot in the slot's top-left corner: lit green = active, hollow grey = Off.
+                const float d = 6.0f;
+                juce::Rectangle<float> dot ((float) b.getX(), (float) (b.getY() - 1), d, d);
+                if (active) { g.setColour (juce::Colour (0xff7bd88f)); g.fillEllipse (dot); }
+                else        { g.setColour (juce::Colours::white.withAlpha (0.28f)); g.drawEllipse (dot, 1.0f); }
+            }
+        }
     }
 
     void ModuleFrame::timerCallback()
@@ -490,6 +540,22 @@ namespace rack
                 if (want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
                     iv.second->setSelectedItemIndex (want, juce::dontSendNotification);
             }
+        }
+
+        // Per-slot activity (MOD MATRIX): recompute each slot's active flag; repaint on any change so
+        // paintOverChildren can dim the inactive slots and draw the lit/hollow dots.
+        if (desc.slotActivity.groupSize > 0 && desc.slotActivity.isActive)
+        {
+            const int gs        = desc.slotActivity.groupSize;
+            const int numGroups = (int) cells.size() / gs;
+            bool changed = false;
+            if ((int) slotActiveCache.size() != numGroups) { slotActiveCache.assign ((size_t) numGroups, (char) -1); changed = true; }
+            for (int gi = 0; gi < numGroups; ++gi)
+            {
+                const char a = desc.slotActivity.isActive (gi) ? (char) 1 : (char) 0;
+                if (slotActiveCache[(size_t) gi] != a) { slotActiveCache[(size_t) gi] = a; changed = true; }
+            }
+            if (changed) repaint();
         }
 
         if (enableValue == nullptr && ! desc.enabledWhen) return;

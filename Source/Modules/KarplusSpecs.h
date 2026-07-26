@@ -13,9 +13,9 @@ namespace Modules
         m.params = {
             { "karplusOn",      "Enabled",   "",     ParamSpec::Kind::Bool },
             { "karplusFreq",    "Frequency", "FREQ", ParamSpec::Kind::Float, juce::NormalisableRange<float> (20.0f, 2000.0f, 1.0f, 0.3f), 261.63f },
-            { "karplusAmp",     "Amplitude", "AMP",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
-            { "karplusDamping", "Damping",   "DAMP", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
-            { "karplusStretch", "Stretch",   "STR",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f },
+            { "karplusAmp",     "Amplitude", "AMP",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::KarplusAmp },
+            { "karplusDamping", "Damping",   "DAMP", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::KarplusDamping },
+            { "karplusStretch", "Stretch",   "STR",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::KarplusStretch },
         };
         return m;
     }

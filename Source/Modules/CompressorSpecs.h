@@ -14,11 +14,11 @@ namespace Modules
         m.alignRight = true;        // MASTER BUS: hug the right edge (PRESETS holds the left)
         m.params = {
             { "compOn",        "Enabled",   "",       ParamSpec::Kind::Bool },
-            { "compThreshold", "Threshold", "THRESH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-60.0f, 0.0f, 0.1f),        -18.0f },
-            { "compRatio",     "Ratio",     "RATIO",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (1.0f, 20.0f, 0.1f, 0.5f),    2.0f },
-            { "compAttack",    "Attack",    "ATK",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 100.0f, 0.1f, 0.4f),  10.0f },
-            { "compRelease",   "Release",   "REL",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (10.0f, 1000.0f, 1.0f, 0.4f), 120.0f },
-            { "compMakeup",    "Makeup",    "GAIN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 24.0f, 0.1f),          0.0f },
+            { "compThreshold", "Threshold", "THRESH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-60.0f, 0.0f, 0.1f),        -18.0f, {}, {}, LFOTarget::CompThreshold },
+            { "compRatio",     "Ratio",     "RATIO",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (1.0f, 20.0f, 0.1f, 0.5f),    2.0f, {}, {}, LFOTarget::CompRatio },
+            { "compAttack",    "Attack",    "ATK",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 100.0f, 0.1f, 0.4f),  10.0f, {}, {}, LFOTarget::CompAttack },
+            { "compRelease",   "Release",   "REL",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (10.0f, 1000.0f, 1.0f, 0.4f), 120.0f, {}, {}, LFOTarget::CompRelease },
+            { "compMakeup",    "Makeup",    "GAIN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 24.0f, 0.1f),          0.0f, {}, {}, LFOTarget::CompMakeup },
         };
         return m;
     }

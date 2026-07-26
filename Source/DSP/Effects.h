@@ -171,6 +171,7 @@ private:
         float filterStore = 0.0f;
 
         void init(int size) { buffer.assign(size, 0.0f); pos = 0; filterStore = 0.0f; }
+        void clear() { std::fill(buffer.begin(), buffer.end(), 0.0f); pos = 0; filterStore = 0.0f; }   // keep size
         float process(float input, float fb, float damp);
     };
 
@@ -180,6 +181,7 @@ private:
         int pos = 0;
 
         void init(int size) { buffer.assign(size, 0.0f); pos = 0; }
+        void clear() { std::fill(buffer.begin(), buffer.end(), 0.0f); pos = 0; }   // keep size
         float process(float input);
     };
 

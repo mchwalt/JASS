@@ -13,8 +13,8 @@ namespace Modules
         m.alignRight = true;   // MASTER BUS: hug the right edge (PRESETS holds the left)
         m.params = {
             { "masterOn",  "On",     "",      ParamSpec::Kind::Bool,  {}, 1.0f },   // default ON
-            { "masterVol", "Volume", "VOL",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),   0.5f },
-            { "syncTempo", "Tempo",  "TEMPO", ParamSpec::Kind::Float, juce::NormalisableRange<float> (40.0f, 250.0f, 1.0f), 130.0f },
+            { "masterVol", "Volume", "VOL",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),   0.5f,   {}, {}, LFOTarget::MasterVol },
+            { "syncTempo", "Tempo",  "TEMPO", ParamSpec::Kind::Float, juce::NormalisableRange<float> (40.0f, 250.0f, 1.0f), 130.0f, {}, {}, LFOTarget::MasterTempo },
         };
         return m;
     }
