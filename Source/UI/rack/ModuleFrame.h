@@ -127,6 +127,10 @@ namespace rack
 
         std::vector<juce::Button*> actionButtons;   // Action-button widgets, in body order (for clickFirstAction)
 
+        // Per-slot activity (MOD MATRIX, desc.slotActivity): cached active state per slot so the timer
+        // only repaints on change; paintOverChildren dims inactive slots + draws the lit/hollow dots.
+        std::vector<char> slotActiveCache;
+
         static constexpr int kHeaderH = 22;
         static constexpr int kComboH  = 22;   // combo box: short (half-height), wide, left-aligned
         static constexpr int kButtonW = 90;   // Action/FileAction/Toggle button: capped width

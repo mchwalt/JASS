@@ -1320,6 +1320,13 @@ void SynthyEditor::buildRack()
                             pp->setValueNotifyingHost (pp->convertTo0to1 (0.0f));
                 } });
         }
+        // Per-slot activity highlight: a slot is "active" when its MOD combo != Off (index 0). The
+        // frame dims inactive slots and draws a lit dot on active ones (groupSize 4 = SRC/MOD/PARAM/AMT).
+        d.slotActivity.groupSize = 4;
+        d.slotActivity.isActive  = [this] (int slot)
+        {
+            return (int) processor.getAPVTS().getRawParameterValue (P::modSlotModule (slot + 1))->load() != 0;
+        };
         rackBody->addModule (std::move (d));
     }
 
