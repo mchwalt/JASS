@@ -108,6 +108,8 @@ private:
                                    // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
+    juce::MidiBuffer arpKeptScratch;       // RT-safety (11.1): reused per block instead of a fresh
+    juce::MidiBuffer glideRebuiltScratch;  // MidiBuffer (arp filter + mono-glide rebuild)
 
     // Poly-glide (portamento): the processor assigns each newly-started note a predecessor
     // pitch to glide FROM (pitch-sorted against the previous chord) and shares it with all
@@ -147,6 +149,21 @@ private:
     // other to a free OSC. Registered for mixSrcA/mixSrcB only.
     void parameterChanged(const juce::String& paramId, float newValue) override;
     std::atomic<bool> fixingMixSrc { false };   // reentrancy guard (shared by the CROSS-MOD couplings)
+
+    // RT-safety (11.1): APVTS calls parameterChanged SYNCHRONOUSLY on whatever thread changes the
+    // param — the AUDIO thread under host automation. The auto-enable couplings below allocate
+    // (std::set/map/String) and call setValueNotifyingHost re-entrantly, which must NOT happen on the
+    // audio thread. So on the audio thread we only set an atomic dirty flag (alloc/lock-free) and
+    // defer the work to the message thread via reconcileParamCouplingsIfDirty() (driven by the
+    // editor timer). UI edits stay on the message thread and run synchronously as before, so the
+    // maps are only ever touched on the message thread (no data race).
+public:
+    void reconcileParamCouplingsIfDirty();   // message thread only (editor timer)
+private:
+    std::atomic<bool> matrixEnablesDirty { false };
+    std::atomic<bool> crossModDirty      { false };
+    std::atomic<int>  pendingCrossModCode { -1 };   // encodes which CROSS-MOD param changed (alloc-free)
+    void applyCrossModCoupling(const juce::String& paramId);   // the message-thread coupling body
 
     // CROSS MOD enable coupling: keep the two operand OSCs enabled while CROSS MOD is on (auto-on
     // with memory), and switch CROSS MOD off when a used operand OSC is turned off. Mirrors the

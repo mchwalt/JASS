@@ -263,24 +263,72 @@ void SynthyProcessor::syncCrossModEnables(const juce::String& changed)
     }
 }
 
+namespace
+{
+    // Encode a CROSS-MOD-relevant param id as a small int WITHOUT constructing a juce::String
+    // (audio-thread safe). -1 = not a CROSS-MOD param. Reverse map below (message thread only).
+    int crossModCode(const juce::String& id)
+    {
+        using namespace Parameters;
+        if (id == ID::mixModeOn) return 0;
+        if (id == ID::mixSrcA)   return 1;
+        if (id == ID::mixSrcB)   return 2;
+        if (id == ID::oscOn(1))  return 3;   // ID::oscOn returns a cached ref (no alloc; warmed)
+        if (id == ID::oscOn(2))  return 4;
+        if (id == ID::oscOn(3))  return 5;
+        return -1;
+    }
+    juce::String crossModIdFromCode(int c)   // message thread (juce::String construction OK)
+    {
+        using namespace Parameters;
+        switch (c) { case 0: return ID::mixModeOn; case 1: return ID::mixSrcA; case 2: return ID::mixSrcB;
+                     case 3: return ID::oscOn(1);  case 4: return ID::oscOn(2); case 5: return ID::oscOn(3); }
+        return {};
+    }
+}
+
 void SynthyProcessor::parameterChanged(const juce::String& paramId, float newValue)
 {
-    using namespace Parameters;
-    // Keep the matrix's source + target modules in step with the routing (auto-enable on wire-up,
-    // auto-undo when the last route drops). Handled before the guard so it always runs.
-    if (paramId.startsWith("modSlot"))
+    juce::ignoreUnused(newValue);
+    // APVTS calls this synchronously on the changing thread — the AUDIO thread under host automation.
+    // Off the message thread we do NO allocation / setValueNotifyingHost: just flag the needed
+    // reconciliation (atomic) and let reconcileParamCouplingsIfDirty() run it on the message thread.
+    const bool onMsgThread = juce::MessageManager::existsAndIsCurrentThread();
+
+    if (paramId.startsWith("modSlot"))   // startsWith(const char*) is alloc-free
     {
-        updateMatrixModuleEnables();
+        if (onMsgThread) updateMatrixModuleEnables();
+        else             matrixEnablesDirty.store(true);
         return;
     }
 
-    // The remaining couplings are all CROSS-MOD-related (operand distinctness + enable coupling).
-    const bool crossModParam = (paramId == ID::mixModeOn || paramId == ID::mixSrcA || paramId == ID::mixSrcB
-                                || paramId == ID::oscOn(1) || paramId == ID::oscOn(2) || paramId == ID::oscOn(3));
-    if (! crossModParam)
+    const int cc = crossModCode(paramId);
+    if (cc < 0)
         return;
+    if (! onMsgThread)
+    {
+        pendingCrossModCode.store(cc);
+        crossModDirty.store(true);
+        return;
+    }
+    applyCrossModCoupling(paramId);
+}
 
-    juce::ignoreUnused(newValue);
+// Message-thread poll (editor timer): run any reconciliation deferred from the audio thread.
+void SynthyProcessor::reconcileParamCouplingsIfDirty()
+{
+    if (matrixEnablesDirty.exchange(false))
+        updateMatrixModuleEnables();
+    if (crossModDirty.exchange(false))
+        applyCrossModCoupling(crossModIdFromCode(pendingCrossModCode.load()));
+}
+
+// The CROSS-MOD coupling body (message thread only): operand distinctness + enable coupling.
+void SynthyProcessor::applyCrossModCoupling(const juce::String& paramId)
+{
+    using namespace Parameters;
+    if (paramId.isEmpty())
+        return;
     if (fixingMixSrc.exchange(true))   // shared reentrancy guard: ignore our own write-backs
         return;
 
@@ -494,9 +542,10 @@ void SynthyProcessor::restoreModifiedState(bool modified)
 
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+    Parameters::ID::warmIndexedIds();   // RT-safety: build the indexed-ID caches on the message thread
     synth.setCurrentPlaybackSampleRate(sampleRate);
     for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+        if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
         {
             voice->prepareToPlay(sampleRate, samplesPerBlock);
             voice->setGlideInfo(&glideInfo);   // poly-glide: shared per-block source ratios
@@ -505,6 +554,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     // Pre-size the glide note lists so the audio thread never reallocates.
     glideHeld.reserve(128); glideLastChord.reserve(128);
     glideNewNotes.reserve(128); glideOffNotes.reserve(128);
+    arpKeptScratch.ensureSize(2048); glideRebuiltScratch.ensureSize(2048);   // RT: no per-block MidiBuffer growth
 
     stereoWidth.prepare(sampleRate);
     compressor.prepare(sampleRate);
@@ -609,7 +659,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* voice = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+        if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getFilter(),
                                      voice->getDistortion(), voice->getWavefolder(),
@@ -650,7 +700,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
             // Drop the raw chord (channel-1 note on/off) so only the arp sounds;
             // keep everything else (e.g. the channel-16 auto-play drone).
-            juce::MidiBuffer kept;
+            auto& kept = arpKeptScratch; kept.clear();   // reused member (no per-block MidiBuffer alloc)
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
@@ -673,14 +723,14 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // the keyboard). Suppress the pluck only for the drone's own note-on.
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+            if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
                 v->setPluckEnabled(false);
 
     // Manual PLUCK (button / spacebar): re-excite the Karplus string on every voice.
     // RT-safe — the atomic flag is set on the message thread and consumed here.
     if (pluckRequested.exchange(false))
         for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+            if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
                 v->pluckKarplus();
 
     // Poly-glide (portamento): assign each newly-started note a predecessor pitch to glide
@@ -742,7 +792,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         const bool glideMono = (int) *apvts.getRawParameterValue(ID::glideMode) == 0;
         if (glideInfo.enabled && glideMono)
         {
-            juce::MidiBuffer rebuilt;
+            auto& rebuilt = glideRebuiltScratch; rebuilt.clear();   // reused member (no per-block alloc)
             for (const auto meta : midiMessages)
             {
                 const auto m = meta.getMessage();
@@ -773,7 +823,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+            if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
                 v->setPluckEnabled(true);
 
     // Advance the display-only LFO so the editor can draw live modulation rings.
