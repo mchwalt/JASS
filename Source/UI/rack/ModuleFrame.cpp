@@ -260,17 +260,19 @@ namespace rack
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
                     fileChooser = std::make_unique<juce::FileChooser> ("Select a file", startDir, wildcard);
+                    juce::Component::SafePointer<ModuleFrame> self (this);
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                        [this, cb, refreshes] (const juce::FileChooser& fc)
+                        [self, cb, refreshes] (const juce::FileChooser& fc)
                         {
+                            if (self == nullptr) return;   // frame destroyed while the dialog was open
                             auto f = fc.getResult();
                             if (cb && f.existsAsFile())
                             {
                                 cb (f);
-                                for (const auto& id : refreshes) refreshCombo (id);   // re-list bank combo
+                                for (const auto& id : refreshes) self->refreshCombo (id);   // re-list bank combo
                             }
-                            fileChooserActive = false;   // dialog closed — allow the next open
+                            self->fileChooserActive = false;   // dialog closed — allow the next open
                         });
                 };
                 addAndMakeVisible (*btn);

@@ -559,7 +559,9 @@ namespace rack
 
         const int gridLeft  = kPad;
         const int gridWidth = juce::jmax (cols, width - 2 * kPad);   // guard tiny widths
-        const int wc        = (gridWidth - (cols - 1) * kGutter) / cols;   // Wc
+        // Floor at 1: at a very small width the gutters can exceed gridWidth, making the raw cell
+        // width negative (broken/negative bounds). 1px is a safe degenerate fallback.
+        const int wc        = juce::jmax (1, (gridWidth - (cols - 1) * kGutter) / cols);   // Wc
 
         int y = kPad;
 
@@ -668,7 +670,11 @@ namespace rack
             {
                 const auto* pl = placedById (e->id);
                 if (pl == nullptr || pl->frame == nullptr) continue;
-                const int fcols = pl->cols, funits = pl->units;
+                // Clamp the footprint width to the rack width: a module wider than `cols` would make
+                // the inner fit-loop's `c + fcols <= cols` never true, so `found` never flips and the
+                // outer `for(;!found;++fr)` loops forever (growing rows unbounded). Placing it
+                // full-width is the sane fallback for such a misconfiguration.
+                const int fcols = juce::jmin (pl->cols, cols), funits = pl->units;
 
                 // first free top-left cell that fits the cols×units footprint
                 int fr = 0, fc = 0;

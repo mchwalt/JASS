@@ -58,8 +58,10 @@ SynthyProcessor::SynthyProcessor()
 
         // The standalone wrapper restores its OWN saved state right after
         // construction; re-load the shared LiveState afterwards so it wins.
-        juce::MessageManager::callAsync([this]
+        juce::WeakReference<SynthyProcessor> weak (this);
+        juce::MessageManager::callAsync([this, weak]
         {
+            if (weak == nullptr) return;   // processor destroyed before this async ran
             PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
             if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
                 currentPresetName = n;
@@ -918,6 +920,9 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
     {
         migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
+        // The just-restored state IS the clean baseline: snapshot it so a freshly loaded host
+        // project does not spuriously report "modified" (isPresetModified compares to this).
+        markPresetClean();
     }
 }
 

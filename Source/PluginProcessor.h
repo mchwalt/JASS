@@ -181,5 +181,6 @@ private:
     void updateMatrixModuleEnables();
     std::map<juce::String, bool> matrixAutoEnabled;   // enable-param id -> true if auto-enable turned it on
 
+    JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)
 };
