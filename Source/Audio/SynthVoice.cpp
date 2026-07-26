@@ -419,7 +419,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // Apply amplitude modulation (tremolo). Same (1+v)*0.5 map as before; only when
         // Amplitude is an active target, so an unrouted patch keeps full gain (no ×0.5).
         if (tActive[(size_t) LFOTarget::Amplitude])
-            mixedSample *= (1.0f + (float) modOffset[(size_t) LFOTarget::Amplitude]) * 0.5f;
+            mixedSample *= std::clamp((1.0f + (float) modOffset[(size_t) LFOTarget::Amplitude]) * 0.5f, 0.0f, 1.0f);   // clamp like the per-OSC AMP path (stacked slots must not boost >1 / invert)
 
         // Filter (main biquad), then the vowel/formant filter.
         mixedSample = filter.process(mixedSample);

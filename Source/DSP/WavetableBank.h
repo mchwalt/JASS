@@ -336,15 +336,18 @@ public:
         return n;
     }
 
-    // Drop every user-LOADED bank, keeping only the original built-in list (WAVETABLE reset).
-    // Message-thread only. The visible count is lowered FIRST (release) so the audio thread — which
-    // reads count with acquire — never dereferences a slot we then free. The built-in slots
-    // (0..builtInCount-1) are never overwritten by loadWav, so they stay valid; no rebuild needed.
+    // Drop every user-LOADED bank from the VISIBLE list, keeping only the built-ins (WAVETABLE reset).
+    // Message-thread only. We ONLY lower the visible count here — we do NOT free the user banks.
+    // A voice caches the raw WavetableBank* returned by getBank() for the whole render block, so
+    // freeing a slot while the audio thread may still be dereferencing it is a use-after-free (the
+    // atomic count doesn't protect an already-cached pointer). Lowering count (release) makes getBank
+    // clamp back into the built-in range within one block, so no voice points past builtInCount
+    // afterwards; the stale unique_ptrs stay alive and are reclaimed only when a later loadWav
+    // overwrites their slot — provably unreferenced by then (deferred reclamation). Bounded by
+    // MaxBanks, so this cannot grow without limit.
     void resetToBuiltIns()
     {
         count.store(builtInCount, std::memory_order_release);
-        for (int i = builtInCount; i < MaxBanks; ++i)
-            banks[(size_t) i].reset();
     }
 
 private:

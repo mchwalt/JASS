@@ -387,14 +387,16 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         auto flags = juce::FileBrowserComponent::saveMode
                    | juce::FileBrowserComponent::canSelectFiles
                    | juce::FileBrowserComponent::warnAboutOverwriting;
-        presetChooser->launchAsync(flags, [this](const juce::FileChooser& fc)
+        juce::Component::SafePointer<SynthyEditor> self (this);
+        presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
         {
+            if (self == nullptr) return;   // editor closed while the dialog was open
             auto f = fc.getResult();
             if (f == juce::File{}) return;
             if (! f.hasFileExtension("jass")) f = f.withFileExtension("jass");
-            PresetIO::saveToFile(processor.getAPVTS(), f, f.getFileNameWithoutExtension());
-            processor.markPresetClean();   // current state now matches the saved file
-            setPresetName(f.getFileNameWithoutExtension());
+            PresetIO::saveToFile(self->processor.getAPVTS(), f, f.getFileNameWithoutExtension());
+            self->processor.markPresetClean();   // current state now matches the saved file
+            self->setPresetName(f.getFileNameWithoutExtension());
         });
     };
     loadBtn.onClick = [this]
@@ -402,11 +404,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         presetChooser = std::make_unique<juce::FileChooser>(
             "Load preset", PresetIO::presetsFolder(), "*.jass");
         auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-        presetChooser->launchAsync(flags, [this](const juce::FileChooser& fc)
+        juce::Component::SafePointer<SynthyEditor> self (this);
+        presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
         {
+            if (self == nullptr) return;
             auto f = fc.getResult();
             if (f == juce::File{}) return;
-            loadPresetFile(f);
+            self->loadPresetFile(f);
         });
     };
 
@@ -592,9 +596,11 @@ void SynthyEditor::showModulesMenu()
     // The reorderable customization list (Story 4.2) in a call-out anchored to the button.
     // Parent = nullptr (desktop) so the editor's auto-fit transform doesn't skew mouse coords.
     auto panel = std::make_unique<RackCustomizePanel>(*rackBody, currentLang);
-    juce::CallOutBox::launchAsynchronously(std::move(panel),
-                                           modulesBtn.getScreenBounds(),
-                                           nullptr);
+    // Keep a SafePointer to the call-out so the destructor can dismiss it before rackBody dies
+    // (the panel references *rackBody).
+    modulesCallout = &juce::CallOutBox::launchAsynchronously(std::move(panel),
+                                                             modulesBtn.getScreenBounds(),
+                                                             nullptr);
 }
 
 void SynthyEditor::timerCallback()
@@ -829,8 +835,10 @@ void SynthyEditor::assignPresetSlot(int slot)
         (currentLang == "DE" ? "Preset auf F" : "Assign preset to F") + juce::String(slot + 1),
         PresetIO::presetsFolder(), "*.jass");
     auto chooserFlags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
-    presetChooser->launchAsync(chooserFlags, [this, slot](const juce::FileChooser& fc)
+    juce::Component::SafePointer<SynthyEditor> self (this);
+    presetChooser->launchAsync(chooserFlags, [this, self, slot](const juce::FileChooser& fc)
     {
+        if (self == nullptr) return;   // editor closed while the dialog was open (then `this` is valid below)
         auto f = fc.getResult();
         if (f == juce::File{}) return;
         const auto name = f.getFileNameWithoutExtension();
@@ -1126,14 +1134,15 @@ void SynthyEditor::mouseDown(const juce::MouseEvent& e)
     m.addSeparator();
     m.addItem(1, (currentLang == "DE" ? "3D-Titel animieren" : "Animate 3D title"),
               true, title3DAnimated);
+    juce::Component::SafePointer<SynthyEditor> self (this);
     m.showMenuAsync(juce::PopupMenu::Options().withTargetScreenArea(
                         juce::Rectangle<int>(e.getScreenX(), e.getScreenY(), 1, 1)),
-                    [this](int r)
+                    [self](int r) mutable
                     {
-                        if (r != 1) return;
-                        title3DAnimated = ! title3DAnimated;
-                        spinningTitle.setAnimate(title3DAnimated);
-                        saveTitleAnimated(title3DAnimated);
+                        if (self == nullptr || r != 1) return;   // editor closed while menu was open
+                        self->title3DAnimated = ! self->title3DAnimated;
+                        self->spinningTitle.setAnimate(self->title3DAnimated);
+                        self->saveTitleAnimated(self->title3DAnimated);
                     });
 }
 

@@ -18,8 +18,9 @@ public:
     // Called from audio thread
     void writeSample(float sample)
     {
-        ring[writePos] = sample;
-        writePos = (writePos + 1) % ringSize;
+        const int p = writePos.load(std::memory_order_relaxed);
+        ring[(size_t) p] = sample;
+        writePos.store((p + 1) % ringSize, std::memory_order_release);   // publish (paired acquire in updateSnapshot)
     }
 
     // Called from GUI thread at ~30fps
@@ -27,7 +28,7 @@ public:
     {
         // Copy ring buffer to temp
         std::vector<float> temp(ringSize);
-        int pos = writePos; // read current write pos (atomic-ish, close enough)
+        int pos = writePos.load(std::memory_order_acquire);   // paired with the release in writeSample
         for (int i = 0; i < ringSize; ++i)
             temp[i] = ring[(pos + i) % ringSize];
 
@@ -64,5 +65,5 @@ private:
     int ringSize;
     std::vector<float> ring;
     std::vector<float> snapshot;
-    int writePos = 0;
+    std::atomic<int> writePos { 0 };   // audio writes (release), GUI reads (acquire) — no torn index
 };
