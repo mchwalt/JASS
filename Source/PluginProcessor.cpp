@@ -663,13 +663,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
             Parameters::applyToVoice(apvts, voice->getOscillators(),
-                                     voice->getEnvelope(), voice->getFilter(),
-                                     voice->getDistortion(), voice->getWavefolder(),
-                                     voice->getBitcrusher(),
-                                     voice->getPhaser(),
-                                     voice->getDelay(),
-                                     voice->getChorus(), voice->getReverb(),
-                                     voice->getFormant(),
+                                     voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                                      voice->getLFOs(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getMixMode(),
@@ -679,6 +673,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getPitchEnv(), voice->getPitchEnvAmountRef(),
                                      voice->getPitchEnvOnRef(),
                                      voice->getModSlots(), voice->getModMatrixOnRef(),
+                                     voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
                                      lfoRateHz, delayTimeSec);
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
@@ -866,8 +861,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         compressor.process(buffer);
     }
 
-    // Final pseudo-stereo stage: turns the mono mix into a wide stereo image.
-    stereoWidth.enabled = *apvts.getRawParameterValue(Parameters::ID::stereoOn) > 0.5f;
+    // Final pseudo-stereo stage: turns the mono mix into a wide stereo image. Only in Pseudo-Stereo
+    // mode (Epic 10) — Mono needs no widening, and Stereo-Pan already produces a true stereo image (the
+    // voices pan into L/R), so widening it would double-image. The width/time knobs still feed it.
+    const int outMode = (int) *apvts.getRawParameterValue(Parameters::ID::outputMode);
+    stereoWidth.enabled = (outMode == (int) OutputMode::PseudoStereo)
+                          && *apvts.getRawParameterValue(Parameters::ID::stereoOn) > 0.5f;
     stereoWidth.width   = juce::jlimit(0.0f, 1.0f,  (float) (*apvts.getRawParameterValue(Parameters::ID::stereoWidth) + gMod[(size_t) LFOTarget::StereoWidth] * 1.0));
     stereoWidth.timeMs  = juce::jlimit(1.0f, 15.0f, (float) (*apvts.getRawParameterValue(Parameters::ID::stereoTime)  + gMod[(size_t) LFOTarget::StereoTime]  * 7.0));
     stereoWidth.process(buffer);

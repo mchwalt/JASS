@@ -10,7 +10,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "wavetable"; m.title = "WAVETABLE"; m.persistObject = "Wavetable"; m.enableParamId = "wavetableOn";
-        m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W8H1;
+        m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W14H1;   // NOTE: WAVETABLE's rack size is set in the editor's hand-built add() (this spec size is unused for it)
         m.params = {
             { "wavetableOn",        "Enabled",      "",       ParamSpec::Kind::Bool },
             { "wavetableBank",      "BankIndex",    "BANK",   ParamSpec::Kind::Int,   juce::NormalisableRange<float> (0.0f, (float) (WavetableBankStore::MaxBanks - 1), 1.0f), 0.0f },
@@ -19,6 +19,7 @@ namespace Modules
             { "wavetableAmp",       "Amplitude",    "AMP",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
             { "wavetableUniVoices", "UnisonVoices", "VOICES", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (1.0f, 7.0f, 1.0f), 1.0f },
             { "wavetableUniDetune", "UnisonDetune", "DETUNE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.2f },
+            { "wavetablePan",       "Pan",          "PAN",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f },   // Epic 10: stereo placement (knob added to the hand-built body in the editor)
         };
         return m;
     }

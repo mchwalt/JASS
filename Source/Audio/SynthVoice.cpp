@@ -16,15 +16,20 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     envelope.setSampleRate(sampleRate);
     bypassGate.reset(sampleRate, 0.010);   // 10 ms anti-click gate for the ADSR-bypass path
     pitchEnv.setSampleRate(sampleRate);
-    filter.setSampleRate(sampleRate);
-    formant.prepare(sampleRate);
     for (auto& l : lfos) l.setSampleRate(sampleRate);
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
-    phaser.prepare(sampleRate);
-    delay.prepare(sampleRate);
-    chorus.prepare(sampleRate);
-    reverb.prepare(sampleRate);
+    // Prepare EVERY channel strip's effects (not just strip 0) so a later Stereo-Pan channel is ready
+    // (its delay/reverb buffers preallocated) — no allocation ever happens on the audio thread.
+    for (auto& s : strips)
+    {
+        s.filter.setSampleRate(sampleRate);
+        s.formant.prepare(sampleRate);
+        s.phaser.prepare(sampleRate);
+        s.delay.prepare(sampleRate);
+        s.chorus.prepare(sampleRate);
+        s.reverb.prepare(sampleRate);
+    }
 }
 
 void SynthVoice::startNote(int midiNoteNumber, float velocity,
@@ -199,6 +204,72 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     std::array<double, ModMatrixConfig::kNumTargets> modOffset {};   // per-sample summed offsets
     OscModOffsets oscOffset {};                                      // per-sample per-OSC offsets
 
+    // ── Spatialization (Epic 10) ────────────────────────────────────────────────────────────
+    // Channel count for this block: 1 (Mono / Pseudo-Stereo — byte-identical mono path) or 2
+    // (Stereo-Pan). Per-generator equal-power pan gains, computed once per block (no trig per sample).
+    const int nCh = (outputMode == (int) OutputMode::StereoPan) ? kMaxOutChannels : 1;
+    for (int g = 0; g < kNumPanGenerators; ++g)
+        positionToGains(generatorPan[(size_t) g], nCh, panGains[g]);
+
+    // The per-sample effect-parameter MODULATION, applied to ONE channel strip. Runs per active
+    // strip (nCh==1 → strip 0 only = today). Only FX targets here; generator targets (wavetable/sub/
+    // noise/karplus/pitch-env) stay pre-pan and are applied to the shared generators inline below.
+    auto applyFxMods = [&] (ChannelStrip& s)
+    {
+        if (tActive[(size_t) LFOTarget::FilterCutoff])
+            s.filter.setCutoff(std::clamp(baseCutoff * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterCutoff] * 3.0), 20.0, 20000.0));
+        if (tActive[(size_t) LFOTarget::FormantVowel])
+            s.formant.vowel = std::clamp(baseVowel + modOffset[(size_t) LFOTarget::FormantVowel] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::FilterResonance])
+            s.filter.setResonance(std::clamp(baseReso * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterResonance] * 1.5), 0.1, 10.0));
+        if (tActive[(size_t) LFOTarget::WavefolderDrive])
+            s.wavefolder.drive = std::clamp(baseFold + modOffset[(size_t) LFOTarget::WavefolderDrive] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::DelayTime])
+            s.delay.time = std::clamp(baseDelayTime + modOffset[(size_t) LFOTarget::DelayTime] * 0.2, 0.01, 2.0);
+        if (tActive[(size_t) LFOTarget::DelayMix])
+            s.delay.mix = std::clamp(baseDelayMix + modOffset[(size_t) LFOTarget::DelayMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::ReverbMix])
+            s.reverb.mix = std::clamp(baseReverbMix + modOffset[(size_t) LFOTarget::ReverbMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::ChorusDepth])
+            s.chorus.depth = std::clamp(baseChorusDep + modOffset[(size_t) LFOTarget::ChorusDepth] * 0.01, 0.001, 0.02);
+        if (tActive[(size_t) LFOTarget::DistortionDrive])
+            s.distortion.drive = std::clamp(baseDistDrive + modOffset[(size_t) LFOTarget::DistortionDrive] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::BitcrushMix])
+            s.bitcrusher.mix = std::clamp(baseCrushMix + modOffset[(size_t) LFOTarget::BitcrushMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::FormantReso])
+            s.formant.resonance = std::clamp(baseFormantReso + modOffset[(size_t) LFOTarget::FormantReso] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::FormantMix])
+            s.formant.mix = std::clamp(baseFormantMix + modOffset[(size_t) LFOTarget::FormantMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::WavefolderSym])
+            s.wavefolder.symmetry = std::clamp(baseWavefoldSym + modOffset[(size_t) LFOTarget::WavefolderSym] * 0.5, -1.0, 1.0);
+        if (tActive[(size_t) LFOTarget::WavefolderMix])
+            s.wavefolder.mix = std::clamp(baseWavefoldMix + modOffset[(size_t) LFOTarget::WavefolderMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::DistortionMix])
+            s.distortion.mix = std::clamp(baseDistMix + modOffset[(size_t) LFOTarget::DistortionMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::BitcrushBits])
+            s.bitcrusher.bits = (double) juce::roundToInt(std::clamp(baseBits + modOffset[(size_t) LFOTarget::BitcrushBits] * 8.0, 1.0, 16.0));
+        if (tActive[(size_t) LFOTarget::BitcrushRate])
+            s.bitcrusher.rate = (double) juce::roundToInt(std::clamp(baseRate + modOffset[(size_t) LFOTarget::BitcrushRate] * 25.0, 1.0, 50.0));
+        if (tActive[(size_t) LFOTarget::ChorusRate])
+            s.chorus.rate = std::clamp(baseChorusRate + modOffset[(size_t) LFOTarget::ChorusRate] * 2.0, 0.1, 5.0);
+        if (tActive[(size_t) LFOTarget::ChorusMix])
+            s.chorus.mix = std::clamp(baseChorusMix + modOffset[(size_t) LFOTarget::ChorusMix] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::DelayFeedback])
+            s.delay.feedback = std::clamp(baseDelayFb + modOffset[(size_t) LFOTarget::DelayFeedback] * 0.4, 0.0, 0.95);
+        if (tActive[(size_t) LFOTarget::ReverbRoom])
+            s.reverb.roomSize = std::clamp(baseReverbRoom + modOffset[(size_t) LFOTarget::ReverbRoom] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::ReverbDamp])
+            s.reverb.damping = std::clamp(baseReverbDamp + modOffset[(size_t) LFOTarget::ReverbDamp] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::PhaserRate])
+            s.phaser.rate = std::clamp(basePhaserRate + modOffset[(size_t) LFOTarget::PhaserRate] * 2.0, 0.05, 5.0);
+        if (tActive[(size_t) LFOTarget::PhaserDepth])
+            s.phaser.depth = std::clamp(basePhaserDepth + modOffset[(size_t) LFOTarget::PhaserDepth] * 0.5, 0.0, 1.0);
+        if (tActive[(size_t) LFOTarget::PhaserFeedback])
+            s.phaser.feedback = std::clamp(basePhaserFb + modOffset[(size_t) LFOTarget::PhaserFeedback] * 0.4, 0.0, 0.95);
+        if (tActive[(size_t) LFOTarget::PhaserMix])
+            s.phaser.mix = std::clamp(basePhaserMix + modOffset[(size_t) LFOTarget::PhaserMix] * 0.5, 0.0, 1.0);
+    };
+
     for (int sample = 0; sample < numSamples; ++sample)
     {
         // Poly-glide: the pitch ratio glides toward the target (== target once finished /
@@ -251,38 +322,12 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         subOsc.setFrequency(baseFrequencies[0] * ratio * subMul
                             * std::pow(2.0, std::clamp(gPitch, -kMaxPitchOct, kMaxPitchOct)) * pitchEnvMul);
 
-        // Apply each ACTIVE target's summed offset ONCE, reusing today's exact curve+clamp.
-        if (tActive[(size_t) LFOTarget::FilterCutoff])
-            filter.setCutoff(std::clamp(baseCutoff * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterCutoff] * 3.0), 20.0, 20000.0));
+        // GENERATOR-target modulation (pre-pan, applied to the shared generators ONCE). The FX-target
+        // modulation moved into applyFxMods() above and runs per channel strip in the chain loop below.
         if (tActive[(size_t) LFOTarget::WavetablePosition])
             wavetable.setPosition(std::clamp(basePos + modOffset[(size_t) LFOTarget::WavetablePosition] * 0.5, 0.0, 1.0));
-        if (tActive[(size_t) LFOTarget::FormantVowel])
-            formant.vowel = std::clamp(baseVowel + modOffset[(size_t) LFOTarget::FormantVowel] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::FilterResonance])
-            filter.setResonance(std::clamp(baseReso * std::pow(2.0, modOffset[(size_t) LFOTarget::FilterResonance] * 1.5), 0.1, 10.0));
-        if (tActive[(size_t) LFOTarget::WavefolderDrive])
-            wavefolder.drive = std::clamp(baseFold + modOffset[(size_t) LFOTarget::WavefolderDrive] * 0.5, 0.0, 1.0);
-        // Appended per-voice targets. Each modulates around its captured base and is clamped to the
-        // parameter's own range; only audible when the owning effect/generator is enabled.
-        if (tActive[(size_t) LFOTarget::DelayTime])
-            delay.time = std::clamp(baseDelayTime + modOffset[(size_t) LFOTarget::DelayTime] * 0.2, 0.01, 2.0);
-        if (tActive[(size_t) LFOTarget::DelayMix])
-            delay.mix = std::clamp(baseDelayMix + modOffset[(size_t) LFOTarget::DelayMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::ReverbMix])
-            reverb.mix = std::clamp(baseReverbMix + modOffset[(size_t) LFOTarget::ReverbMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::ChorusDepth])
-            chorus.depth = std::clamp(baseChorusDep + modOffset[(size_t) LFOTarget::ChorusDepth] * 0.01, 0.001, 0.02);
-        if (tActive[(size_t) LFOTarget::DistortionDrive])
-            distortion.drive = std::clamp(baseDistDrive + modOffset[(size_t) LFOTarget::DistortionDrive] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::BitcrushMix])
-            bitcrusher.mix = std::clamp(baseCrushMix + modOffset[(size_t) LFOTarget::BitcrushMix] * 0.5, 0.0, 1.0);
         if (tActive[(size_t) LFOTarget::SubLevel])
             subOsc.setAmplitude(std::clamp(baseSubLevel + modOffset[(size_t) LFOTarget::SubLevel] * 0.5, 0.0, 1.0));
-
-        // NOISE / KARPLUS / PITCH ENV (appended 2026-07-26). Same base+offset+clamp shape; only
-        // audible when the owning module is enabled. Karplus AMP/DAMP/STR update the ringing string
-        // live (FREQ is fixed at pluck time, so it is intentionally not a target). PITCH ENV amount
-        // is read by the one-shot sweep, so it only bites during a note's initial pitch transient.
         if (tActive[(size_t) LFOTarget::NoiseLevel])
             noise.setAmplitude(std::clamp(baseNoiseAmp + modOffset[(size_t) LFOTarget::NoiseLevel] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusAmp])
@@ -293,47 +338,12 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             karplus.setStretch(std::clamp(baseKarplusStr + modOffset[(size_t) LFOTarget::KarplusStretch] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::PitchEnvAmount])
             pitchEnvAmount = std::clamp(basePitchEnvAmt + modOffset[(size_t) LFOTarget::PitchEnvAmount] * 24.0, -48.0, 48.0);
-
-        // Epic 8.3 — full per-module coverage. Each modulates around its captured base, clamped to the
-        // parameter's own range (see the module specs); only audible when the owning module is enabled.
         if (tActive[(size_t) LFOTarget::WavetableAmp])
             wavetable.setAmplitude(std::clamp(baseWtAmp + modOffset[(size_t) LFOTarget::WavetableAmp] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::WavetableVoices])
             wavetable.setUnisonCount(juce::roundToInt(std::clamp(baseWtVoices + modOffset[(size_t) LFOTarget::WavetableVoices] * 3.0, 1.0, 7.0)));
         if (tActive[(size_t) LFOTarget::WavetableDetune])
             wavetable.setDetuneAmount(std::clamp(baseWtDetune + modOffset[(size_t) LFOTarget::WavetableDetune] * 50.0, 0.0, 100.0));
-        if (tActive[(size_t) LFOTarget::FormantReso])
-            formant.resonance = std::clamp(baseFormantReso + modOffset[(size_t) LFOTarget::FormantReso] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::FormantMix])
-            formant.mix = std::clamp(baseFormantMix + modOffset[(size_t) LFOTarget::FormantMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::WavefolderSym])
-            wavefolder.symmetry = std::clamp(baseWavefoldSym + modOffset[(size_t) LFOTarget::WavefolderSym] * 0.5, -1.0, 1.0);
-        if (tActive[(size_t) LFOTarget::WavefolderMix])
-            wavefolder.mix = std::clamp(baseWavefoldMix + modOffset[(size_t) LFOTarget::WavefolderMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::DistortionMix])
-            distortion.mix = std::clamp(baseDistMix + modOffset[(size_t) LFOTarget::DistortionMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::BitcrushBits])   // whole steps (integer bit depth)
-            bitcrusher.bits = (double) juce::roundToInt(std::clamp(baseBits + modOffset[(size_t) LFOTarget::BitcrushBits] * 8.0, 1.0, 16.0));
-        if (tActive[(size_t) LFOTarget::BitcrushRate])   // whole steps (integer hold factor)
-            bitcrusher.rate = (double) juce::roundToInt(std::clamp(baseRate + modOffset[(size_t) LFOTarget::BitcrushRate] * 25.0, 1.0, 50.0));
-        if (tActive[(size_t) LFOTarget::ChorusRate])
-            chorus.rate = std::clamp(baseChorusRate + modOffset[(size_t) LFOTarget::ChorusRate] * 2.0, 0.1, 5.0);
-        if (tActive[(size_t) LFOTarget::ChorusMix])
-            chorus.mix = std::clamp(baseChorusMix + modOffset[(size_t) LFOTarget::ChorusMix] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::DelayFeedback])
-            delay.feedback = std::clamp(baseDelayFb + modOffset[(size_t) LFOTarget::DelayFeedback] * 0.4, 0.0, 0.95);
-        if (tActive[(size_t) LFOTarget::ReverbRoom])
-            reverb.roomSize = std::clamp(baseReverbRoom + modOffset[(size_t) LFOTarget::ReverbRoom] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::ReverbDamp])
-            reverb.damping = std::clamp(baseReverbDamp + modOffset[(size_t) LFOTarget::ReverbDamp] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::PhaserRate])
-            phaser.rate = std::clamp(basePhaserRate + modOffset[(size_t) LFOTarget::PhaserRate] * 2.0, 0.05, 5.0);
-        if (tActive[(size_t) LFOTarget::PhaserDepth])
-            phaser.depth = std::clamp(basePhaserDepth + modOffset[(size_t) LFOTarget::PhaserDepth] * 0.5, 0.0, 1.0);
-        if (tActive[(size_t) LFOTarget::PhaserFeedback])
-            phaser.feedback = std::clamp(basePhaserFb + modOffset[(size_t) LFOTarget::PhaserFeedback] * 0.4, 0.0, 0.95);
-        if (tActive[(size_t) LFOTarget::PhaserMix])
-            phaser.mix = std::clamp(basePhaserMix + modOffset[(size_t) LFOTarget::PhaserMix] * 0.5, 0.0, 1.0);
 
         // Detune: base + GLOBAL ("Alle OSC") offset + this OSC's OWN offset. Only re-applied when a
         // detune routing exists (else the base set by applyToVoice stands — no per-sample writes).
@@ -380,70 +390,81 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
 
         const int a = juce::jlimit(0, 2, mixSrcA);
         const int b = juce::jlimit(0, 2, mixSrcB);
-        float mixedSample = 0.0f;
+
+        // Mix the generators into the per-channel bus via each generator's PAN (Epic 10). Every
+        // generator is still advanced EXACTLY once per sample (no phase drift). For nCh==1 every pan
+        // gain is 1.0, so channel[0] == the old mono mixedSample (byte-identical).
+        float channel[kMaxOutChannels] = {};
+        auto addPanned = [&] (float s, int gen) { for (int c = 0; c < nCh; ++c) channel[c] += s * panGains[gen][c]; };
+
         if (mixModeOn && a != b && mixMode == MixMode::FM)
         {
-            // FM: OSC A modulates OSC B's frequency; the third OSC is additive.
+            // FM: OSC A modulates OSC B's frequency; the third OSC is additive. The modulator (OSC A) is
+            // consumed, not emitted → no pan; the carrier is panned by OSC B, the third OSC by its own pan.
             const int o = 3 - a - b;
             float modulator = oscillators[a].nextSample() * oscGain[a];
             double fmOffset = modulator * oscillators[a].getFrequency() * 2.0;
-            float carrier = oscillators[b].nextSample(fmOffset) * oscGain[b];
-            float other = oscillators[o].nextSample() * oscGain[o];
-            mixedSample = carrier + other;
+            addPanned(oscillators[b].nextSample(fmOffset) * oscGain[b], PanOsc1 + b);
+            addPanned(oscillators[o].nextSample() * oscGain[o],         PanOsc1 + o);
         }
         else if (mixModeOn && a != b && mixMode == MixMode::RingMod)
         {
-            // Ring: OSC A × OSC B, + the third OSC.
+            // Ring: OSC A × OSC B (product panned by OSC B), + the third OSC (own pan).
             const int o = 3 - a - b;
             float sa = oscillators[a].nextSample() * oscGain[a];
             float sb = oscillators[b].nextSample() * oscGain[b];
-            float other = oscillators[o].nextSample() * oscGain[o];
-            mixedSample = sa * sb * 2.0f + other;
+            addPanned(sa * sb * 2.0f,                            PanOsc1 + b);
+            addPanned(oscillators[o].nextSample() * oscGain[o], PanOsc1 + o);
         }
         else
         {
             for (int i = 0; i < 3; ++i)
-                mixedSample += oscillators[i].nextSample() * oscGain[i];
+                addPanned(oscillators[i].nextSample() * oscGain[i], PanOsc1 + i);
         }
 
-        // Add noise + Karplus string + wavetable + sub-oscillator
-        mixedSample += noise.nextSample();
-        mixedSample += karplus.nextSample();
-        mixedSample += wavetable.nextSample();
-        mixedSample += subOsc.nextSample();
+        // Noise + Karplus + wavetable + sub, each panned by its own generator pan.
+        addPanned(noise.nextSample(),     PanNoise);
+        addPanned(karplus.nextSample(),   PanKarplus);
+        addPanned(wavetable.nextSample(), PanWavetable);
+        addPanned(subOsc.nextSample(),    PanSub);
 
-        // Wavefolding (West-Coast timbre): fold the raw signal BEFORE the filter
-        // so the filter can tame the harsh upper harmonics it generates.
-        mixedSample = wavefolder.process(mixedSample);
+        // Global "Alle OSC" amplitude (tremolo) — post-mix, same factor on every channel; and the
+        // envelope gain (ADSR advanced once above; reused here, not re-advanced — bypass gate when off).
+        const float ampGain = tActive[(size_t) LFOTarget::Amplitude]
+                                  ? std::clamp((1.0f + (float) modOffset[(size_t) LFOTarget::Amplitude]) * 0.5f, 0.0f, 1.0f)
+                                  : 1.0f;
+        const float envGain = (adsrOn ? envValue : gateG);
 
-        // Apply amplitude modulation (tremolo). Same (1+v)*0.5 map as before; only when
-        // Amplitude is an active target, so an unrouted patch keeps full gain (no ×0.5).
-        if (tActive[(size_t) LFOTarget::Amplitude])
-            mixedSample *= std::clamp((1.0f + (float) modOffset[(size_t) LFOTarget::Amplitude]) * 0.5f, 0.0f, 1.0f);   // clamp like the per-OSC AMP path (stacked slots must not boost >1 / invert)
+        // Per-channel effect chain: each panned channel runs its OWN strip. nCh==1 → strip 0 only, the
+        // exact chain + order as before. Wavefold → amp → filter → formant → envelope → dist → bitcrush
+        // → phaser → chorus → delay → reverb → clamp. FX modulation (applyFxMods) is applied per strip.
+        for (int ch = 0; ch < nCh; ++ch)
+        {
+            applyFxMods(strips[(size_t) ch]);
+            auto& st = strips[(size_t) ch];
+            float x = channel[ch];
+            x = st.wavefolder.process(x);
+            x *= ampGain;
+            x = st.filter.process(x);
+            x = st.formant.process(x);
+            x *= envGain;
+            x = st.distortion.process(x);
+            x = st.bitcrusher.process(x);
+            x = st.phaser.process(x);
+            x = st.chorus.process(x);
+            x = st.delay.process(x);
+            x = st.reverb.process(x);
+            channel[ch] = std::clamp(x, -1.0f, 1.0f);
+        }
 
-        // Filter (main biquad), then the vowel/formant filter.
-        mixedSample = filter.process(mixedSample);
-        mixedSample = formant.process(mixedSample);
-
-        // Envelope gain. The ADSR was already advanced ONCE at the top of the loop (envValue,
-        // also a mod source); reuse it here — do not advance twice. When disabled (Story 2.4)
-        // bypass it with the fast gate (NOT constant 1.0 — that made a released note hang at full
-        // volume for the whole release time before cutting; the gate fades in/out in ~10 ms and
-        // frees the voice promptly). The envelope still advances, so toggling mid-note doesn't glitch.
-        mixedSample *= (adsrOn ? envValue : gateG);
-
-        // Effects
-        mixedSample = distortion.process(mixedSample);
-        mixedSample = bitcrusher.process(mixedSample);
-        mixedSample = phaser.process(mixedSample);
-        mixedSample = chorus.process(mixedSample);
-        mixedSample = delay.process(mixedSample);
-        mixedSample = reverb.process(mixedSample);
-
-        mixedSample = std::clamp(mixedSample, -1.0f, 1.0f);
-
-        for (int channel = 0; channel < outputBuffer.getNumChannels(); ++channel)
-            outputBuffer.addSample(channel, startSample + sample, mixedSample);
+        // Output write: mono → both channels (today); stereo-pan → L/R (channels beyond nCh reuse the last).
+        const int nOut = outputBuffer.getNumChannels();
+        if (nCh == 1)
+            for (int c = 0; c < nOut; ++c)
+                outputBuffer.addSample(c, startSample + sample, channel[0]);
+        else
+            for (int c = 0; c < nOut; ++c)
+                outputBuffer.addSample(c, startSample + sample, channel[std::min(c, nCh - 1)]);
 
         // Free the voice when its amplitude source has fully decayed: ADSR reaching Idle (envelope
         // on), else the fast bypass gate reaching 0 (envelope off) — so a released note stops in

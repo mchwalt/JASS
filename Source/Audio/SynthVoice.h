@@ -11,6 +11,7 @@
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/ModMatrix.h"
+#include "../DSP/ChannelStrip.h"   // Epic 10: ChannelStrip, kMaxOutChannels, OutputMode, positionToGains
 #include "SynthSound.h"
 
 // Poly-glide (portamento): the processor computes, per block, the transpose ratio each
@@ -65,6 +66,12 @@ public:
     ModSlot* getModSlots() { return modSlots; }
     bool& getModMatrixOnRef() { return modMatrixOn; }
 
+    // Spatialization (Epic 10): the processor writes the output mode + the per-generator pans each
+    // block (applyToVoice); the voice turns them into per-channel gains at the top of renderNextBlock.
+    int& getOutputModeRef() { return outputMode; }
+    float* getGeneratorPan() { return generatorPan; }   // [kNumPanGenerators], indexed by PanGen
+    std::array<ChannelStrip, kMaxOutChannels>& getStrips() { return strips; }   // applyToVoice configures all
+
     // Re-pluck the Karplus string at the voice's current (transposed) pitch.
     void pluckKarplus();
 
@@ -80,15 +87,20 @@ private:
     Oscillator subOsc;            // sub-oscillator: tracks OSC1 pitch, octave(s) down
     AdsrEnvelope envelope;
     PitchEnvelope pitchEnv;   // one-shot pitch sweep (kicks/lasers/zaps)
-    BiquadFilter filter;
-    DistortionEffect distortion;
-    WavefolderEffect wavefolder;
-    BitcrusherEffect bitcrusher;
-    PhaserEffect phaser;
-    DelayEffect delay;
-    ChorusEffect chorus;
-    ReverbEffect reverb;
-    FormantFilter formant;   // vowel filter, applied right after the main filter
+    // Effect chain instanced per output channel (Epic 10). The old individual FX members are now
+    // reference ALIASES onto strip 0, so all existing render/applyToVoice code (which uses `filter`,
+    // `delay`, … directly) keeps working unchanged and operates on channel 0 — byte-identical while
+    // only strip 0 is active (Mono / Pseudo-Stereo). Stereo-Pan iterates strips[0..nCh) directly.
+    std::array<ChannelStrip, kMaxOutChannels> strips;
+    BiquadFilter&     filter     = strips[0].filter;
+    DistortionEffect& distortion = strips[0].distortion;
+    WavefolderEffect& wavefolder = strips[0].wavefolder;
+    BitcrusherEffect& bitcrusher = strips[0].bitcrusher;
+    PhaserEffect&     phaser     = strips[0].phaser;
+    DelayEffect&      delay      = strips[0].delay;
+    ChorusEffect&     chorus     = strips[0].chorus;
+    ReverbEffect&     reverb     = strips[0].reverb;
+    FormantFilter&    formant    = strips[0].formant;   // vowel filter, applied right after the main filter
     LFO lfos[kNumLFOs];   // indexed LFOs (each: own module + target + a matrix source)
     NoiseGenerator noise;
     KarplusStrong karplus;
@@ -101,6 +113,12 @@ private:
     int mixSrcB = 1;         // operand B; default OSC2 (== prior fixed OSC1<->OSC2 coupling)
     double pitchEnvAmount = 0.0;  // semitones at full envelope (bipolar); 0 => no pitch sweep
     bool   pitchEnvOn = false;    // false => pitch envelope bypassed
+
+    // Spatialization (Epic 10). outputMode/generatorPan are filled per block by applyToVoice;
+    // panGains is derived once per block at the top of renderNextBlock via positionToGains().
+    int   outputMode = (int) OutputMode::PseudoStereo;
+    float generatorPan[kNumPanGenerators] = {};                 // -1..1 per generator (PanGen order)
+    float panGains[kNumPanGenerators][kMaxOutChannels] = {};    // per-generator per-channel gains
 
     // Modulation matrix (Story 8.1): N routing slots + master enable, filled per block by
     // the processor (Parameters::applyToVoice). noteVelocity is the Velocity source (0..1),

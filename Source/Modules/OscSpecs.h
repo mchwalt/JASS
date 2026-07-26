@@ -21,6 +21,7 @@ namespace Modules
             { p + "UniVoices", "UnisonVoices", "VOICES", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (1.0f, 7.0f, 1.0f), 1.0f, {}, {}, LFOTarget::OscVoices },
             { p + "UniDetune", "UnisonDetune", "DETUNE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.2f, {}, {}, LFOTarget::OscDetune },
             { p + "Feedback",  "Feedback",     "FB",     ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f, {}, {}, LFOTarget::OscFeedback },
+            { p + "Pan",       "Pan",          "PAN",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f },   // Epic 10: stereo placement (only active in Stereo-Pan output mode)
         };
         return m;
     }
