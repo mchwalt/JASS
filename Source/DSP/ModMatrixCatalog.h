@@ -18,7 +18,7 @@
 
 namespace ModDest
 {
-    inline constexpr int kMaxParams = 5;   // most params any one module exposes (OSC: FREQ/AMP/DETUNE/FB/VOICES)
+    inline constexpr int kMaxParams = 6;   // most params any one module exposes (OSC: FREQ/AMP/DETUNE/FB/VOICES/PAN)
 
     struct Param  { const char* label; LFOTarget target; };
     struct Module
@@ -39,21 +39,21 @@ namespace ModDest
         // INT, so a v5→v6 migration remaps saved presets (PresetIO::migrateV5ParamOrder). OSC 1/2/3
         // are PER-OSCILLATOR (oscIndex 0..2); "Alle OSC" (-1) is the classic global variant.
         { "Off",        "",             -1, { { "-",      LFOTarget::Off } }, 1 },
-        { "Alle OSC",   "",             -1, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
+        { "Alle OSC",   "",             -1, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices }, { "PAN", LFOTarget::OscPan } }, 6 },
         { "BITCRUSH",   "bitcrushOn",   -1, { { "BITS",   LFOTarget::BitcrushBits }, { "MIX", LFOTarget::BitcrushMix }, { "RATE", LFOTarget::BitcrushRate } }, 3 },
         { "CHORUS",     "chorusOn",     -1, { { "DEPTH",  LFOTarget::ChorusDepth }, { "MIX", LFOTarget::ChorusMix }, { "RATE", LFOTarget::ChorusRate } }, 3 },
         { "DELAY",      "delayOn",      -1, { { "FB",     LFOTarget::DelayFeedback }, { "MIX", LFOTarget::DelayMix }, { "TIME", LFOTarget::DelayTime } }, 3 },
         { "DISTORTION", "distortionOn", -1, { { "DRIVE",  LFOTarget::DistortionDrive }, { "MIX", LFOTarget::DistortionMix } }, 2 },
         { "FILTER",     "filterOn",     -1, { { "CUTOFF", LFOTarget::FilterCutoff }, { "RESO", LFOTarget::FilterResonance } }, 2 },
         { "FORMANT",    "formantOn",    -1, { { "MIX",    LFOTarget::FormantMix }, { "RESO", LFOTarget::FormantReso }, { "VOWEL", LFOTarget::FormantVowel } }, 3 },
-        { "OSC 1",      "osc1On",        0, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
-        { "OSC 2",      "osc2On",        1, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
-        { "OSC 3",      "osc3On",        2, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices } }, 5 },
+        { "OSC 1",      "osc1On",        0, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices }, { "PAN", LFOTarget::OscPan } }, 6 },
+        { "OSC 2",      "osc2On",        1, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices }, { "PAN", LFOTarget::OscPan } }, 6 },
+        { "OSC 3",      "osc3On",        2, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices }, { "PAN", LFOTarget::OscPan } }, 6 },
         { "PHASER",     "phaserOn",     -1, { { "DEPTH",  LFOTarget::PhaserDepth }, { "FB", LFOTarget::PhaserFeedback }, { "MIX", LFOTarget::PhaserMix }, { "RATE", LFOTarget::PhaserRate } }, 4 },
         { "REVERB",     "reverbOn",     -1, { { "DAMP",   LFOTarget::ReverbDamp }, { "MIX", LFOTarget::ReverbMix }, { "ROOM", LFOTarget::ReverbRoom } }, 3 },
-        { "SUB",        "subOn",        -1, { { "LEVEL",  LFOTarget::SubLevel } }, 1 },
+        { "SUB",        "subOn",        -1, { { "LEVEL",  LFOTarget::SubLevel }, { "PAN", LFOTarget::SubPan } }, 2 },
         { "WAVEFOLD",   "wavefoldOn",   -1, { { "DRIVE",  LFOTarget::WavefolderDrive }, { "MIX", LFOTarget::WavefolderMix }, { "SYM", LFOTarget::WavefolderSym } }, 3 },
-        { "WAVETABLE",  "wavetableOn",  -1, { { "AMP",    LFOTarget::WavetableAmp }, { "DETUNE", LFOTarget::WavetableDetune }, { "FREQ", LFOTarget::WavetableFreq }, { "POS", LFOTarget::WavetablePosition }, { "VOICES", LFOTarget::WavetableVoices } }, 5 },
+        { "WAVETABLE",  "wavetableOn",  -1, { { "AMP",    LFOTarget::WavetableAmp }, { "DETUNE", LFOTarget::WavetableDetune }, { "FREQ", LFOTarget::WavetableFreq }, { "POS", LFOTarget::WavetablePosition }, { "VOICES", LFOTarget::WavetableVoices }, { "PAN", LFOTarget::WavetablePan } }, 6 },
         // APPENDED (2026-07-26): previously-missing modules. They go at the END so the persisted MOD
         // combo index of every module above is unchanged (no preset/DAW migration). The combo is thus
         // no longer strictly A→Z for these six — the append-only contract wins over display ordering.
@@ -61,9 +61,9 @@ namespace ModDest
         // PluginProcessor::processBlock (block-rate, LFO sources only), not per voice. NOISE/KARPLUS/
         // PITCH ENV are per-voice like the rest. KARPLUS omits FREQ (pitch is fixed at pluck time).
         { "COMPRESSOR", "compOn",       -1, { { "ATK",    LFOTarget::CompAttack }, { "GAIN", LFOTarget::CompMakeup }, { "RATIO", LFOTarget::CompRatio }, { "REL", LFOTarget::CompRelease }, { "THRESH", LFOTarget::CompThreshold } }, 5 },
-        { "KARPLUS",    "karplusOn",    -1, { { "AMP",    LFOTarget::KarplusAmp }, { "DAMP", LFOTarget::KarplusDamping }, { "STR", LFOTarget::KarplusStretch } }, 3 },
+        { "KARPLUS",    "karplusOn",    -1, { { "AMP",    LFOTarget::KarplusAmp }, { "DAMP", LFOTarget::KarplusDamping }, { "STR", LFOTarget::KarplusStretch }, { "PAN", LFOTarget::KarplusPan } }, 4 },
         { "MASTER",     "masterOn",     -1, { { "TEMPO",  LFOTarget::MasterTempo }, { "VOL", LFOTarget::MasterVol } }, 2 },
-        { "NOISE",      "noiseOn",      -1, { { "AMP",    LFOTarget::NoiseLevel } }, 1 },
+        { "NOISE",      "noiseOn",      -1, { { "AMP",    LFOTarget::NoiseLevel }, { "PAN", LFOTarget::NoisePan } }, 2 },
         { "PITCH ENV",  "pitchEnvOn",   -1, { { "AMOUNT", LFOTarget::PitchEnvAmount } }, 1 },
         { "STEREO",     "stereoOn",     -1, { { "TIME",   LFOTarget::StereoTime }, { "WIDTH", LFOTarget::StereoWidth } }, 2 },
     };
@@ -87,7 +87,7 @@ namespace ModDest
     // Resolve a (module,param) selection to its DSP target (LFOTarget). Off => LFOTarget::Off.
     inline LFOTarget targetOf (int m, int p) noexcept { return modules[clampModule (m)].params[clampParam (m, p)].target; }
 
-    inline constexpr int kOscRingSlots = 5;   // per-OSC ring slots: FREQ, AMP, DETUNE, FB, VOICES
+    inline constexpr int kOscRingSlots = 6;   // per-OSC ring slots: FREQ, AMP, DETUNE, FB, VOICES, PAN
 
     // Per-oscillator ring slot for the OSC-scoped targets (FREQ=0..VOICES=4); -1 else.
     // Used by the live-ring feed so a per-OSC routing lights ONLY that oscillator's knob.
@@ -100,6 +100,7 @@ namespace ModDest
             case LFOTarget::OscDetune:   return 2;
             case LFOTarget::OscFeedback: return 3;
             case LFOTarget::OscVoices:   return 4;
+            case LFOTarget::OscPan:      return 5;
             default:                     return -1;
         }
     }

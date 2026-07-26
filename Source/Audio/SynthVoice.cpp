@@ -187,6 +187,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     bool anyOscDetune    = false;                      // any per-oscillator DETUNE routing exists
     bool anyOscFeedback  = false;                      // any per-oscillator FEEDBACK routing exists
     bool anyOscVoices    = false;                      // any per-oscillator VOICES routing exists
+    bool anyOscPan       = false;                      // any per-oscillator PAN routing exists (Epic 10)
     if (modMatrixOn)
         for (const auto& s : modSlots)
             if (s.target > 0 && s.target < ModMatrixConfig::kNumTargets && s.amount != 0.0f)
@@ -197,6 +198,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                     if (s.target == (int) LFOTarget::OscDetune)   anyOscDetune = true;
                     if (s.target == (int) LFOTarget::OscFeedback) anyOscFeedback = true;
                     if (s.target == (int) LFOTarget::OscVoices)   anyOscVoices = true;
+                    if (s.target == (int) LFOTarget::OscPan)      anyOscPan    = true;
                     continue;   // pitch is always applied (harmless at 0); the rest use the flags
                 }
                 tActive[(size_t) s.target] = true;
@@ -210,6 +212,17 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const int nCh = (outputMode == (int) OutputMode::StereoPan) ? kMaxOutChannels : 1;
     for (int g = 0; g < kNumPanGenerators; ++g)
         positionToGains(generatorPan[(size_t) g], nCh, panGains[g]);
+
+    // PAN as a mod target (Epic 10): auto-panning. Only meaningful in Stereo-Pan (nCh>1). When active,
+    // the per-generator pan gains are re-derived PER SAMPLE from the base pan + the modulation; else the
+    // per-block panGains stand. curGains holds whichever is current; the mix reads it.
+    const bool panMod = (nCh > 1) && (anyOscPan
+                        || tActive[(size_t) LFOTarget::OscPan]      || tActive[(size_t) LFOTarget::SubPan]
+                        || tActive[(size_t) LFOTarget::NoisePan]    || tActive[(size_t) LFOTarget::KarplusPan]
+                        || tActive[(size_t) LFOTarget::WavetablePan]);
+    float curGains[kNumPanGenerators][kMaxOutChannels];
+    for (int g = 0; g < kNumPanGenerators; ++g)
+        for (int c = 0; c < kMaxOutChannels; ++c) curGains[g][c] = panGains[g][c];
 
     // The per-sample effect-parameter MODULATION, applied to ONE channel strip. Runs per active
     // strip (nCh==1 → strip 0 only = today). Only FX targets here; generator targets (wavetable/sub/
@@ -394,8 +407,25 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // Mix the generators into the per-channel bus via each generator's PAN (Epic 10). Every
         // generator is still advanced EXACTLY once per sample (no phase drift). For nCh==1 every pan
         // gain is 1.0, so channel[0] == the old mono mixedSample (byte-identical).
+        // Auto-pan: re-derive the per-generator pan gains from base pan + modulation this sample.
+        // OSC pan = base + GLOBAL ("Alle OSC", modOffset[OscPan]) + this OSC's own offset (oscOffset.pan).
+        if (panMod)
+        {
+            const double gPan = modOffset[(size_t) LFOTarget::OscPan];   // "Alle OSC" global pan
+            for (int g = 0; g < kNumPanGenerators; ++g)
+            {
+                double p = generatorPan[(size_t) g];
+                if      (g <= PanOsc3)        p += gPan + oscOffset.pan[(size_t) g];
+                else if (g == PanSub)         p += modOffset[(size_t) LFOTarget::SubPan];
+                else if (g == PanNoise)       p += modOffset[(size_t) LFOTarget::NoisePan];
+                else if (g == PanKarplus)     p += modOffset[(size_t) LFOTarget::KarplusPan];
+                else if (g == PanWavetable)   p += modOffset[(size_t) LFOTarget::WavetablePan];
+                positionToGains((float) std::clamp(p, -1.0, 1.0), nCh, curGains[g]);
+            }
+        }
+
         float channel[kMaxOutChannels] = {};
-        auto addPanned = [&] (float s, int gen) { for (int c = 0; c < nCh; ++c) channel[c] += s * panGains[gen][c]; };
+        auto addPanned = [&] (float s, int gen) { for (int c = 0; c < nCh; ++c) channel[c] += s * curGains[gen][c]; };
 
         if (mixModeOn && a != b && mixMode == MixMode::FM)
         {

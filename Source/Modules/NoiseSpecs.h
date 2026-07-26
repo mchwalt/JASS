@@ -13,7 +13,7 @@ namespace Modules
             { "noiseOn",   "Enabled", "",    ParamSpec::Kind::Bool },
             { "noiseType", "Type",    "TYPE", ParamSpec::Kind::Choice, {}, 0.0f, { "White", "Pink", "Brown", "Blue" } },
             { "noiseAmp",  "Amount",  "AMP",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::NoiseLevel },
-            { "noisePan",  "Pan",     "PAN",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f },   // Epic 10: stereo placement
+            { "noisePan",  "Pan",     "PAN",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::NoisePan },   // Epic 10: stereo placement + auto-pan target
         };
         return m;
     }

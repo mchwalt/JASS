@@ -1261,7 +1261,7 @@ void SynthyEditor::buildRack()
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
-          K(P::karplusPan, "PAN") });   // Epic 10: stereo placement
+          Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) });   // Epic 10: stereo placement + auto-pan target
     add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+6 knobs incl. PAN
         { Combo{ P::wavetableBank, "BANK",
                  std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
@@ -1277,7 +1277,7 @@ void SynthyEditor::buildRack()
                       PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
           Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq), Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),
           Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
-          K(P::wavetablePan, "PAN") },   // Epic 10: stereo placement
+          Kmod(P::wavetablePan, "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
         [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
 
     // ---- MODULATION ----
