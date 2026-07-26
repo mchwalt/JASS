@@ -56,21 +56,20 @@ private:
 
     double pinkNoise()
     {
-        // Voss-McCartney: update one random row per sample based on changed bits.
-        unsigned int lastIndex = pinkIndex;
+        // Voss-McCartney: each sample, refresh exactly ONE row — the one given by the number of
+        // trailing zeros of the counter. Row 0 refreshes every 2nd sample, row 1 every 4th, row 2
+        // every 8th, … which is what produces the 1/f (−3 dB/oct) octave spacing.
+        // (Previous code used the lowest CHANGED bit of counter^(counter-1), which is ALWAYS bit 0
+        //  because incrementing always toggles the LSB — so only row 0 ever updated and the output
+        //  was attenuated white, not pink. Blue noise, derived from pink, inherited the bug.)
         pinkIndex++;
+        int row = 0;
+        for (unsigned int n = pinkIndex; (n & 1u) == 0u && row < (int) pinkRows.size() - 1; n >>= 1)
+            ++row;
 
-        unsigned int diff = lastIndex ^ pinkIndex;
-        for (int row = 0; row < (int) pinkRows.size(); ++row)
-        {
-            if ((diff & (1u << row)) != 0)
-            {
-                pinkRunningSum -= pinkRows[(size_t) row];
-                pinkRows[(size_t) row] = whiteNoise();
-                pinkRunningSum += pinkRows[(size_t) row];
-                break;
-            }
-        }
+        pinkRunningSum -= pinkRows[(size_t) row];
+        pinkRows[(size_t) row] = whiteNoise();
+        pinkRunningSum += pinkRows[(size_t) row];
 
         double white = whiteNoise();
         return (pinkRunningSum + white) / (pinkRows.size() + 1);

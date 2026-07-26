@@ -30,7 +30,9 @@ public:
 
     float nextSample()
     {
-        if (!enabled || amplitude < 0.001 || bank == nullptr)
+        // Bail only when OFF or unusable. NOT on a tiny amplitude — that froze the phase (see the
+        // Oscillator fix), so a tremolo'd wavetable drifted in pitch. Output is ~0 here anyway.
+        if (!enabled || bank == nullptr)
             return 0.0f;
 
         double sum = 0.0;
