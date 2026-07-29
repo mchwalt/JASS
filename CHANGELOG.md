@@ -16,13 +16,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   taps (8–24 ms) rendered through lateral KEMAR ears push the image **out of the head** —
   the cue dry binaural cannot deliver, and the axis on which Kunstkopf is now audibly
   different from the parametric Binaural mode. The knob is a **5-detent room macro**
-  (wet level −6…0 dB **plus** a damping morph 3.5→7 kHz per step) — deliberately coarse
+  (wet level −3…+6 dB **plus** a damping morph 5→10 kHz per step) — deliberately coarse
   and ear-calibrated: the ear's direct-to-room JND is ~5–6 dB (Zahorik 2002), so a fine
-  or wide-range knob feels dead; every detent sits inside the audible window and the top
-  detent (= the default) is the ear-tested optimum. Level-neutral by constant-power
-  normalisation with per-detent measured constants (±0.2 dB); the other four output modes
-  stay bit-exact (FormatVersion stays 6, append-only). RANDOM now leaves the output MODE
-  and ROOM untouched (master-bus rule; MODE had been missed in 10.1).
+  or wide-range knob feels dead. The **centre detent (= the default) is the ear-tested
+  optimum**; the upper half goes beyond it (at the stop the room carries twice the direct
+  power). Level-neutral by constant-power normalisation with per-detent measured
+  constants (±0.35 dB); the other four output modes stay bit-exact (FormatVersion stays
+  6, append-only). RANDOM now leaves the output MODE and ROOM untouched (master-bus rule;
+  MODE had been missed in 10.1).
 - **Spatialization / STEREO output modes** — a per-generator **PAN** feeds a new STEREO
   output stage with five modes: **Mono**, **Pseudo-Stereo** (the existing Haas widener,
   still default), **Stereo-Pan** (true amplitude L/R), **Binaural** (parametric headphone

@@ -19,14 +19,14 @@ namespace Modules
             { "stereoWidth", "Width",   "WIDTH", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f),  0.5f, {}, {}, LFOTarget::StereoWidth },
             { "stereoTime",  "Time",    "TIME",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (1.0f, 15.0f, 0.1f), 12.0f, {}, {}, LFOTarget::StereoTime },
             // Kunstkopf externalization (Story 10.4): binaural early-reflection MACRO, only read in
-            // Kunstkopf mode (BinauralRoom on the bus). 5 detents (step 0.25), ear-calibrated: all
-            // steps sit inside the audible window (wet −6…0 dB + damping morph — coarser spreads
-            // wasted travel below the user's effect threshold, verified 2026-07-29). Default 1.0 =
-            // the ear-tested "perfect" setting (user decision; deliberate default-rule exception:
-            // the param only acts in the days-old Kunstkopf mode and the factory outputMode is
-            // Pseudo-Stereo — factory state unaffected). 0 = fully dry. Append-only, format stays
-            // v6; older fine-grained values snap to a detent on load. NOT a mod-matrix target (AC7).
-            { "hrtfRoom",    "Room",    "ROOM",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.25f),  1.0f },
+            // Kunstkopf mode (BinauralRoom on the bus). 5 detents (step 0.25), ear-calibrated
+            // 2026-07-29: wet {off,−3,0,+3,+6} dB + damping morph, all inside the audible window.
+            // Default 0.5 = the CENTRE detent = the ear-tested "perfect" setting; the upper half
+            // goes beyond it (user decision; deliberate default-rule exception: the param only
+            // acts in the days-old Kunstkopf mode and the factory outputMode is Pseudo-Stereo —
+            // factory state unaffected). 0 = fully dry. Append-only, format stays v6; older
+            // fine-grained values snap to a detent on load. NOT a mod-matrix target (AC7).
+            { "hrtfRoom",    "Room",    "ROOM",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.25f),  0.5f },
         };
         return m;
     }

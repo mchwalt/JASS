@@ -17,8 +17,10 @@ Output stage for the mono engine: choose how it reaches the two output channels.
   (8–24 ms, rendered through lateral KEMAR ears). Dry binaural tends to stay *inside* the head no
   matter how good the HRTF is — reflections are what push the image **out of the head**. The knob
   has **5 steps** (that is deliberate: the ear can only tell about that many room amounts apart);
-  each step up = a stronger **and brighter** room, 0 = fully dry. Level-neutral: more room does not
-  get louder. Heard best on transients — plucks and short arp notes, not sustained drones.
+  each step up = a stronger **and brighter** room, 0 = fully dry. The **middle step is the sweet
+  spot** — above it the room grows stronger than the direct sound (distant, big). Level-neutral:
+  more room does not get louder. Heard best on transients — plucks and short arp notes, not
+  sustained drones.
 
 **PAN decides whether you hear anything at all.** With every generator centred, Stereo-Pan, Binaural
 and Kunstkopf all render identical mono — there is no direction to place, so switching between them

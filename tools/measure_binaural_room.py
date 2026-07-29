@@ -1,13 +1,13 @@
 # Story 10.4 design measurement: binaural early-reflection stage (BinauralRoom.h).
 # Pure stdlib (cmath + own FFT) per project rule "DSP messen statt raten".
 #
-# v3 (5 DETENTS, ear-calibrated): the knob is a 5-position macro. Psychoacoustics (Zahorik 2002:
-# direct-to-reverberant JND ~5-6 dB; Barron 1971 / precedence: spatial impression saturates within
-# ~10 dB of the direct sound) killed the linear knob; the v2 -24..0 dB spread then turned out to
-# waste half the travel BELOW the user's personal effect threshold (ear test 2026-07-29: -18/-12 dB
-# inaudible, -6 dB slight, 0 dB perfect). v3 places all detents inside the audible window, the top
-# detent IS the ear-tested "perfect" (0 dB / 7 kHz, unchanged):
-#   wet {off, -6, -4, -2, 0} dB  x  damping {-, 3.5, 4.4, 5.6, 7} kHz.
+# v4 (5 DETENTS, perfect-in-the-middle): the knob is a 5-position macro. Psychoacoustics
+# (Zahorik 2002: direct-to-reverberant JND ~5-6 dB; Barron 1971 / precedence: saturation within
+# ~10 dB of the direct sound) killed the linear knob; the v2 -24..0 dB spread wasted the lower
+# half below the user's effect threshold; v3 ended AT the ear-tested optimum. v4 (user request):
+# the optimum sits in the MIDDLE of the travel and the upper half goes beyond it:
+#   wet {off, -3, 0, +3, +6} dB  x  damping {-, 5, 7, 8.5, 10} kHz
+# Detent 2 (knob 0.5, the default) is the ear-tested "perfect" (0 dB / 7 kHz) bit-exact.
 # Each detent gets its own MEASURED normalisation constant (no interpolation).
 #
 # Verifies:
@@ -26,9 +26,9 @@ N   = 65536          # FFT size (~0.7 Hz resolution, enough for 8-25 ms combs)
 TAP_DELAY_SMP = [367, 499, 641, 773, 919, 1061]        # 8.3 / 11.3 / 14.5 / 17.5 / 20.8 / 24.1 ms
 TAP_AZ_DEG    = [55, -40, 70, -60, 30, -50]            # lateral, alternating sides
 TAP_GAIN      = [0.785, 0.707, 0.628, 0.565, 0.503, 0.456]   # P=1.0 tuning (wet==dry at top detent)
-# Per-detent design (knob step 0.25 -> detent index 0..4). Detent 4 == the ear-tested "perfect".
-DET_WET_DB    = [None, -6.0, -4.0, -2.0, 0.0]           # wet level rel. dry (None = off)
-DET_DAMP_HZ   = [3500.0, 3500.0, 4400.0, 5600.0, 7000.0]
+# Per-detent design (knob step 0.25 -> detent index 0..4). Detent 2 == the ear-tested "perfect".
+DET_WET_DB    = [None, -3.0, 0.0, 3.0, 6.0]             # wet level rel. dry (None = off)
+DET_DAMP_HZ   = [5000.0, 5000.0, 7000.0, 8500.0, 10000.0]
 
 def det_wet(d):      return 0.0 if DET_WET_DB[d] is None else 10.0 ** (DET_WET_DB[d] / 20.0)
 
@@ -170,15 +170,16 @@ def main():
         wdb = "   off " if DET_WET_DB[d] is None else f"{DET_WET_DB[d]:+7.1f}"
         print(f"  detent {d}: wet {wdb} dB | damp {DET_DAMP_HZ[d]:5.0f} Hz | level L {lvlL:+.2f} / R {lvlR:+.2f} dB")
 
-    # centre colouration at the top detent (octave bands)
-    irL, _ = room_ir(4, powers)
-    mL = mag_response(irL)
-    print("octave bands (L, detent 4, dB re dry):")
-    for fcb in (63, 125, 250, 500, 1000, 2000, 4000, 8000, 12000):
-        lo, hi = fcb / math.sqrt(2), fcb * math.sqrt(2)
-        i0, i1 = max(1, int(lo * N / FS)), min(N // 2 - 1, int(hi * N / FS))
-        p = sum(mL[i] * mL[i] for i in range(i0, i1 + 1)) / (i1 - i0 + 1)
-        print(f"  {fcb:>5} Hz: {10*math.log10(p):+.2f} dB")
+    # centre colouration at the default and the top detent (octave bands)
+    for d in (2, 4):
+        irL, _ = room_ir(d, powers)
+        mL = mag_response(irL)
+        print(f"octave bands (L, detent {d}, dB re dry):")
+        for fcb in (63, 125, 250, 500, 1000, 2000, 4000, 8000, 12000):
+            lo, hi = fcb / math.sqrt(2), fcb * math.sqrt(2)
+            i0, i1 = max(1, int(lo * N / FS)), min(N // 2 - 1, int(hi * N / FS))
+            p = sum(mL[i] * mL[i] for i in range(i0, i1 + 1)) / (i1 - i0 + 1)
+            print(f"  {fcb:>5} Hz: {10*math.log10(p):+.2f} dB")
 
 if __name__ == "__main__":
     main()

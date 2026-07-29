@@ -68,12 +68,12 @@ public:
 
     // In-place stereo. room ∈ [0,1] is a 5-DETENT MACRO (param step 0.25), not a linear wet gain:
     // the direct-to-reverberant JND is ~5-6 dB [Zahorik 2002], spatial impression saturates within
-    // ~10 dB of the direct sound [Barron 1971 / precedence], and the first two spreads wasted
-    // travel below the user's personal effect threshold (ear-calibrated 2026-07-29: -12 dB wet
-    // inaudible, -6 dB slight, 0 dB perfect). Every detent therefore sits INSIDE the audible
-    // window and gangs wet level + send damping (each step = stronger AND brighter room); the top
-    // detent is the ear-tested "perfect" setting, preserved exactly. Per-detent measured
-    // normalisation constants — see the tables below. Gains ramp across the block (anti-zipper).
+    // ~10 dB of the direct sound [Barron 1971 / precedence], and wide/fine spreads wasted travel
+    // below the user's personal effect threshold (ear-calibrated 2026-07-29: -12 dB wet inaudible,
+    // -6 dB slight, 0 dB perfect). Every detent sits INSIDE the audible window and gangs wet level
+    // + send damping (each step = stronger AND brighter room); the ear-tested "perfect" setting
+    // sits at the CENTRE detent (= the default), the upper half goes beyond it. Per-detent
+    // measured normalisation constants — see the tables below. Gains ramp across the block.
     void process (float* l, float* r, int n, float room) noexcept
     {
         const int det = std::clamp ((int) std::lround (room * 4.0f), 0, kNumDetents - 1);
@@ -137,16 +137,19 @@ private:
     // 367/499/641/773/919/1061 samples @44.1k — primes, hence mutually non-harmonic.
     static constexpr float kTapDelayMs[kNumTaps]  = { 8.32f, 11.32f, 14.54f, 17.53f, 20.84f, 24.06f };
     static constexpr int   kTapAzimuthDeg[kNumTaps] = { 55, -40, 70, -60, 30, -50 };   // lateral, alternating sides
-    // Gains tuned so the top detent delivers wet == dry power (the user's ear-tested "perfect").
+    // Gains tuned so detent 2 delivers wet == dry power (the user's ear-tested "perfect").
     static constexpr float kTapGain[kNumTaps]     = { 0.785f, 0.707f, 0.628f, 0.565f, 0.503f, 0.456f };
-    // Per-detent design (knob step 0.25 → detent 0..4), ear-calibrated 2026-07-29:
-    //   wet     {off, −6, −4, −2, 0} dB rel. dry (as amplitude below)
-    //   damping {—, 3.5, 4.4, 5.6, 7} kHz send lowpass (darker small room → brighter big one)
+    // Per-detent design (knob step 0.25 → detent 0..4), ear-calibrated 2026-07-29. The ear-tested
+    // optimum sits in the MIDDLE (detent 2, the default); the upper half goes beyond it — at the
+    // stop the reflections carry twice the direct power (sounds distant, bass thins ~5 dB by
+    // partial cancellation — measured, accepted as the extreme).
+    //   wet     {off, −3, 0, +3, +6} dB rel. dry (as amplitude below)
+    //   damping {—, 5, 7, 8.5, 10} kHz send lowpass (darker small room → brighter big one)
     //   power   = MEASURED per-ear pink wet power at that damping (tools/measure_binaural_room.py)
     static constexpr int   kNumDetents            = 5;
-    static constexpr float kDetWet[kNumDetents]      = { 0.0f, 0.501f, 0.631f, 0.794f, 1.0f };
-    static constexpr float kDetDampHz[kNumDetents]   = { 3500.0f, 3500.0f, 4400.0f, 5600.0f, 7000.0f };
-    static constexpr float kDetWetPower[kNumDetents] = { 0.814f, 0.814f, 0.904f, 1.008f, 1.107f };
+    static constexpr float kDetWet[kNumDetents]      = { 0.0f, 0.708f, 1.0f, 1.413f, 1.995f };
+    static constexpr float kDetDampHz[kNumDetents]   = { 5000.0f, 5000.0f, 7000.0f, 8500.0f, 10000.0f };
+    static constexpr float kDetWetPower[kNumDetents] = { 0.958f, 0.958f, 1.107f, 1.192f, 1.258f };
     static constexpr float kTwoPi                 = 6.2831853f;
 
     // 24.06 ms + 128-tap window fits up to ~185 kHz host rate; prepare() clamps beyond that.
