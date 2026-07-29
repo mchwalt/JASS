@@ -13,7 +13,8 @@ public:
           fft(fftOrder),
           window(fftSize, juce::dsp::WindowingFunction<float>::hann)
     {
-        smoothedMagnitudes.resize(fftSize / 2, 0.0f);
+        smoothedMagnitudes[0].resize(fftSize / 2, 0.0f);
+        smoothedMagnitudes[1].resize(fftSize / 2, 0.0f);
         startTimerHz(30);
     }
 
@@ -84,50 +85,66 @@ public:
                    static_cast<int>(topMargin + plotH + 1), 16, 14,
                    juce::Justification::centredRight);
 
-        // Spectrum path
+        // Spectrum paths — stereo (Story 10.6): L and R as separate curves; a single curve when
+        // the content is effectively mono (the two would coincide).
         int numBins = fftSize / 2;
         float binWidth = sampleRate / static_cast<float>(fftSize);
 
-        juce::Path path;
-        bool pathStarted = false;
-
-        for (int i = 1; i < numBins; ++i)
+        auto buildPath = [&] (int ch, juce::Path& path) -> bool
         {
-            float freq = i * binWidth;
-            if (freq < minFreq || freq > maxFreq) continue;
-
-            float xNorm = freqToX(freq);
-            float x = leftMargin + xNorm * plotW;
-
-            float mag = smoothedMagnitudes[i];
-            float db = mag > 0.0f ? 20.0f * std::log10(mag) : mindB;
-            db = std::max(db, mindB);
-
-            float yNorm = juce::jmap(db, mindB, 0.0f, 1.0f, 0.0f);
-            float y = topMargin + yNorm * plotH;
-
-            if (!pathStarted)
+            bool pathStarted = false;
+            for (int i = 1; i < numBins; ++i)
             {
-                path.startNewSubPath(x, y);
-                pathStarted = true;
-            }
-            else
-            {
-                path.lineTo(x, y);
-            }
-        }
+                float freq = i * binWidth;
+                if (freq < minFreq || freq > maxFreq) continue;
 
-        if (isOn() && pathStarted)
+                float xNorm = freqToX(freq);
+                float x = leftMargin + xNorm * plotW;
+
+                float mag = smoothedMagnitudes[ch][(size_t) i];
+                float db = mag > 0.0f ? 20.0f * std::log10(mag) : mindB;
+                db = std::max(db, mindB);
+
+                float yNorm = juce::jmap(db, mindB, 0.0f, 1.0f, 0.0f);
+                float y = topMargin + yNorm * plotH;
+
+                if (!pathStarted) { path.startNewSubPath(x, y); pathStarted = true; }
+                else               path.lineTo(x, y);
+            }
+            return pathStarted;
+        };
+
+        auto drawCurve = [&] (int ch, juce::Colour col, float fillAlpha)
         {
-            g.setColour(strokeColour.withAlpha(0.15f));
+            juce::Path path;
+            if (! buildPath(ch, path)) return;
+
+            g.setColour(col.withAlpha(fillAlpha));
             juce::Path filled(path);
             filled.lineTo(leftMargin + plotW, topMargin + plotH);
             filled.lineTo(leftMargin, topMargin + plotH);
             filled.closeSubPath();
             g.fillPath(filled);
 
-            g.setColour(strokeColour);
+            g.setColour(col);
             g.strokePath(path, juce::PathStrokeType(1.5f));
+        };
+
+        if (isOn())
+        {
+            if (stereoContent)
+            {
+                drawCurve(1, kRightColour, 0.10f);
+                drawCurve(0, strokeColour, 0.10f);   // L on top, matching the scope
+
+                g.setFont(juce::FontOptions(13.0f, juce::Font::bold));
+                g.setColour(strokeColour);
+                g.drawText("L", static_cast<int>(leftMargin + 5),  static_cast<int>(topMargin + 3), 16, 14, juce::Justification::centredLeft);
+                g.setColour(kRightColour);
+                g.drawText("R", static_cast<int>(leftMargin + 22), static_cast<int>(topMargin + 3), 16, 14, juce::Justification::centredLeft);
+            }
+            else
+                drawCurve(0, strokeColour, 0.15f);
         }
 
         // Border
@@ -170,29 +187,34 @@ private:
 
     void computeFFT()
     {
-        auto& snapshot = captureRef.getSnapshot();
-        int len = static_cast<int>(snapshot.size());
-
-        // Fill FFT buffer from the TRAILING fftSize samples (the most recent) — the snapshot spans
-        // ~displayLen samples from the trigger, so reading the FIRST fftSize showed the OLDEST slice
-        // and the spectrum lagged the audio by ~(displayLen-fftSize)/sr. Zero-pad if shorter.
-        std::array<float, fftSize * 2> fftData{};
-        const int take  = std::min(len, fftSize);
-        const int start = len - take;   // most-recent `take` samples
-        for (int i = 0; i < take; ++i)
-            fftData[i] = snapshot[(size_t) (start + i)];
-
-        window.multiplyWithWindowingTable(fftData.data(), fftSize);
-        fft.performFrequencyOnlyForwardTransform(fftData.data());
-
-        // Normalize and smooth
-        float invN = 2.0f / fftSize;
-        constexpr float smoothing = 0.7f;
-
-        for (int i = 0; i < fftSize / 2; ++i)
+        stereoContent = captureRef.isStereoContent();
+        const int channels = stereoContent ? 2 : 1;
+        for (int ch = 0; ch < channels; ++ch)
         {
-            float mag = fftData[i] * invN;
-            smoothedMagnitudes[i] = smoothedMagnitudes[i] * smoothing + mag * (1.0f - smoothing);
+            auto& snapshot = captureRef.getSnapshot(ch);
+            int len = static_cast<int>(snapshot.size());
+
+            // Fill FFT buffer from the TRAILING fftSize samples (the most recent) — the snapshot spans
+            // ~displayLen samples from the trigger, so reading the FIRST fftSize showed the OLDEST slice
+            // and the spectrum lagged the audio by ~(displayLen-fftSize)/sr. Zero-pad if shorter.
+            std::array<float, fftSize * 2> fftData{};
+            const int take  = std::min(len, fftSize);
+            const int start = len - take;   // most-recent `take` samples
+            for (int i = 0; i < take; ++i)
+                fftData[i] = snapshot[(size_t) (start + i)];
+
+            window.multiplyWithWindowingTable(fftData.data(), fftSize);
+            fft.performFrequencyOnlyForwardTransform(fftData.data());
+
+            // Normalize and smooth
+            float invN = 2.0f / fftSize;
+            constexpr float smoothing = 0.7f;
+
+            for (int i = 0; i < fftSize / 2; ++i)
+            {
+                float mag = fftData[i] * invN;
+                smoothedMagnitudes[ch][(size_t) i] = smoothedMagnitudes[ch][(size_t) i] * smoothing + mag * (1.0f - smoothing);
+            }
         }
     }
 
@@ -203,11 +225,14 @@ private:
     }
 
     WaveformCapture& captureRef;
-    juce::Colour strokeColour;
+    juce::Colour strokeColour;                                        // L / mono curve
+    static constexpr juce::uint32 kRightColourArgb = 0xfffb923c;      // R curve: orange (colorblind-safe, matches the scope)
+    const juce::Colour kRightColour { kRightColourArgb };
     juce::dsp::FFT fft;
     juce::dsp::WindowingFunction<float> window;
 
-    std::vector<float> smoothedMagnitudes;
+    std::vector<float> smoothedMagnitudes[2];
+    bool stereoContent = false;
     float sampleRate = 44100.0f;
     bool showTitle = true;   // false in the rack (module header carries the title)
     std::atomic<float>* enableSrc = nullptr;   // optional module-enable source (spectrumOn)

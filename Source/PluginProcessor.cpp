@@ -844,12 +844,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         }
     }
 
-    // Capture waveform before master volume (still mono content -> the scope
-    // shows the dry mono mix, unaffected by the stereo stage below).
-    auto* channelData = buffer.getReadPointer(0);
-    for (int i = 0; i < buffer.getNumSamples(); ++i)
-        waveformCapture.writeSample(channelData[i]);
-
     // Master-bus compressor: glue the summed mono mix before it is widened.
     {
         using namespace Parameters;
@@ -895,6 +889,18 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     const float masterGain = masterOn ? masterVol : 0.0f;
     buffer.applyGainRamp(0, buffer.getNumSamples(), prevMasterGain, masterGain);
     prevMasterGain = masterGain;
+
+    // Capture the STEREO output for OSCILLOSCOPE + SPECTRUM (Story 10.6) — the VERY LAST stage:
+    // the displays show exactly what leaves the plugin ("was hinten rauskommt"), including the
+    // whole master section (compressor, widener, Binaural/Kunstkopf, ROOM) and master volume.
+    // (Supersedes the Story-2.3 pre-bus mono tap, deliberately: the engine output is genuinely
+    // stereo since Epic 10 and the user wants to SEE the spatial stages.)
+    {
+        const float* capL = buffer.getReadPointer(0);
+        const float* capR = buffer.getNumChannels() > 1 ? buffer.getReadPointer(1) : capL;
+        for (int i = 0; i < buffer.getNumSamples(); ++i)
+            waveformCapture.writeSample(capL[i], capR[i]);
+    }
 }
 
 void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
