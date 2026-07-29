@@ -72,7 +72,9 @@ info** so nothing is hidden and every control explains itself.
 - **19″ rack UI** with zones; every module and zone has **enable / reset / info**
   (context help, EN/DE)
 - Show/hide and reorder modules (persisted), **randomize** & **reset**
-- **Oscilloscope + spectrum analyzer** (FFT)
+- **Stereo oscilloscope + spectrum analyzer** (FFT) — tapped at the **final output**
+  (after all master stages incl. the spatial modes), L/R side-by-side scope plots and a
+  two-colour spectrum, with automatic mono collapse and per-channel scope triggering
 - **3D spinning JASS logo** in the header (toggle off via right-click)
 - **Presets** in the `.jass` format + an auto-saved live state; demo presets
   (incl. **"Matrix Showcase"**, which exercises the whole mod matrix) and example
