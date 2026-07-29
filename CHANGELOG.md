@@ -11,6 +11,19 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **SAMPLER module** (Story 12.1) — play your own recordings (WAV/AIFF, ≤60 s, up to 32
+  loaded) as a sound source through the whole JASS chain (filter, wavefolder, mod matrix,
+  arp, PAN, binaural modes). ROOT/START/END, modes One-Shot / Loop (crossfaded) / Reverse /
+  Rev-Loop, 4-point Hermite interpolation (measured: +10 dB SNR over linear). **Stereo
+  files stay stereo** — L/R render as two placed sub-sources around PAN (own binaural/HRTF
+  placement each); mono downmix only in the mono output modes. LOAD copies files into
+  `%AppData%\JASS\Samples`; presets re-resolve the sample **by name** across sessions.
+  Ships with an example catalog (`Samples/`, embedded + seeded + pre-loaded into the SET
+  combo at startup). A **SPEED** knob (0.25×–4×) multiplies the playback rate tape-style
+  on top of the key. LEVEL and PAN are mod-matrix targets. Append-only, FormatVersion
+  stays 6.
+- **MOD MATRIX: slot LEDs moved** — each routing strand's green activity dot now sits
+  directly before its AMT knob (was at the strand's left edge).
 - **Stereo displays, final-output tap** — OSCILLOSCOPE and SPECTRUM now show the **true
   final output** (after compressor, stereo/binaural modes, ROOM and master volume) instead
   of the old dry pre-bus mono mix. The scope draws **L and R side by side** (blue /

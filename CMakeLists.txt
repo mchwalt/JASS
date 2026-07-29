@@ -83,6 +83,11 @@ juce_add_binary_data(JASS_DemoPresets HEADER_NAME DemoPresets.h NAMESPACE DemoPr
 file(GLOB JASS_WAVETABLES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Wavetables/*.wav")
 juce_add_binary_data(JASS_Wavetables HEADER_NAME Wavetables.h NAMESPACE Wavetables SOURCES ${JASS_WAVETABLES})
 
+# Example SAMPLER recordings (Story 12.1): embedded and seeded into %AppData%\JASS\Samples on
+# first run (PresetIO::seedSamples); the SAMPLER LOAD dialog opens there. Same pattern as above.
+file(GLOB JASS_SAMPLES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Samples/*.wav")
+juce_add_binary_data(JASS_Samples HEADER_NAME Samples.h NAMESPACE Samples SOURCES ${JASS_SAMPLES})
+
 target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
@@ -96,6 +101,7 @@ target_link_libraries(JASS
         JASS_HelpDE
         JASS_DemoPresets
         JASS_Wavetables
+        JASS_Samples
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

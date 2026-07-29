@@ -498,6 +498,10 @@ namespace rack
             for (int gi = 0; gi < (int) slotActiveCache.size(); ++gi)
             {
                 juce::Rectangle<int> b; bool has = false;
+                juce::Component* lastW   = nullptr;   // the group's final control (the AMT knob)
+                juce::Component* prevW   = nullptr;   //   …and the one before it (the PARAM combo)
+                juce::Label*     lastCap = nullptr;   // their NAME captions (may be null)
+                juce::Label*     prevCap = nullptr;
                 for (int c = gi * gs; c < gi * gs + gs && c < (int) cells.size(); ++c)
                 {
                     if (auto* w = cells[(size_t) c].widget)
@@ -505,6 +509,8 @@ namespace rack
                         auto wb = w->getBounds();
                         if (cells[(size_t) c].caption != nullptr) wb = wb.getUnion (cells[(size_t) c].caption->getBounds());
                         b = has ? b.getUnion (wb) : wb; has = true;
+                        prevW = lastW; lastW = w;
+                        prevCap = lastCap; lastCap = cells[(size_t) c].caption;
                     }
                 }
                 if (! has) continue;
@@ -515,9 +521,37 @@ namespace rack
                     g.setColour (juce::Colour (0xff15181d).withAlpha (0.45f));
                     g.fillRect (b.expanded (2));
                 }
-                // Status dot in the slot's top-left corner: lit green = active, hollow grey = Off.
-                const float d = 6.0f;
-                juce::Rectangle<float> dot ((float) b.getX(), (float) (b.getY() - 1), d, d);
+                // Status dot immediately LEFT of the slot's final control (the AMT knob): lit
+                // green = active, hollow grey = Off. It sits ON THE HEIGHT OF the knob's NAME
+                // caption ("AMT") — beside the label line, not floating between the widgets —
+                // and is anchored to that cell (not the group's corner) so every slot in a row
+                // carries its dot right beside its knob. Fallback without a caption: the rotary
+                // centre (a SynthySlider's bottom 14 px is its value box, see resized). In tight
+                // layouts the dot is re-centred into the actual gap so it never sits ON the
+                // neighbouring cell.
+                const float d  = 6.0f;
+                const auto  wb = lastW->getBounds();
+                float cy, anchorL;      // dot centre-line + left edge of the AMT cell's content
+                if (lastCap != nullptr)
+                {
+                    cy      = lastCap->getBounds().toFloat().getCentreY();
+                    anchorL = (float) juce::jmin (lastCap->getX(), wb.getX());
+                }
+                else
+                {
+                    const int rotaryH = dynamic_cast<SynthySlider*> (lastW) != nullptr ? wb.getHeight() - 14
+                                                                                       : wb.getHeight();
+                    cy      = (float) wb.getY() + (float) rotaryH * 0.5f;
+                    anchorL = (float) wb.getX();
+                }
+                // Right edge of the previous cell (caption OR widget, whichever reaches further).
+                float neighbourR = 0.0f; bool hasNeighbour = false;
+                if (prevW   != nullptr) { neighbourR = (float) prevW->getRight(); hasNeighbour = true; }
+                if (prevCap != nullptr) { neighbourR = juce::jmax (neighbourR, (float) prevCap->getRight()); hasNeighbour = true; }
+                float dotX = anchorL - 3.0f - d;
+                if (hasNeighbour && dotX < neighbourR + 1.0f)
+                    dotX = (neighbourR + anchorL - d) * 0.5f;
+                juce::Rectangle<float> dot (dotX, cy - d * 0.5f, d, d);
                 if (active) { g.setColour (juce::Colour (0xff7bd88f)); g.fillEllipse (dot); }
                 else        { g.setColour (juce::Colours::white.withAlpha (0.28f)); g.drawEllipse (dot, 1.0f); }
             }
