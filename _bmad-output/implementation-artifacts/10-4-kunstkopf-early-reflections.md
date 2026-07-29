@@ -182,10 +182,27 @@ which had been missing since Story 10.1 (RANDOM could silently flip the output m
 ### Range extension + default (user decision, 2026-07-29)
 
 The user's ear-tested preferred value was **1.0 — the old ceiling**, i.e. the range was too weak,
-not the default wrong. Resolution: tap gains rescaled ×1.571 so full deflection delivers **wet ==
-dry power** (P = 1.0, ~3.5 dB more room than before, measured; level neutrality holds at ±0.2 dB,
-octave-band colouration at full −2.4…+1.0 dB). The old maximum — the preferred amount — now sits at
-knob **0.67** (wet power scales with r², so √0.45 ≈ 0.67), which becomes the **spec default**.
+not the default wrong. First resolution: tap gains rescaled ×1.571 so full deflection delivers
+**wet == dry power** (P = 1.0; the preferred amount then sat at knob 0.67 = √0.45).
 Deliberate exception to the "never change global defaults" rule (AC4 originally said default 0):
 `hrtfRoom` only acts in the days-old Kunstkopf mode and the factory `outputMode` is Pseudo-Stereo,
 so the factory state is unaffected; the user owns the decision.
+
+### Rework: 5-detent room MACRO (user decision, 2026-07-29, same session)
+
+Next ear-test finding: **no audible difference between ~0.2 and 1.0.** That is textbook
+psychoacoustics, not a defect and not the user's ears: the direct-to-reverberant JND is **~5–6 dB**
+(Zahorik 2002, JASA — one of the coarsest auditory dimensions), spatial impression **saturates**
+within ~10 dB of the direct sound (Barron 1971; precedence/Haas fusion), the single-reflection
+threshold is ~−15…−20 dB (Olive & Toole 1989) so knob 0.2 (−14 dB wet) was already above threshold
+— and this design deliberately removed the two cues (loudness via level-neutrality, comb colour via
+the 10.3-style optimisation) that usually fake "more". The linear knob had ~2–3 JNDs of range.
+
+Rework (mirroring what commercial "room amount" macros do — gang parameters):
+- knob → **wet level −24…0 dB exponential** (hard off at 0) **+ damping morph 3.5→7 kHz**
+  (small dark room → bigger brighter one); normalisation constant is a lerp between the measured
+  per-ear pink wet powers at the two damping endpoints (`kWetPowerLo=0.814`, `kWetPowerHi=1.107`)
+- UI: **5 detents** (Float step 0.25 — no type change, append-only stays intact; old fine-grained
+  values snap on load). Each detent = 6 dB ≈ 1 JND apart — the honest resolution of the dimension.
+- Default **0.5** (detent 2 — user decision; a moderate room rather than the near-max favourite).
+- Re-measured: level-neutral ±0.2 dB across the sweep; octave colouration at full −2.6…+1.4 dB.

@@ -13,10 +13,12 @@ Output stage for the mono engine: choose how it reaches the two output channels.
     pinna structure. **Headphones only**; costs more CPU.
 - **WIDTH** / **TIME** — only apply in Pseudo-Stereo (spread, and the short inter-channel delay), so
   they are greyed out in every other mode.
-- **ROOM** — only applies in Kunstkopf (greyed out elsewhere). Adds a few binaural **early
-  reflections** (8–24 ms, rendered through lateral KEMAR ears). Dry binaural tends to stay *inside*
-  the head no matter how good the HRTF is — reflections are what push the image **out of the head**.
-  0 = dry (as before), up = more room. Level-neutral: turning it up does not get louder.
+- **ROOM** — only applies in Kunstkopf (greyed out elsewhere). Adds binaural **early reflections**
+  (8–24 ms, rendered through lateral KEMAR ears). Dry binaural tends to stay *inside* the head no
+  matter how good the HRTF is — reflections are what push the image **out of the head**. The knob
+  has **5 steps** (that is deliberate: the ear can only tell about that many room amounts apart);
+  each step up = a stronger **and brighter** room, 0 = fully dry. Level-neutral: more room does not
+  get louder. Heard best on transients — plucks and short arp notes, not sustained drones.
 
 **PAN decides whether you hear anything at all.** With every generator centred, Stereo-Pan, Binaural
 and Kunstkopf all render identical mono — there is no direction to place, so switching between them

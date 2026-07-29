@@ -13,10 +13,12 @@ Ausgangsstufe der Mono-Engine: legt fest, wie das Signal auf die zwei Ausgangska
     Ohrmuschel-Struktur. **Nur Kopfhörer**; kostet mehr CPU.
 - **WIDTH** / **TIME** — wirken nur im Pseudo-Stereo (Breite bzw. kurze Kanal-Verzögerung); in allen
   anderen Modi sind sie deshalb ausgegraut.
-- **ROOM** — wirkt nur im Kunstkopf (sonst ausgegraut). Fügt einige binaurale **frühe Reflexionen**
-  hinzu (8–24 ms, über seitliche KEMAR-Ohren gerendert). Trockenes Binaural bleibt *im* Kopf, egal
-  wie gut die HRTF ist — erst Reflexionen schieben das Klangbild **aus dem Kopf heraus**.
-  0 = trocken (wie bisher), aufdrehen = mehr Raum. Pegelneutral: Aufdrehen macht nicht lauter.
+- **ROOM** — wirkt nur im Kunstkopf (sonst ausgegraut). Fügt binaurale **frühe Reflexionen** hinzu
+  (8–24 ms, über seitliche KEMAR-Ohren gerendert). Trockenes Binaural bleibt *im* Kopf, egal wie gut
+  die HRTF ist — erst Reflexionen schieben das Klangbild **aus dem Kopf heraus**. Der Regler hat
+  **5 Raststufen** (bewusst: mehr Abstufungen kann das Ohr bei Raumanteil gar nicht unterscheiden);
+  jede Stufe = stärkerer **und hellerer** Raum, 0 = ganz trocken. Pegelneutral: mehr Raum wird nicht
+  lauter. Am besten hörbar auf Transienten — Plucks und kurze Arp-Noten, nicht auf Dauertönen.
 
 **PAN entscheidet, ob man überhaupt etwas hört.** Stehen alle Generatoren in der Mitte, geben
 Stereo-Pan, Binaural und Kunstkopf identisches Mono aus — es gibt dann keine Richtung zu rendern, das
