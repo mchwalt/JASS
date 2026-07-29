@@ -178,3 +178,14 @@ which had been missing since Story 10.1 (RANDOM could silently flip the output m
   different thing from Binaural. Lesson recorded: the effect is inaudible on STEADY tones by design
   (level-neutral + colouration optimised away + no tail) — early reflections are heard on
   transients; the auto-play drone is the worst possible test signal.
+
+### Range extension + default (user decision, 2026-07-29)
+
+The user's ear-tested preferred value was **1.0 — the old ceiling**, i.e. the range was too weak,
+not the default wrong. Resolution: tap gains rescaled ×1.571 so full deflection delivers **wet ==
+dry power** (P = 1.0, ~3.5 dB more room than before, measured; level neutrality holds at ±0.2 dB,
+octave-band colouration at full −2.4…+1.0 dB). The old maximum — the preferred amount — now sits at
+knob **0.67** (wet power scales with r², so √0.45 ≈ 0.67), which becomes the **spec default**.
+Deliberate exception to the "never change global defaults" rule (AC4 originally said default 0):
+`hrtfRoom` only acts in the days-old Kunstkopf mode and the factory `outputMode` is Pseudo-Stereo,
+so the factory state is unaffected; the user owns the decision.

@@ -178,7 +178,8 @@ def third_oct_smooth(mag):
         out[i] = math.sqrt(s / (i1 - i0 + 1))
     return out
 
-TARGET_P = 0.45   # wet ~3.5 dB below dry at room=1 — clearly audible, not swampy
+TARGET_P = 1.0    # wet == dry power at room=1 (user 2026-07-29: original 0.45 max was his
+                  # preferred amount -> now sits at knob ~0.67 = the default, with headroom above)
 
 def report_levels():
     ref = pink_level(mag_response([1.0]))
