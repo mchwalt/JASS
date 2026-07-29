@@ -1,18 +1,35 @@
 #pragma once
 #include <cmath>
 #include <algorithm>
-#include "KemarHrir.h"   // embedded MIT KEMAR horizontal-plane HRIRs (see attribution in that file)
+#include "KemarHrir.h"   // embedded MIT KEMAR HRIRs, post-processed (see attribution in that header)
 
 // ── HRIR-convolution binaural panner ("real Kunstkopf", Epic 10 / Story 10.3) ────────────────
 // Convolves ONE mono source with the measured MIT KEMAR head-related impulse response for its azimuth
 // → genuine out-of-head 3-D on headphones (real ITD/ILD/spectral cues baked into the IR), unlike the
 // parametric BinauralPanner. One instance per generator per voice.
 //
-// Fully static-sized (128-tap fixed), so there is NO allocation anywhere (RT-safe by construction):
-// the KEMAR table is a static constexpr (KemarHrir.h); each panner holds a 128-sample input ring and
-// its two currently-selected per-ear kernels. The azimuth kernel is chosen ONCE PER BLOCK
-// (setPanForBlock) — never per sample — which is the anti-zipper granularity for auto-panning; the
-// per-sample process() is just two 128-tap dot products.
+// ALL tonal correction lives in the KERNELS, not here (tools/gen_kemar_hrir.py, applied offline, so the
+// runtime cost is zero). That matters, because the raw MIT kernels cannot be used directly: their
+// frontal response — the one playing at pan CENTRE, where no spatial effect is wanted at all — is a
+// 21.6 dB bandpass with no bass, heard as "buzzy, loses its warmth". The generator equalises the
+// frontal response out, synthesises a flat correctly-delayed low end (a 128-tap kernel is too short to
+// carry real bass, but "flat with the right delay" is just a delayed impulse, which is compact), and
+// level-matches every azimuth pair to Stereo-Pan. Pan centre therefore comes out transparent while the
+// ITD and the per-frequency ILD stay intact.
+//
+// This class deliberately stays a PLAIN convolution. An earlier version split the signal and routed
+// the low band around the kernels through a delay line, to spare the bass; that was wrong twice over —
+// the kernel's phase below ~300 Hz is not a meaningful delay (it measured -94 samples at 100 Hz), so
+// the bypass could not be aligned against it and the two paths partially cancelled into an 8.8 dB hole
+// at the crossover; and with a gentle 1st-order split most of a played note's energy skipped the
+// convolution entirely, which made the whole mode indistinguishable from plain stereo panning. Both
+// problems disappear when the low end is built into the kernel instead, and the runtime gets simpler.
+//
+// Fully static-sized, so there is NO allocation anywhere (RT-safe by construction): the KEMAR table is
+// a static constexpr (KemarHrir.h); each panner holds a 128-sample input ring and its two currently-
+// selected per-ear kernels. The azimuth kernel is chosen ONCE PER BLOCK (setPanForBlock) — never per
+// sample — which is the anti-zipper granularity for auto-panning; the per-sample process() is just two
+// 128-tap dot products.
 //
 // v1 uses the 44.1 kHz IRs at the host rate directly (no resample). At 48/96 kHz the notches shift a
 // few percent — inaudible for placement; a windowed-sinc resample in prepare() is a documented later

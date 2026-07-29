@@ -56,6 +56,10 @@ namespace rack
         void buildBody();
         void doReset();
 
+        // Apply each Knob::activeWhen predicate: an irrelevant knob is disabled (ignores the
+        // mouse) and dimmed, together with its caption. Only touches widgets on a real change.
+        void updateCondKnobs();
+
         // Re-poll a dynamic-provider combo's items (after an Action/FileAction that lists
         // it in .refreshes fired), then re-apply the param's current selection so the
         // ComboBoxAttachment stays consistent (AD-4 declarative combo refresh).
@@ -107,8 +111,13 @@ namespace rack
         // they show toDisplay(base, ratio) and write fromDisplay(shown, ratio) back.
         struct XformKnob { SynthySlider* slider; juce::String paramId;
                            std::function<double(double,double)> toDisplay, fromDisplay; };
+        // Knobs carrying a per-knob relevance predicate (Knob::activeWhen): polled by the timer,
+        // which disables + dims just that knob (and its caption) when the predicate is false.
+        // `active` caches the last applied state so we only touch the widgets on a real change.
+        struct CondKnob { SynthySlider* slider; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
         std::vector<RingKnob>  ringKnobs;
         std::vector<XformKnob> xformKnobs;
+        std::vector<CondKnob>  condKnobs;
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back
 
         // Combos built from a dynamic provider (e.g. the Wavetable bank list). Recorded so
