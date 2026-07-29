@@ -203,10 +203,11 @@ Rework (mirroring what commercial "room amount" macros do — gang parameters):
   values snap on load), each ganging wet level + send damping.
 - First spread (wet −24…0 dB, 6 dB ≈ 1 JND per step) still failed the ear test: detents 0–2 were
   inaudible, 3 slight, 4 perfect — the lower half sat below the user's personal effect threshold.
-- **Final, ear-calibrated detents:** wet **{off, −6, −4, −2, 0} dB** × damping
-  **{—, 3.5, 4.4, 5.6, 7} kHz** — every step inside the audible window; **the top detent is the
-  ear-tested "perfect" setting, preserved bit-exact** (wet 0 dB / 7 kHz / P=1.107). Per-detent
-  MEASURED normalisation constants (`kDetWetPower = {—, 0.814, 0.904, 1.008, 1.107}`), level-neutral
-  ±0.2 dB at every detent.
-- Default **1.0** (the "perfect" top detent — user decision).
+- **Final, ear-calibrated detents (user request: the optimum belongs in the MIDDLE of the travel,
+  with headroom above):** wet **{off, −3, 0, +3, +6} dB** × damping **{—, 5, 7, 8.5, 10} kHz**.
+  **Detent 2 (knob 0.5) is the ear-tested "perfect" setting, preserved bit-exact** (wet 0 dB /
+  7 kHz / P=1.107) **and is the default**; the upper half goes beyond it — at the stop the room
+  carries twice the direct power (measured price: bass thins ~5 dB at 63 Hz by partial
+  cancellation; sounds distant/big, accepted as the extreme). Per-detent MEASURED normalisation
+  constants (`kDetWetPower = {—, 0.958, 1.107, 1.192, 1.258}`), level-neutral ±0.35 dB.
 - Re-measured: level-neutral ±0.2 dB across the sweep; octave colouration at full −2.6…+1.4 dB.

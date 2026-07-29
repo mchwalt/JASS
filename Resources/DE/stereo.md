@@ -17,8 +17,10 @@ Ausgangsstufe der Mono-Engine: legt fest, wie das Signal auf die zwei Ausgangska
   (8–24 ms, über seitliche KEMAR-Ohren gerendert). Trockenes Binaural bleibt *im* Kopf, egal wie gut
   die HRTF ist — erst Reflexionen schieben das Klangbild **aus dem Kopf heraus**. Der Regler hat
   **5 Raststufen** (bewusst: mehr Abstufungen kann das Ohr bei Raumanteil gar nicht unterscheiden);
-  jede Stufe = stärkerer **und hellerer** Raum, 0 = ganz trocken. Pegelneutral: mehr Raum wird nicht
-  lauter. Am besten hörbar auf Transienten — Plucks und kurze Arp-Noten, nicht auf Dauertönen.
+  jede Stufe = stärkerer **und hellerer** Raum, 0 = ganz trocken. Die **mittlere Stufe ist der
+  Sweet-Spot** — darüber wird der Raum stärker als das Direktsignal (fern, groß). Pegelneutral:
+  mehr Raum wird nicht lauter. Am besten hörbar auf Transienten — Plucks und kurze Arp-Noten,
+  nicht auf Dauertönen.
 
 **PAN entscheidet, ob man überhaupt etwas hört.** Stehen alle Generatoren in der Mitte, geben
 Stereo-Pan, Binaural und Kunstkopf identisches Mono aus — es gibt dann keine Richtung zu rendern, das
