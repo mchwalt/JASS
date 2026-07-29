@@ -199,10 +199,14 @@ threshold is ~−15…−20 dB (Olive & Toole 1989) so knob 0.2 (−14 dB wet) w
 the 10.3-style optimisation) that usually fake "more". The linear knob had ~2–3 JNDs of range.
 
 Rework (mirroring what commercial "room amount" macros do — gang parameters):
-- knob → **wet level −24…0 dB exponential** (hard off at 0) **+ damping morph 3.5→7 kHz**
-  (small dark room → bigger brighter one); normalisation constant is a lerp between the measured
-  per-ear pink wet powers at the two damping endpoints (`kWetPowerLo=0.814`, `kWetPowerHi=1.107`)
 - UI: **5 detents** (Float step 0.25 — no type change, append-only stays intact; old fine-grained
-  values snap on load). Each detent = 6 dB ≈ 1 JND apart — the honest resolution of the dimension.
-- Default **0.5** (detent 2 — user decision; a moderate room rather than the near-max favourite).
+  values snap on load), each ganging wet level + send damping.
+- First spread (wet −24…0 dB, 6 dB ≈ 1 JND per step) still failed the ear test: detents 0–2 were
+  inaudible, 3 slight, 4 perfect — the lower half sat below the user's personal effect threshold.
+- **Final, ear-calibrated detents:** wet **{off, −6, −4, −2, 0} dB** × damping
+  **{—, 3.5, 4.4, 5.6, 7} kHz** — every step inside the audible window; **the top detent is the
+  ear-tested "perfect" setting, preserved bit-exact** (wet 0 dB / 7 kHz / P=1.107). Per-detent
+  MEASURED normalisation constants (`kDetWetPower = {—, 0.814, 0.904, 1.008, 1.107}`), level-neutral
+  ±0.2 dB at every detent.
+- Default **1.0** (the "perfect" top detent — user decision).
 - Re-measured: level-neutral ±0.2 dB across the sweep; octave colouration at full −2.6…+1.4 dB.
