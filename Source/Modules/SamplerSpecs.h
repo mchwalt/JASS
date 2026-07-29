@@ -21,7 +21,7 @@ namespace Modules
             { "samplerRoot",  "Root",    "ROOT",  ParamSpec::Kind::Int,   juce::NormalisableRange<float> (24.0f, 96.0f, 1.0f), 60.0f },
             { "samplerStart", "Start",   "START", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f },
             { "samplerEnd",   "End",     "END",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f },
-            { "samplerMode",  "Mode",    "MODE",  ParamSpec::Kind::Choice, {}, 0.0f, { "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
+            { "samplerMode",  "Mode",    "MODE",  ParamSpec::Kind::Choice, {}, 1.0f, { "One-Shot", "Loop", "Reverse", "Rev-Loop" } },   // default Loop (user pick)
             { "samplerLevel", "Level",   "LEVEL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::SamplerLevel },
             { "samplerPan",   "Pan",     "PAN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::SamplerPan },
             // Playback-speed multiplier on top of the key transposition (tape-style: pitch moves
