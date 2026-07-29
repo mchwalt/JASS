@@ -17,12 +17,13 @@
 //   * tap delays = primes in samples @44.1k (8.3–24.1 ms) → mutually non-harmonic by construction
 //     (closest pair ratio is 0.106 away from an integer; nothing rings on a pitch). All ≥ 8 ms —
 //     below ~5 ms reflections fuse into comb colouration instead of room.
-//   * kReflectionPower = 0.45 is the EMPIRICAL per-ear pink-weighted power of the whole wet path
+//   * kReflectionPower is the EMPIRICAL per-ear pink-weighted power of the whole wet path
 //     (kernels + damping + cross-tap incoherence) relative to dry. The constant-power normalisation
-//     dry=1/sqrt(1+r^2*P), wet=r*dry then holds the output level to within ±0.1 dB of dry at any
+//     dry=1/sqrt(1+r^2*P), wet=r*dry then holds the output level to within ±0.2 dB of dry at any
 //     knob position — the five output modes were just level-matched, this must not break that.
-//   * centre transparency: octave bands at room=1 stay within −1.4…+0.6 dB of dry (a smooth room
-//     tilt, no comb colour) — the Story-10.3 centre win is kept.
+//   * centre transparency: octave bands at full deflection stay within −2.4…+1.0 dB of dry (a
+//     smooth room tilt, no comb colour; at the 0.67 default it is −1.4…+0.6 dB) — the Story-10.3
+//     centre win is kept.
 //   * the reflection send is damped by a one-pole lowpass (~5.5 kHz, wall/air absorption): keeps
 //     the direct sound crisp, the room dark — and the HF comb inaudible.
 //
@@ -126,8 +127,11 @@ private:
     // 367/499/641/773/919/1061 samples @44.1k — primes, hence mutually non-harmonic.
     static constexpr float kTapDelayMs[kNumTaps]  = { 8.32f, 11.32f, 14.54f, 17.53f, 20.84f, 24.06f };
     static constexpr int   kTapAzimuthDeg[kNumTaps] = { 55, -40, 70, -60, 30, -50 };   // lateral, alternating sides
-    static constexpr float kTapGain[kNumTaps]     = { 0.527f, 0.474f, 0.421f, 0.379f, 0.337f, 0.306f };
-    static constexpr float kReflectionPower       = 0.45f;    // measured per-ear pink power of the wet path
+    // Range extended 2026-07-29 (user ear test): the original max (P=0.45, wet −3.5 dB) turned out
+    // to be the PREFERRED amount, not the ceiling — it now sits at knob 0.67 (the default) and full
+    // deflection delivers wet == dry power (P=1.0), i.e. ~3.5 dB more room on top.
+    static constexpr float kTapGain[kNumTaps]     = { 0.785f, 0.707f, 0.628f, 0.565f, 0.503f, 0.456f };
+    static constexpr float kReflectionPower       = 1.0f;     // measured per-ear pink power of the wet path
     static constexpr float kDampHz                = 5500.0f;  // one-pole LP on the send (absorption)
 
     // 24.06 ms + 128-tap window fits up to ~185 kHz host rate; prepare() clamps beyond that.
