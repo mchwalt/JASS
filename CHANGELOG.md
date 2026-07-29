@@ -11,6 +11,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Stereo displays, final-output tap** — OSCILLOSCOPE and SPECTRUM now show the **true
+  final output** (after compressor, stereo/binaural modes, ROOM and master volume) instead
+  of the old dry pre-bus mono mix. The scope draws **L and R side by side** (blue /
+  orange, a colorblind-safe pair), the spectrum overlays **two coloured curves** in one
+  diagram (violet / orange). Effectively-mono signals collapse to a single plot/curve
+  automatically — so the spatial stages are literally visible.
 - **Kunstkopf externalization: ROOM knob** (STEREO module, Story 10.4) — a shared binaural
   **early-reflection** stage on the bus, active only in Kunstkopf mode. Six non-harmonic
   taps (8–24 ms) rendered through lateral KEMAR ears push the image **out of the head** —

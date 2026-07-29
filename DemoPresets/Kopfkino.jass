@@ -1,0 +1,153 @@
+{
+  "FormatVersion": 6,
+  "Name": "Kopfkino",
+  "Modified": false,
+  "Filter": {
+    "Enabled": true,
+    "Type": "Lowpass",
+    "Cutoff": 2400.0,
+    "Resonance": 1.2
+  },
+  "Stereo": {
+    "Enabled": true,
+    "Mode": "Kunstkopf (HRTF)",
+    "Width": 0.5,
+    "Time": 12.0,
+    "Room": 0.5
+  },
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 120.0
+  },
+  "Sub": {
+    "Enabled": false
+  },
+  "Noise": {
+    "Enabled": false
+  },
+  "Reverb": {
+    "Enabled": false
+  },
+  "Delay": {
+    "Enabled": false
+  },
+  "Chorus": {
+    "Enabled": false
+  },
+  "Arp": {
+    "Enabled": true,
+    "Mode": "Up",
+    "Rate": 6.0,
+    "Octaves": 2.0,
+    "Gate": 0.4
+  },
+  "Osc1": {
+    "Enabled": true,
+    "Waveform": "Triangle",
+    "Frequency": 262.0,
+    "Amplitude": 0.28,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.2,
+    "Feedback": 0.0,
+    "Pan": -0.4
+  },
+  "Osc2": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Frequency": 523.0,
+    "Amplitude": 0.18,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.2,
+    "Feedback": 0.0,
+    "Pan": 0.4
+  },
+  "Osc3": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Frequency": 131.0,
+    "Amplitude": 0.3,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.2,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "Karplus": {
+    "Enabled": true,
+    "Frequency": 262.0,
+    "Amplitude": 0.6,
+    "Damping": 0.45,
+    "Stretch": 0.0,
+    "Pan": 0.0
+  },
+  "Wavetable": {
+    "Enabled": false
+  },
+  "Adsr": {
+    "Enabled": true,
+    "Attack": 0.02,
+    "Decay": 0.35,
+    "Sustain": 0.55,
+    "Release": 0.216
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 0.07,
+    "Depth": 1.0
+  },
+  "Lfo2": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 0.05,
+    "Depth": 1.0
+  },
+  "ModMatrix": {
+    "On": true,
+    "Slot1Source": "LFO 1",
+    "Slot1Module": "KARPLUS",
+    "Slot1Param": 3.0,
+    "Slot1Amount": 0.9,
+    "Slot2Source": "LFO 2",
+    "Slot2Module": "OSC 1",
+    "Slot2Param": 5.0,
+    "Slot2Amount": 0.6,
+    "Slot3Source": "LFO 2",
+    "Slot3Module": "OSC 2",
+    "Slot3Param": 5.0,
+    "Slot3Amount": -0.6,
+    "Slot4Source": "Envelope",
+    "Slot4Module": "FILTER",
+    "Slot4Param": 0.0,
+    "Slot4Amount": 0.35,
+    "Slot5Source": "LFO 1",
+    "Slot5Module": "Off",
+    "Slot5Param": 0.0,
+    "Slot5Amount": 0.5,
+    "Slot6Source": "LFO 1",
+    "Slot6Module": "Off",
+    "Slot6Param": 0.0,
+    "Slot6Amount": 0.5,
+    "Slot7Source": "LFO 1",
+    "Slot7Module": "Off",
+    "Slot7Param": 0.0,
+    "Slot7Amount": 0.5,
+    "Slot8Source": "LFO 1",
+    "Slot8Module": "Off",
+    "Slot8Param": 0.0,
+    "Slot8Amount": 0.5
+  },
+  "Scope": {
+    "Enabled": true
+  },
+  "Spectrum": {
+    "Enabled": true
+  },
+  "Keyboard": {
+    "Enabled": true
+  }
+}
