@@ -11,6 +11,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Kunstkopf externalization: ROOM knob** (STEREO module, Story 10.4) — a shared binaural
+  **early-reflection** stage on the bus, active only in Kunstkopf mode. Six non-harmonic
+  taps (8–24 ms) rendered through lateral KEMAR ears push the image **out of the head** —
+  the cue dry binaural cannot deliver, and the axis on which Kunstkopf is now audibly
+  different from the parametric Binaural mode. Level-neutral by constant-power
+  normalisation (±0.1 dB measured); default 0 keeps every existing preset and the other
+  four output modes bit-exact (FormatVersion stays 6, append-only). RANDOM now leaves the
+  output MODE and ROOM untouched (master-bus rule; MODE had been missed in 10.1).
 - **Spatialization / STEREO output modes** — a per-generator **PAN** feeds a new STEREO
   output stage with five modes: **Mono**, **Pseudo-Stereo** (the existing Haas widener,
   still default), **Stereo-Pan** (true amplitude L/R), **Binaural** (parametric headphone

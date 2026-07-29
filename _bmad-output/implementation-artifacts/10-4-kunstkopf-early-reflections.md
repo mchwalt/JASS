@@ -1,6 +1,6 @@
 # Story 10.4: Kunstkopf externalization via binaural early reflections
 
-Status: ready-for-dev
+Status: review
 
 <!-- Follow-on to Story 10.3 (Kunstkopf HRTF mode). Raised 2026-07-29 after the listening session:
      once both binaural modes were level-matched, the user could not tell Binaural from Kunstkopf.
@@ -114,5 +114,61 @@ inaudible for externalization purposes — **confirm by ear before polishing any
 
 ## Dev Agent Record
 
-_Not started — story recorded 2026-07-29 at the user's request ("zuerst nur die Story aufnehmen,
-noch nicht programmieren")._
+### Implementation (2026-07-29)
+
+**Measured first (AC2, per the epic's "measure before tuning" rule).** Scratch harness
+(`measure_binaural_room.py`, pure stdlib cmath + own radix-2 FFT, parses `KemarHrir.h`) verified the
+design before any C++ was written:
+
+- **Delays** = primes in samples @44.1 kHz → mutually non-harmonic *by construction*:
+  367/499/641/773/919/1061 smp = 8.3/11.3/14.5/17.5/20.8/24.1 ms. Closest pair ratio is 0.106 away
+  from an integer — nothing rings on a pitch. All ≥ 8 ms (comb-fusion zone avoided).
+- **Azimuths** ±30–70°, alternating sides (55, −40, 70, −60, 30, −50): lateral kernels carry the
+  out-of-head cue; alternation balances the ears (measured L/R wet asymmetry 0.7 dB).
+- **Level neutrality (AC6):** the naïve normalisation constant (Σg²·kernel-power) was **wrong by
+  2.4 dB** — the kernel pairs are pair-normalised (not per-ear) and the send damping eats wet power.
+  Fix: `kReflectionPower = 0.45` is the *empirical* per-ear pink-weighted power of the whole wet
+  path (kernels + damping + cross-tap incoherence), measured, then gains rescaled. Result: output
+  level within **±0.1 dB** of dry at room = 0 / 0.5 / 1.
+- **Centre transparency (AC2):** octave bands at room=1 stay within **−1.4…+0.6 dB** of dry — a
+  smooth room tilt, no comb colour. (The 1/3-oct spread of 5.9 dB is fine-grained ripple that reads
+  as ambience; the octave profile is the tonal-shift metric.) The Story-10.3 centre win is kept.
+- **Damping:** one-pole LP at 5.5 kHz on the reflection send (wall/air absorption) — keeps the
+  direct sound crisp, the room dark, and the HF comb inaudible.
+
+**DSP (`Source/DSP/BinauralRoom.h`, new, AC1/AC3):** static-sized (8192-sample pow-2 ring, fixed
+constexpr tap table), kernels are *pointers into* the constexpr KEMAR table (no copies), zero
+allocation anywhere; `prepare(sampleRate)` scales the ms delays to the host rate (+ ring guard) and
+`reset()` clears state. Dry/wet gains ramp linearly across each block (anti-zipper). At room = 0 the
+convolutions are skipped but the ring keeps filling (turning the knob up later is seamless); the
+stage itself is only *called* in Kunstkopf mode (`processBlock`, after the — there inert —
+`stereoWidth`, before master gain), with a `wasKunstkopf` edge that resets the ring on mode entry.
+Other four modes: untouched code path ⇒ byte-identical (AC3). Cost: 6 taps × 2 ears × 128 MACs
+once per block on the bus (≈ 1.5 k MAC/sample), independent of voice count.
+
+**Parameter (AC4/AC5):** `hrtfRoom` (Float 0..1, default **0**, persist key `Room` in the `Stereo`
+object) appended to `StereoSpecs.h` — append-only, FormatVersion stays 6, missing ⇒ 0 = today's
+sound. ROOM knob on the STEREO module (fits W5H1: combo 2 + 3 knobs = 5 ≤ 6 slots); greyed out
+outside Kunstkopf via `Knob::activeWhen` (editor-injected predicate, like WIDTH/TIME). Not a
+mod-matrix target (AC7, by design).
+
+**RANDOM:** `hrtfRoom` added to the `masterBusIds` snapshot/restore list — and **`outputMode` too**,
+which had been missing since Story 10.1 (RANDOM could silently flip the output mode, violating the
+"whole MASTER BUS zone untouched" rule). Docs: STEREO help EN+DE (ROOM paragraph), CHANGELOG.
+
+### File List
+- `Source/DSP/BinauralRoom.h` (new)
+- `Source/PluginProcessor.h` (member + include + mode-edge flag)
+- `Source/PluginProcessor.cpp` (prepare, bus stage, RANDOM master-bus list)
+- `Source/Modules/StereoSpecs.h` (hrtfRoom param)
+- `Source/Audio/Parameters.h` (ID::hrtfRoom)
+- `Source/UI/PluginEditor.cpp` (kunstkopfOnly activeWhen)
+- `Resources/EN/stereo.md`, `Resources/DE/stereo.md`
+- `CHANGELOG.md`
+
+### Verification
+- Design measured offline (see above) — AC2/AC6 confirmed numerically.
+- Clean rebuild (`/t:Rebuild /nodeReuse:false`) of `JASS_Standalone` — see session log.
+- **OPEN (AC8):** user headphone verification — does the image leave the head, and is Kunstkopf now
+  unmistakably different from Binaural? Also confirm the shared-reflection compromise is inaudible
+  (hard-L + hard-R generators share one reflection pattern).
