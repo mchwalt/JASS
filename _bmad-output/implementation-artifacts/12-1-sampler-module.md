@@ -148,5 +148,32 @@ mutually exclusive, and the story should not pretend otherwise.
 
 ## Dev Agent Record
 
-_Not started. Story recorded 2026-07-29 at the user's request; scope deliberately left open pending
-the discussion above._
+### Implementation (2026-07-30)
+
+- **Stereo decision (user, mid-implementation): stereo files STAY stereo** — downmix only where the
+  engine itself is mono (Mono / Pseudo-Stereo modes). Realised via TWO pan-generator slots
+  (`PanSamplerL/R`, `kNumPanGenerators` 7→9): a stereo set's channels are two mono sub-sources
+  spread ±0.5 around the PAN knob, each with its own equal-power/binaural/HRTF placement; the
+  SamplerPan mod target moves both together. Mono sets use slot L at the plain pan.
+- **Interpolation measured** (scratch harness): linear 28.5 dB vs **Hermite 38.3 dB** SNR on a
+  bright component at +7 semitones → 4-point Hermite.
+- `Source/DSP/SampleBank.h` (SampleSet + SampleBankStore, WavetableBankStore mechanics, caps 60 s /
+  32 sets), `Source/DSP/SamplePlayer.h` (absolute-position playback, ROOT-key rate, START/END,
+  modes One-Shot/Loop/Reverse/Rev-Loop with ~6 ms crossfaded loop join).
+- Params via `SamplerSpecs.h` (appended last, format stays v6); REVERSE folded into the MODE combo
+  (deviation from AC2's separate LOOP+REVERSE — one control instead of two).
+- **Preset portability:** LOAD copies the file into `%AppData%\JASS\Samples`; PresetIO persists
+  "Sampler.File" (name) beside the session SET index and re-resolves it on load (RackLayout-style
+  special case in toVar/applyVar).
+- Matrix: SAMPLER module (LEVEL/PAN) appended to catalog + 2 LFOTargets appended; editor body
+  hand-built (dynamic SET combo + LOAD FileAction + AlertWindow on cap rejection), default-hidden.
+- **Session iterations (user-tested):** SPEED knob (0.25×–4×, tape-style, live); example catalog
+  (`Samples/` repo folder → embedded → seeded → PRE-LOADED into the SET combo at startup,
+  alphabetical = stable indices); SET combo needed `indexIsValue` (classic combo-index bug class —
+  found by ear: "Brass" played CH_01); module default-VISIBLE (user decision, overrides the AC);
+  keyboard now labels MIDI 60 as **C4** (`setOctaveForMiddleC(4)` — JUCE's C3 default made "plays
+  original at C3" look like a rate bug); **shared loop clock** (master phase at ROOT×SPEED,
+  loop notes start on it + HARD resync of all loop voices at each master wrap = beat-lock).
+- **→ Story 12.2 scope note (user, 2026-07-30):** playing one WAV at several pitches while keeping
+  playback speed/loops truly in sync is its own topic (pitch/time DECOUPLING = timestretch) and
+  belongs with multisampling — v1 stays tape-style + beat-resync by design.

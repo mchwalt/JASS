@@ -10,6 +10,7 @@
 #include "../DSP/NoiseGenerator.h"
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
+#include "../DSP/SamplePlayer.h"   // Story 12.1: SAMPLER generator
 #include "../DSP/ModMatrix.h"
 #include "../DSP/ChannelStrip.h"   // Epic 10: ChannelStrip, kMaxOutChannels, OutputMode, positionToGains
 #include "../DSP/BinauralPanner.h" // Epic 10 (10.3): parametric binaural per-generator renderer
@@ -55,6 +56,7 @@ public:
     KarplusStrong& getKarplus() { return karplus; }
     MixMode& getMixMode() { return mixMode; }
     WavetableOscillator& getWavetable() { return wavetable; }
+    SamplePlayer& getSampler() { return sampler; }   // Story 12.1
     Oscillator& getSubOsc() { return subOsc; }
     int& getSubOctaveRef() { return subOctave; }
     bool& getAdsrOnRef() { return adsrOn; }
@@ -107,6 +109,7 @@ private:
     NoiseGenerator noise;
     KarplusStrong karplus;
     WavetableOscillator wavetable;
+    SamplePlayer sampler;   // Story 12.1: recordings as a generator (stereo via PanSamplerL/R)
 
     MixMode mixMode = MixMode::RingMod;   // only meaningful when mixModeOn; off => additive
     bool adsrOn = true;      // false => envelope bypassed (constant gain) — Story 2.4

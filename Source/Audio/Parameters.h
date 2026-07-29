@@ -9,6 +9,7 @@
 #include "../DSP/NoiseGenerator.h"
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
+#include "../DSP/SamplePlayer.h"          // Story 12.1: SAMPLER generator (+ SampleBank store)
 #include "../DSP/SyncDivision.h"
 #include "../DSP/ModMatrix.h"
 #include "../DSP/ModMatrixCatalog.h"      // ModDest: MOD MATRIX destination = MODULE → PARAM
@@ -210,6 +211,17 @@ namespace Parameters
         // module carries a working enabler for a future use. Append-only, default true.
         constexpr const char* keyboardOn = "keyboardOn";
 
+        // Sampler (Story 12.1)
+        constexpr const char* samplerOn    = "samplerOn";
+        constexpr const char* samplerSet   = "samplerSet";     // index into SampleBankStore (session)
+        constexpr const char* samplerRoot  = "samplerRoot";    // MIDI key at original speed
+        constexpr const char* samplerStart = "samplerStart";
+        constexpr const char* samplerEnd   = "samplerEnd";
+        constexpr const char* samplerMode  = "samplerMode";    // One-Shot / Loop / Reverse / Rev-Loop
+        constexpr const char* samplerLevel = "samplerLevel";
+        constexpr const char* samplerPan   = "samplerPan";
+        constexpr const char* samplerSpeed = "samplerSpeed";   // playback-rate multiplier (tape-style)
+
         // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
         // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
         // so only this enabler is an APVTS param. Append-only, default true.
@@ -258,6 +270,7 @@ namespace Parameters
                               std::array<ChannelStrip, kMaxOutChannels>& strips,   // Epic 10: per-channel FX
                               LFO* lfos, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
+                              SamplePlayer& sampler, double samplerLoopFrac,   // Story 12.1 (+ shared loop clock)
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
                               bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB,
                               PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
@@ -378,6 +391,16 @@ namespace Parameters
         generatorPanOut[PanNoise]     = *apvts.getRawParameterValue(ID::noisePan);
         generatorPanOut[PanKarplus]   = *apvts.getRawParameterValue(ID::karplusPan);
         generatorPanOut[PanWavetable] = *apvts.getRawParameterValue(ID::wavetablePan);
+        // SAMPLER (12.1): a stereo set spreads its L/R sub-sources ±0.5 around the PAN knob (the
+        // whole stereo image moves with the knob); a mono set sits at the plain pan on slot L.
+        {
+            const float sPan   = *apvts.getRawParameterValue(ID::samplerPan);
+            const auto* set    = SampleBankStore::instance().getSet(
+                                     static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
+            const float spread = (set != nullptr && set->isStereo()) ? 0.5f : 0.0f;
+            generatorPanOut[PanSamplerL] = juce::jlimit(-1.0f, 1.0f, sPan - spread);
+            generatorPanOut[PanSamplerR] = juce::jlimit(-1.0f, 1.0f, sPan + spread);
+        }
 
         // LFOs — one loop for all (Tempo-Sync resolved per LFO in processBlock => lfoRateHz[i]).
         for (int i = 0; i < kNumLFOs; ++i)
@@ -400,6 +423,20 @@ namespace Parameters
         karplus.setAmplitude(*apvts.getRawParameterValue(ID::karplusAmp));
         karplus.setDamping(*apvts.getRawParameterValue(ID::karplusDamping));
         karplus.setStretch(*apvts.getRawParameterValue(ID::karplusStretch));
+
+        // Sampler (Story 12.1): source set + playback params. The set pointer stays valid for the
+        // whole block (never-freed store, same contract as the wavetable bank below).
+        sampler.setEnabled(*apvts.getRawParameterValue(ID::samplerOn) > 0.5f);
+        sampler.setSource(SampleBankStore::instance().getSet(
+            static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet))));
+        sampler.setRootKey(static_cast<int>(*apvts.getRawParameterValue(ID::samplerRoot)));
+        sampler.setRegion(*apvts.getRawParameterValue(ID::samplerStart),
+                          *apvts.getRawParameterValue(ID::samplerEnd));
+        sampler.setMode(static_cast<SamplePlayer::Mode>(
+            static_cast<int>(*apvts.getRawParameterValue(ID::samplerMode))));
+        sampler.setLevel(*apvts.getRawParameterValue(ID::samplerLevel));
+        sampler.setSpeed(*apvts.getRawParameterValue(ID::samplerSpeed));
+        sampler.setLoopSyncPhase(samplerLoopFrac);
 
         wavetable.setEnabled(*apvts.getRawParameterValue(ID::wavetableOn) > 0.5f);
         wavetable.setBank(WavetableBankStore::instance().getBank(

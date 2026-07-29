@@ -19,6 +19,8 @@ SynthyProcessor::SynthyProcessor()
     // Ship the demo presets + example wavetables into the user's folders on first run (idempotent).
     PresetIO::seedDemoPresets();
     PresetIO::seedWavetables();
+    PresetIO::seedSamples();     // Story 12.1: SAMPLER example recordings
+    PresetIO::preloadSamples();  // ... and pre-load them so the SET combo starts populated
 
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
@@ -661,6 +663,33 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                     ? SyncDivision::delaySeconds(syncBpm, delayDiv)
                                     : (double) *apvts.getRawParameterValue(Parameters::ID::delayTime);
 
+    // Story 12.1: shared SAMPLER loop clock — ONE master phase advancing at the ROOT rate × SPEED
+    // through the START..END region. Loop-mode notes START at this phase (SamplePlayer::trigger),
+    // so simultaneous/late notes stay in step instead of each restarting the loop at START.
+    {
+        using namespace Parameters;
+        const auto* set = SampleBankStore::instance().getSet(
+            static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
+        const bool on = *apvts.getRawParameterValue(ID::samplerOn) > 0.5f;
+        if (set != nullptr && on && set->getLength() > 4)
+        {
+            const double root  = *apvts.getRawParameterValue(ID::samplerRoot);
+            const double speed = *apvts.getRawParameterValue(ID::samplerSpeed);
+            const double s0 = *apvts.getRawParameterValue(ID::samplerStart);
+            const double s1 = *apvts.getRawParameterValue(ID::samplerEnd);
+            const double lenFile = std::abs(s1 - s0) * (double) (set->getLength() - 1);
+            if (lenFile > 4.0)
+            {
+                const double rate = std::pow(2.0, (60.0 - root) / 12.0)
+                                  * set->getFileSampleRate() / getSampleRate() * speed;
+                samplerMasterFrac += (double) buffer.getNumSamples() * rate / lenFile;
+                samplerMasterFrac -= std::floor(samplerMasterFrac);
+            }
+        }
+        else
+            samplerMasterFrac = 0.0;   // off/empty: clock parks at START
+    }
+
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
@@ -668,6 +697,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                                      voice->getLFOs(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
+                                     voice->getSampler(), samplerMasterFrac,   // Story 12.1 (+ loop clock)
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
                                      voice->getAdsrOnRef(), voice->getMixModeOnRef(),

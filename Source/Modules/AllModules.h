@@ -30,6 +30,7 @@
 #include "AdsrSpecs.h"
 #include "DisplaySpecs.h"
 #include "PresetBankSpecs.h"
+#include "SamplerSpecs.h"
 
 namespace Modules
 {
@@ -42,6 +43,7 @@ namespace Modules
             osc(1), osc(2), osc(3), crossmod(), lfo(1), lfo(2), lfo(3), lfo(4), modMatrix(),
             string(), wavetable(), adsr(), oscilloscope(), spectrum(), keyboard(),
             presetBank(),   // appended LAST: keeps APVTS param order append-only (UI order comes from buildRack)
+            sampler(),      // Story 12.1 — appended after presetBank for the same reason
         };
     }
 }
