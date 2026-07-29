@@ -11,6 +11,28 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Kunstkopf externalization: ROOM knob** (STEREO module, Story 10.4) — a shared binaural
+  **early-reflection** stage on the bus, active only in Kunstkopf mode. Six non-harmonic
+  taps (8–24 ms) rendered through lateral KEMAR ears push the image **out of the head** —
+  the cue dry binaural cannot deliver, and the axis on which Kunstkopf is now audibly
+  different from the parametric Binaural mode. The knob is a **5-detent room macro**
+  (wet level −3…+6 dB **plus** a damping morph 5→10 kHz per step) — deliberately coarse
+  and ear-calibrated: the ear's direct-to-room JND is ~5–6 dB (Zahorik 2002), so a fine
+  or wide-range knob feels dead. The **centre detent (= the default) is the ear-tested
+  optimum**; the upper half goes beyond it (at the stop the room carries twice the direct
+  power). Level-neutral by constant-power normalisation with per-detent measured
+  constants (±0.35 dB); the other four output modes stay bit-exact (FormatVersion stays
+  6, append-only). RANDOM now leaves the output MODE and ROOM untouched (master-bus rule;
+  MODE had been missed in 10.1).
+- **Spatialization / STEREO output modes** — a per-generator **PAN** feeds a new STEREO
+  output stage with five modes: **Mono**, **Pseudo-Stereo** (the existing Haas widener,
+  still default), **Stereo-Pan** (true amplitude L/R), **Binaural** (parametric headphone
+  3-D: ITD + head-shadow) and **Kunstkopf (HRTF)** — real out-of-head placement by
+  convolving each generator with the measured **MIT KEMAR** head impulse response for its
+  PAN azimuth (embedded, no external assets; headphones only). PAN is also a mod-matrix
+  target, so any source can **auto-pan** a voice in 3-D. Append-only — old presets load
+  unchanged (FormatVersion stays 6). See the STEREO module's info for mode details, and
+  the [License](README.md#third-party-data) for the KEMAR attribution.
 - **MOD MATRIX destination = MODULE → PARAM** — the DEST is now chosen in two steps
   (a **MOD** combo, then a **PARAM** combo whose items follow the picked module). Both lists
   are sorted A→Z. PARAM labels match the target module's own knobs (FREQ, CUTOFF, DRIVE, …),
@@ -38,6 +60,26 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **Demo preset "FX Motion"** — 4 LFOs breathing delay/reverb/chorus/detune.
 
 ### Changed
+- **Kunstkopf (HRTF) no longer colours the sound.** The raw MIT KEMAR kernels turned out to be
+  unusable as-is: the *frontal* response — the one playing at pan centre, where no spatial effect is
+  wanted at all — is a 21.6 dB bandpass (no bass, because the 1994 measurement speaker had none, plus
+  average pinna resonances that the listener's own ears then apply a second time over headphones).
+  The kernels are now post-processed offline in `tools/gen_kemar_hrir.py`, so the runtime cost is
+  unchanged: the frontal response is equalised out (pan centre becomes transparent — 4.2 dB
+  peak-to-peak, from 21.6), the low end is replaced by a flat correctly-delayed synthetic one, and
+  every azimuth pair is level-normalised. Verified: the localisation cues survive intact (worst ITD
+  error 23 µs, worst per-frequency ILD error 1.9 dB).
+- **All five output modes are now level-matched**, so switching modes changes the image and not the
+  loudness. Kunstkopf was 4.6 dB quiet (pink-weighted) and **Binaural** was 3 dB hot — it drove both
+  ears at unity at centre instead of 0.707, which flattered it in any A/B for no reason but level.
+- **STEREO WIDTH/TIME are greyed out outside Pseudo-Stereo**, and the seven per-generator **PAN**
+  knobs are greyed out in Mono and Pseudo-Stereo — the modes in which the voice renders
+  single-channel and the pan value is never read. Previously these knobs looked live while doing
+  nothing. (New per-knob `Knob::activeWhen` predicate in the rack descriptor.)
+- STEREO help (EN+DE) now states what actually distinguishes the modes — Binaural is deliberately
+  exaggerated (everything pans, bass included), Kunstkopf is physically faithful (bass stays centred)
+  — and warns that with every generator centred those modes are *identical by construction*, since
+  there is no direction to render.
 - **DELAY** and **LFO** control order aligned to the module-wide convention
   (selector combos first, then knobs): DELAY = SYNC·TIME·FB·MIX, LFO = WAVE·SYNC·RATE·DEPTH.
 - Zone help (EN+DE) explains the Modulation-vs-Processing distinction (audio vs. control).

@@ -118,6 +118,7 @@ namespace Parameters
         constexpr const char* stereoWidth = "stereoWidth";
         constexpr const char* stereoTime  = "stereoTime";
         constexpr const char* outputMode  = "outputMode";   // Epic 10: Mono / Pseudo-Stereo / Stereo-Pan
+        constexpr const char* hrtfRoom    = "hrtfRoom";     // Story 10.4: Kunstkopf early-reflection amount
 
         // Master-bus compressor (append-only)
         constexpr const char* compOn        = "compOn";

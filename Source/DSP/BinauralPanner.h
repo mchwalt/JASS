@@ -12,9 +12,15 @@
 // One instance per generator per voice (Binaural is the per-generator spatial render before the mix).
 //
 // Center-continuity is STRUCTURAL: every extra term (delay, LP coef) is an odd split of p that → 0 as
-// p → 0, and gL/gR are the equal-power gains, so at p=0 the output is exactly {gL·x, gR·x} — identical
-// to the amplitude Stereo-Pan center and seamless across the mode boundary. With kMaxITDSeconds=0 and
-// a 0 head-shadow depth the whole thing collapses to Stereo-Pan byte-for-byte (regression oracle).
+// p → 0, so at p=0 the output is exactly {0.707·x, 0.707·x} — identical to the amplitude Stereo-Pan
+// center and seamless across the mode boundary. With kMaxITDSeconds=0 and a 0 head-shadow depth the
+// whole thing collapses to Stereo-Pan byte-for-byte (regression oracle).
+//
+// LEVEL (fixed 2026-07-29): the two ear gains are normalised to CONSTANT TOTAL POWER, the same a pan
+// law delivers, so this mode sits at exactly the level of Stereo-Pan and Kunstkopf. Before, both ears
+// ran at unity at centre, making the mode 3 dB hot — which flatters it in an A/B against the other
+// modes for no reason other than loudness. (The comment here used to claim equal-power gains were
+// passed in and applied; they never were. The normalisation below is what actually enforces it.)
 //
 // RT-safe: the delay line is sized once in prepare(); process() is bounded arithmetic + two
 // interpolated reads (no alloc/lock/trig). Denormals are handled by the caller's ScopedNoDenormals.
@@ -62,9 +68,17 @@ public:
         const float cL = headShadowCoefMax * std::max (0.0f,  p);
         const float cR = headShadowCoefMax * std::max (0.0f, -p);
 
-        // ILD: near ear unity, far ear attenuated by up to kILDDepth (NOT to zero — keeps the cues).
-        const float gainL = 1.0f - kILDDepth * std::max (0.0f,  p);
-        const float gainR = 1.0f - kILDDepth * std::max (0.0f, -p);
+        // ILD: near ear unity, far ear attenuated by up to kILDDepth (NOT to zero — keeps the cues),
+        // then BOTH scaled so gainL² + gainR² == 1. That is the constant total power an equal-power pan
+        // law delivers, so switching modes changes the image and not the loudness: at centre this gives
+        // {0.707, 0.707} (exactly Stereo-Pan) and at full side {0.148, 0.989} — the far ear stays
+        // audible, which is the whole point, while the pair still sums to unity power.
+        // One sqrt per sample is negligible beside the two interpolated reads and two one-poles here.
+        float gainL = 1.0f - kILDDepth * std::max (0.0f,  p);
+        float gainR = 1.0f - kILDDepth * std::max (0.0f, -p);
+        const float norm = 1.0f / std::sqrt (std::max (1.0e-12f, gainL * gainL + gainR * gainR));
+        gainL *= norm;
+        gainR *= norm;
 
         const float yL = readFrac (slewL);
         const float yR = readFrac (slewR);

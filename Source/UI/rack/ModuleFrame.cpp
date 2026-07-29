@@ -59,9 +59,14 @@ namespace rack
             if (auto* raw = apvts.getRawParameterValue (desc.comboDeps[i].watchParamId))
                 lastWatched[i] = (int) raw->load();
 
+        // Apply the mode-dependent knob states NOW (not on the first tick 50 ms later), so an
+        // irrelevant knob never flashes up live before greying out.
+        updateCondKnobs();
+
         // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
-        // dynamic active state — an enable param, a derived predicate, or dependent combos.
-        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty())
+        // dynamic active state — an enable param, a derived predicate, dependent combos, or a
+        // per-knob relevance predicate.
+        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty() || ! condKnobs.empty())
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -189,6 +194,12 @@ namespace rack
 
                 cells.push_back ({ s, makeCaption (ownedCaptions, k->label), 1 });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
+
+                // Mode-dependent knob (e.g. STEREO WIDTH/TIME outside Pseudo-Stereo): the timer
+                // disables + dims this one knob while the module stays live. Applied there, not
+                // here, so the initial state is set by the first poll.
+                if (k->activeWhen)
+                    condKnobs.push_back ({ s, cells.back().caption, k->activeWhen });
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
@@ -558,6 +569,8 @@ namespace rack
             if (changed) repaint();
         }
 
+        updateCondKnobs();
+
         if (enableValue == nullptr && ! desc.enabledWhen) return;
         const bool en = moduleEnabled();
         // A derived (predicate) enabler has no attachment — keep its display toggle in sync.
@@ -565,6 +578,28 @@ namespace rack
             enableBtn->setToggleState (en, juce::dontSendNotification);
         const bool off = ! en;
         if (off != dimmed) { dimmed = off; repaint(); }
+    }
+
+    void ModuleFrame::updateCondKnobs()
+    {
+        // A knob that does not apply in the current mode is switched off rather than hidden: the
+        // module keeps its layout (no reflow when the mode changes) and the greyed knob still shows
+        // its stored value. setEnabled stops the mouse; the alpha carries the visual cue, since a
+        // custom slider LookAndFeel need not honour isEnabled by itself.
+        for (auto& ck : condKnobs)
+        {
+            const char want = ck.predicate() ? (char) 1 : (char) 0;
+            if (ck.active == want) continue;
+            ck.active = want;
+            const bool on = (want == 1);
+            if (ck.slider != nullptr)
+            {
+                ck.slider->setEnabled (on);
+                ck.slider->setAlpha (on ? 1.0f : 0.35f);
+            }
+            if (ck.caption != nullptr)
+                ck.caption->setAlpha (on ? 1.0f : 0.35f);
+        }
     }
 
     void ModuleFrame::updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio)
