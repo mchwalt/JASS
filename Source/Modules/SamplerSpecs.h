@@ -15,7 +15,9 @@ namespace Modules
         m.params = {
             { "samplerOn",    "Enabled", "",      ParamSpec::Kind::Bool, {}, 0.0f },
             // SET = index into the session store (dynamic combo in the editor; not shown from spec).
-            { "samplerSet",   "Set",     "",      ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 31.0f, 1.0f), 0.0f, {}, {}, LFOTarget::Off, false, false },
+            // Default 2 = "CH_01" in the shipped alphabetical catalog (user pick, 2026-07-30) —
+            // keep in step with Samples/ if the catalog changes below index 2.
+            { "samplerSet",   "Set",     "",      ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 31.0f, 1.0f), 2.0f, {}, {}, LFOTarget::Off, false, false },
             { "samplerRoot",  "Root",    "ROOT",  ParamSpec::Kind::Int,   juce::NormalisableRange<float> (24.0f, 96.0f, 1.0f), 60.0f },
             { "samplerStart", "Start",   "START", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f },
             { "samplerEnd",   "End",     "END",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f },
