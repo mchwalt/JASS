@@ -36,6 +36,8 @@ quick-access bank on **F1–F6** (in the order listed below).
   Envelope → FILTER · CUTOFF opens each pluck. Reverb is deliberately OFF — the space
   comes from the ROOM early reflections alone. Hold one key: the arp makes the
   transients, ROOM puts them outside your head.
+- **Sampler Demo.jass** (F7) — the **SAMPLER** module (Story 12.1) in action, built on the shipped
+  example recordings (user-authored patch).
 
 These ship embedded in the binary and are seeded into the user's Presets folder on
 first run if missing (`PresetIO::seedDemoPresets`), so every user gets them.

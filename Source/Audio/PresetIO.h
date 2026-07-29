@@ -127,6 +127,7 @@ namespace PresetIO
         slots[3] = "Helikopter";
         slots[4] = "Matrix Showcase";   // full MOD MATRIX demo (per-OSC + full coverage + 8 slots)
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
+        slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
         return slots;
     }
 
