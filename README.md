@@ -63,6 +63,10 @@ info** so nothing is hidden and every control explains itself.
   (parametric headphone 3-D) and **Kunstkopf (HRTF)** — real out-of-head placement
   by convolving each generator with a measured **MIT KEMAR** head impulse response.
   PAN is a mod-matrix target, so any source can auto-pan a voice in 3-D.
+- **Kunstkopf externalization (ROOM)** — a binaural **early-reflection** stage
+  (six non-harmonic taps, 8–24 ms, rendered through lateral KEMAR ears) that pushes
+  the headphone image **out of the head** — the cue dry HRTF rendering cannot
+  deliver. Level-neutral at any setting; heard best on transients (plucks, arps).
 
 **Playing & workflow**
 - **19″ rack UI** with zones; every module and zone has **enable / reset / info**
