@@ -78,6 +78,14 @@ namespace rack
         std::function<double(double base,  double ratio)> toDisplay;
         std::function<double(double shown, double ratio)> fromDisplay;
         ModTarget modTarget = ModTarget::Off;
+
+        // Optional PER-KNOB relevance predicate. When set and false, this ONE knob is disabled
+        // and dimmed while the rest of the module stays live — for a knob that only applies in
+        // some modes (STEREO's WIDTH/TIME are Pseudo-Stereo-only). Like enabledWhen it must read
+        // APVTS params only (AD-9) and is polled in the frame timer (message thread), so the
+        // EDITOR injects it after makeModuleDescriptor (a static spec can't capture apvts).
+        // Purely cosmetic/interaction: the DSP already ignores an irrelevant param.
+        std::function<bool()> activeWhen;
     };
 
     struct Combo

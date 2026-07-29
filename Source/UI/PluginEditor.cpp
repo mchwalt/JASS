@@ -1186,6 +1186,29 @@ void SynthyEditor::buildRack()
 
     namespace P = Parameters::ID;
 
+    // Per-generator PAN gating (Epic 10 follow-up). In Mono and Pseudo-Stereo the voice renders
+    // SINGLE-channel — positionToGains collapses to gain 1.0 and the pan VALUE is never read — so
+    // every PAN knob is inert in those two modes. Left looking live it actively misleads, because PAN
+    // is the one control that makes Stereo-Pan / Binaural / Kunstkopf differ from each other at all:
+    // with every generator centred those three modes render identical mono, since there is no
+    // direction to place. So grey the knobs out where they do nothing. Applied centrally on the way
+    // into the rack, which also covers the hand-built bodies (KARPLUS, WAVETABLE) and any PAN
+    // parameter added later; an explicit per-knob predicate (STEREO's WIDTH/TIME) is never overwritten.
+    auto* outModeRaw = apvts.getRawParameterValue (P::outputMode);
+    auto panKnobsActive = [outModeRaw]
+    {
+        const int m = (int) outModeRaw->load();
+        return m != (int) OutputMode::Mono && m != (int) OutputMode::PseudoStereo;
+    };
+    auto addRackModule = [this, panKnobsActive] (ModuleDescriptor d)
+    {
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob> (&el))
+                if (k->activeWhen == nullptr && k->paramId.endsWith ("Pan"))
+                    k->activeWhen = panKnobsActive;
+        rackBody->addModule (std::move (d));
+    };
+
     // small builders to keep the descriptor list readable
     auto K = [](juce::String id, juce::String lbl) { return Knob{ std::move(id), std::move(lbl) }; };
     auto C = [](juce::String id, juce::String lbl, juce::StringArray items)
@@ -1209,7 +1232,7 @@ void SynthyEditor::buildRack()
         d.defaultZone = zone;   // AD-10: zone declared on the descriptor
         d.enableParam = std::move(enableParam); d.body = std::move(body);
         d.onReset = std::move(onReset);   // extra non-param reset (e.g. scope time-base)
-        rackBody->addModule(std::move(d));
+        addRackModule(std::move(d));
     };
 
 
@@ -1244,19 +1267,38 @@ void SynthyEditor::buildRack()
             P::presetBankOn, { Display{ panel, 8 } }, [] {});
     }
 
-    rackBody->addModule(makeModuleDescriptor(Modules::compressor()));
-    rackBody->addModule(makeModuleDescriptor(Modules::stereo()));
-    rackBody->addModule(makeModuleDescriptor(Modules::master()));
+    addRackModule(makeModuleDescriptor(Modules::compressor()));
+    // STEREO — spec-driven; the editor injects the per-knob relevance predicates (they read apvts
+    // atomics, which a static spec can't capture). WIDTH/TIME drive the Haas widener, which ONLY
+    // runs in Pseudo-Stereo; ROOM drives the Kunstkopf early-reflection stage (Story 10.4), which
+    // ONLY runs in Kunstkopf — in every other output mode the DSP ignores them, so the knobs are
+    // greyed out there instead of sitting there looking live.
+    {
+        auto d = makeModuleDescriptor(Modules::stereo());
+        auto* mode = apvts.getRawParameterValue (P::outputMode);
+        auto pseudoOnly    = [mode] { return (int) mode->load() == (int) OutputMode::PseudoStereo; };
+        auto kunstkopfOnly = [mode] { return (int) mode->load() == (int) OutputMode::Kunstkopf; };
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob> (&el))
+            {
+                if (k->paramId == P::stereoWidth || k->paramId == P::stereoTime)
+                    k->activeWhen = pseudoOnly;
+                else if (k->paramId == P::hrtfRoom)
+                    k->activeWhen = kunstkopfOnly;
+            }
+        addRackModule(std::move(d));
+    }
+    addRackModule(makeModuleDescriptor(Modules::master()));
 
     // ---- GENERATORS ----
     // OSC 1-3 — spec-driven (OscSpecs.h). FREQ display-transform + AMP ring come from the spec.
     for (int i = 1; i <= 3; ++i)
-        rackBody->addModule(makeModuleDescriptor(Modules::osc(i)));
+        addRackModule(makeModuleDescriptor(Modules::osc(i)));
     // CROSS MOD now lives in the MODULATION zone (it shapes the oscillators, it is not a source).
     // Added below with the other modulators so its default within-zone position is natural.
 
-    rackBody->addModule(makeModuleDescriptor(Modules::sub()));
-    rackBody->addModule(makeModuleDescriptor(Modules::noise()));
+    addRackModule(makeModuleDescriptor(Modules::sub()));
+    addRackModule(makeModuleDescriptor(Modules::noise()));
     add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,   // W8: PLUCK + 5 knobs incl. PAN
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
@@ -1290,10 +1332,10 @@ void SynthyEditor::buildRack()
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
     // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
     for (int i = 1; i <= kNumLFOs; ++i)
-        rackBody->addModule(makeModuleDescriptor(Modules::lfo(i)));
-    rackBody->addModule(makeModuleDescriptor(Modules::arpeggiator()));
-    rackBody->addModule(makeModuleDescriptor(Modules::glide()));
-    rackBody->addModule(makeModuleDescriptor(Modules::pitchEnv()));
+        addRackModule(makeModuleDescriptor(Modules::lfo(i)));
+    addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
+    addRackModule(makeModuleDescriptor(Modules::glide()));
+    addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
     // which a static spec can't capture). Lit = mixModeOn AND both SELECTED operand OSCs enabled.
     {
@@ -1309,7 +1351,7 @@ void SynthyEditor::buildRack()
             const int b = juce::jlimit (0, 2, (int) selB->load());
             return oscOn[(size_t) a]->load() >= 0.5f && oscOn[(size_t) b]->load() >= 0.5f;
         };
-        rackBody->addModule(std::move(d));
+        addRackModule(std::move(d));
     }
     // MOD MATRIX — APVTS params are spec-driven (ModMatrixSpecs.h), but the BODY is hand-built here:
     // each slot's PARAM combo is DEPENDENT on its MODULE selection (which params exist depends on the
@@ -1362,21 +1404,21 @@ void SynthyEditor::buildRack()
         {
             return (int) processor.getAPVTS().getRawParameterValue (P::modSlotModule (slot + 1))->load() != 0;
         };
-        rackBody->addModule (std::move (d));
+        addRackModule (std::move (d));
     }
 
     // ---- PROCESSING (spec-driven) ----
-    rackBody->addModule(makeModuleDescriptor(Modules::filter()));
+    addRackModule(makeModuleDescriptor(Modules::filter()));
     // PROCESSING — spec-driven (Modules::*). Display-only combo labels (e.g. DISTORTION
     // "Soft Clip") live in the spec's displayChoices; canonical strings stay in choices.
-    rackBody->addModule(makeModuleDescriptor(Modules::formant()));
-    rackBody->addModule(makeModuleDescriptor(Modules::distortion()));
-    rackBody->addModule(makeModuleDescriptor(Modules::wavefold()));
-    rackBody->addModule(makeModuleDescriptor(Modules::bitcrush()));
-    rackBody->addModule(makeModuleDescriptor(Modules::phaser()));
-    rackBody->addModule(makeModuleDescriptor(Modules::chorus()));
-    rackBody->addModule(makeModuleDescriptor(Modules::delay()));
-    rackBody->addModule(makeModuleDescriptor(Modules::reverb()));
+    addRackModule(makeModuleDescriptor(Modules::formant()));
+    addRackModule(makeModuleDescriptor(Modules::distortion()));
+    addRackModule(makeModuleDescriptor(Modules::wavefold()));
+    addRackModule(makeModuleDescriptor(Modules::bitcrush()));
+    addRackModule(makeModuleDescriptor(Modules::phaser()));
+    addRackModule(makeModuleDescriptor(Modules::chorus()));
+    addRackModule(makeModuleDescriptor(Modules::delay()));
+    addRackModule(makeModuleDescriptor(Modules::reverb()));
     // Real visualizers (own instances, separate from the legacy ones behind the rack —
     // one-parent rule). setShowTitle(false): the module header already shows the title.
     // Sharing the one WaveformCapture across instances is safe (updateSnapshot is idempotent

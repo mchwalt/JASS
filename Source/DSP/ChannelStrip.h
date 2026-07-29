@@ -17,7 +17,7 @@ inline constexpr int kMaxOutChannels = 2;
 
 // Output Mode (append-only; Surround/Binaural appended after StereoPan later). MUST match the
 // "outputMode" choice order in StereoSpecs.h.
-enum class OutputMode { Mono = 0, PseudoStereo = 1, StereoPan = 2, Binaural = 3 };
+enum class OutputMode { Mono = 0, PseudoStereo = 1, StereoPan = 2, Binaural = 3, Kunstkopf = 4 };
 
 // Generators that carry an independent PAN (OSC 1/2/3, SUB, NOISE, KARPLUS, WAVETABLE).
 inline constexpr int kNumPanGenerators = 7;

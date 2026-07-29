@@ -13,6 +13,7 @@
 #include "../DSP/ModMatrix.h"
 #include "../DSP/ChannelStrip.h"   // Epic 10: ChannelStrip, kMaxOutChannels, OutputMode, positionToGains
 #include "../DSP/BinauralPanner.h" // Epic 10 (10.3): parametric binaural per-generator renderer
+#include "../DSP/HrtfPanner.h"     // Epic 10 (10.3): HRIR "Kunstkopf" per-generator renderer
 #include "SynthSound.h"
 
 // Poly-glide (portamento): the processor computes, per block, the transpose ratio each
@@ -121,6 +122,7 @@ private:
     float generatorPan[kNumPanGenerators] = {};                 // -1..1 per generator (PanGen order)
     float panGains[kNumPanGenerators][kMaxOutChannels] = {};    // per-generator per-channel gains
     BinauralPanner binaural[kNumPanGenerators];                 // 10.3: per-generator binaural renderer (Binaural mode)
+    HrtfPanner     hrtf[kNumPanGenerators];                     // 10.3: per-generator HRIR renderer (Kunstkopf HRTF mode)
 
     // Modulation matrix (Story 8.1): N routing slots + master enable, filled per block by
     // the processor (Parameters::applyToVoice). noteVelocity is the Velocity source (0..1),

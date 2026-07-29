@@ -5,6 +5,7 @@
 #include "Audio/Parameters.h"
 #include "DSP/WaveformCapture.h"
 #include "DSP/StereoWidth.h"
+#include "DSP/BinauralRoom.h"
 #include "DSP/Compressor.h"
 #include "DSP/Arpeggiator.h"
 #include <vector>
@@ -101,6 +102,8 @@ private:
     // races a resize. (Spectrum reads at most fftSize=1024 of it, zero-padding when shorter.)
     WaveformCapture waveformCapture { 9600 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
+    BinauralRoom binauralRoom; // Kunstkopf externalization: shared early-reflection stage (Story 10.4)
+    bool wasKunstkopf = false; // mode-transition edge -> reset the reflection ring (no stale audio)
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
     std::atomic<float> lfoDisplayValues[kNumLFOs] {};

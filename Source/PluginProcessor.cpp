@@ -364,7 +364,7 @@ void SynthyProcessor::randomize()
     // restore it verbatim after the dice roll.
     static const char* const masterBusIds[] = {
         ID::masterOn, ID::masterVol, ID::syncTempo,
-        ID::stereoOn, ID::stereoWidth, ID::stereoTime,
+        ID::stereoOn, ID::stereoWidth, ID::stereoTime, ID::outputMode, ID::hrtfRoom,
         ID::compOn, ID::compThreshold, ID::compRatio, ID::compAttack, ID::compRelease, ID::compMakeup };
     const int numMasterBus = (int) (sizeof (masterBusIds) / sizeof (masterBusIds[0]));
     float keepMasterBus[sizeof (masterBusIds) / sizeof (masterBusIds[0])];
@@ -559,6 +559,8 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     arpKeptScratch.ensureSize(2048); glideRebuiltScratch.ensureSize(2048);   // RT: no per-block MidiBuffer growth
 
     stereoWidth.prepare(sampleRate);
+    binauralRoom.prepare(sampleRate);
+    wasKunstkopf = false;
     compressor.prepare(sampleRate);
     prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
     for (auto& l : uiLfos) l.setSampleRate(sampleRate);
@@ -870,6 +872,21 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     stereoWidth.width   = juce::jlimit(0.0f, 1.0f,  (float) (*apvts.getRawParameterValue(Parameters::ID::stereoWidth) + gMod[(size_t) LFOTarget::StereoWidth] * 1.0));
     stereoWidth.timeMs  = juce::jlimit(1.0f, 15.0f, (float) (*apvts.getRawParameterValue(Parameters::ID::stereoTime)  + gMod[(size_t) LFOTarget::StereoTime]  * 7.0));
     stereoWidth.process(buffer);
+
+    // Kunstkopf externalization (Story 10.4): shared binaural early-reflection stage, bus-level and
+    // ONLY in Kunstkopf mode — the other four modes are byte-identical to before (regression oracle).
+    // Runs once on the stereo mix (not per voice): reflections need no per-source accuracy to move
+    // the image out of the head, so the shared pattern gets the effect at a fixed, tiny cost.
+    {
+        const bool kunstkopf = (outMode == (int) OutputMode::Kunstkopf) && buffer.getNumChannels() >= 2;
+        if (kunstkopf && !wasKunstkopf)
+            binauralRoom.reset();   // entering the mode: clear stale ring content
+        wasKunstkopf = kunstkopf;
+        if (kunstkopf)
+            binauralRoom.process(buffer.getWritePointer(0), buffer.getWritePointer(1),
+                                 buffer.getNumSamples(),
+                                 *apvts.getRawParameterValue(Parameters::ID::hrtfRoom));
+    }
 
     // Master volume — gated by masterOn (Story 2.4): off => silent output. Base + MOD MATRIX offset,
     // applied as a per-block RAMP (prev→cur) so LFO-modulated VOL doesn't zipper.
