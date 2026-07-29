@@ -110,6 +110,8 @@ public:
                 accR += kTapGain[t] * aR;
             }
 
+            writePos = (writePos + 1) & kRingMask;
+
             curDry += stepDry;
             curWet += stepWet;
             l[i] = curDry * l[i] + curWet * accL;
