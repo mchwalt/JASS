@@ -1268,18 +1268,24 @@ void SynthyEditor::buildRack()
     }
 
     addRackModule(makeModuleDescriptor(Modules::compressor()));
-    // STEREO — spec-driven; the editor injects the per-knob relevance predicate (reads apvts
+    // STEREO — spec-driven; the editor injects the per-knob relevance predicates (they read apvts
     // atomics, which a static spec can't capture). WIDTH/TIME drive the Haas widener, which ONLY
-    // runs in Pseudo-Stereo — in every other output mode the DSP ignores them, so the knobs are
+    // runs in Pseudo-Stereo; ROOM drives the Kunstkopf early-reflection stage (Story 10.4), which
+    // ONLY runs in Kunstkopf — in every other output mode the DSP ignores them, so the knobs are
     // greyed out there instead of sitting there looking live.
     {
         auto d = makeModuleDescriptor(Modules::stereo());
         auto* mode = apvts.getRawParameterValue (P::outputMode);
-        auto pseudoOnly = [mode] { return (int) mode->load() == (int) OutputMode::PseudoStereo; };
+        auto pseudoOnly    = [mode] { return (int) mode->load() == (int) OutputMode::PseudoStereo; };
+        auto kunstkopfOnly = [mode] { return (int) mode->load() == (int) OutputMode::Kunstkopf; };
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob> (&el))
+            {
                 if (k->paramId == P::stereoWidth || k->paramId == P::stereoTime)
                     k->activeWhen = pseudoOnly;
+                else if (k->paramId == P::hrtfRoom)
+                    k->activeWhen = kunstkopfOnly;
+            }
         addRackModule(std::move(d));
     }
     addRackModule(makeModuleDescriptor(Modules::master()));
