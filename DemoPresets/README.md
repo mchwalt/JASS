@@ -6,7 +6,7 @@ the repository so they can be shared and re-seeded.
 
 To try one now, copy the `.jass` file into `%AppData%\Roaming\JASS\Presets\` and
 pick it from the preset menu in the app. They are also pre-assigned to the PRESETS
-quick-access bank on **F1–F5** (in the order listed below).
+quick-access bank on **F1–F6** (in the order listed below).
 
 - **Matrix Demo.jass** (F1) — shows the modulation matrix (Story 8.1): the LFO, the
   Envelope and Velocity all drive the filter Cutoff at once (stacking). Play the
@@ -29,6 +29,13 @@ quick-access bank on **F1–F5** (in the order listed below).
   opening (Envelope + Velocity → FILTER · CUTOFF), and evolving space via the new FX
   targets (LFO 2 → REVERB · ROOM, LFO 3 → CHORUS · RATE, LFO 2 → DELAY · MIX). A lush
   pad that keeps moving on a held chord.
+- **Kopfkino.jass** (F6) — the **Kunstkopf (HRTF) + ROOM** showcase (Story 10.4).
+  **Headphones required.** A Karplus pluck arpeggio slowly circles the head
+  (LFO 1 → KARPLUS · PAN, auto-pan through the measured KEMAR ears) over a soft
+  triangle/sine pad whose two halves counter-sweep (LFO 2 → OSC 1/OSC 2 · PAN, ±),
+  Envelope → FILTER · CUTOFF opens each pluck. Reverb is deliberately OFF — the space
+  comes from the ROOM early reflections alone. Hold one key: the arp makes the
+  transients, ROOM puts them outside your head.
 
 These ship embedded in the binary and are seeded into the user's Presets folder on
 first run if missing (`PresetIO::seedDemoPresets`), so every user gets them.
