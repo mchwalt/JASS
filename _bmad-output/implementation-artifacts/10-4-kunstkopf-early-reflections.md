@@ -1,6 +1,6 @@
 # Story 10.4: Kunstkopf externalization via binaural early reflections
 
-Status: review
+Status: done
 
 <!-- Follow-on to Story 10.3 (Kunstkopf HRTF mode). Raised 2026-07-29 after the listening session:
      once both binaural modes were level-matched, the user could not tell Binaural from Kunstkopf.
@@ -168,7 +168,13 @@ which had been missing since Story 10.1 (RANDOM could silently flip the output m
 
 ### Verification
 - Design measured offline (see above) — AC2/AC6 confirmed numerically.
-- Clean rebuild (`/t:Rebuild /nodeReuse:false`) of `JASS_Standalone` — see session log.
-- **OPEN (AC8):** user headphone verification — does the image leave the head, and is Kunstkopf now
-  unmistakably different from Binaural? Also confirm the shared-reflection compromise is inaudible
-  (hard-L + hard-R generators share one reflection pattern).
+- Clean rebuild (`/t:Rebuild /nodeReuse:false`) of `JASS_Standalone`; the DSP class additionally
+  proven with a standalone console harness (exact passthrough at room=0; reflections present at all
+  six tap delays; −0.9 dB white-noise level at room=1) after a first-build bug (ring `writePos`
+  never advanced in the active loop → no audible reflections; fixed in `92400e8`).
+- **AC8 ✅ user-verified on headphones (2026-07-29):** both listening tests positive — (1) hard-left
+  generator, ROOM 0↔1 clearly audible in the far (right) ear (function check); (2) Karplus plucks
+  externalize: image sits outside the head at ROOM=1, in-head at 0. Kunstkopf is now audibly a
+  different thing from Binaural. Lesson recorded: the effect is inaudible on STEADY tones by design
+  (level-neutral + colouration optimised away + no tail) — early reflections are heard on
+  transients; the auto-play drone is the worst possible test signal.
