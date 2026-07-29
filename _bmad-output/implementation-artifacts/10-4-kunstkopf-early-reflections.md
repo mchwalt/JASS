@@ -210,4 +210,5 @@ Rework (mirroring what commercial "room amount" macros do — gang parameters):
   carries twice the direct power (measured price: bass thins ~5 dB at 63 Hz by partial
   cancellation; sounds distant/big, accepted as the extreme). Per-detent MEASURED normalisation
   constants (`kDetWetPower = {—, 0.958, 1.107, 1.192, 1.258}`), level-neutral ±0.35 dB.
+- **✅ Final ear test positive ("jetzt endlich passt es!") — story closed 2026-07-29.**
 - Re-measured: level-neutral ±0.2 dB across the sweep; octave colouration at full −2.6…+1.4 dB.
