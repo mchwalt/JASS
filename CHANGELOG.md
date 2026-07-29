@@ -47,6 +47,26 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **Demo preset "FX Motion"** — 4 LFOs breathing delay/reverb/chorus/detune.
 
 ### Changed
+- **Kunstkopf (HRTF) no longer colours the sound.** The raw MIT KEMAR kernels turned out to be
+  unusable as-is: the *frontal* response — the one playing at pan centre, where no spatial effect is
+  wanted at all — is a 21.6 dB bandpass (no bass, because the 1994 measurement speaker had none, plus
+  average pinna resonances that the listener's own ears then apply a second time over headphones).
+  The kernels are now post-processed offline in `tools/gen_kemar_hrir.py`, so the runtime cost is
+  unchanged: the frontal response is equalised out (pan centre becomes transparent — 4.2 dB
+  peak-to-peak, from 21.6), the low end is replaced by a flat correctly-delayed synthetic one, and
+  every azimuth pair is level-normalised. Verified: the localisation cues survive intact (worst ITD
+  error 23 µs, worst per-frequency ILD error 1.9 dB).
+- **All five output modes are now level-matched**, so switching modes changes the image and not the
+  loudness. Kunstkopf was 4.6 dB quiet (pink-weighted) and **Binaural** was 3 dB hot — it drove both
+  ears at unity at centre instead of 0.707, which flattered it in any A/B for no reason but level.
+- **STEREO WIDTH/TIME are greyed out outside Pseudo-Stereo**, and the seven per-generator **PAN**
+  knobs are greyed out in Mono and Pseudo-Stereo — the modes in which the voice renders
+  single-channel and the pan value is never read. Previously these knobs looked live while doing
+  nothing. (New per-knob `Knob::activeWhen` predicate in the rack descriptor.)
+- STEREO help (EN+DE) now states what actually distinguishes the modes — Binaural is deliberately
+  exaggerated (everything pans, bass included), Kunstkopf is physically faithful (bass stays centred)
+  — and warns that with every generator centred those modes are *identical by construction*, since
+  there is no direction to render.
 - **DELAY** and **LFO** control order aligned to the module-wide convention
   (selector combos first, then knobs): DELAY = SYNC·TIME·FB·MIX, LFO = WAVE·SYNC·RATE·DEPTH.
 - Zone help (EN+DE) explains the Modulation-vs-Processing distinction (audio vs. control).
