@@ -40,7 +40,17 @@ info** so nothing is hidden and every control explains itself.
   PWM, Spectral) with example WAVs, position morph, **WAV import**, own unison
 - **Noise** — white / pink / brown / blue
 - **Karplus-Strong** — plucked string, played from the keyboard
+- **SAMPLER** — play your own recordings (WAV/AIFF, ≤60 s) as a sound source through
+  the whole chain: ROOT-key tape-style transposition, START/END, One-Shot / Loop
+  (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
+  stereo files rendered as two placed sub-sources. Ships with an example catalog
+  (seeded to `%AppData%\JASS\Samples`); presets reference samples by name.
+
+**Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
+- **MIDI keyboard / controller** — the synth accepts MIDI note input with velocity
+  (a mod-matrix source): in the standalone pick the device in the audio/MIDI
+  settings; as a VST3 it receives MIDI from the DAW track
 
 **Envelopes & modulation**
 - **ADSR** + **pitch envelope**
@@ -58,11 +68,6 @@ info** so nothing is hidden and every control explains itself.
 - **Distortion** (soft/hard clip, foldback), **wavefolding**, **bitcrusher**
 - **Compressor**, **phaser/flanger**
 - **Delay** (tempo sync), **chorus**, **reverb**
-- **SAMPLER** — play your own recordings (WAV/AIFF, ≤60 s) as a sound source through
-  the whole chain: ROOT-key tape-style transposition, START/END, One-Shot / Loop
-  (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
-  stereo files rendered as two placed sub-sources. Ships with an example catalog
-  (seeded to `%AppData%\JASS\Samples`); presets reference samples by name.
 - **STEREO output stage** with a per-generator **PAN** and five modes: Mono,
   **Pseudo-stereo** (Haas widener, on by default), **Stereo-Pan**, **Binaural**
   (parametric headphone 3-D) and **Kunstkopf (HRTF)** — real out-of-head placement
