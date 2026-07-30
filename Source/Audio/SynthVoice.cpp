@@ -19,6 +19,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     for (auto& l : lfos) l.setSampleRate(sampleRate);
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
+    sampler.setSampleRate(sampleRate);   // Story 12.1
     // Prepare EVERY channel strip's effects (not just strip 0) so a later Stereo-Pan channel is ready
     // (its delay/reverb buffers preallocated) — no allocation ever happens on the audio thread.
     for (auto& s : strips)
@@ -72,6 +73,7 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     if (pluckEnabled)
         pluckKarplus();   // pluck at the transposed pitch (skipped for the drone)
 
+    sampler.trigger(transposeRatio);   // Story 12.1: (re)start the recording at the note's rate
     pitchEnv.trigger();   // (re)start the one-shot pitch sweep at note-on
     envelope.gateOn();
     bypassGate.setCurrentAndTargetValue(0.0f);
@@ -100,6 +102,7 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
     else
     {
         envelope.reset();
+        sampler.reset();   // Story 12.1: hard stop ends the recording too
         bypassGate.setCurrentAndTargetValue(0.0f);
         clearCurrentNote();
         noteOn = false;
@@ -144,6 +147,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                                              (double) oscillators[2].getUnisonCount() };
     // Epic 8.3 — base values for the full per-module target coverage (captured once, modulated around).
     const double baseWtAmp        = wavetable.getAmplitude();
+    const double baseSamplerLevel = sampler.getLevel();   // Story 12.1
     const double baseWtVoices     = (double) wavetable.getUnisonCount();
     const double baseWtDetune     = wavetable.getDetuneAmount();
     const double baseFormantReso  = formant.resonance;
@@ -359,6 +363,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             subOsc.setAmplitude(std::clamp(baseSubLevel + modOffset[(size_t) LFOTarget::SubLevel] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::NoiseLevel])
             noise.setAmplitude(std::clamp(baseNoiseAmp + modOffset[(size_t) LFOTarget::NoiseLevel] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::SamplerLevel])
+            sampler.setLevel(std::clamp(baseSamplerLevel + modOffset[(size_t) LFOTarget::SamplerLevel] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusAmp])
             karplus.setAmplitude(std::clamp(baseKarplusAmp + modOffset[(size_t) LFOTarget::KarplusAmp] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusDamping])
@@ -436,6 +442,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 else if (g == PanNoise)       p += modOffset[(size_t) LFOTarget::NoisePan];
                 else if (g == PanKarplus)     p += modOffset[(size_t) LFOTarget::KarplusPan];
                 else if (g == PanWavetable)   p += modOffset[(size_t) LFOTarget::WavetablePan];
+                else if (g == PanSamplerL || g == PanSamplerR)
+                                              p += modOffset[(size_t) LFOTarget::SamplerPan];   // both sub-sources move together
                 effPan[g] = (float) std::clamp(p, -1.0, 1.0);
                 positionToGains(effPan[g], nCh, curGains[g]);
             }
@@ -492,6 +500,20 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         addPanned(karplus.nextSample(),   PanKarplus);
         addPanned(wavetable.nextSample(), PanWavetable);
         addPanned(subOsc.nextSample(),    PanSub);
+        {
+            // SAMPLER (12.1): a stereo set renders as TWO panned sub-sources (own placement each);
+            // in the single-channel modes it collapses to a level-true (L+R)/2 downmix instead.
+            const auto sm = sampler.nextSample();
+            if (nCh == 1)
+                addPanned(0.5f * (sm.l + sm.r), PanSamplerL);
+            else if (sampler.sourceIsStereo())
+            {
+                addPanned(sm.l, PanSamplerL);
+                addPanned(sm.r, PanSamplerR);
+            }
+            else
+                addPanned(sm.l, PanSamplerL);
+        }
 
         // Global "Alle OSC" amplitude (tremolo) — post-mix, same factor on every channel; and the
         // envelope gain (ADSR advanced once above; reused here, not re-advanced — bypass gate when off).
@@ -549,6 +571,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         oscillators[i].setFrequency(baseFrequencies[i]);
     wavetable.setFrequency(baseWtFreq);
     wavetable.setPosition(basePos);
+    sampler.setLevel(baseSamplerLevel);   // Story 12.1
     filter.setCutoff(baseCutoff);
     filter.setResonance(baseReso);
     formant.vowel = baseVowel;

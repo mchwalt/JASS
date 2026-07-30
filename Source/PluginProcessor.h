@@ -103,6 +103,7 @@ private:
     WaveformCapture waveformCapture { 9600 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
     BinauralRoom binauralRoom; // Kunstkopf externalization: shared early-reflection stage (Story 10.4)
+    double samplerMasterFrac = 0.0;   // Story 12.1: shared SAMPLER loop phase (see processBlock)
     bool wasKunstkopf = false; // mode-transition edge -> reset the reflection ring (no stale audio)
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)

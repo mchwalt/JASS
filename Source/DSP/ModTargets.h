@@ -87,7 +87,10 @@
     X(SubPan,            "SubPan",           "Sub Pan",      "subOn")                             \
     X(NoisePan,          "NoisePan",         "Noise Pan",    "noiseOn")                           \
     X(KarplusPan,        "KarplusPan",       "Karplus Pan",  "karplusOn")                         \
-    X(WavetablePan,      "WavetablePan",     "WT Pan",       "wavetableOn")
+    X(WavetablePan,      "WavetablePan",     "WT Pan",       "wavetableOn")                       \
+    /* SAMPLER (Story 12.1): per-voice level + pan (pan offsets BOTH stereo sub-sources). */      \
+    X(SamplerLevel,      "SamplerLevel",     "Sampler Level","samplerOn")                         \
+    X(SamplerPan,        "SamplerPan",       "Sampler Pan",  "samplerOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget
