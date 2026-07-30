@@ -1,9 +1,6 @@
 # Story 12.1: SAMPLER module (samples as a sound source)
 
-Status: **draft — scope decision pending.** Do NOT start dev. The scope must be settled with the user
-first (see "Unresolved, to discuss"): how far multi-sampling goes, and whether this stays a JASS
-module or becomes a **sister project**. Everything after that section is a provisional design,
-recorded so the discussion has something concrete to argue against.
+Status: **ready-for-dev** (scope settled 2026-07-30, see "Scope decision" below).
 
 <!-- Raised 2026-07-29 in conversation. "wir müssen das aber nochmal später ausdiskutieren, vor allem
      das Thema Multi-Sampling und ob man das ganze nicht doch in ein Schwester-Projekt packt - man muss
@@ -17,7 +14,24 @@ I want to load audio files and play them back at the pitch I press, so I can use
 one-shots, loops, textures, drums, and possibly multisampled instruments — as a sound source inside
 JASS, running through the engine that is already there.
 
-## Unresolved, to discuss (blocking)
+## Scope decision (user, 2026-07-30)
+
+Asked directly — "eigenständigen Sampler ausliefern & pflegen, oder Samples in JASS spielen?" —
+the answer was **the latter's first option: own recordings/one-shots/textures as a sound source
+inside JASS** ("Ersteres"). Consequences:
+
+- **Option A — module in JASS.** No sister project, no standalone product, no DSP-library extraction.
+- **v1 = ONE sample per set** (one-shot / texture / loop): no mapping, no zone logic. **ROOT stays a
+  day-one param** so multisampling remains reachable without a format break.
+- **Multisample import (folder naming convention / `.sfz`) = follow-up Story 12.2**, not v1. The
+  analysis below (authoring vs. using a mapping) remains valid and is the blueprint for 12.2.
+- **Memory:** own recordings are MB-scale, not GB. v1 keeps the proven never-free store policy but
+  BOUNDED: per-file cap (~60 s stereo) + set-count cap (32). No disk streaming, no reclamation
+  rework in v1 — revisit only if 12.2 (multisample sets) materialises.
+- The point of the module is the JASS chain: sample → filter/formant/wavefolder/matrix/arp →
+  per-generator PAN → Kunstkopf + ROOM. That combination is the feature, not sampling fidelity.
+
+## Original discussion notes (kept for 12.2 context)
 
 ### 1. Can multi-sampling fit in a module? — probably YES, and the first analysis was wrong
 
@@ -102,15 +116,18 @@ not a realism instrument (wavefolder, bitcrusher, Karplus, formant filter), so t
 material rather than defect — but "one sample per instrument" and "sounds like the real thing" are
 mutually exclusive, and the story should not pretend otherwise.
 
-## Provisional acceptance criteria (only once the scope is settled)
+## Acceptance criteria (v1, scope as decided above)
 
 1. New `Source/DSP/SamplePlayer.h` (per voice) + a shared immutable sample store modelled on
    `WavetableBankStore` (single instance, lock-free reads, loading off the audio thread — Epic 11
-   rules apply, no allocation in `process`), extended with safe reclamation (see §2).
-2. Params: LOAD (FileAction), **ROOT** key, START, END, LOOP (off / sustain), REVERSE, LEVEL, PAN.
-   Append-only; FormatVersion stays 6. ROOT exists from day one even in a single-sample version, so
-   the multisample route stays reachable without a format break.
-3. A decided, documented **size cap** for an in-RAM set; no disk streaming in this story.
+   rules apply, no allocation in `process`). Never-free policy kept, BOUNDED by the caps in #3
+   (no reclamation rework in v1).
+2. Params: LOAD (FileAction), **ROOT** key, START, END, LOOP (off / sustain, with a click-free
+   crossfaded join), REVERSE, LEVEL, PAN. Append-only; FormatVersion stays 6. ROOT exists from day
+   one even in the single-sample version, so the multisample route (12.2) stays reachable without a
+   format break.
+3. **Caps, documented in the help text:** max ~60 s stereo per file, max 32 loaded sets; loading a
+   file over the cap is rejected with a friendly message (no truncation surprises).
 4. `kNumPanGenerators` 7 → 8, plus a mod-matrix module entry. Two consequences: in Kunstkopf mode
    every generator carries its own 128-tap convolution **per voice**, so an eighth adds real CPU
    there; and generators are embedded by value in `SynthVoice`, so the struct grows → **clean
@@ -131,5 +148,32 @@ mutually exclusive, and the story should not pretend otherwise.
 
 ## Dev Agent Record
 
-_Not started. Story recorded 2026-07-29 at the user's request; scope deliberately left open pending
-the discussion above._
+### Implementation (2026-07-30)
+
+- **Stereo decision (user, mid-implementation): stereo files STAY stereo** — downmix only where the
+  engine itself is mono (Mono / Pseudo-Stereo modes). Realised via TWO pan-generator slots
+  (`PanSamplerL/R`, `kNumPanGenerators` 7→9): a stereo set's channels are two mono sub-sources
+  spread ±0.5 around the PAN knob, each with its own equal-power/binaural/HRTF placement; the
+  SamplerPan mod target moves both together. Mono sets use slot L at the plain pan.
+- **Interpolation measured** (scratch harness): linear 28.5 dB vs **Hermite 38.3 dB** SNR on a
+  bright component at +7 semitones → 4-point Hermite.
+- `Source/DSP/SampleBank.h` (SampleSet + SampleBankStore, WavetableBankStore mechanics, caps 60 s /
+  32 sets), `Source/DSP/SamplePlayer.h` (absolute-position playback, ROOT-key rate, START/END,
+  modes One-Shot/Loop/Reverse/Rev-Loop with ~6 ms crossfaded loop join).
+- Params via `SamplerSpecs.h` (appended last, format stays v6); REVERSE folded into the MODE combo
+  (deviation from AC2's separate LOOP+REVERSE — one control instead of two).
+- **Preset portability:** LOAD copies the file into `%AppData%\JASS\Samples`; PresetIO persists
+  "Sampler.File" (name) beside the session SET index and re-resolves it on load (RackLayout-style
+  special case in toVar/applyVar).
+- Matrix: SAMPLER module (LEVEL/PAN) appended to catalog + 2 LFOTargets appended; editor body
+  hand-built (dynamic SET combo + LOAD FileAction + AlertWindow on cap rejection), default-hidden.
+- **Session iterations (user-tested):** SPEED knob (0.25×–4×, tape-style, live); example catalog
+  (`Samples/` repo folder → embedded → seeded → PRE-LOADED into the SET combo at startup,
+  alphabetical = stable indices); SET combo needed `indexIsValue` (classic combo-index bug class —
+  found by ear: "Brass" played CH_01); module default-VISIBLE (user decision, overrides the AC);
+  keyboard now labels MIDI 60 as **C4** (`setOctaveForMiddleC(4)` — JUCE's C3 default made "plays
+  original at C3" look like a rate bug); **shared loop clock** (master phase at ROOT×SPEED,
+  loop notes start on it + HARD resync of all loop voices at each master wrap = beat-lock).
+- **→ Story 12.2 scope note (user, 2026-07-30):** playing one WAV at several pitches while keeping
+  playback speed/loops truly in sync is its own topic (pitch/time DECOUPLING = timestretch) and
+  belongs with multisampling — v1 stays tape-style + beat-resync by design.

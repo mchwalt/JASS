@@ -1,0 +1,504 @@
+{
+  "FormatVersion": 6,
+  "Name": "sampler Demo",
+  "Modified": false,
+  "Filter": {
+    "Enabled": false,
+    "Type": "Lowpass",
+    "Cutoff": 550.0,
+    "Resonance": 0.710000038146973
+  },
+  "Compressor": {
+    "Enabled": false,
+    "Threshold": -18.0,
+    "Ratio": 2.0,
+    "Attack": 10.000000953674316,
+    "Release": 120.0,
+    "Makeup": 0.0
+  },
+  "Stereo": {
+    "Enabled": true,
+    "Mode": "Kunstkopf (HRTF)",
+    "Width": 0.5,
+    "Time": 12.0,
+    "Room": 0.5
+  },
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 130.0
+  },
+  "Sub": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Octave": "-1 Oct",
+    "Level": 0.5,
+    "Pan": 0.0
+  },
+  "Noise": {
+    "Enabled": false,
+    "Type": "White",
+    "Amount": 0.5,
+    "Pan": 0.0
+  },
+  "Formant": {
+    "Enabled": false,
+    "Vowel": 0.5,
+    "Resonance": 0.699999988079071,
+    "Mix": 0.799999952316284
+  },
+  "Distortion": {
+    "Enabled": false,
+    "Type": "SoftClip",
+    "Drive": 0.5,
+    "Mix": 1.0
+  },
+  "Wavefold": {
+    "Enabled": false,
+    "Drive": 0.299999982118607,
+    "Symmetry": 0.0,
+    "Mix": 1.0
+  },
+  "Bitcrush": {
+    "Enabled": false,
+    "Bits": 8.0,
+    "Rate": 1.0,
+    "Mix": 1.0
+  },
+  "Phaser": {
+    "Enabled": false,
+    "Type": "Phaser",
+    "Rate": 0.5,
+    "Depth": 0.699999988079071,
+    "Feedback": 0.5,
+    "Mix": 0.5
+  },
+  "Chorus": {
+    "Enabled": false,
+    "Rate": 1.5,
+    "Depth": 0.005000000353903,
+    "Mix": 0.5
+  },
+  "Delay": {
+    "Enabled": false,
+    "SyncDiv": "Free",
+    "Time": 0.299999982118607,
+    "Feedback": 0.399999976158142,
+    "Mix": 0.299999982118607
+  },
+  "Reverb": {
+    "Enabled": false,
+    "RoomSize": 0.699999988079071,
+    "Damping": 0.5,
+    "Mix": 0.299999982118607
+  },
+  "Arp": {
+    "Enabled": false,
+    "Mode": "Up",
+    "Rate": 8.0,
+    "Octaves": 2.0,
+    "Gate": 0.5
+  },
+  "Glide": {
+    "Enabled": false,
+    "Mode": "Mono",
+    "Time": 0.300000011920929
+  },
+  "PitchEnv": {
+    "Enabled": false,
+    "Amount": 0.0,
+    "Time": 0.300000011920929
+  },
+  "Osc1": {
+    "Enabled": false,
+    "Waveform": "Sawtooth",
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "Osc2": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Frequency": 523.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "Osc3": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Frequency": 131.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "CrossMod": {
+    "On": false,
+    "Mode": "RingMod",
+    "SrcA": "OSC 1",
+    "SrcB": "OSC 2"
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 0.900000035762787,
+    "Depth": 0.5
+  },
+  "Lfo2": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "Lfo3": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "Lfo4": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "ModMatrix": {
+    "On": true,
+    "Slot1Source": "LFO 1",
+    "Slot1Module": "SAMPLER",
+    "Slot1Param": 0.0,
+    "Slot1Amount": 0.5,
+    "Slot2Source": "LFO 1",
+    "Slot2Module": "Off",
+    "Slot2Param": 0.0,
+    "Slot2Amount": 0.5,
+    "Slot3Source": "LFO 1",
+    "Slot3Module": "Off",
+    "Slot3Param": 0.0,
+    "Slot3Amount": 0.5,
+    "Slot4Source": "LFO 1",
+    "Slot4Module": "Off",
+    "Slot4Param": 0.0,
+    "Slot4Amount": 0.5,
+    "Slot5Source": "LFO 1",
+    "Slot5Module": "Off",
+    "Slot5Param": 0.0,
+    "Slot5Amount": 0.5,
+    "Slot6Source": "LFO 1",
+    "Slot6Module": "Off",
+    "Slot6Param": 0.0,
+    "Slot6Amount": 0.5,
+    "Slot7Source": "LFO 1",
+    "Slot7Module": "Off",
+    "Slot7Param": 0.0,
+    "Slot7Amount": 0.5,
+    "Slot8Source": "LFO 1",
+    "Slot8Module": "Off",
+    "Slot8Param": 0.0,
+    "Slot8Amount": 0.5
+  },
+  "Karplus": {
+    "Enabled": false,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "Damping": 0.5,
+    "Stretch": 0.0,
+    "Pan": 0.0
+  },
+  "Wavetable": {
+    "Enabled": false,
+    "BankIndex": 0.0,
+    "Position": 0.160000011324883,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Pan": 0.0
+  },
+  "Adsr": {
+    "Enabled": false,
+    "Attack": 0.010000000707805,
+    "Decay": 0.300000011920929,
+    "Sustain": 0.699999988079071,
+    "Release": 0.25
+  },
+  "Scope": {
+    "Enabled": true
+  },
+  "Spectrum": {
+    "Enabled": true
+  },
+  "Keyboard": {
+    "Enabled": true
+  },
+  "PresetBank": {
+    "Enabled": true
+  },
+  "Sampler": {
+    "Enabled": true,
+    "Set": 2.0,
+    "Root": 60.0,
+    "Start": 0.0,
+    "End": 1.0,
+    "Mode": "Loop",
+    "Level": 0.5,
+    "Pan": 0.350000023841858,
+    "Speed": 1.0,
+    "File": "CH_01"
+  },
+  "RackLayout": [
+    {
+      "id": "presets",
+      "zone": "MASTER BUS",
+      "pos": 0,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "compressor",
+      "zone": "MASTER BUS",
+      "pos": 1,
+      "vis": false,
+      "alignR": true
+    },
+    {
+      "id": "stereo",
+      "zone": "MASTER BUS",
+      "pos": 2,
+      "vis": true,
+      "alignR": true
+    },
+    {
+      "id": "master",
+      "zone": "MASTER BUS",
+      "pos": 3,
+      "vis": true,
+      "alignR": true
+    },
+    {
+      "id": "osc1",
+      "zone": "GENERATORS",
+      "pos": 0,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "osc2",
+      "zone": "GENERATORS",
+      "pos": 1,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "osc3",
+      "zone": "GENERATORS",
+      "pos": 2,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "sub",
+      "zone": "GENERATORS",
+      "pos": 3,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "noise",
+      "zone": "GENERATORS",
+      "pos": 4,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "stringkarplus",
+      "zone": "GENERATORS",
+      "pos": 5,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "wavetable",
+      "zone": "GENERATORS",
+      "pos": 6,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "sampler",
+      "zone": "GENERATORS",
+      "pos": 7,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "envelopeadsr",
+      "zone": "MODULATION",
+      "pos": 0,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "lfo",
+      "zone": "MODULATION",
+      "pos": 1,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "lfo2",
+      "zone": "MODULATION",
+      "pos": 2,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "lfo3",
+      "zone": "MODULATION",
+      "pos": 3,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "lfo4",
+      "zone": "MODULATION",
+      "pos": 4,
+      "vis": false,
+      "alignR": false
+    },
+    {
+      "id": "arpeggiator",
+      "zone": "MODULATION",
+      "pos": 5,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "glide",
+      "zone": "MODULATION",
+      "pos": 6,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "pitchenv",
+      "zone": "MODULATION",
+      "pos": 7,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "mixmode",
+      "zone": "MODULATION",
+      "pos": 8,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "modmatrix",
+      "zone": "MODULATION",
+      "pos": 9,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "filter",
+      "zone": "PROCESSING",
+      "pos": 0,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "formant",
+      "zone": "PROCESSING",
+      "pos": 1,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "distortion",
+      "zone": "PROCESSING",
+      "pos": 2,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "wavefold",
+      "zone": "PROCESSING",
+      "pos": 3,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "bitcrush",
+      "zone": "PROCESSING",
+      "pos": 4,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "phaser",
+      "zone": "PROCESSING",
+      "pos": 5,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "chorus",
+      "zone": "PROCESSING",
+      "pos": 6,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "delay",
+      "zone": "PROCESSING",
+      "pos": 7,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "reverb",
+      "zone": "PROCESSING",
+      "pos": 8,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "oscilloscope",
+      "zone": "VISUALIZATION",
+      "pos": 0,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "spectrum",
+      "zone": "VISUALIZATION",
+      "pos": 1,
+      "vis": true,
+      "alignR": false
+    },
+    {
+      "id": "keyboard",
+      "zone": "INPUT",
+      "pos": 0,
+      "vis": true,
+      "alignR": false
+    }
+  ]
+}

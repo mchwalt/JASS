@@ -66,6 +66,8 @@ namespace ModDest
         { "NOISE",      "noiseOn",      -1, { { "AMP",    LFOTarget::NoiseLevel }, { "PAN", LFOTarget::NoisePan } }, 2 },
         { "PITCH ENV",  "pitchEnvOn",   -1, { { "AMOUNT", LFOTarget::PitchEnvAmount } }, 1 },
         { "STEREO",     "stereoOn",     -1, { { "TIME",   LFOTarget::StereoTime }, { "WIDTH", LFOTarget::StereoWidth } }, 2 },
+        // APPENDED (Story 12.1): SAMPLER — per-voice like NOISE/KARPLUS.
+        { "SAMPLER",    "samplerOn",    -1, { { "LEVEL",  LFOTarget::SamplerLevel }, { "PAN", LFOTarget::SamplerPan } }, 2 },
     };
 
     inline constexpr int kNumModules = (int) (sizeof (modules) / sizeof (modules[0]));

@@ -5,6 +5,7 @@
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 #include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
+#include "Samples.h"       // embedded shipped SAMPLER examples (Story 12.1)
 
 // Reads/writes JASS's ".jass" JSON preset format (nested-per-module). The C# compatibility
 // (shared "%AppData%\Synthy" folder + ".synthy" extension) was dropped; migrateLegacyAppData()
@@ -126,6 +127,7 @@ namespace PresetIO
         slots[3] = "Helikopter";
         slots[4] = "Matrix Showcase";   // full MOD MATRIX demo (per-OSC + full coverage + 8 slots)
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
+        slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
         return slots;
     }
 
@@ -177,6 +179,42 @@ namespace PresetIO
         auto dir = jassFolder().getChildFile("Wavetables");
         dir.createDirectory();
         return dir;
+    }
+
+    // SAMPLER user samples (Story 12.1): LOAD copies files here so presets can re-resolve them by
+    // name across sessions ("Sampler.File").
+    inline juce::File samplesFolder()
+    {
+        auto dir = jassFolder().getChildFile("Samples");
+        dir.createDirectory();
+        return dir;
+    }
+
+    // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav) into
+    // %AppData%\JASS\Samples. Same idempotent pattern as seedWavetables below.
+    inline void seedSamples()
+    {
+        auto dir = samplesFolder();
+        for (int i = 0; i < Samples::namedResourceListSize; ++i)
+        {
+            int size = 0;
+            const char* data = Samples::getNamedResource(Samples::namedResourceList[i], size);
+            if (data == nullptr || size <= 0) continue;
+            auto file = dir.getChildFile(Samples::getNamedResourceOriginalFilename(Samples::namedResourceList[i]));
+            if (! file.existsAsFile())
+                file.replaceWithData(data, (size_t) size);
+        }
+    }
+
+    // Pre-load every sample from the Samples folder into the store at startup (message thread),
+    // so the SET combo is populated without a manual LOAD. Alphabetical => deterministic indices
+    // (stable preset SET references as long as the folder is stable); bounded by the store caps.
+    inline void preloadSamples()
+    {
+        auto files = samplesFolder().findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff");
+        files.sort();
+        for (auto& f : files)
+            SampleBankStore::instance().loadFile(f);
     }
 
     // First-run seeding of the shipped example wavetables (embedded from Wavetables/*.wav). Same
@@ -269,6 +307,15 @@ namespace PresetIO
         // omitted (clean preset, missing⇒default on load; the C# app ignores the unknown field).
         if (auto s = a.state.getProperty(juce::Identifier("rackLayout")).toString(); s.isNotEmpty())
             root->setProperty("RackLayout", juce::JSON::parse(s));
+
+        // SAMPLER (Story 12.1): persist the selected sample's NAME alongside the session-local SET
+        // index, so applyVar can re-resolve it from the Samples folder across sessions.
+        {
+            const int idx = static_cast<int>(*a.getRawParameterValue(ID::samplerSet));
+            if (const auto* set = SampleBankStore::instance().getSet(idx))
+                if (auto* mod = root->getProperty("Sampler").getDynamicObject())
+                    mod->setProperty("File", set->getName());
+        }
 
         return juce::var(root);
     }
@@ -487,6 +534,29 @@ namespace PresetIO
 
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
+
+        // SAMPLER (Story 12.1): the SET param is a session-local index, so the preset also carries
+        // the selected sample's NAME ("Sampler.File", written by toVar). Re-resolve it: already
+        // loaded => re-select; else load "<name>.*" from %AppData%\JASS\Samples. Missing file =>
+        // the combo stays where the index landed (documented: samples live in the Samples folder).
+        // Message-thread only (applyVar always is), like every store load.
+        if (auto* mod = v["Sampler"].getDynamicObject())
+        {
+            const juce::String name = mod->getProperty("File").toString();
+            if (name.isNotEmpty())
+            {
+                int idx = SampleBankStore::instance().indexOf(name);
+                if (idx < 0)
+                {
+                    auto matches = samplesFolder().findChildFiles(juce::File::findFiles, false, name + ".*");
+                    if (! matches.isEmpty())
+                        idx = SampleBankStore::instance().loadFile(matches.getReference(0));
+                }
+                if (idx >= 0)
+                    if (auto* p = a.getParameter(ID::samplerSet))
+                        p->setValueNotifyingHost(p->convertTo0to1((float) idx));
+            }
+        }
     }
 
     // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,

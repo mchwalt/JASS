@@ -58,6 +58,11 @@ info** so nothing is hidden and every control explains itself.
 - **Distortion** (soft/hard clip, foldback), **wavefolding**, **bitcrusher**
 - **Compressor**, **phaser/flanger**
 - **Delay** (tempo sync), **chorus**, **reverb**
+- **SAMPLER** — play your own recordings (WAV/AIFF, ≤60 s) as a sound source through
+  the whole chain: ROOT-key tape-style transposition, START/END, One-Shot / Loop
+  (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
+  stereo files rendered as two placed sub-sources. Ships with an example catalog
+  (seeded to `%AppData%\JASS\Samples`); presets reference samples by name.
 - **STEREO output stage** with a per-generator **PAN** and five modes: Mono,
   **Pseudo-stereo** (Haas widener, on by default), **Stereo-Pan**, **Binaural**
   (parametric headphone 3-D) and **Kunstkopf (HRTF)** — real out-of-head placement

@@ -476,6 +476,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         processor.getKeyboardState(), juce::MidiKeyboardComponent::horizontalKeyboard);
     keyboard->setAvailableRange(21, 108);  // A0 .. C8 (full 88-key piano)
     keyboard->setKeyWidth(20.0f);          // FillWidthKeyboard::resized() spreads keys to fill its width
+    keyboard->setOctaveForMiddleC(4);      // label MIDI 60 as "C4" (Roland convention) — matches the
+                                           // docs/help everywhere ("FREQ knobs = sound at C4", SAMPLER
+                                           // ROOT default 60 = C4); JUCE's default label was C3.
     keyboard->setKeyPressBaseOctave(kbBaseOctave);
     // Custom computer-key → note map for a German (QWERTZ) keyboard: HOME row = white keys, TOP row =
     // black keys, spanning the full width from 'a' up to the 'ä'/'#' keys (~2.5 octaves). JUCE polls
@@ -1321,6 +1324,51 @@ void SynthyEditor::buildRack()
           Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
           Kmod(P::wavetablePan, "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
         [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
+    // SAMPLER (Story 12.1) — recordings as a generator: dynamic SET combo over the session's
+    // SampleBankStore + LOAD (which COPIES the file into %AppData%\JASS\Samples so presets can
+    // re-resolve it by name). Hand-built body like WAVETABLE; default-HIDDEN like COMPRESSOR
+    // (show via MODULES) so the GENERATORS zone stays compact.
+    {
+        ModuleDescriptor d;
+        d.sizeClass = SizeClass::W12H1; d.type = ModuleType::Generator;
+        d.id = "sampler"; d.title = "SAMPLER";
+        d.defaultZone = Rack::Zone::Generators;
+        d.defaultVisible = true;    // visible from the start (user decision) — but disabled until switched on
+        d.enableParam = P::samplerOn;
+        // SET selects a STORE INDEX: bind by item index (indexIsValue), NOT via ComboBoxAttachment —
+        // that maps item positions across the whole 0..31 range and lands on the wrong sample
+        // (the classic combo-index bug class; found by ear: "Brass" played CH_01).
+        Combo setCombo{ P::samplerSet, "SET",
+                        std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
+        setCombo.indexIsValue = true;
+        d.body = {
+            setCombo,
+            FileAction{ "LOAD",
+                        [this] (juce::File f)
+                        {
+                            // Copy into the Samples folder first (preset portability), then load.
+                            auto dest = PresetIO::samplesFolder().getChildFile(f.getFileName());
+                            if (! dest.existsAsFile() && ! f.copyFileTo(dest))
+                                dest = f;   // copy failed (exotic path) → load in place
+                            const int idx = SampleBankStore::instance().loadFile(dest);
+                            if (idx >= 0)
+                            {
+                                if (auto* pr = processor.getAPVTS().getParameter(P::samplerSet))
+                                    pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
+                            }
+                            else
+                                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                                    "SAMPLER", "Could not load this file: unreadable, longer than 60 s, or the sample list is full (32).");
+                        },
+                        { juce::String(P::samplerSet) },   // refresh the SET combo after load
+                        PresetIO::samplesFolder(), "*.wav;*.aif;*.aiff" },
+            Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
+            K(P::samplerRoot, "ROOT"), K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
+            K(P::samplerSpeed, "SPEED"),
+            Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
+            Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
+        addRackModule(std::move(d));
+    }
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
