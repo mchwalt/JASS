@@ -45,6 +45,8 @@ info** so nothing is hidden and every control explains itself.
   (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
   stereo files rendered as two placed sub-sources. Ships with an example catalog
   (seeded to `%AppData%\JASS\Samples`); presets reference samples by name.
+
+**Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
 
 **Envelopes & modulation**
