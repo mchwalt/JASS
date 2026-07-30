@@ -48,6 +48,9 @@ info** so nothing is hidden and every control explains itself.
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
+- **MIDI keyboard / controller** — the synth accepts MIDI note input with velocity
+  (a mod-matrix source): in the standalone pick the device in the audio/MIDI
+  settings; as a VST3 it receives MIDI from the DAW track
 
 **Envelopes & modulation**
 - **ADSR** + **pitch envelope**
