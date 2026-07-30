@@ -10,6 +10,17 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.07.15] – 2026-07-30
+
+Collects everything released as v2026.07.1 – v2026.07.15 (the automated per-merge
+releases since 2026.07.0; the CHANGELOG had not been promoted along the way).
+
+### Changed
+- **README** — SAMPLER moved under *Sound sources*; new *Input devices* section
+  (on-screen keyboard + MIDI keyboard/controller).
+- **Local dev builds** now default to CalVer `2026.7.15` (header display); release
+  builds keep getting their exact per-merge CalVer from CI.
+
 ### Added
 - **SAMPLER module** (Story 12.1) — play your own recordings (WAV/AIFF, ≤60 s, up to 32
   loaded) as a sound source through the whole JASS chain (filter, wavefolder, mod matrix,
