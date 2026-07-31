@@ -1,8 +1,8 @@
-# JASS `.jass` Preset Format (nested, v4)
+# JASS `.jass` Preset Format (nested, v6)
 
 JASS stores patches as **JSON** files with the extension `.jass`. The format is
 **nested** (one object per module) and versioned; the current version is
-**`FormatVersion: 4`**.
+**`FormatVersion: 6`** (defined as `PresetIO::kFormatVersion`).
 
 - **Format:** JSON, UTF‑8. File extension `.jass`.
 - **Canonical source:** each module declares its own parameters and JSON shape in
@@ -37,7 +37,7 @@ nested format on load.
 
 ```jsonc
 {
-  "FormatVersion": 4,
+  "FormatVersion": 6,
   "Name": "Matrix Demo",
   "Modified": false,        // LiveState only: true = unsaved working state (header shows "Current State")
 
@@ -53,7 +53,7 @@ nested format on load.
   "Distortion": { "Enabled": false, "Type": "SoftClip", "Drive": 0.5, "Mix": 1.0 },
   "Wavefold":   { "Enabled": false, "Drive": 0.3, "Symmetry": 0.0, "Mix": 1.0 },
   "Bitcrush":   { "Enabled": false, "Bits": 8.0, "Rate": 1.0, "Mix": 1.0 },
-  // … Oscillators, Wavetable, LFOs (indexed 1..4), ModMatrix (6 slots),
+  // … Oscillators, Wavetable, LFOs (indexed 1..4), ModMatrix (8 slots),
   //   ADSR, PitchEnv, Glide, Arp, Delay, Chorus, Reverb, Karplus, CrossMod, etc.
 
   // Optional. Only present when the rack layout differs from the factory default.
@@ -72,8 +72,11 @@ nested format on load.
   fields, so its round‑trip is unaffected.
 - **`FormatVersion`** is reserved for *value* migrations (a field whose meaning
   changed). Merely adding new fields needs no version bump — the missing⇒default
-  rule handles that. `v4` folded the LFO's built‑in target into modulation‑matrix
-  slots. This integer contract is independent of the app's CalVer version.
+  rule handles that. Version history: `v3` = nested per module (flat before);
+  `v4` folded the LFO's built‑in target into modulation‑matrix slots; `v5` split
+  the matrix DEST into MODULE + PARAM combos; `v6` sorted the matrix
+  module/param catalog A→Z (the persisted PARAM index was remapped). This
+  integer contract is independent of the app's CalVer version.
 - **Migration & backups.** Presets older than the current `FormatVersion` are
   upgraded to the current format — both by the startup batch pass (`convertOldPresets`)
   and when you open an older file via the LOAD dialog. **Before rewriting, the original
