@@ -11,6 +11,9 @@ JASS stores patches as **JSON** files with the extension `.jass`. The format is
   are the single source of truth for field names. This doc describes the
   *structure*.
 - **Serializer:** `Source/Audio/PresetIO.h`.
+- **Terms & abbreviations:** see the [Glossary](Glossary.md) (e.g.
+  [APVTS](Glossary.md#apvts), [LiveState](Glossary.md#livestate),
+  [FormatVersion](Glossary.md#formatversion), [Seeding](Glossary.md#seeding)).
 
 ## Locations (`%AppData%\Roaming\JASS\`)
 

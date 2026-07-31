@@ -7,35 +7,39 @@ destinations and languages.
 
 Companion docs: [`ARCHITECTURE.md`](ARCHITECTURE.md) (layers, signal flow,
 threading) · [`DEVELOPER_GUIDE.md`](DEVELOPER_GUIDE.md) (build, dependencies,
-gotchas) · [`JASS_Preset_Format.md`](JASS_Preset_Format.md) (preset format).
+gotchas) · [`JASS_Preset_Format.md`](JASS_Preset_Format.md) (preset format) ·
+[`Glossary.md`](Glossary.md) (abbreviations & domain terms — special terms
+below link there).
 
 ---
 
 ## 1. Concept
 
 A synth module (FILTER, LFO 2, SAMPLER, …) is declared **once**, in a
-`Source/Modules/<Name>Specs.h` header, as a `ModuleSpec`. From that single
-declaration the system *generates*:
+`Source/Modules/<Name>Specs.h` header, as a
+[`ModuleSpec`](Glossary.md#modulespec). From that single declaration the
+system *generates*:
 
-1. the **APVTS parameter layout** — `Parameters::createLayout()` is one call:
+1. the **[APVTS](Glossary.md#apvts) parameter layout** — `Parameters::createLayout()` is one call:
    `Modules::appendAllParameters(params)`;
 2. the **rack UI descriptor** — `makeModuleDescriptor(spec)` builds the
    module's body from its parameters;
-3. the **nested `.jass` persistence** — `Modules::writeState/readState` walk
+3. the **nested [`.jass`](Glossary.md#jass-format) persistence** — `Modules::writeState/readState` walk
    the specs, one JSON object per module.
 
-**Hand-written remains** (deliberately): the DSP `process()` of each module
+**Hand-written remains** (deliberately): the [DSP](Glossary.md#dsp) `process()` of each module
 (`Source/DSP/`), the param → DSP wiring in `Parameters::applyToVoice`, and the
 UI bodies of ~9 modules that need dynamic providers, file dialogs or injected
 display components (see [§6](#6-editor-bound-modules)).
 
-The core compatibility contract everywhere in this system is **append-only**:
+The core compatibility contract everywhere in this system is
+**[append-only](Glossary.md#append-only)**:
 
 - `Modules::all()` order **is** the APVTS parameter order — new modules are
   appended at the end, never inserted.
 - Within a spec, new parameters are appended at the end of `params`.
 - Choice item order must equal the parameter's enum order
-  (`ComboBoxAttachment` maps by index).
+  ([`ComboBoxAttachment`](Glossary.md#attachment) maps by index).
 - Mod-target enums and the matrix catalog are append-only (indices are
   persisted).
 - Preset fields are never renamed; missing ⇒ factory default.
@@ -57,7 +61,7 @@ init, so the order matters):
 | 6 | `float defaultValue` | Float/Int raw value · Bool 0/1 · Choice **index**. |
 | 7 | `juce::StringArray choices` | Choice items — **canonical** (APVTS *and* persistence strings). |
 | 8 | `juce::StringArray displayChoices` | Optional UI-only labels (e.g. `"SoftClip"` → `"Soft Clip"`); empty ⇒ use `choices`. |
-| 9 | `LFOTarget modTarget` | `Off` ⇒ no live mod ring on this knob. |
+| 9 | `LFOTarget modTarget` | `Off` ⇒ no live [mod ring](Glossary.md#mod-ring) on this knob. |
 | 10 | `bool freqDisplay` | Knob shows the *played* frequency (base × note ratio) with write-back through the inverse. |
 | 11 | `bool showInBody` | `false` ⇒ APVTS param exists but no rack control (hidden LFO `Target`, SUB `Octave`, SAMPLER `Set`). |
 
@@ -254,9 +258,10 @@ clean-rebuild rule below):
 | `ModTargets::kCount` | `LiveModFeed::byTarget`, `ModMatrixConfig::kNumTargets`, `gMod[]`, per-voice offset arrays |
 | `kNumPanGenerators` (9, `ChannelStrip.h`) | per-voice panner arrays |
 
-> ⚠️ **Clean-rebuild rule (ODR trap).** These constants size structs that
-> voices embed **by value** in headers. Growing them changes struct sizes; an
-> *incremental* MSBuild then mixes TUs with old and new layouts →
+> ⚠️ **[Clean-rebuild](Glossary.md#clean-rebuild) rule ([ODR](Glossary.md#odr) trap).**
+> These constants size structs that voices embed **by value** in headers.
+> Growing them changes struct sizes; an *incremental* MSBuild then mixes
+> [TUs](Glossary.md#tu) with old and new layouts →
 > heap corruption / `0xC0000005` at startup. After changing any header-struct
 > size: build with **`/t:Rebuild`**. (Bitten repeatedly: `ModSlot` growth,
 > `kNumPanGenerators` 7→9, stereo `WaveformCapture`.)
@@ -267,7 +272,7 @@ clean-rebuild rule below):
 
 Written by `PresetIO::toVar` / read by `PresetIO::applyVar`
 (`Source/Audio/PresetIO.h`); the per-module work is spec-driven
-(`Modules::writeState/readState`). Shape (FormatVersion **6**):
+(`Modules::writeState/readState`). Shape ([FormatVersion](Glossary.md#formatversion) **6**):
 
 ```jsonc
 {
@@ -293,10 +298,11 @@ Rules:
 - Adding fields never bumps `kFormatVersion`; only *value/meaning* changes do
   (then write a migration — see the chain in `PresetIO.h` and
   [`JASS_Preset_Format.md`](JASS_Preset_Format.md)).
-- Non-spec side channels handled directly by `PresetIO`: `RackLayout`
-  (mirrored from the `apvts.state` string property), `Sampler.File`
-  (re-resolved by name from `%AppData%\JASS\Samples` on load),
-  `PresetBanks.json` (global app file, not part of presets).
+- Non-spec side channels handled directly by `PresetIO`:
+  [`RackLayout`](Glossary.md#racklayout) (mirrored from the `apvts.state`
+  string property), `Sampler.File` (re-resolved by name from
+  `%AppData%\JASS\Samples` on load), [`PresetBanks.json`](Glossary.md#preset-bank)
+  (global app file, not part of presets).
 
 ---
 
@@ -305,7 +311,7 @@ Rules:
 - One markdown file per help topic: `Resources/EN/<id>.md` +
   `Resources/DE/<id>.md` (module IDs + `zone-*` IDs). The **filename stem is
   the help ID**.
-- Embedded via **one `juce_add_binary_data` target per language**
+- Embedded via **one [`juce_add_binary_data`](Glossary.md#binary-data) target per language**
   (`JASS_HelpEN`/`JASS_HelpDE` with distinct `NAMESPACE` + `HEADER_NAME` —
   JUCE derives symbols from basenames only, so EN/DE files would collide in a
   single target).
@@ -370,8 +376,8 @@ Rules:
 - **New matrix slot count**: `ModMatrixConfig::kNumSlots` (spec loop follows).
 - **New size class**: one `SizeClass` enum entry + one `sizeClassSpec` row.
 - **New wavetable/sample assets**: drop files into `Wavetables/`/`Samples/`
-  (globbed by CMake, embedded, seeded on first run — idempotent, existing
-  user files never overwritten).
+  (globbed by CMake, embedded, [seeded](Glossary.md#seeding) on first run —
+  idempotent, existing user files never overwritten).
 - **New demo preset**: file in `DemoPresets/` + CMake reconfigure +
   optionally a `defaultPresetBank()` slot + README. Seeding is idempotent —
   replace the AppData copy manually when re-tuning an existing preset.

@@ -6,7 +6,9 @@ configuration surface, repo conventions, and the known build gotchas.
 
 Companion docs: [`ARCHITECTURE.md`](ARCHITECTURE.md) ·
 [`MODULE_SYSTEM.md`](MODULE_SYSTEM.md) ·
-[`JASS_Preset_Format.md`](JASS_Preset_Format.md).
+[`JASS_Preset_Format.md`](JASS_Preset_Format.md) ·
+[`Glossary.md`](Glossary.md) (abbreviations & domain terms — special terms
+below link there).
 
 ---
 
@@ -16,8 +18,9 @@ Companion docs: [`ARCHITECTURE.md`](ARCHITECTURE.md) ·
   CMake (`…\VS\2022\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe`
   if `cmake` is not on your PATH)
 - **CMake ≥ 3.22**, **Git**
-- No package manager, no Python, no other SDKs — JUCE is vendored, all data
-  dependencies are committed.
+- No package manager, no Python, no other SDKs — [JUCE](Glossary.md#juce) is
+  vendored as a Git [submodule](Glossary.md#submodule), all data dependencies
+  are committed.
 
 ```powershell
 git clone --recurse-submodules <repo-url> JASS
@@ -38,8 +41,8 @@ cmake -B build -G "Visual Studio 17 2022"
 
 | Artifact | Path |
 |---|---|
-| Standalone | `build\JASS_artefacts\Release\Standalone\JASS.exe` |
-| VST3 bundle | `build\JASS_artefacts\Release\VST3\JASS.vst3\` (no auto-install — copy to `C:\Program Files\Common Files\VST3\` manually) |
+| [Standalone](Glossary.md#standalone) | `build\JASS_artefacts\Release\Standalone\JASS.exe` |
+| [VST3](Glossary.md#vst3) bundle | `build\JASS_artefacts\Release\VST3\JASS.vst3\` (no auto-install — copy to `C:\Program Files\Common Files\VST3\` manually) |
 | Shared code lib | `build\JASS_artefacts\Release\JASS_SharedCode.lib` |
 | Generated code | `build\JASS_artefacts\JuceLibraryCode\` (`JuceHeader.h`, `JASS_resources.rc`, `Info.txt`) |
 
@@ -48,7 +51,7 @@ cmake -B build -G "Visual Studio 17 2022"
 `JASS_HelpDE`, `JASS_DemoPresets`, `JASS_Wavetables`, `JASS_Samples`),
 `JASS_All`.
 
-**Linux** builds are exercised only by CI (see [§5](#5-ci--releases) for the
+**Linux** builds are exercised only by [CI](Glossary.md#ci) (see [§5](#5-ci--releases) for the
 apt dependency list and the Ninja invocation). The project has never been
 built locally on Linux — GCC gets JUCE's much stricter recommended warning set
 (`-Wconversion -Wsign-conversion -Wfloat-equal …`) that MSVC's `/W4` does not.
@@ -81,7 +84,7 @@ project(JASS VERSION ${JASS_CALVER})  # numeric CalVer, month unpadded
 - `target_sources` lists **10 `.cpp` files** — everything else in `Source/` is
   header-only. Adding a header-only DSP/spec module needs no CMake change;
   **adding a `.cpp` does**.
-- **Five `juce_add_binary_data` targets**, each with its own `NAMESPACE` +
+- **Five [`juce_add_binary_data`](Glossary.md#binary-data) targets**, each with its own `NAMESPACE` +
   `HEADER_NAME` (JUCE derives symbols from file *basenames* only, so EN/DE
   files with equal names would collide in one target):
 
@@ -123,7 +126,7 @@ project(JASS VERSION ${JASS_CALVER})  # numeric CalVer, month unpadded
   The JUCE working tree may show many files as dirty from EOL normalisation —
   that's noise; only the submodule pointer matters.
 
-### 3.2 MIT KEMAR HRTF data (committed, not fetched)
+### 3.2 MIT [KEMAR](Glossary.md#kemar) [HRTF](Glossary.md#hrtf) data (committed, not fetched)
 
 `Source/DSP/KemarHrir.h` (~66 KB) is **generated** by
 `tools/gen_kemar_hrir.py` from the MIT KEMAR compact set (Bill Gardner & Keith
@@ -142,7 +145,7 @@ python tools/gen_kemar_hrir.py --input <path>/compact/elev0 --output Source/DSP/
 
 and **clean-rebuild** (the table size is compiled into the voice).
 
-### 3.3 Embedded assets (all committed, all seeded to `%AppData%\JASS` on first run)
+### 3.3 Embedded assets (all committed, all [seeded](Glossary.md#seeding) to [`%AppData%\JASS`](Glossary.md#appdata) on first run)
 
 | Repo folder | Contents | Runtime role |
 |---|---|---|
@@ -173,7 +176,7 @@ DSP with your own FFT/cmath):
 
 Two independent version numbers — don't conflate them:
 
-1. **App version — CalVer `YYYY.MM.MICRO`** (e.g. `2026.07.15`).
+1. **App version — [CalVer](Glossary.md#calver) `YYYY.MM.MICRO`** (e.g. `2026.07.15`).
    - Single source of truth: `JASS_CALVER` in `CMakeLists.txt` →
      `project(JASS VERSION …)` → JUCE's `ProjectInfo::versionString` /
      `JucePlugin_VersionString` → `JASS::versionString()`
@@ -184,9 +187,9 @@ Two independent version numbers — don't conflate them:
      stay near the released number.
    - Shown in the header subtitle and the right-click title menu (which also
      shows the loaded preset's format version).
-2. **Preset `FormatVersion`** — an integer schema contract
+2. **Preset [`FormatVersion`](Glossary.md#formatversion)** — an integer schema contract
    (`PresetIO::kFormatVersion`, currently **6**). Bumped only for *value*
-   migrations; additive fields ride on missing⇒default. See
+   [migrations](Glossary.md#migration); additive fields ride on missing⇒default. See
    [`JASS_Preset_Format.md`](JASS_Preset_Format.md).
 
 ---
@@ -196,7 +199,7 @@ Two independent version numbers — don't conflate them:
 - **Trigger**: push to `main` (i.e. every PR merge), with `paths-ignore` for
   `**.md`, `docs/**`, `_bmad-output/**`, `.githooks/**` — docs-only merges
   release nothing. Plus manual `workflow_dispatch`.
-- **Version job**: `MICRO = count of existing v<year>.<month>.* tags` — the
+- **Version job**: [`MICRO`](Glossary.md#micro)` = count of existing v<year>.<month>.* tags` — the
   tag list is the release source of truth (a deliberately rejected
   alternative was auto-committing bumps back to `main`). Outputs both the
   padded display CalVer and the unpadded CMake variant.
@@ -253,10 +256,10 @@ Two independent version numbers — don't conflate them:
 | Path | Purpose |
 |---|---|
 | `Presets\*.jass` | named presets (SAVE/LOAD dialogs default here) |
-| `LiveState.jass` | auto-saved working state (Standalone; loaded at startup, saved debounced ~1.5 s and on exit) |
+| [`LiveState.jass`](Glossary.md#livestate) | auto-saved working state (Standalone; loaded at startup, saved debounced ~1.5 s and on exit) |
 | `Wavetables\*.wav` | seeded examples + user WAV imports (LOAD WAV opens here) |
 | `Samples\*.wav` | seeded examples + user samples (SAMPLER LOAD **copies** files here so presets can re-resolve by name) |
-| `PresetBanks.json` | global F1–F12 assignments (array of preset names) |
+| [`PresetBanks.json`](Glossary.md#preset-bank) | global F1–F12 assignments (array of preset names) |
 | `ui-language.txt` | help language (`EN`/`DE`; written once changed) |
 | `title-anim.txt` | 3-D title animation flag (`0` = off) |
 | `PresetsBackup\` | originals backed up before format migration rewrites |
@@ -275,7 +278,7 @@ suppresses the migration.
 |---|---|
 | Help language combo (header) | `ui-language.txt` |
 | Right-click on the title: version info, preset-format info, 3-D animation toggle | `title-anim.txt` |
-| MODULES panel: show/hide, reorder, zone move, L/R alignment, Reset layout | `rackLayout` property on `apvts.state` → LiveState/preset `RackLayout` |
+| MODULES panel: show/hide, reorder, zone move, L/R alignment, Reset layout | [`rackLayout`](Glossary.md#racklayout) property on [`apvts.state`](Glossary.md#apvts) → LiveState/preset `RackLayout` |
 | F1–F12 preset bank (single = load, double = assign) | `PresetBanks.json` |
 | Audio/MIDI settings (standalone "Options" button — JUCE dialog): output device, sample rate, buffer, **MIDI input devices** | `JASS.settings` |
 
@@ -367,7 +370,7 @@ a header struct embedded in `SynthVoice` requires a clean rebuild**
 
 ## 10. Known build gotchas
 
-1. **ODR/ABI trap — clean rebuild after header struct-size changes.**
+1. **[ODR/ABI trap](Glossary.md#odr) — [clean rebuild](Glossary.md#clean-rebuild) after header struct-size changes.**
    Growing a struct that `SynthVoice` embeds by value (mod-slot arrays,
    `kNumPanGenerators`, `LiveModFeed`, `WaveformCapture`, the HRIR table, …)
    with an *incremental* build leaves TUs compiled against different layouts →
@@ -406,6 +409,6 @@ a header struct embedded in `SynthVoice` requires a clean rebuild**
    needs no CMake change.
 9. **UI/layout edits sometimes don't take with incremental builds** (stale
    layout despite fresh timestamps) — when in doubt, `/t:Rebuild`.
-10. **Test-window trap**: the standalone restores its window size from
+10. **Test-window trap**: the [standalone](Glossary.md#standalone) restores its window size from
     `JASS.settings`; after design-height changes an old window can clip the
     new UI — delete the settings file when testing layout changes.
