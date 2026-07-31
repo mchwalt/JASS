@@ -143,12 +143,23 @@ Source/
 └─ UI/                    rack editor + knob/display components
 ```
 
-Architecture concept: **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Architektur_Konzept.md)**.
+Architecture details: **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** ·
+module-spec system: **[`docs/MODULE_SYSTEM.md`](docs/MODULE_SYSTEM.md)**.
 
 ## Docs
 
+**For developers:**
+
+- **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** — system architecture: layers,
+  audio signal flow, threading & RT-safety, state/persistence, UI architecture
+- **[`docs/MODULE_SYSTEM.md`](docs/MODULE_SYSTEM.md)** — the declarative module-spec
+  system ("one module = one place") + recipes for adding parameters & modules
+- **[`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md)** — build, dependencies,
+  versioning/CI, all configuration surfaces, compile-time tunables, build gotchas
+
+**Reference:**
+
 - **[`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)** — `.jass` preset format (nested v6)
-- **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Architektur_Konzept.md)** — declarative module-spec architecture
 - **[`docs/Glossary.md`](docs/Glossary.md)** — glossary
 - `docs/notes/` — internal ideas, research & cheat-sheet notes (not official docs)
 

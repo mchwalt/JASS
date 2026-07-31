@@ -10,6 +10,22 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **Developer documentation** — three new docs linked from the README:
+  `docs/ARCHITECTURE.md` (layers, signal flow, threading/RT-safety, state, UI),
+  `docs/MODULE_SYSTEM.md` (declarative module-spec system + extension recipes)
+  and `docs/DEVELOPER_GUIDE.md` (build, dependencies, versioning/CI, all
+  configuration surfaces, compile-time tunables, build gotchas).
+
+### Changed
+- `docs/JASS_Preset_Format.md` updated to the current FormatVersion 6 (was
+  stale at v4) with the full v3→v6 version history.
+
+### Removed
+- `docs/Modul_Architektur_Konzept.md` — the 2026-07-18 design draft is
+  superseded by `docs/MODULE_SYSTEM.md`, which documents the *implemented*
+  state (the draft's `legacyKey`/array-persistence proposals were never built).
+
 ## [2026.07.15] – 2026-07-30
 
 Collects everything released as v2026.07.1 – v2026.07.15 (the automated per-merge

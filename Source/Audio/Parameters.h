@@ -257,7 +257,7 @@ namespace Parameters
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
         // ALL modules are spec-driven now: every APVTS parameter comes from a ModuleSpec
-        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/Modul_Architektur_Konzept.md.
+        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/MODULE_SYSTEM.md.
         // The DSP wiring in applyToVoice + PresetIO still read the ID:: strings (unchanged ids).
         Modules::appendAllParameters(params);
 
