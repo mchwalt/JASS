@@ -1378,6 +1378,8 @@ void SynthyEditor::buildRack()
             Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
             rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
             K(P::samplerSpeed, "SPEED"),
+            // 12.3: pitch/time decoupling — key = pitch only, SPEED = time only (~60 ms latency).
+            Toggle{ P::samplerStretch, "STRETCH" },
             Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));

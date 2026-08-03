@@ -22,6 +22,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   name like single samples; sets live in `%AppData%\JASS\Samples\<SetName>\`.
 - **SAMPLER load errors now name the file and the reason** (e.g. which file of a
   set is unreadable) instead of a generic limits message.
+- **SAMPLER STRETCH mode** (Story 12.3) — pitch/time decoupling: the key sets only
+  the pitch, SPEED only the tempo, so loops keep their rhythm on every key and all
+  loop voices stay beat-locked regardless of pitch (the tape-mode hard resync
+  becomes unnecessary by construction). Engine: **Signalsmith Stretch** (MIT,
+  vendored under `Source/ThirdParty/signalsmith-stretch/`), chosen by a measured
+  bake-off (~35–40 dB spectral SNR at ±7/±12 st vs. negative SNR for a naive
+  granular; ~19 % of one core for 16 stereo voices). The engine's ~60 ms
+  warm-up is pre-computed at note-on (`outputSeek`, measured 0.57 ms/voice),
+  so attacks stay immediate even when playing fast. Off by default — existing
+  presets and the classic tape behaviour are unchanged.
 
 - **Developer documentation** — three new docs linked from the README:
   `docs/ARCHITECTURE.md` (layers, signal flow, threading/RT-safety, state, UI),
@@ -41,6 +51,9 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **`Samples/Talkbox.wav` was MS-ADPCM-compressed** — JUCE cannot decode that,
   so the shipped sample had never actually loaded (silently skipped since its
   introduction). Re-encoded as 16-bit PCM; it now appears in the SET list.
+- **Rejected folder/`.sfz` imports no longer leave a dead copy** in
+  `%AppData%\JASS\Samples` (imports now validate before copying — a leftover
+  folder would have silently failed at every startup preload).
 
 ### Removed
 - `docs/Modul_Architektur_Konzept.md` — the 2026-07-18 design draft is

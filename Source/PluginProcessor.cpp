@@ -694,8 +694,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             const double lenFile = std::abs(s1 - s0) * (double) (zone->getLength() - 1);
             if (lenFile > 4.0)
             {
-                const double rate = std::pow(2.0, (60.0 - root) / 12.0)
-                                  * zone->fileSampleRate / getSampleRate() * speed;
+                // 12.3 STRETCH mode: the round advances on the TIME axis only (speed, no pitch
+                // factor) — voices walk it identically, so the clock must too. Tape mode keeps
+                // the root-rate round of 12.1.
+                const bool stretchOn = *apvts.getRawParameterValue(ID::samplerStretch) > 0.5f;
+                const double pitchPart = stretchOn ? 1.0 : std::pow(2.0, (60.0 - root) / 12.0);
+                const double rate = pitchPart * zone->fileSampleRate / getSampleRate() * speed;
                 samplerMasterFrac += (double) buffer.getNumSamples() * rate / lenFile;
                 samplerMasterFrac -= std::floor(samplerMasterFrac);
             }

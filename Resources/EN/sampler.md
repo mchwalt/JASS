@@ -15,6 +15,10 @@ wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
 - **START / END** trim the played region; **MODE**: One-Shot, Loop (click-free crossfaded join),
   Reverse, Rev-Loop. **SPEED** (0.25×–4×) multiplies the playback rate on top of the key,
   tape-style — pitch moves with it.
+- **STRETCH** decouples pitch from time: the key sets only the pitch, SPEED only the tempo —
+  a loop keeps its rhythm on every key, and all loop voices stay beat-locked regardless of
+  pitch. The attack is pre-computed at note-on, so playing stays immediate; the trade-off is
+  a subtle phase-vocoder character on transients. Off = classic tape behaviour.
 - **Stereo files stay stereo**: left/right render as two placed sources around PAN; in the Mono and
   Pseudo-Stereo output modes they collapse to a mono downmix.
 - **Limits:** 60 s per file, 5 minutes of audio per set, 32 sets.
