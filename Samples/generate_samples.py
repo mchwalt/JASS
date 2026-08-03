@@ -70,6 +70,43 @@ def sweep():
         out.append(0.8 * (0.7 * lp + tone) * env)
     return [out]
 
+# 4) EPiano multisample (Story 12.2) - FM e-piano rendered at FIVE roots (C2..C6), shipped as
+#    the folder-naming-convention showcase. Filenames use the "<Folder>__<File>" seeding
+#    convention (PresetIO::seedSamples splits at "__" into %AppData%\JASS\Samples\EPiano\...),
+#    where the per-file note suffix (_C2) IS the mapping.
+def epiano(f0):
+    dur = 2.2
+    n = int(FS * dur)
+    out = []
+    for i in range(n):
+        t = i / FS
+        tine = 3.0 * math.exp(-8.0 * t)                        # fast-decaying FM index = attack "ping"
+        s = math.sin(2 * math.pi * f0 * t + tine * math.sin(2 * math.pi * f0 * 14.0 * t))
+        s += 0.45 * math.sin(2 * math.pi * f0 * 2.0 * t) * math.exp(-2.5 * t)   # body octave
+        out.append(0.75 * s * math.exp(-1.3 * t))
+    return [out]
+
+# 5) Organ multisample (Story 12.2) - additive drawbar tone at THREE roots, mapped by the
+#    shipped example Organ__Organ.sfz (the .sfz-import showcase; see that file).
+def organ(f0):
+    dur = 2.0
+    n = int(FS * dur)
+    out = []
+    for i in range(n):
+        t = i / FS
+        vib = 1.0 + 0.004 * math.sin(2 * math.pi * 5.7 * t)    # gentle chorus-y vibrato
+        s = (math.sin(2 * math.pi * f0 * vib * t)
+             + 0.5 * math.sin(2 * math.pi * f0 * 2.0 * t)
+             + 0.3 * math.sin(2 * math.pi * f0 * 3.0 * vib * t)
+             + 0.2 * math.sin(2 * math.pi * f0 * 4.0 * t))
+        env = min(t / 0.015, 1.0) * min((dur - t) / 0.05, 1.0)  # click-free edges
+        out.append(0.38 * s * env)
+    return [out]
+
 write_wav("Bell_C4.wav", bell())
 write_wav("Texture_C4.wav", texture())
 write_wav("Sweep_C4.wav", sweep())
+for note, f in [("C2", 65.41), ("C3", 130.81), ("C4", 261.63), ("C5", 523.25), ("C6", 1046.50)]:
+    write_wav(f"EPiano__EP_{note}.wav", epiano(f))
+for note, f in [("C2", 65.41), ("C4", 261.63), ("C6", 1046.50)]:
+    write_wav(f"Organ__O_{note}.wav", organ(f))

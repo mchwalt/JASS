@@ -238,11 +238,15 @@ namespace rack
             }
             else if (auto* t = std::get_if<Toggle> (&el))
             {
-                auto* btn = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton (t->label)));
+                // Body toggle renders like every other captioned element: NAME above, checkbox
+                // below (review feedback 2026-08-04 — button-side text was unreadable squeezed
+                // between knobs). The button itself carries no text.
+                auto* btn = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
                 addAndMakeVisible (*btn);
                 buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
                     apvts, t->paramId, *btn));
-                cells.push_back ({ btn, nullptr, 1 });
+                cells.push_back ({ btn, makeCaption (ownedCaptions, t->label), 1 });
+                if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
             }
             else if (auto* act = std::get_if<Action> (&el))
             {
@@ -405,11 +409,12 @@ namespace rack
                                         body.getY() + placeRow * cellH,
                                         cellW * span, cellH);
 
-            if (cell.caption != nullptr)   // knob/combo: NAME caption on top, widget below
+            if (cell.caption != nullptr)   // knob/combo/toggle: NAME caption on top, widget below
             {
                 auto cr = cellR.reduced (2);
                 const int capH = 13;   // fits the uniform 13pt caption font
-                const bool isKnob = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                const bool isKnob   = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                const bool isButton = dynamic_cast<juce::Button*> (cell.widget) != nullptr;
                 // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
                 // is just the short box. Name sits ABOVE, so the block is caption + widget.
                 const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
@@ -424,6 +429,15 @@ namespace rack
                     cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
                     const int sw = juce::jmin (cr.getWidth(), 62);
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
+                }
+                else if (isButton)
+                {
+                    // Captioned toggle: NAME above, the bare checkbox glyph centred below on the
+                    // shared widget centre-line (the glyph draws at the LEFT of the bounds, so
+                    // a narrow box centred on the cell centres the glyph itself).
+                    const int boxY = juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
+                    cell.caption->setBounds (cr.getX(), boxY - capH, cr.getWidth(), capH);
+                    cell.widget->setBounds (cr.getCentreX() - 12, boxY, 24, wH);
                 }
                 else
                 {

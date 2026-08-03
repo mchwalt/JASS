@@ -673,15 +673,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         const auto* set = SampleBankStore::instance().getSet(
             static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
         const bool on = *apvts.getRawParameterValue(ID::samplerOn) > 0.5f;
-        // 12.2 (user request): the clock runs only while at least one voice is sounding (incl.
-        // release tails). During silence it parks at START, so the FIRST note after any pause
-        // hits the sample's attack; notes added while others still ring keep joining the running
-        // round (beat-lock preserved). Without this, percussive loop material entered mid-round
-        // after a pause — the attack arrived only at the next wrap.
+        // 12.2 (user request, tightened 2026-08-04): the clock runs only while at least one KEY
+        // is held (sustain pedal counts) — release TAILS no longer hold the round open, so the
+        // first note after letting go always hits the sample's attack without waiting for the
+        // previous tone to fully fade. Notes added while a key is still held keep joining the
+        // running round (beat-lock preserved). The auto-play drone holds its key permanently,
+        // so with auto-play on the clock free-runs as before.
         bool anyVoiceSounding = false;
         for (int vi = 0; vi < synth.getNumVoices() && ! anyVoiceSounding; ++vi)
             if (auto* v = synth.getVoice(vi))
-                anyVoiceSounding = v->isVoiceActive();
+                anyVoiceSounding = v->isVoiceActive() && (v->isKeyDown() || v->isSustainPedalDown());
         // The clock's reference is the zone C4 would play — for a single sample that is THE zone
         // (12.1 unchanged); for a mapped set it anchors the round on the centre zone (its own
         // root, since the ROOT knob is inert for mapped sets).
