@@ -4,7 +4,7 @@ baseline_commit: 0866f77
 
 # Story 1.5: Migrate the GENERATORS zone
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

@@ -1,6 +1,6 @@
 # Story 5.1: Selectable MIX MODE sources (A/B among OSC 1/2/3)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

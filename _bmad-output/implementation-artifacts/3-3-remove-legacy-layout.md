@@ -4,7 +4,7 @@ baseline_commit: 6351e88
 
 # Story 3.3: Remove legacy per-module layout code & confirm NFR1
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

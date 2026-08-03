@@ -4,7 +4,7 @@ baseline_commit: 9a69649
 
 # Story 2.2: Migrate the PROCESSING effect modules
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

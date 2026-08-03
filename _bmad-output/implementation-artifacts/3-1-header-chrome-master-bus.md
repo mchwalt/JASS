@@ -4,7 +4,7 @@ baseline_commit: 45f90dc
 
 # Story 3.1: Global header chrome + MASTER BUS modules
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

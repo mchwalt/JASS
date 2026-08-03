@@ -4,7 +4,7 @@ baseline_commit: 5d0232bfab940d22a14bb5082f2e2de03488b705
 
 # Story 8.1: Modulation Matrix — accumulating source→target routing engine
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

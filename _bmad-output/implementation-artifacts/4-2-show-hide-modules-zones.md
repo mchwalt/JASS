@@ -1,6 +1,6 @@
 # Story 4.2: Rack customization panel — show/hide, reorder & move between zones (auto-fit height)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
