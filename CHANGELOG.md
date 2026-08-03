@@ -11,6 +11,18 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **SAMPLER multisampling** (Story 12.2) — load a whole folder as ONE sample set:
+  files named `<anything>_<note>` (`Piano_C3.wav`, `Pad_A#4.wav`, note names with
+  C4 = middle C or MIDI numbers) are spread across the keyboard, each zone covering
+  the range halfway to its neighbours. LOAD also imports a minimal **`.sfz`** subset
+  (`<group>`/`<region>`, `sample`/`key`/`lokey`/`hikey`/`pitch_keycenter`). ROOT is
+  inert (dimmed) for multisample sets — each zone brings its own root. New caps:
+  60 s per file (unchanged), 5 min of audio per set, 32 sets, and a global RAM
+  budget equal to the previous worst case. Presets reference multisample sets by
+  name like single samples; sets live in `%AppData%\JASS\Samples\<SetName>\`.
+- **SAMPLER load errors now name the file and the reason** (e.g. which file of a
+  set is unreadable) instead of a generic limits message.
+
 - **Developer documentation** — three new docs linked from the README:
   `docs/ARCHITECTURE.md` (layers, signal flow, threading/RT-safety, state, UI),
   `docs/MODULE_SYSTEM.md` (declarative module-spec system + extension recipes)
@@ -18,8 +30,17 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   configuration surfaces, compile-time tunables, build gotchas).
 
 ### Changed
+- **SAMPLER shared loop clock runs only while voices are sounding** — during
+  silence it parks at the region start, so the first note after a pause always
+  plays the sample's attack; simultaneous/overlapping loop notes still join the
+  running round (beat-lock preserved).
 - `docs/JASS_Preset_Format.md` updated to the current FormatVersion 6 (was
   stale at v4) with the full v3→v6 version history.
+
+### Fixed
+- **`Samples/Talkbox.wav` was MS-ADPCM-compressed** — JUCE cannot decode that,
+  so the shipped sample had never actually loaded (silently skipped since its
+  introduction). Re-encoded as 16-bit PCM; it now appears in the SET list.
 
 ### Removed
 - `docs/Modul_Architektur_Konzept.md` — the 2026-07-18 design draft is

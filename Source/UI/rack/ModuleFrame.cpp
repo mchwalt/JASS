@@ -265,20 +265,24 @@ namespace rack
                 auto refreshes = fa->refreshes;
                 auto startDir  = fa->startFolder;
                 auto wildcard  = fa->wildcard;
-                btn->onClick = [this, cb, refreshes, startDir, wildcard]
+                auto pickDir   = fa->pickDirectory;
+                btn->onClick = [this, cb, refreshes, startDir, wildcard, pickDir]
                 {
                     if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
-                    fileChooser = std::make_unique<juce::FileChooser> ("Select a file", startDir, wildcard);
+                    fileChooser = std::make_unique<juce::FileChooser> (pickDir ? "Select a folder" : "Select a file",
+                                                                       startDir, wildcard);
                     juce::Component::SafePointer<ModuleFrame> self (this);
                     fileChooser->launchAsync (
-                        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                        [self, cb, refreshes] (const juce::FileChooser& fc)
+                        juce::FileBrowserComponent::openMode
+                            | (pickDir ? juce::FileBrowserComponent::canSelectDirectories
+                                       : juce::FileBrowserComponent::canSelectFiles),
+                        [self, cb, refreshes, pickDir] (const juce::FileChooser& fc)
                         {
                             if (self == nullptr) return;   // frame destroyed while the dialog was open
                             auto f = fc.getResult();
-                            if (cb && f.existsAsFile())
+                            if (cb && (pickDir ? f.isDirectory() : f.existsAsFile()))
                             {
                                 cb (f);
                                 for (const auto& id : refreshes) self->refreshCombo (id);   // re-list bank combo
