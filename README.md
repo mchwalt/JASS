@@ -43,8 +43,10 @@ info** so nothing is hidden and every control explains itself.
 - **SAMPLER** — play your own recordings (WAV/AIFF, ≤60 s) as a sound source through
   the whole chain: ROOT-key tape-style transposition, START/END, One-Shot / Loop
   (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
-  stereo files rendered as two placed sub-sources. Ships with an example catalog
-  (seeded to `%AppData%\JASS\Samples`); presets reference samples by name.
+  stereo files rendered as two placed sub-sources. **Multisampling**: load a folder
+  of `Name_C3.wav`-style files (or a basic `.sfz`) as one set — zones spread across
+  the keyboard, each with its own root. Ships with an example catalog (seeded to
+  `%AppData%\JASS\Samples`); presets reference sets by name.
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys

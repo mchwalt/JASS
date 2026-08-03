@@ -136,9 +136,12 @@ Two threads matter: the **[audio thread](Glossary.md#audio-thread)** (all of
 - **Store contract (never-free)**: `WavetableBankStore` (`MaxBanks = 64`) and
   `SampleBankStore` (`MaxSets = 32`) are append-only slot arrays with an
   atomic `count` (release/acquire). A voice caches a raw
-  `WavetableBank*`/`SampleSet*` for a whole render block, so entries are
-  **never freed** — "reset" merely lowers `count` (deferred reclamation).
-  Loading is message-thread-only.
+  `WavetableBank*`/`SampleSet*` (and since Story 12.2 a `SampleZone*` picked at
+  note-on) for a whole render block or longer, so entries are **never freed** —
+  "reset" merely lowers `count` (deferred reclamation). Loading is
+  message-thread-only. The sample store is bounded by three caps (60 s per
+  file, 300 s per set, global byte budget = the pre-multisampling worst case of
+  32 × 60 s stereo), so never-free stays a bounded policy, not a leak.
 - Spatial DSP (`HrtfPanner`, `BinauralRoom`) is fully static-sized.
 
 ### 3.2 `parameterChanged` deferral
@@ -239,7 +242,8 @@ Per sample:
    `a·b·2`; otherwise all three OSCs additive) → noise →
    [Karplus](Glossary.md#karplus) → [wavetable](Glossary.md#wavetable) → sub →
    [sampler](Glossary.md#sampler) (stereo sample sets render as two placed
-   sub-sources `PanSamplerL/R`).
+   sub-sources `PanSamplerL/R`; a multisample set's zone — key range + own
+   root — is picked per voice at note-on, Story 12.2).
 6. Global amplitude tremolo, then the envelope/gate gain.
 7. **Per-channel effect chain** — each output channel owns a full
    `ChannelStrip`, so a left-panned generator also reverberates left:
@@ -400,9 +404,10 @@ light only the targeted oscillator's knob.
   `%AppData%\JASS\PresetsBackup`. Details: [`JASS_Preset_Format.md`](JASS_Preset_Format.md).
 
 Side channels the module specs deliberately do not cover: `RackLayout`
-(above), `Sampler.File` (sample referenced **by name**, re-resolved on load),
-and `PresetBanks.json` (F1–F12 assignments — a global app setting, not part of
-any preset).
+(above), `Sampler.File` (sample set referenced **by name**, re-resolved on
+load — since Story 12.2 the name may also resolve to a multisample subfolder
+`Samples\<SetName>\`), and `PresetBanks.json` (F1–F12 assignments — a global
+app setting, not part of any preset).
 
 ---
 

@@ -1,6 +1,10 @@
+---
+baseline_commit: ad2770b310b56a7d59efae310d485a5d3b1576d5
+---
+
 # Story 12.2: SAMPLER multisampling
 
-Status: ready-for-dev
+Status: review (implementation user-verified by ear 2026-08-03; code-review pending)
 
 <!-- Follow-up to Story 12.1 (see its "Original discussion notes" — the analysis there is this
      story's blueprint). Scope set by user 2026-07-30: multisample import (folder naming
@@ -65,19 +69,35 @@ needs a single file action. JASS consumes mappings, it never edits them.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: SampleSet zones + store (AC 1, 4)
-  - [ ] Zone struct + multi-zone `SampleSet` (single-sample = one zone), caps + worst-case comment
-  - [ ] `loadFolder(dir)` / `loadSfz(file)` on the store (message thread, whole-set reject on cap)
-- [ ] Task 2: Mapping import (AC 2, 3)
-  - [ ] Filename note parser (names C4=60 + MIDI numbers), halfway-split range derivation
-  - [ ] Minimal sfz parser (group inheritance, 5 opcodes, relative paths, ignore rest)
-- [ ] Task 3: Voice + player (AC 6)
-  - [ ] `trigger(transposeRatio, midiNote)` + zone lookup; per-zone root/rate; ROOT-inert rule
-- [ ] Task 4: Editor + persistence (AC 5, 9) — LOAD FOLDER FileAction (needs a `pickDirectory`
+- [x] Task 1: SampleSet zones + store (AC 1, 4)
+  - [x] Zone struct + multi-zone `SampleSet` (single-sample = one zone), caps + worst-case comment
+  - [x] `loadFolder(dir)` / `loadSfz(file)` on the store (message thread, whole-set reject on cap)
+- [x] Task 2: Mapping import (AC 2, 3)
+  - [x] Filename note parser (names C4=60 + MIDI numbers), halfway-split range derivation
+  - [x] Minimal sfz parser (group inheritance, 5 opcodes, relative paths, ignore rest)
+- [x] Task 3: Voice + player (AC 6)
+  - [x] `trigger(transposeRatio, midiNote)` + zone lookup; per-zone root/rate; ROOT-inert rule
+- [x] Task 4: Editor + persistence (AC 5, 9) — LOAD FOLDER FileAction (needs a `pickDirectory`
       flag on `FileAction` in `ModuleDescriptor.h` + `ModuleFrame.cpp` handling), sfz in LOAD
       wildcard, copy-on-load for sets, PresetIO re-resolve + preload of set folders
-- [ ] Task 5: Docs + help + CHANGELOG (AC 8)
-- [ ] Task 6: Verification pass (AC 10) — **clean rebuild mandatory**, see guardrails
+- [x] Task 5: Docs + help + CHANGELOG (AC 8)
+- [x] Task 6: Verification pass (AC 10) — **clean rebuild mandatory**, see guardrails
+      (clean rebuild green, 0 warnings; app starts stable; USER verified by ear 2026-08-03:
+      folder import with correct zone boundary, ROOT dimming, sfz 3-region import after the
+      Talkbox fix below)
+
+## Change Log
+
+- **2026-08-03 (during verification, user requests):**
+  1. **Loop clock runs only while voices sound** — during silence it parks at START, so the
+     first note after a pause always hits the sample's attack (user found the bell attack
+     arriving up to a round late in Loop mode); overlapping notes still join the running round.
+  2. **Load errors name the file and reason** (store loaders + `importSamplerSource` carry an
+     error string to the AlertWindow) — replaced the generic limits lecture.
+  3. **Shipped `Samples/Talkbox.wav` was MS-ADPCM** (WAV format tag 2) — JUCE cannot decode it,
+     so it had NEVER loaded since 12.1 (silent preload skip). Found via the new error message
+     when the test .sfz referenced it. Decoded to 16-bit PCM in the repo, AppData copy
+     refreshed, embedded catalog rebuilt.
 
 ## Dev Notes
 
@@ -181,8 +201,69 @@ against a hand-written `.sfz` (AC 10). DSP decisions, if any arise, are measured
 
 ### Agent Model Used
 
+Fable 5 (claude-fable-5)
+
 ### Debug Log References
+
+- First clean rebuild failed: missing private member block in the rewritten `SampleSet`
+  (C2614/C2065 across all TUs) — added `name`/`zones`/`mapped`; second `/t:Rebuild` green,
+  0 warnings.
 
 ### Completion Notes List
 
+- **Zones (AC 1):** `SampleZone` (buffers, fileSampleRate, rootKey, lo/hiKey) + `SampleSet` =
+  name + zone vector + `mapped` flag. Single file = one unmapped zone 0–127 → one code path.
+  `zoneFor(note)` is alloc-free; notes outside imported ranges (sfz gaps) fall back to the
+  NEAREST zone by range distance so every key sounds.
+- **Caps (AC 4):** per file 60 s (unchanged), per set 300 s total, plus a global byte budget
+  `kMaxStoreBytes` = exactly the 12.1 worst case (32 × 60 s stereo @ 44.1k float ≈ 646 MiB),
+  enforced in the store's single `append()` choke point — the RAM envelope cannot grow no matter
+  how sets are shaped. Whole-set rejection on any violation (no partial sets).
+- **Folder mapping (AC 2):** `SampleMapping::entriesFromFolder` — `*_<note>` suffix (names with
+  C4=60 or MIDI numbers), halfway-split ranges, outermost zones extend 0/127, duplicate roots
+  first-wins, non-matching files skipped.
+- **SFZ import (AC 3):** `SampleMapping::entriesFromSfz` — `<group>/<global>/<master>` defaults
+  inherit into `<region>`; opcodes sample/key/lokey/hikey/pitch_keycenter; `sample=` values with
+  spaces supported; unknown headers suspend parsing; everything else ignored; missing
+  pitch_keycenter ⇒ 60; `//` comments.
+- **Voice (AC 6):** `trigger(transposeRatio, midiNote)` picks the zone; rate uses the ZONE's
+  root+fileSR for mapped sets, the ROOT knob for single samples (12.1 semantics bit-identical).
+  Mid-note SET switches re-pick the zone from the stored note (never-freed store keeps old
+  pointers valid either way). Master loop clock now anchors on `zoneFor(60)` and uses the
+  mapped root when applicable.
+- **Editor (AC 9):** `FileAction.pickDirectory` added to the rack vocabulary (ModuleDescriptor +
+  ModuleFrame chooser flags); SAMPLER body = LOAD (now also `*.sfz`) + FOLDER (directory pick),
+  both through one `importSource` lambda; ROOT knob dims via `activeWhen` when the selected set
+  is mapped. Body 10/12 slots in W12H1 (footprint unchanged).
+- **Persistence (AC 5):** `PresetIO::importSamplerSource` copies file/folder/.sfz (+ referenced
+  samples, relative paths preserved; refuses `..` escapes) into `%AppData%\JASS\Samples`;
+  `preloadSamples` now also restores `Samples\<SetName>\` subfolders (files first — 12.1 indices
+  stable, then folders, both alphabetical); `applyVar` re-resolves `Sampler.File` names to
+  subfolders too. `toVar` unchanged (set name round-trips as before). No new APVTS params,
+  nothing renamed — FormatVersion stays 6 (AC 7).
+- **Docs (AC 8):** help EN/DE (mapping conventions, C4=60, caps, ROOT-inert), README SAMPLER
+  bullet, CHANGELOG Unreleased, ARCHITECTURE.md (store contract + voice mix passage + side
+  channels), MODULE_SYSTEM.md editor-bound table row.
+- **Verification (AC 10):** clean `/t:Rebuild` green with 0 warnings; Standalone starts and
+  stays up (no ODR/heap crash after the struct-size changes). Test assets prepared in the
+  session scratchpad (`TestKit\` folder-convention kit: Sax_F3 + Bell_C4, zone boundary at A3;
+  `SfzTest\Test.sfz`: 3 regions incl. group inheritance and `key=` shorthand). USER listening
+  test pending: old-preset regression (F7 Sampler Demo), zone boundary by ear, sfz import.
+
 ### File List
+
+- Source/DSP/SampleMapping.h (NEW — note parser, folder convention, minimal sfz parser)
+- Source/DSP/SampleBank.h (zones, mapped sets, loadFolder/loadSfz, per-set + global caps)
+- Source/DSP/SamplePlayer.h (zone-aware playback, trigger(ratio, note), mapped-root rate)
+- Source/Audio/SynthVoice.cpp (trigger call passes the MIDI note)
+- Source/PluginProcessor.cpp (master loop clock anchors on the reference zone)
+- Source/Audio/PresetIO.h (importSamplerSource, loadSampleSetFolder, preload of set folders,
+  applyVar folder re-resolve)
+- Source/UI/rack/ModuleDescriptor.h (FileAction.pickDirectory)
+- Source/UI/rack/ModuleFrame.cpp (directory chooser mode)
+- Source/UI/PluginEditor.cpp (SAMPLER body: LOAD+FOLDER via importSource, ROOT activeWhen)
+- Resources/EN/sampler.md, Resources/DE/sampler.md (multisampling, caps, ROOT-inert)
+- README.md (SAMPLER feature bullet)
+- CHANGELOG.md (Unreleased entry)
+- docs/ARCHITECTURE.md, docs/MODULE_SYSTEM.md (sampler passages)
+- _bmad-output/implementation-artifacts/12-2-sampler-multisampling.md (this file)

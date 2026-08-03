@@ -3,29 +3,29 @@
 #include <algorithm>
 #include "SampleBank.h"
 
-// ── Per-voice sample playback (Story 12.1) ───────────────────────────────────────────────────
+// ── Per-voice sample playback (Story 12.1, zone-aware since Story 12.2) ─────────────────────
 // The genuine opposite of WavetableOscillator (which traverses ONE cycle at pitch rate): here an
 // ABSOLUTE read position runs once (or looped) through a long recording at
-//   rate = transposeRatio · 2^((60 − rootKey)/12) · fileSR / hostSR
-// so the ROOT key plays the file at its original speed and every other key transposes it,
-// formants and all (documented in the help text: this is material, not a defect — JASS bends
-// recordings, it does not imitate instruments; multisample import is Story 12.2).
+//   rate = transposeRatio · 2^((60 − root)/12) · fileSR / hostSR
+// so the root key plays the file at its original speed and every other key transposes it,
+// formants and all. Since 12.2 the root comes from the ZONE the played note falls into
+// (multisample sets — the ROOT knob is inert there); single-sample sets keep the ROOT knob as
+// their live root, exactly the 12.1 behaviour. Zone pointers stay valid forever (never-freed
+// store), so caching them across blocks is safe by the same contract as the wavetable bank.
 //
 // Interpolation is 4-point Hermite — MEASURED, not guessed (scratch harness 2026-07-30): on a
 // bright 6.7 kHz component transposed +7 semitones, linear = 28.5 dB SNR (audible grit),
 // Hermite = 38.3 dB. Cost: a few extra multiplies per voice-sample — irrelevant.
 //
 // LOOP modes wrap with a short equal-gain crossfade (~6 ms) at the join — the classic loop-click
-// defect is designed out rather than fixed later. RT-safe: no allocation anywhere; the set is a
-// raw pointer into the never-freed store (same contract as the wavetable bank).
+// defect is designed out rather than fixed later. RT-safe: no allocation anywhere.
 class SamplePlayer
 {
 public:
     enum class Mode { OneShot = 0, Loop, Reverse, RevLoop };
-    struct Out { float l, r; };   // stereo pair; mono sets deliver l == r
+    struct Out { float l, r; };   // stereo pair; mono zones deliver l == r
 
     void setSampleRate(double sr)              { hostSampleRate = sr > 0 ? sr : 44100.0; }
-    void setSource(const SampleSet* s)         { set = s; }
     void setEnabled(bool e)                    { enabled = e; }
     void setLevel(double l)                    { level = l; }
     void setRootKey(int k)                     { rootKey = k; }
@@ -37,10 +37,26 @@ public:
     }
     void setMode(Mode m)                       { mode = m; }
     void setSpeed(double s)                    { speed = std::clamp(s, 0.05, 8.0); }   // rate multiplier (tape-style)
+
+    // Called every block from applyToVoice. A SET switched mid-note follows the combo (12.1
+    // behaviour): re-pick this voice's zone for its note; pos clamps naturally in nextSample
+    // against the new zone's region.
+    void setSource(const SampleSet* s)
+    {
+        if (s == set)
+            return;
+        set  = s;
+        zone = (s != nullptr) ? s->zoneFor(lastNote) : nullptr;
+        if (! active)
+            return;
+        if (zone == nullptr || zone->getLength() < 4) { active = false; return; }
+        computeRate();
+    }
+
     // Shared loop clock (Story 12.1 follow-up): the processor advances ONE master loop phase (at
-    // ROOT rate) and hands it to every voice per block; loop-mode notes START at that phase, so
-    // simultaneous/late notes stay in step (same pitch = sample-locked, octaves = rhythm-locked)
-    // instead of each note restarting the loop at START and drifting apart.
+    // the reference-zone root rate) and hands it to every voice per block; loop-mode notes START
+    // at that phase, so simultaneous/late notes stay in step (same pitch = sample-locked,
+    // octaves = rhythm-locked) instead of each note restarting the loop at START and drifting.
     void setLoopSyncPhase(double f)
     {
         f = std::clamp(f, 0.0, 1.0);
@@ -50,22 +66,27 @@ public:
         // loop voices restart each round together; a transposed voice cuts its pass at the wrap.
         const bool wrapped = f < syncPhase - 0.5;
         syncPhase = f;
-        if (wrapped && active && set != nullptr && (mode == Mode::Loop || mode == Mode::RevLoop))
+        if (wrapped && active && zone != nullptr && (mode == Mode::Loop || mode == Mode::RevLoop))
             pos = (mode == Mode::Loop) ? startSample() + f * (endSample() - startSample())
                                        : endSample()   - f * (endSample() - startSample());
     }
 
     bool   isEnabled() const   { return enabled; }
     double getLevel() const    { return level; }     // base capture for per-voice modulation
+    // SET-level stereo (any zone): keeps the voice's L/R sub-source routing consistent with the
+    // ±0.5 pan-slot spread computed per block in applyToVoice. A mono zone inside a stereo set
+    // delivers l == r and lands centred between the spread slots.
     bool   sourceIsStereo() const { return set != nullptr && set->isStereo(); }
 
-    // Start playback for a note. transposeRatio = f(note)/f(C4), like every other generator.
-    void trigger(double transposeRatio)
+    // Start playback for a note. transposeRatio = f(note)/f(C4), like every other generator;
+    // midiNote picks the zone (12.2) — mapped sets use ITS root, single samples the ROOT knob.
+    void trigger(double transposeRatio, int midiNote)
     {
-        if (set == nullptr || set->getLength() < 4) { active = false; return; }
-        rate = transposeRatio
-             * std::pow(2.0, (60.0 - (double) rootKey) / 12.0)
-             * set->getFileSampleRate() / hostSampleRate;
+        lastRatio = transposeRatio;
+        lastNote  = std::clamp(midiNote, 0, 127);
+        zone = (set != nullptr) ? set->zoneFor(lastNote) : nullptr;
+        if (zone == nullptr || zone->getLength() < 4) { active = false; return; }
+        computeRate();
         const bool rev = (mode == Mode::Reverse || mode == Mode::RevLoop);
         if (mode == Mode::Loop)         pos = startSample() + syncPhase * (endSample() - startSample());
         else if (mode == Mode::RevLoop) pos = endSample()   - syncPhase * (endSample() - startSample());
@@ -77,7 +98,7 @@ public:
 
     Out nextSample()
     {
-        if (!enabled || !active || set == nullptr)
+        if (!enabled || !active || zone == nullptr)
             return { 0.0f, 0.0f };
 
         const double s0 = startSample();
@@ -87,7 +108,7 @@ public:
 
         const bool rev     = (mode == Mode::Reverse || mode == Mode::RevLoop);
         const bool looping = (mode == Mode::Loop    || mode == Mode::RevLoop);
-        const bool stereo  = set->isStereo();
+        const bool stereo  = zone->isStereo();
 
         float outL = read(pos, 0);
         float outR = stereo ? read(pos, 1) : outL;
@@ -122,14 +143,25 @@ public:
 private:
     static constexpr int kXfadeSamples = 256;   // ~6 ms at 44.1k
 
-    double startSample() const { return regionStart * (double) (set->getLength() - 1); }
-    double endSample() const   { return regionEnd   * (double) (set->getLength() - 1); }
+    double startSample() const { return regionStart * (double) (zone->getLength() - 1); }
+    double endSample() const   { return regionEnd   * (double) (zone->getLength() - 1); }
+
+    // Fixed at note-on (and on a mid-note SET switch): a mapped set's zone root wins, a single
+    // sample follows the ROOT knob as captured at trigger time — 12.1 semantics unchanged.
+    void computeRate()
+    {
+        const double root = (set != nullptr && set->isMapped()) ? (double) zone->rootKey
+                                                                : (double) rootKey;
+        rate = lastRatio
+             * std::pow(2.0, (60.0 - root) / 12.0)
+             * zone->fileSampleRate / hostSampleRate;
+    }
 
     // 4-point Hermite (Catmull-Rom) around the fractional position, edge-clamped.
     float read(double p, int ch) const
     {
-        const int n = set->getLength();
-        const float* d = set->getData(ch);
+        const int n = zone->getLength();
+        const float* d = zone->getData(ch);
         p = std::clamp(p, 0.0, (double) (n - 1));
         const int i = (int) p;
         const float f = (float) (p - i);
@@ -143,11 +175,14 @@ private:
         return ((c3 * f + c2) * f + c1) * f + x0;
     }
 
-    const SampleSet* set = nullptr;
+    const SampleSet*  set  = nullptr;
+    const SampleZone* zone = nullptr;   // this voice's zone (picked at trigger / SET switch)
     bool   enabled = false;
     bool   active  = false;
     double level   = 0.5;
     int    rootKey = 60;
+    int    lastNote = 60;               // note that picked the zone (kept for SET switches)
+    double lastRatio = 1.0;             // transposeRatio at note-on (kept for SET switches)
     double regionStart = 0.0, regionEnd = 1.0;
     Mode   mode = Mode::OneShot;
     double hostSampleRate = 44100.0;
