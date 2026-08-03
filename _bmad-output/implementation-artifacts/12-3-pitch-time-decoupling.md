@@ -1,6 +1,10 @@
+---
+baseline_commit: 146cd0e09c82cc698cf8f2ea98fb2a9146f3250d
+---
+
 # Story 12.3: SAMPLER pitch/time decoupling (timestretch)
 
-Status: ready-for-dev
+Status: in-progress
 
 <!-- Split out of the original combined 12.2 draft (user decision 2026-08-03). Scope set by user
      2026-07-30: "playing one WAV at several pitches while keeping playback speed/loops truly in
