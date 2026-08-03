@@ -1,6 +1,6 @@
 # Story 12.3: SAMPLER pitch/time decoupling (timestretch)
 
-Status: ready-for-dev (one open decision: third-party vendoring — see "Open decision" below)
+Status: ready-for-dev
 
 <!-- Split out of the original combined 12.2 draft (user decision 2026-08-03). Scope set by user
      2026-07-30: "playing one WAV at several pitches while keeping playback speed/loops truly in
@@ -78,12 +78,12 @@ design; this story adds the alternative without touching the default.
 
 ## Dev Notes
 
-### Open decision (user)
+### Vendoring approved (user, 2026-08-03)
 
 If the bake-off favours signalsmith-stretch, third-party MIT code gets vendored into the repo
-(`Source/ThirdParty/signalsmith-stretch/`, license header kept, README attribution). The user has
-not yet approved vendoring — confirm before Task 2 commits third-party code; the granular
-fallback needs no approval.
+(`Source/ThirdParty/signalsmith-stretch/`, license header kept, README "Third-party" attribution
+like KEMAR). The user has approved this in advance ("ja, es darf") — the bake-off still decides
+WHETHER it is used; approval only removes the confirmation gate before Task 2.
 
 ### Integration map (subset relevant here; verified against code 2026-08-03)
 
