@@ -663,6 +663,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                     ? SyncDivision::delaySeconds(syncBpm, delayDiv)
                                     : (double) *apvts.getRawParameterValue(Parameters::ID::delayTime);
 
+    SamplePlayer::resetSeekBudget();   // 12.3: per-block cap on note-on stretch pre-rolls
+
     // Story 12.1: shared SAMPLER loop clock — ONE master phase advancing at the ROOT rate × SPEED
     // through the START..END region. Loop-mode notes START at this phase (SamplePlayer::trigger),
     // so simultaneous/late notes stay in step instead of each restarting the loop at START.

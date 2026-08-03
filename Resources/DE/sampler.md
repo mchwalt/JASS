@@ -8,7 +8,8 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   `Piano_C3.wav` / `Pad_A#4.wav` (Notenname mit C4 = mittleres C, oder MIDI-Nummer) werden über
   die Tastatur verteilt — jede deckt den Bereich bis zur Mitte zum Nachbarn ab, so bleiben
   Instrumente über mehr als eine Oktave natürlich. LOAD akzeptiert auch eine **.sfz**-Datei
-  (ihre Tastenzuordnung wird importiert; gelesen werden nur die grundlegenden Sample-/Key-Opcodes).
+  (ihre Tastenzuordnung wird importiert; gelesene Opcodes: `sample`, `key`, `lokey`/`hikey`,
+  `pitch_keycenter`, `default_path` — alles andere, auch Velocity-Layer, wird ignoriert).
 - **ROOT** — die Taste, bei der eine **einzelne** Aufnahme in Originalgeschwindigkeit läuft; jede
   andere Taste transponiert sie bandmaschinen-artig (Formanten wandern mit: nutzbar sind grob
   ±1 Oktave — die Natur von Einzel-Samples, kein Defekt). Bei Multisample-Sets bringt jede Zone
@@ -18,9 +19,9 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   Abspielgeschwindigkeit zusätzlich zur Taste, bandmaschinen-artig — die Tonhöhe wandert mit.
 - **STRETCH** entkoppelt Tonhöhe und Zeit: die Taste bestimmt nur noch die Tonhöhe, SPEED nur
   das Tempo — ein Loop behält auf jeder Taste seinen Rhythmus, und alle Loop-Stimmen bleiben
-  unabhängig von der Tonhöhe im Takt. Der Anschlag wird beim Tastendruck vorberechnet, das
-  Spielgefühl bleibt direkt; Preis ist ein dezenter Phase-Vocoder-Charakter auf Transienten.
-  Aus = klassisches Bandmaschinen-Verhalten.
+  unabhängig von der Tonhöhe im Takt. Die Engine arbeitet intern ~60 ms voraus; dieser Vorlauf
+  wird beim Tastendruck vorberechnet, das Spielgefühl bleibt direkt. Preis ist ein dezenter
+  Phase-Vocoder-Charakter auf Transienten. Aus = klassisches Bandmaschinen-Verhalten.
 - **Stereo-Dateien bleiben stereo**: links/rechts werden als zwei platzierte Quellen um PAN herum
   gerendert; in den Modi Mono und Pseudo-Stereo kollabieren sie zum Mono-Downmix.
 - **Grenzen:** 60 s pro Datei, 5 Minuten Audio pro Set, 32 Sets.

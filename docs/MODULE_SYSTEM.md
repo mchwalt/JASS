@@ -194,7 +194,7 @@ their descriptors are hand-built in `SynthyEditor::buildRack()`
 | PRESETS | injected `PresetBankPanel` display |
 | STRING – KARPLUS | PLUCK `Action` (mirrored by the Space key) |
 | WAVETABLE | dynamic BANK combo (`WavetableBankStore` provider), `FileAction` LOAD WAV, `onReset` → `resetToBuiltIns()` |
-| SAMPLER | dynamic SET combo with `indexIsValue`, `FileAction` LOAD (file or `.sfz`) + FOLDER (`pickDirectory`, multisample import — both copy into `%AppData%\JASS\Samples`), ROOT knob `activeWhen` (inert for mapped sets) |
+| SAMPLER | dynamic SET combo with `indexIsValue`, `FileAction` LOAD (file or `.sfz`) + FOLDER (`pickDirectory`, multisample import — both copy into `%AppData%\JASS\Samples`), ROOT knob `activeWhen` (inert for mapped sets), STRETCH toggle = pitch/time decoupling via a per-voice vendored Signalsmith Stretch (Story 12.3) |
 | ENVELOPE – ADSR | injected `EnvelopeDisplay` |
 | MOD MATRIX | per-slot dynamic PARAM combos (`indexIsValue`), `ComboDependency`, `SlotActivity` |
 | OSCILLOSCOPE / SPECTRUM | injected display components |

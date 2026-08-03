@@ -1,6 +1,7 @@
 #pragma once
 #include <cmath>
 #include <algorithm>
+#include <atomic>
 #include "SampleBank.h"
 // Vendored third-party (MIT, see ThirdParty README): not ours to keep warning-clean — silence
 // its conversion/shadowing noise HERE instead of editing upstream files (breaks the update path).
@@ -88,19 +89,24 @@ public:
             return;
         if (zone == nullptr || zone->getLength() < 4) { active = false; return; }
         computeRate();
+        // Review 2026-08-04: in stretch mode the engine + FIFO still hold the OLD sample's
+        // audio — re-park like setStretchMode does, so the voice continues in the new source
+        // instead of replaying stale content (brief warm-up gap, acceptable for a combo edit).
+        if (stretchMode) { stretch.reset(); outRead = kChunk; drainRemaining = -1; }
     }
 
     // Shared loop clock: the processor advances ONE master loop phase and hands it to every
     // voice per block; loop-mode notes START at that phase, so simultaneous/late notes stay in
-    // step. TAPE mode additionally HARD-resyncs all loop voices at each master wrap (different
-    // pitches traverse at different rates — physics of resampling). STRETCH mode skips the
-    // resync: all voices share the time axis, nothing can drift (Story 12.3 AC 1).
+    // step. The HARD resync at each master wrap runs in BOTH modes (review 2026-08-04): in tape
+    // mode it catches pitch-rate drift; in stretch mode same-zone voices never drift, so the
+    // resync is an exact no-op for them — but a MULTISAMPLE set's zones can differ in length /
+    // file rate, and without the resync those loop voices would drift apart forever.
     void setLoopSyncPhase(double f)
     {
         f = std::clamp(f, 0.0, 1.0);
         const bool wrapped = f < syncPhase - 0.5;
         syncPhase = f;
-        if (wrapped && ! stretchMode && active && zone != nullptr
+        if (wrapped && active && zone != nullptr
             && (mode == Mode::Loop || mode == Mode::RevLoop))
             pos = (mode == Mode::Loop) ? startSample() + f * (endSample() - startSample())
                                        : endSample()   - f * (endSample() - startSample());
@@ -132,19 +138,39 @@ public:
             // 2026-08-04). outputSeek computes the latency's worth of output in one go —
             // MEASURED 0.57 ms per stereo voice (seekbench) — so the attack is immediate.
             // No allocation: it works inside capacities established by configure().
-            drainRemaining = -1;
+            drainRemaining = -1;   // BEFORE fillInput — a short region may end during pre-roll
             outRead = kChunk;
             if (! seekBufL.empty())   // sized in setSampleRate; empty only before prepareToPlay
             {
-                const int n = (int) seekBufL.size();
-                fillInput(seekBufL.data(), seekBufR.data(), n);
-                float* bufs[2] = { seekBufL.data(), seekBufR.data() };
-                stretch.outputSeek(bufs, n);
+                // Burst cap (review 2026-08-04, user decision "B"): at most kMaxSeeksPerBlock
+                // full pre-rolls per audio block — a sequencer chord landing N note-ons in ONE
+                // callback would stack N × 0.57 ms and blow small-buffer deadlines. Overflow
+                // voices take the CHEAP seek (0.01 ms): they still sound, their attack just
+                // arrives ~outputLatency (~30 ms) late. The budget refills every block.
+                if (seekBudget.fetch_sub(1, std::memory_order_relaxed) > 0)
+                {
+                    const int n = (int) seekBufL.size();
+                    fillInput(seekBufL.data(), seekBufR.data(), n);
+                    float* bufs[2] = { seekBufL.data(), seekBufR.data() };
+                    stretch.outputSeek(bufs, n);
+                }
+                else
+                {
+                    stretch.reset();
+                    const int n = stretch.inputLatency();
+                    fillInput(seekBufL.data(), seekBufR.data(), n);
+                    float* bufs[2] = { seekBufL.data(), seekBufR.data() };
+                    stretch.seek(bufs, n, 1.0);
+                }
             }
             else
                 stretch.reset();
         }
     }
+
+    // Refilled by the processor ONCE per audio block (before the voices render), so the note-on
+    // pre-roll burst above stays bounded no matter how many voices start in the same callback.
+    static void resetSeekBudget() { seekBudget.store(kMaxSeeksPerBlock, std::memory_order_relaxed); }
 
     void reset() { active = false; drainRemaining = -1; }
 
@@ -165,6 +191,11 @@ public:
                 refillStretchChunk();
             const float l = outBufL[outRead], r = outBufR[outRead];
             ++outRead;
+            // Drain accounting lives on the OUTPUT side (review 2026-08-04): the note-on
+            // pre-roll must not consume the budget (it made short one-shots fully silent),
+            // and counting inputs cut the FIFO's last partial chunk of tail.
+            if (! active && drainRemaining > 0)
+                --drainRemaining;
             return { l * g, r * g };
         }
 
@@ -188,6 +219,10 @@ public:
 private:
     static constexpr int kXfadeSamples = 256;   // ~6 ms at 44.1k
     static constexpr int kChunk = 64;           // stretch FIFO granularity (~1.5 ms — negligible)
+    static constexpr int kMaxSeeksPerBlock = 4; // note-on pre-roll burst cap (user decision "B")
+    // Shared across all voices (and plugin instances — they also share the CPU): the per-block
+    // budget of full note-on pre-rolls. Reset by the processor each block (resetSeekBudget).
+    static inline std::atomic<int> seekBudget { kMaxSeeksPerBlock };
 
     double startSample() const { return regionStart * (double) (zone->getLength() - 1); }
     double endSample() const   { return regionEnd   * (double) (zone->getLength() - 1); }
@@ -239,16 +274,17 @@ private:
         {
             if (! active)
             {
-                L[k] = R[k] = 0.0f;   // drain the engine's latency with silence
-                if (drainRemaining > 0) --drainRemaining;
-                continue;
+                L[k] = R[k] = 0.0f;   // drain the engine's pipeline with silence
+                continue;             // (budget is debited per OUTPUT sample in nextSample)
             }
             const float l = readXf(pos, 0, s0, s1, len, rev, looping);
             L[k] = l;
             R[k] = stereo ? readXf(pos, 1, s0, s1, len, rev, looping) : l;
             pos += rev ? -step : step;
-            if (!rev && pos >= s1)      { if (looping) pos -= len; else { active = false; drainRemaining = stretch.outputLatency(); } }
-            else if (rev && pos <  s0)  { if (looping) pos += len; else { active = false; drainRemaining = stretch.outputLatency(); } }
+            // Input ended (one-shot): grant the full pipeline depth as an OUTPUT budget so the
+            // shifted tail — including anything pre-rolled at note-on — drains completely.
+            if (!rev && pos >= s1)      { if (looping) pos -= len; else { active = false; drainRemaining = stretch.inputLatency() + stretch.outputLatency(); } }
+            else if (rev && pos <  s0)  { if (looping) pos += len; else { active = false; drainRemaining = stretch.inputLatency() + stretch.outputLatency(); } }
         }
     }
 
