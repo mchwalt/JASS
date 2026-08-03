@@ -16,6 +16,11 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
 - **START / END** beschneiden den gespielten Bereich; **MODE**: One-Shot, Loop (klickfreier
   Crossfade-Übergang), Reverse, Rev-Loop. **SPEED** (0,25×–4×) multipliziert die
   Abspielgeschwindigkeit zusätzlich zur Taste, bandmaschinen-artig — die Tonhöhe wandert mit.
+- **STRETCH** entkoppelt Tonhöhe und Zeit: die Taste bestimmt nur noch die Tonhöhe, SPEED nur
+  das Tempo — ein Loop behält auf jeder Taste seinen Rhythmus, und alle Loop-Stimmen bleiben
+  unabhängig von der Tonhöhe im Takt. Der Anschlag wird beim Tastendruck vorberechnet, das
+  Spielgefühl bleibt direkt; Preis ist ein dezenter Phase-Vocoder-Charakter auf Transienten.
+  Aus = klassisches Bandmaschinen-Verhalten.
 - **Stereo-Dateien bleiben stereo**: links/rechts werden als zwei platzierte Quellen um PAN herum
   gerendert; in den Modi Mono und Pseudo-Stereo kollabieren sie zum Mono-Downmix.
 - **Grenzen:** 60 s pro Datei, 5 Minuten Audio pro Set, 32 Sets.

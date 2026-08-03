@@ -45,7 +45,9 @@ info** so nothing is hidden and every control explains itself.
   (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
   stereo files rendered as two placed sub-sources. **Multisampling**: load a folder
   of `Name_C3.wav`-style files (or a basic `.sfz`) as one set — zones spread across
-  the keyboard, each with its own root. Ships with an example catalog (seeded to
+  the keyboard, each with its own root. **STRETCH**: pitch/time decoupling — the key
+  sets only the pitch, SPEED only the tempo, loops stay beat-locked on every key
+  (Signalsmith Stretch, MIT). Ships with an example catalog (seeded to
   `%AppData%\JASS\Samples`); presets reference sets by name.
 
 **Input devices**
@@ -193,7 +195,7 @@ JASS embeds **JUCE** as a submodule. JUCE is dual-licensed (**GPLv3 or a
 commercial JUCE licence**); the GPLv3 choice covers free JUCE use. Distributing
 JASS under other terms requires an appropriate JUCE licence.
 
-### Third-party data
+### Third-party data & code
 
 The **Kunstkopf (HRTF)** output mode uses the **MIT KEMAR** HRTF measurements
 (Bill Gardner & Keith Martin, MIT Media Lab, 1994), embedded as
@@ -202,3 +204,10 @@ no restrictions on use, provided the authors are cited — see
 <https://sound.media.mit.edu/resources/KEMAR.html>. The embedded header is
 regenerated from the original set by [`tools/gen_kemar_hrir.py`](tools/gen_kemar_hrir.py)
 (see [`tools/README.md`](tools/README.md)).
+
+The SAMPLER's **STRETCH** mode (pitch/time decoupling) uses **Signalsmith Stretch**
+by Geraint Luff / Signalsmith Audio Ltd. (MIT license), vendored under
+[`Source/ThirdParty/signalsmith-stretch/`](Source/ThirdParty/signalsmith-stretch/)
+together with its `signalsmith-linear` FFT dependency — see
+<https://github.com/Signalsmith-Audio/signalsmith-stretch> and the license files
+in that folder.

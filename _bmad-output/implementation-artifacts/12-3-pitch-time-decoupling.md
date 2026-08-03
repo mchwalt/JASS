@@ -4,7 +4,7 @@ baseline_commit: 146cd0e09c82cc698cf8f2ea98fb2a9146f3250d
 
 # Story 12.3: SAMPLER pitch/time decoupling (timestretch)
 
-Status: in-progress
+Status: review (implementation user-verified by ear 2026-08-04; code-review pending)
 
 <!-- Split out of the original combined 12.2 draft (user decision 2026-08-03). Scope set by user
      2026-07-30: "playing one WAV at several pitches while keeping playback speed/loops truly in
@@ -68,17 +68,36 @@ design; this story adds the alternative without touching the default.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Engine bake-off (AC 2) — scratch harness, quality + CPU numbers into Dev Agent
+- [x] Task 1: Engine bake-off (AC 2) — scratch harness, quality + CPU numbers into Dev Agent
       Record, decision documented
-- [ ] Task 2: Vendor or implement the winner (AC 2) — `Source/ThirdParty/signalsmith-stretch/` +
+- [x] Task 2: Vendor or implement the winner (AC 2) — `Source/ThirdParty/signalsmith-stretch/` +
       README attribution, OR granular engine header in `Source/DSP/`
-- [ ] Task 3: Integration (AC 1, 4) — `samplerStretch` param appended in `SamplerSpecs.h`,
+- [x] Task 3: Integration (AC 1, 4) — `samplerStretch` param appended in `SamplerSpecs.h`,
       decoupled step in `SamplePlayer`, `prepareToPlay` allocation, mode/crossfade/mod
       composition, resync no-op in stretch mode
-- [ ] Task 4: Editor toggle (AC 7) — STRETCH in the hand-built SAMPLER body
+- [x] Task 4: Editor toggle (AC 7) — STRETCH in the hand-built SAMPLER body
       (`Source/UI/PluginEditor.cpp`)
-- [ ] Task 5: Latency measurement + docs + help + CHANGELOG (AC 3, 6)
-- [ ] Task 6: Verification pass (AC 8) — **clean rebuild mandatory**, see guardrails
+- [x] Task 5: Latency measurement + docs + help + CHANGELOG (AC 3, 6)
+- [x] Task 6: Verification pass (AC 8) — **clean rebuild mandatory**, see guardrails
+      (two clean rebuilds, 0 warnings each; USER verified by ear 2026-08-04: old-preset
+      regression, beat-lock of C4+G4+C5 loop voices, one-shot duration invariance, SPEED =
+      tempo-only, TestKit composition, fast playing after the note-on pre-roll fix; negative
+      cap tests: 330 s folder rejected with the named per-set message and no dead AppData
+      folder, 70 s file rejected with the per-file message)
+
+## Change Log
+
+- **2026-08-04 (during verification):**
+  1. **Note-on pre-roll** — user found fast playing impossible with STRETCH on: the engine's
+     ~60 ms warm-up after reset() ate short notes. Fixed with `outputSeek` at trigger
+     (pre-computes the latency's worth of output; MEASURED 0.567 ms per stereo voice,
+     scratchpad seekbench) — attacks are now immediate; help texts updated accordingly.
+  2. **Vendored headers wrapped in JUCE warning guards** (SamplePlayer.h) — the three upstream
+     files emitted 342 MSVC warnings under juce_recommended_warning_flags; suppressed at the
+     include site (C4127/4244/4305/4456/4458 + GCC-like equivalents), upstream untouched.
+  3. **Import hardening (12.2 path, found by the cap stress test):** folder/.sfz imports now
+     VALIDATE-THEN-COPY — a rejected set no longer leaves a dead folder in
+     `%AppData%\JASS\Samples` that would silently fail at every preload.
 
 ## Dev Notes
 
@@ -162,8 +181,64 @@ delay measurement (AC 3).
 
 ### Agent Model Used
 
+Fable 5 (claude-fable-5)
+
 ### Debug Log References
+
+### Bake-off results (2026-08-04, scratchpad/bakeoff/bakeoff.cpp, MSVC /O2)
+
+Bright harmonic tone (f0 220 Hz, harmonics to 7 kHz), pitch shift at time 1:1, spectral SNR
+(power at expected shifted partials vs. rest; **metric ceiling = 43.0 dB**, the unshifted
+signal's own score). CPU = % of one core for 16 stereo voices at 44.1 kHz.
+
+| engine / config | SNR +7 st | +12 st | −7 st | latency | CPU 16 voices |
+|---|---|---|---|---|---|
+| stretch default (0.12/0.03) | 45.7 | 42.5 | 42.1 | 120 ms | 18 % |
+| stretch cheaper (0.10/0.04) | 21.8 | 20.1 | 24.9 | 100 ms | 12 % |
+| **stretch short (0.06/0.015)** | **34.8** | **39.8** | **38.9** | **60 ms** | **19 %** |
+| stretch tiny (0.03/0.0075) | 9.9 | 0.7 | 16.9 | 30 ms | 18 % |
+| granular naive 30/50/80 ms | −10.5…−18 | −18…−3 | −18…+8 | 15–40 ms | 3 % |
+
+**Decision: signalsmith-stretch, "short" config (block 0.06·sr, interval 0.015·sr).** The naive
+granular's overlapping grains comb (constant offset hop·(1−ratio)) — sidebands louder than the
+signal; a competitive granular needs WSOLA-style correlation alignment = its own project.
+"default" is ~5 dB better but doubles the latency to 120 ms — too late an attack for a playable
+generator. RT-contract of the engine verified by inspection: configure() allocates;
+process()/reset() stay within configure()'s vector capacities (documented in SamplePlayer.h).
 
 ### Completion Notes List
 
+- **Vendored** `Source/ThirdParty/signalsmith-stretch/` — 3 headers only (stretch @57b93f4,
+  linear @0dd6b82), MIT licenses kept, no SIMD backends (plain-C++ path = what was measured);
+  folder README documents the update procedure. Top-level README section renamed to
+  "Third-party data & code" + attribution.
+- **Param** `samplerStretch` (Bool, default OFF) appended in SamplerSpecs/Parameters/applyToVoice;
+  editor gets a STRETCH Toggle (body now 11/12 slots in W12H1). No ID renamed, FormatVersion 6.
+- **SamplePlayer**: per-voice `SignalsmithStretch<float>` member, configured in
+  `setSampleRate` (prepareToPlay) with the "short" config. STRETCH path: read position walks the
+  TIME axis only (speed · fileSR/hostSR), input fed through the shared loop-crossfade reader
+  (`readXf`, extracted from the tape path — join stays click-free in both modes), engine shifts
+  pitch (`setTransposeFactor` = transposeRatio · 2^((60−root)/12)) at 1:1 in 64-sample chunks
+  (FIFO adds ~1.5 ms). One-shot tails drain the engine latency with silence before the voice
+  frees. Master-wrap hard resync SKIPPED in stretch mode (voices share the time axis — nothing
+  drifts); trigger still starts loop notes at the master phase. Mid-note mode/SET switches
+  reset/re-park the engine (allocation-free).
+- **Master clock** (PluginProcessor): in stretch mode the round advances at speed·fileSR/hostSR
+  (no pitch factor) — matching what the voices do.
+- **Docs**: help EN/DE STRETCH bullet incl. the honest ~60 ms latency note (AC 3), README
+  feature bullet + third-party section, CHANGELOG, ARCHITECTURE.md voice-mix passage.
+
 ### File List
+
+- Source/ThirdParty/signalsmith-stretch/ (NEW — signalsmith-stretch.h, signalsmith-linear/
+  {stft,fft}.h, LICENSE.txt ×2, README.md)
+- Source/DSP/SamplePlayer.h (stretch engine integration, readXf extraction)
+- Source/Modules/SamplerSpecs.h (samplerStretch appended)
+- Source/Audio/Parameters.h (ID + applyToVoice wiring)
+- Source/PluginProcessor.cpp (time-axis master clock in stretch mode)
+- Source/UI/PluginEditor.cpp (STRETCH toggle)
+- Resources/EN/sampler.md, Resources/DE/sampler.md (STRETCH bullet + latency honesty)
+- README.md (feature bullet, third-party section)
+- CHANGELOG.md (Unreleased entry)
+- docs/ARCHITECTURE.md (voice-mix passage)
+- _bmad-output/implementation-artifacts/12-3-pitch-time-decoupling.md (this file)

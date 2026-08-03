@@ -243,7 +243,10 @@ Per sample:
    [Karplus](Glossary.md#karplus) → [wavetable](Glossary.md#wavetable) → sub →
    [sampler](Glossary.md#sampler) (stereo sample sets render as two placed
    sub-sources `PanSamplerL/R`; a multisample set's zone — key range + own
-   root — is picked per voice at note-on, Story 12.2).
+   root — is picked per voice at note-on, Story 12.2; the optional STRETCH
+   mode decouples pitch from time via a per-voice vendored Signalsmith
+   Stretch instance — configured in `prepareToPlay`, allocation-free in
+   `process` — Story 12.3).
 6. Global amplitude tremolo, then the envelope/gate gain.
 7. **Per-channel effect chain** — each output channel owns a full
    `ChannelStrip`, so a left-panned generator also reverberates left:

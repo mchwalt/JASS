@@ -229,34 +229,45 @@ namespace PresetIO
     inline int importSamplerSource(const juce::File& src, juce::String* error = nullptr)
     {
         auto& store = SampleBankStore::instance();
+        // Folder / .sfz: LOAD FIRST, COPY ONLY ON SUCCESS. The audio lives in RAM once loaded —
+        // the AppData copy exists purely so future sessions can re-resolve the set by name, so
+        // a REJECTED set must not leave a dead folder behind (it would silently fail at every
+        // preload from then on). Copy failures are non-fatal: the set still plays this session.
         if (src.isDirectory())
         {
+            const int idx = loadSampleSetFolder(src, error);
+            if (idx < 0) return -1;
             auto dest = samplesFolder().getChildFile(src.getFileName());
             dest.createDirectory();
             for (auto& f : src.findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.sfz"))
             {
                 auto d = dest.getChildFile(f.getFileName());
-                if (! d.existsAsFile() && ! f.copyFileTo(d))
-                    return loadSampleSetFolder(src, error);   // copy failed → load in place
+                if (! d.existsAsFile())
+                    f.copyFileTo(d);
             }
-            return loadSampleSetFolder(dest, error);
+            return idx;
         }
         if (src.hasFileExtension("sfz"))
         {
+            const int idx = store.loadSfz(src, error);
+            if (idx < 0) return -1;
             auto dest    = samplesFolder().getChildFile(src.getFileNameWithoutExtension());
             dest.createDirectory();
             auto destSfz = dest.getChildFile(src.getFileName());
-            bool copied  = destSfz.existsAsFile() || src.copyFileTo(destSfz);
-            // Copy the referenced samples too, preserving the .sfz's relative paths.
+            if (! destSfz.existsAsFile())
+                src.copyFileTo(destSfz);
+            // Copy the referenced samples too, preserving the .sfz's relative paths (paths that
+            // escape the sfz's tree are skipped — the set still plays from RAM this session).
             for (const auto& e : SampleMapping::entriesFromSfz(src))
             {
                 auto rel = e.file.getRelativePathFrom(src.getParentDirectory());
-                if (rel.startsWith("..")) { copied = false; break; }   // outside the sfz's tree
+                if (rel.startsWith("..")) continue;
                 auto d = dest.getChildFile(rel);
                 d.getParentDirectory().createDirectory();
-                if (! d.existsAsFile() && ! e.file.copyFileTo(d)) { copied = false; break; }
+                if (! d.existsAsFile())
+                    e.file.copyFileTo(d);
             }
-            return store.loadSfz(copied ? destSfz : src, error);
+            return idx;
         }
         auto dest = samplesFolder().getChildFile(src.getFileName());   // single audio file (12.1)
         if (! dest.existsAsFile() && ! src.copyFileTo(dest))
