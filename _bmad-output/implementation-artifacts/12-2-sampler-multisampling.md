@@ -1,27 +1,25 @@
-# Story 12.2: SAMPLER multisampling + pitch/time decoupling
+# Story 12.2: SAMPLER multisampling
 
 Status: ready-for-dev
 
 <!-- Follow-up to Story 12.1 (see its "Original discussion notes" — the analysis there is this
      story's blueprint). Scope set by user 2026-07-30: multisample import (folder naming
-     convention / .sfz) + "playing one WAV at several pitches while keeping playback speed/loops
-     truly in sync is its own topic (pitch/time DECOUPLING = timestretch) and belongs with
-     multisampling". -->
+     convention / .sfz). Pitch/time DECOUPLING (timestretch) was split out into Story 12.3
+     (user decision 2026-08-03) — this story keeps the 12.1 tape-style pitch model untouched. -->
 
 ## Story
 
 As a sound designer,
-I want the SAMPLER to (A) spread a folder of pitched recordings across the keyboard automatically
-and (B) optionally decouple pitch from playback speed,
-so that multisampled instruments stay usable over more than ~1 octave (no chipmunk/molasses) and
-transposed loop voices stay truly beat-locked instead of being cut at each master-clock wrap.
+I want the SAMPLER to spread a folder of pitched recordings across the keyboard automatically,
+so that multisampled instruments stay usable over more than ~1 octave (no chipmunk/molasses)
+instead of one sample being stretched across the whole keyboard.
 
-## Part A — Multisampling (import, never author)
+## Scope: import, never author
 
 The 12.1 analysis stands: only AUTHORING a key mapping needs an editor; DERIVING or IMPORTING one
 needs a single file action. JASS consumes mappings, it never edits them.
 
-### Acceptance criteria (A)
+## Acceptance criteria
 
 1. **`SampleSet` grows zones.** Each zone = (L/R buffers at file rate, fileSampleRate, rootKey,
    loKey, hiKey). A 12.1 single-sample set is exactly a one-zone set (root from the ROOT knob,
@@ -56,51 +54,14 @@ needs a single file action. JASS consumes mappings, it never edits them.
    ROOT knob is inert (mapping wins); for single-sample sets it keeps its 12.1 meaning — state
    this in the help text.
 7. All params append-only, no APVTS ID renamed/reordered; `AllModules.h` order untouched.
-
-## Part B — Pitch/time decoupling (timestretch)
-
-Today `rate = transposeRatio · 2^((60−root)/12) · fileSR/hostSR` and `step = rate · speed`
-(`SamplePlayer::trigger` / `nextSample`) — pitch and time are one number. That is the single place
-to decouple. Consequence today: differently-pitched loop voices traverse the region at different
-speeds, so the shared loop clock HARD-resyncs them each master wrap (a transposed voice cuts its
-pass — `setLoopSyncPhase` comment documents this).
-
-### Acceptance criteria (B)
-
-8. **New appended param `samplerStretch`** (Bool, default OFF). OFF = 12.1 tape-style behaviour,
-   bit-identical (regression guard: old presets/state have no field ⇒ default OFF ⇒ nothing
-   changes). ON = key sets pitch only; SPEED (and the region) sets time only; all loop voices
-   traverse START..END in the same wall-clock time regardless of pitch ⇒ the master-wrap hard
-   resync becomes a no-op by construction (keep the resync code path for OFF mode).
-9. **Engine choice is MEASURED, not guessed** ([[feedback_measure_dont_guess_dsp]]). Candidates:
-   - **signalsmith-stretch** (github.com/Signalsmith-Audio/signalsmith-stretch): header-only C++11,
-     MIT (GPLv3-compatible — add to README "Third-party" like KEMAR), built exactly for polyphonic
-     pitch-shift at time-rate 1:1. Configure/allocate in `prepareToPlay` ONLY (its setup
-     allocates); verify `process()` is alloc-free before committing (Epic 11 rules).
-   - **Own granular repitcher**: fixed ~50 ms Hann-crossfaded grains; grain read uses the existing
-     Hermite `read()`; position advances at time-rate, grains resampled at pitch ratio. RT-safe by
-     construction, "character" artifacts acceptable — JASS bends recordings, it does not imitate.
-   Scratch-harness measurement (like the 12.1 Hermite bake-off): quality on a bright reference
-   sample at ±7 and ±12 semitones AND per-voice CPU at 16 voices stereo. Record numbers in the Dev
-   Agent Record; pick the winner; wire the loser out cleanly (no dead half-integrations).
-10. **Latency/phase honesty:** if the chosen engine delays the sampler relative to the other
-    generators, measure the group delay and state it in the help text (EN+DE). No compensation
-    machinery in this story.
-11. Stretch mode composes with Part A (a multisampled zone can also be stretched), with all four
-    playback modes, with the loop crossfade, and with LEVEL/PAN modulation.
-
-## Shared acceptance criteria
-
-12. Help texts `Resources/EN/sampler.md` + `Resources/DE/sampler.md` updated: mapping conventions
-    (filename pattern, sfz subset, C4=60), caps, ROOT-inert rule, STRETCH trade-offs. README
-    feature bullet + third-party attribution if signalsmith-stretch is vendored; CHANGELOG
-    Unreleased entry; `docs/MODULE_SYSTEM.md`/`docs/ARCHITECTURE.md` sampler passages extended.
-13. Module footprint stays small (W12H1 if at all possible — large modules trigger the global
-    auto-fit downscale). Budget: STRETCH toggle + LOAD FOLDER action; no zone display, no editor.
-14. Verified by build + running app ([[feedback_ui_verification]]): old preset regression
-    (Sampler Demo F7 unchanged with STRETCH off), folder import plays correct pitches across
-    zone boundaries, sfz import of a hand-written 3-region file, beat-lock of transposed loop
-    voices with STRETCH on.
+8. Help texts `Resources/EN/sampler.md` + `Resources/DE/sampler.md` updated: mapping conventions
+   (filename pattern, sfz subset, C4=60), caps, ROOT-inert rule. README feature bullet; CHANGELOG
+   Unreleased entry; `docs/MODULE_SYSTEM.md`/`docs/ARCHITECTURE.md` sampler passages extended.
+9. Module footprint stays small (W12H1 if at all possible — large modules trigger the global
+   auto-fit downscale). Budget: one LOAD FOLDER action; no zone display, no editor.
+10. Verified by build + running app ([[feedback_ui_verification]]): old preset regression
+    (Sampler Demo F7 unchanged), folder import plays correct pitches across zone boundaries,
+    sfz import of a hand-written 3-region file.
 
 ## Tasks / Subtasks
 
@@ -112,14 +73,11 @@ pass — `setLoopSyncPhase` comment documents this).
   - [ ] Minimal sfz parser (group inheritance, 5 opcodes, relative paths, ignore rest)
 - [ ] Task 3: Voice + player (AC 6)
   - [ ] `trigger(transposeRatio, midiNote)` + zone lookup; per-zone root/rate; ROOT-inert rule
-- [ ] Task 4: Stretch engine bake-off (AC 9) — scratch harness, numbers in Dev Agent Record
-- [ ] Task 5: Stretch integration (AC 8, 10, 11) — `samplerStretch` param, decoupled step,
-      prepareToPlay allocation, mode/crossfade/mod-matrix composition
-- [ ] Task 6: Editor + persistence (AC 5, 13) — LOAD FOLDER FileAction (needs a `pickDirectory`
+- [ ] Task 4: Editor + persistence (AC 5, 9) — LOAD FOLDER FileAction (needs a `pickDirectory`
       flag on `FileAction` in `ModuleDescriptor.h` + `ModuleFrame.cpp` handling), sfz in LOAD
       wildcard, copy-on-load for sets, PresetIO re-resolve + preload of set folders
-- [ ] Task 7: Docs + help + CHANGELOG (AC 12)
-- [ ] Task 8: Verification pass (AC 14) — **clean rebuild mandatory**, see guardrails
+- [ ] Task 5: Docs + help + CHANGELOG (AC 8)
+- [ ] Task 6: Verification pass (AC 10) — **clean rebuild mandatory**, see guardrails
 
 ## Dev Notes
 
@@ -134,6 +92,8 @@ pass — `setLoopSyncPhase` comment documents this).
   `trigger(transposeRatio)` computes `rate`; `nextSample()` steps `rate*speed`, loop crossfade
   `kXfadeSamples=256` equal-gain against `pos∓len`; Hermite `read(p,ch)` edge-clamped;
   `setLoopSyncPhase` detects master wrap (`f < syncPhase−0.5`) and hard-resyncs loop voices.
+  This story only touches source/zone selection + `trigger` — the rate/step model stays 12.1
+  tape-style (decoupling = Story 12.3).
 - Master loop clock: `PluginProcessor::samplerMasterFrac`, advanced once per block in
   `processBlock` ("Story 12.1: shared SAMPLER loop clock" block), delivered via
   `Parameters::applyToVoice(..., samplerMasterFrac, ...)` → `setLoopSyncPhase`.
@@ -142,10 +102,10 @@ pass — `setLoopSyncPhase` comment documents this).
   `SamplerPan` per-sample mod; render: mono host ⇒ `0.5*(l+r)` into `PanSamplerL`, stereo set ⇒
   two `addPanned` into `PanSamplerL`/`PanSamplerR` (each through binaural/HRTF/equal-power).
 - `Source/DSP/ChannelStrip.h` — `kNumPanGenerators = 9`, `PanGen{...,PanSamplerL,PanSamplerR}`.
-  **Unchanged by this story** (stretch/zones add no pan slots).
+  **Unchanged by this story** (zones add no pan slots).
 - `Source/Modules/SamplerSpecs.h` — params `samplerOn/Set/Root/Start/End/Mode/Level/Pan/Speed`
   (Set: Float 0..31, non-automatable, def 2 = "CH_01" alphabetical; Mode order must match
-  `SamplePlayer::Mode`). Append `samplerStretch` at the END. IDs in `Parameters::ID`;
+  `SamplePlayer::Mode`). New params, if any, append at the END. IDs in `Parameters::ID`;
   registration `Source/Modules/AllModules.h` (`sampler()` last — keep).
 - Editor body: hand-built in `Source/UI/PluginEditor.cpp` (`// SAMPLER (Story 12.1)` block):
   SET combo with `indexIsValue = true` (combo-index bug class — keep for anything list-backed),
@@ -164,16 +124,15 @@ pass — `setLoopSyncPhase` comment documents this).
 
 ### Guardrails (violations caused real defects before)
 
-- **`SamplePlayer` grows fields and is embedded BY VALUE in `SynthVoice` ⇒ struct sizes change ⇒
-  `/t:Rebuild` (clean rebuild) MANDATORY** — incremental builds after header struct-size changes
-  caused the 0xC0000005 startup heap corruption (2026-07-24 lesson).
-- Audio thread: no allocation/locks/logging in `processBlock`/`nextSample` (Epic 11). All stretch
-  and zone buffers allocated in `prepareToPlay` (called repeatedly — re-entrant safe) or on the
-  message thread inside the store.
+- **`SamplePlayer`/`SampleSet` grow fields and the player is embedded BY VALUE in `SynthVoice` ⇒
+  struct sizes change ⇒ `/t:Rebuild` (clean rebuild) MANDATORY** — incremental builds after
+  header struct-size changes caused the 0xC0000005 startup heap corruption (2026-07-24 lesson).
+- Audio thread: no allocation/locks/logging in `processBlock`/`nextSample` (Epic 11). All zone
+  buffers allocated on the message thread inside the store; the voice only reads published sets.
 - Combo choice order == enum order (ComboBoxAttachment maps by index); list-backed combos use
   `indexIsValue`.
 - Never change existing param defaults for a new scenario (missing⇒default retro-modulates old
-  presets) — `samplerStretch` default OFF is the pattern.
+  presets).
 - Seeding files into `Samples/` alphabetically below index 2 shifts the `samplerSet` default's
   meaning ("CH_01") — if example multisample content is added, name it to sort AFTER existing
   entries, or adjust the documented default.
@@ -183,19 +142,18 @@ pass — `setLoopSyncPhase` comment documents this).
 
 ### Previous story intelligence (12.1)
 
-- Hermite chosen by measurement (38.3 dB vs linear 28.5 dB at +7 st) — reuse `read()` for grains.
+- Hermite chosen by measurement (38.3 dB vs linear 28.5 dB at +7 st) — `read()` is the only
+  interpolator; zones reuse it unchanged.
 - "Brass played CH_01" = combo-index bug class; `indexIsValue` is the cure.
 - Keyboard labels MIDI 60 as C4 (`setOctaveForMiddleC(4)`) — keep every note-name surface on that
   convention (AC 2).
-- Loop-click designed out via 256-sample equal-gain crossfade; stretch mode must not reintroduce
-  joins/clicks (grain windows or stretcher continuity cover it — verify by ear + capture).
+- Loop-click designed out via 256-sample equal-gain crossfade — zone playback must not bypass it.
 - Module default-VISIBLE was a user decision overriding the draft AC — don't flip it back.
 
 ### Project Structure Notes
 
-- New DSP stays header-only in `Source/DSP/` (e.g. `SfzImport.h`, stretch engine header) unless a
-  `.cpp` is unavoidable (then CMake `target_sources` + regenerate). Vendored third-party header →
-  a clearly-named subfolder (e.g. `Source/ThirdParty/signalsmith-stretch/`) + README attribution.
+- New DSP stays header-only in `Source/DSP/` (e.g. `SfzImport.h`) unless a `.cpp` is unavoidable
+  (then CMake `target_sources` + regenerate).
 - `_bmad-output/project-context.md` is PARTIALLY STALE (kFormatVersion is 6 not 1, AppData is
   `%AppData%\JASS` + `.jass` since the Epic-8 migration, output stage is the 5-mode STEREO module,
   commit language drifted to English) — trust `docs/ARCHITECTURE.md` / `docs/MODULE_SYSTEM.md`
@@ -204,18 +162,20 @@ pass — `setLoopSyncPhase` comment documents this).
 ### Testing standards
 
 No unit-test rig. Verification = clean build + running Standalone app + user listening
-([[feedback_ui_verification]]), plus scratch-harness measurements for DSP decisions (pure
-cmath/own FFT, no numpy — [[feedback_measure_dont_guess_dsp]]). AC 14 lists the concrete checks.
+([[feedback_ui_verification]]); mapping correctness is checked across zone boundaries by ear and
+against a hand-written `.sfz` (AC 10). DSP decisions, if any arise, are measured, not guessed
+([[feedback_measure_dont_guess_dsp]]).
 
 ### References
 
 - [Source: _bmad-output/implementation-artifacts/12-1-sampler-module.md] — scope decision,
   multisampling analysis, memory-wall analysis, Dev Agent Record (all load-bearing here)
+- [Source: _bmad-output/implementation-artifacts/12-3-pitch-time-decoupling.md] — the split-out
+  timestretch story; composes with this one (a zone can be stretched) but neither blocks the other
 - [Source: docs/ARCHITECTURE.md#3, #4.2, #5] — RT rules, per-voice rendering, modulation
 - [Source: docs/MODULE_SYSTEM.md#7, #8, #10] — matrix integration, persistence contract, recipes
 - [Source: Source/DSP/SampleBank.h, Source/DSP/SamplePlayer.h] — read fully before editing
 - SFZ subset: sfzformat.com opcodes `sample`/`key`/`lokey`/`hikey`/`pitch_keycenter`
-- signalsmith-stretch: github.com/Signalsmith-Audio/signalsmith-stretch (MIT, header-only)
 
 ## Dev Agent Record
 
