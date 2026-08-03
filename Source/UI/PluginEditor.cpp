@@ -1376,10 +1376,11 @@ void SynthyEditor::buildRack()
                         { juce::String(P::samplerSet) },
                         PresetIO::samplesFolder(), "*", /*pickDirectory*/ true },
             Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
+            // 12.3: pitch/time decoupling — grouped right beside MODE (both choose the playback
+            // regime); renders caption-above like the knobs (review feedback 2026-08-04).
+            Toggle{ P::samplerStretch, "STRETCH" },
             rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
             K(P::samplerSpeed, "SPEED"),
-            // 12.3: pitch/time decoupling — key = pitch only, SPEED = time only (~60 ms latency).
-            Toggle{ P::samplerStretch, "STRETCH" },
             Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));

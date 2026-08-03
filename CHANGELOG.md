@@ -22,6 +22,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   name like single samples; sets live in `%AppData%\JASS\Samples\<SetName>\`.
 - **SAMPLER load errors now name the file and the reason** (e.g. which file of a
   set is unreadable) instead of a generic limits message.
+- **Two shipped multisample example sets** (seeded to `%AppData%\JASS\Samples`):
+  **EPiano** (5 FM e-piano recordings C2–C6, mapped by the `Name_C3.wav` folder
+  convention) and **Organ** (3 drawbar recordings mapped by the commented example
+  `Organ.sfz` — a template for writing your own).
 - **SAMPLER STRETCH mode** (Story 12.3) — pitch/time decoupling: the key sets only
   the pitch, SPEED only the tempo, so loops keep their rhythm on every key and all
   loop voices stay beat-locked regardless of pitch (the tape-mode hard resync
@@ -40,6 +44,9 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   configuration surfaces, compile-time tunables, build gotchas).
 
 ### Changed
+- **SAMPLER STRETCH toggle** moved next to MODE and now renders like every other
+  control (name caption above, checkbox below) — the button-side label was
+  unreadable between the knobs.
 - **SAMPLER shared loop clock runs only while voices are sounding** — during
   silence it parks at the region start, so the first note after a pause always
   plays the sample's attack; simultaneous/overlapping loop notes still join the

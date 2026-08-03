@@ -190,8 +190,10 @@ namespace PresetIO
         return dir;
     }
 
-    // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav) into
-    // %AppData%\JASS\Samples. Same idempotent pattern as seedWavetables below.
+    // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav + *.sfz)
+    // into %AppData%\JASS\Samples. Same idempotent pattern as seedWavetables below.
+    // "<Folder>__<File>" names (Story 12.2 example sets) seed into a SUBFOLDER — binary-data
+    // resources are flat, so the multisample folder structure is encoded in the filename.
     inline void seedSamples()
     {
         auto dir = samplesFolder();
@@ -200,7 +202,15 @@ namespace PresetIO
             int size = 0;
             const char* data = Samples::getNamedResource(Samples::namedResourceList[i], size);
             if (data == nullptr || size <= 0) continue;
-            auto file = dir.getChildFile(Samples::getNamedResourceOriginalFilename(Samples::namedResourceList[i]));
+            juce::String name = Samples::getNamedResourceOriginalFilename(Samples::namedResourceList[i]);
+            auto target = dir;
+            if (name.contains("__"))
+            {
+                target = dir.getChildFile(name.upToFirstOccurrenceOf("__", false, false));
+                target.createDirectory();
+                name = name.fromFirstOccurrenceOf("__", false, false);
+            }
+            auto file = target.getChildFile(name);
             if (! file.existsAsFile())
                 file.replaceWithData(data, (size_t) size);
         }
