@@ -4,7 +4,7 @@ baseline_commit: ad2770b310b56a7d59efae310d485a5d3b1576d5
 
 # Story 12.2: SAMPLER multisampling
 
-Status: review (implementation user-verified by ear 2026-08-03; code-review pending)
+Status: done (user-verified 2026-08-03; adversarial code-review passed + patches applied 2026-08-04)
 
 <!-- Follow-up to Story 12.1 (see its "Original discussion notes" — the analysis there is this
      story's blueprint). Scope set by user 2026-07-30: multisample import (folder naming
@@ -85,6 +85,44 @@ needs a single file action. JASS consumes mappings, it never edits them.
       (clean rebuild green, 0 warnings; app starts stable; USER verified by ear 2026-08-03:
       folder import with correct zone boundary, ROOT dimming, sfz 3-region import after the
       Talkbox fix below)
+
+### Review Findings (adversarial 3-layer review, 2026-08-04)
+
+- [x] [Review][Decision→Patch, user choice "support it"] `default_path=` (inside `<control>`) is ignored — very common in real
+      .sfz files; every `sample=` then resolves against the wrong base with a per-file "not
+      found" error. Support it (small parser addition, 6th opcode) or keep the documented
+      5-opcode scope?
+- [x] [Review][Patch] Folder-with-.sfz import copies only FLAT top-level files — sfz-referenced
+      subdirectory samples are lost, the AppData copy silently fails at every preload; also
+      absolute/cross-drive `sample=` paths dodge the `..` escape guard [Source/Audio/PresetIO.h:
+      importSamplerSource]
+- [x] [Review][Patch] Single-file LOAD still copies BEFORE validating — a rejected file leaves a
+      dead copy that preload silently re-rejects every startup [PresetIO.h:importSamplerSource]
+- [x] [Review][Patch] Name collision single-file vs. folder/.sfz set: `indexOf` early-return
+      silently returns the OTHER kind's set; preload order makes the file win every session, so
+      a preset's mapped set flips identity [Source/DSP/SampleBank.h:loadFolder/loadSfz/loadFile]
+- [x] [Review][Patch] Corrupt WAV header (huge sampleRate passes the seconds-only cap) →
+      int overflow / multi-GB allocation on the message thread before the byte budget is
+      checked [SampleBank.h:loadZone]
+- [x] [Review][Patch] FOLDER chooser confirmed at its default location imports the Samples ROOT
+      itself as a set named "Samples" (+ recursive Samples\Samples copy) [PluginEditor.cpp +
+      PresetIO.h]
+- [x] [Review][Patch] Malformed/empty `key=`/`lokey=` degrades to a FULL-KEYBOARD region that
+      shadows every other zone (zoneFor is first-match) — drop bad regions instead
+      [Source/DSP/SampleMapping.h:entriesFromSfz]
+- [x] [Review][Patch] `<region>sample=a.wav` (header glued to opcode, legal SFZ) sets
+      `ignoring=true` and silently loses the region [SampleMapping.h:entriesFromSfz]
+- [x] [Review][Patch] Velocity-layered .sfz: all layers load and charge the 300 s/byte caps but
+      only the first is ever reachable — drop regions whose key range is contained in an earlier
+      one [SampleMapping.h]
+- [x] [Review][Patch] `parseNoteToken` accepts malformed octaves ("C1-2" → C1) — set-membership
+      check instead of format check [SampleMapping.h:parseNoteToken]
+- [x] [Review][Patch] Duplicate-root "first wins" is nondeterministic — `std::sort` is unstable;
+      use `std::stable_sort` [SampleMapping.h:deriveRanges]
+- [x] [Review][Patch] Help text says "basic sample/key opcodes" without naming the 5 supported
+      opcodes (AC 8 asks for the subset) [Resources/EN|DE/sampler.md]
+- [x] [Review][Defer] Synchronous message-thread import can freeze the UI for seconds on a full
+      300 s set (12.1 pattern, bounded by the caps; async loading = own story) — deferred
 
 ## Change Log
 

@@ -34,8 +34,12 @@ namespace SampleMapping
         int i = 1;
         if (i < t.length() && t[i] == '#')      { ++semi; ++i; }
         else if (i < t.length() && t[i] == 'b') { --semi; ++i; }   // lowercase only ('B' is a note)
-        const auto oct = t.substring (i);
-        if (oct.isEmpty() || ! oct.retainCharacters ("-0123456789").equalsIgnoreCase (oct))
+        // Octave must be a well-FORMED integer (optional leading '-', then digits only) — a
+        // set-membership check let "C1-2" slip through as C1 (review 2026-08-04).
+        auto oct = t.substring (i);
+        const bool neg = oct.startsWithChar ('-');
+        const auto digits = neg ? oct.substring (1) : oct;
+        if (digits.isEmpty() || ! digits.containsOnly ("0123456789"))
             return -1;
         const int midi = (oct.getIntValue() + 1) * 12 + semi;      // C4 = (4+1)*12 = 60
         return (midi >= 0 && midi <= 127) ? midi : -1;
@@ -63,8 +67,10 @@ namespace SampleMapping
     // halfway between neighbours, outermost zones extend to 0/127. Duplicate roots: first wins.
     inline void deriveRanges (std::vector<Entry>& entries)
     {
-        std::sort (entries.begin(), entries.end(),
-                   [] (const Entry& a, const Entry& b) { return a.rootKey < b.rootKey; });
+        // stable_sort: keeps the alphabetical pre-sort for equal roots, so "duplicate roots:
+        // first (alphabetical) wins" is actually guaranteed, not STL-implementation luck.
+        std::stable_sort (entries.begin(), entries.end(),
+                          [] (const Entry& a, const Entry& b) { return a.rootKey < b.rootKey; });
         entries.erase (std::unique (entries.begin(), entries.end(),
                                     [] (const Entry& a, const Entry& b) { return a.rootKey == b.rootKey; }),
                        entries.end());
@@ -92,17 +98,26 @@ namespace SampleMapping
         return entries;
     }
 
-    // ── Minimal .sfz parser (Story 12.2 AC3) ─────────────────────────────────────────────────
-    // Recognised: <group>/<global>/<master> (defaults that inherit into regions) and <region>;
-    // any other header (<control>, <curve>, ...) suspends parsing until the next known header.
-    // Opcodes: sample= (value may contain spaces — runs until the next token containing '='),
-    // key= / lokey= / hikey= / pitch_keycenter= (note names or numbers). Everything else is
-    // ignored. Missing pitch_keycenter ⇒ 60 (the SFZ default). "//" starts a comment.
+    // ── Minimal .sfz parser (Story 12.2 AC3, hardened by review 2026-08-04) ──────────────────
+    // Recognised: <group>/<global>/<master> (defaults that inherit into regions), <region>, and
+    // <control> (ONLY for default_path= — very common in real files); any other header suspends
+    // parsing until the next known one. Opcodes: sample= (value may contain spaces — runs until
+    // the next token containing '='), key= / lokey= / hikey= / pitch_keycenter= (note names or
+    // numbers), default_path=. Everything else is ignored. Missing pitch_keycenter ⇒ 60 (the
+    // SFZ default). "//" starts a comment. Robustness rules:
+    //   · headers glued to their first opcode ("<region>sample=x", legal SFZ) are split;
+    //   · a region with an UNPARSABLE key/lokey/hikey/pitch_keycenter value is DROPPED — the
+    //     old "treat as unset" fallback turned a typo into a full-keyboard region that shadowed
+    //     every other zone (zoneFor is first-match);
+    //   · regions whose key range is CONTAINED in an earlier region's range are dropped —
+    //     velocity layers (lovel/hivel, unsupported) would otherwise load N copies that charge
+    //     the caps but can never be reached.
     inline std::vector<Entry> entriesFromSfz (const juce::File& sfzFile)
     {
-        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1; };
+        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1; bool bad = false; };
         Scope group, region;
-        bool inRegion = false, ignoring = false;
+        bool inRegion = false, ignoring = false, inControl = false;
+        juce::String defaultPath;
         std::vector<Entry> entries;
         const auto baseDir = sfzFile.getParentDirectory();
 
@@ -117,9 +132,16 @@ namespace SampleMapping
             if (root < 0) root = 60;      // SFZ default: unchanged on middle C
             if (lo   < 0) lo   = 0;
             if (hi   < 0) hi   = 127;
-            if (sample.isNotEmpty() && lo <= hi)
-                entries.push_back ({ baseDir.getChildFile (sample.replaceCharacter ('\\', '/')),
-                                     juce::jlimit (0, 127, root), lo, hi });
+            if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi)
+            {
+                bool contained = false;   // velocity-layer duplicate: same/contained key range
+                for (const auto& e : entries)
+                    if (e.loKey <= lo && e.hiKey >= hi) { contained = true; break; }
+                if (! contained)
+                    entries.push_back ({ baseDir.getChildFile ((defaultPath + sample)
+                                                                   .replaceCharacter ('\\', '/')),
+                                         juce::jlimit (0, 127, root), lo, hi });
+            }
             inRegion = false;
             region = {};
         };
@@ -128,7 +150,8 @@ namespace SampleMapping
         lines.addLines (sfzFile.loadFileAsString());
         for (auto line : lines)
         {
-            line = line.upToFirstOccurrenceOf ("//", false, false);
+            line = line.upToFirstOccurrenceOf ("//", false, false)
+                       .replace (">", "> ");   // split headers glued to their first opcode
             juce::StringArray tokens;
             tokens.addTokens (line, " \t", "");
             tokens.removeEmptyStrings();
@@ -138,9 +161,11 @@ namespace SampleMapping
                 if (tok.startsWithChar ('<'))
                 {
                     flushRegion();
+                    inControl = false;
                     if (tok == "<region>")      { inRegion = true; ignoring = false; }
                     else if (tok == "<group>" || tok == "<global>" || tok == "<master>")
                                                 { group = {}; ignoring = false; }
+                    else if (tok == "<control>"){ ignoring = false; inControl = true; }
                     else                        { ignoring = true; }
                     continue;
                 }
@@ -148,20 +173,30 @@ namespace SampleMapping
                     continue;
                 const auto opcode = tok.upToFirstOccurrenceOf ("=", false, false).toLowerCase();
                 auto value        = tok.fromFirstOccurrenceOf ("=", false, false);
-                if (opcode == "sample")   // path may contain spaces: extend to the next opcode
+                if (opcode == "sample" || opcode == "default_path")   // value may contain spaces
                     while (i + 1 < tokens.size() && ! tokens.getReference (i + 1).contains ("="))
                         value << " " << tokens.getReference (++i);
 
-                Scope& s = inRegion ? region : group;
-                if      (opcode == "sample")          s.sample = value;
-                else if (opcode == "lokey")           s.lo = parseNoteToken (value);
-                else if (opcode == "hikey")           s.hi = parseNoteToken (value);
-                else if (opcode == "pitch_keycenter") s.root = parseNoteToken (value);
-                else if (opcode == "key")             // shorthand: lo = hi = root
+                if (inControl)
                 {
-                    const int k = parseNoteToken (value);
-                    s.lo = s.hi = s.root = k;
+                    if (opcode == "default_path")
+                        defaultPath = value.endsWithChar ('/') || value.endsWithChar ('\\')
+                                          || value.isEmpty() ? value : value + "/";
+                    continue;   // no other <control> opcode is interpreted
                 }
+
+                Scope& s = inRegion ? region : group;
+                auto note = [&s] (const juce::String& v)
+                {
+                    const int k = parseNoteToken (v);
+                    if (k < 0) s.bad = true;   // typo ⇒ drop the region, never widen it
+                    return k;
+                };
+                if      (opcode == "sample")          s.sample = value;
+                else if (opcode == "lokey")           s.lo = note (value);
+                else if (opcode == "hikey")           s.hi = note (value);
+                else if (opcode == "pitch_keycenter") s.root = note (value);
+                else if (opcode == "key")             s.lo = s.hi = s.root = note (value);
                 // every other opcode: ignored by design (minimal subset)
             }
         }

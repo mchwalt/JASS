@@ -4,7 +4,7 @@ baseline_commit: 146cd0e09c82cc698cf8f2ea98fb2a9146f3250d
 
 # Story 12.3: SAMPLER pitch/time decoupling (timestretch)
 
-Status: review (implementation user-verified by ear 2026-08-04; code-review pending)
+Status: done (user-verified + adversarial code-review passed, patches applied 2026-08-04)
 
 <!-- Split out of the original combined 12.2 draft (user decision 2026-08-03). Scope set by user
      2026-07-30: "playing one WAV at several pitches while keeping playback speed/loops truly in
@@ -98,6 +98,29 @@ design; this story adds the alternative without touching the default.
   3. **Import hardening (12.2 path, found by the cap stress test):** folder/.sfz imports now
      VALIDATE-THEN-COPY — a rejected set no longer leaves a dead folder in
      `%AppData%\JASS\Samples` that would silently fail at every preload.
+
+### Review Findings (adversarial 3-layer review, 2026-08-04)
+
+- [x] [Review][Decision→Patch, user choice "B"] Note-on `outputSeek` burst stacks on chords — 0.57 ms/voice on the
+      audio thread; ~8 simultaneous note-ons exceed a 256-sample callback budget, 16-voice
+      retrigger ≈ 9.1 ms. Options: accept+document (realistic play rarely lands >4 note-ons in
+      ONE block; standalone default buffer ≈ 10 ms) vs. cap seeks per block with cheap-seek
+      fallback (~30 ms residual latency for the overflow voices).
+- [x] [Review][Patch] Short one-shots (< ~60 ms · SPEED, or narrow START/END) play SILENT in
+      stretch mode — drain budget is debited during the discarded note-on pre-roll; also tail
+      truncated up to kChunk−1 by input-domain drain accounting [Source/DSP/SamplePlayer.h:
+      trigger/fillInput/nextSample]
+- [x] [Review][Patch] Cross-zone loop voices DRIFT in stretch mode (unequal zone lengths/rates)
+      — hard resync skipped on a premise that only holds within one zone; re-enable the wrap
+      resync (it is a no-op for equal zones by construction) [SamplePlayer.h:setLoopSyncPhase]
+- [x] [Review][Patch] Mid-note SET switch keeps playing the old sample from the stretch FIFO —
+      setSource lacks the reset/re-park that setStretchMode has [SamplePlayer.h:setSource]
+- [x] [Review][Patch] AC 3 regressed during the pre-roll fix: the ~60 ms engine note vanished
+      from the help texts, and docs/MODULE_SYSTEM.md never got a STRETCH mention (AC 6)
+      [Resources/EN|DE/sampler.md, docs/MODULE_SYSTEM.md]
+- [x] [Review][Defer] Toggling STRETCH ON mid-note inserts ~60 ms of silence on held voices
+      (per-voice outputSeek on toggle would burst 16 × 0.57 ms in one block — worse); rare edit
+      action, documented — deferred
 
 ## Dev Notes
 

@@ -6,8 +6,9 @@ wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
 - **Multisampling (FOLDER):** load a whole folder as ONE set. Files named like `Piano_C3.wav` /
   `Pad_A#4.wav` (note name with C4 = middle C, or a MIDI number) are spread across the keyboard,
   each covering the range halfway to its neighbours — so instruments stay natural over more than
-  one octave. LOAD also accepts an **.sfz** file (its key mapping is imported; only the basic
-  sample/key opcodes are read).
+  one octave. LOAD also accepts an **.sfz** file (its key mapping is imported; read opcodes:
+  `sample`, `key`, `lokey`/`hikey`, `pitch_keycenter`, `default_path` — everything else,
+  including velocity layers, is ignored).
 - **ROOT** — the key at which a **single** recording plays at its original speed; every other key
   transposes it, tape-style (formants shift with pitch: usable range is roughly ±1 octave — the
   nature of single-sample playback, not a defect). For multisample sets each zone brings its own
@@ -17,8 +18,9 @@ wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
   tape-style — pitch moves with it.
 - **STRETCH** decouples pitch from time: the key sets only the pitch, SPEED only the tempo —
   a loop keeps its rhythm on every key, and all loop voices stay beat-locked regardless of
-  pitch. The attack is pre-computed at note-on, so playing stays immediate; the trade-off is
-  a subtle phase-vocoder character on transients. Off = classic tape behaviour.
+  pitch. The engine works ~60 ms ahead internally; that lead is pre-computed at note-on, so
+  playing stays immediate. The trade-off is a subtle phase-vocoder character on transients.
+  Off = classic tape behaviour.
 - **Stereo files stay stereo**: left/right render as two placed sources around PAN; in the Mono and
   Pseudo-Stereo output modes they collapse to a mono downmix.
 - **Limits:** 60 s per file, 5 minutes of audio per set, 32 sets.

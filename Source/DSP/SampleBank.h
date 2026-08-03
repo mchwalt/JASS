@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <memory>
+#include <limits>
 #include "SampleMapping.h"
 
 // ── SAMPLER sample sets (Story 12.1, zones since Story 12.2) ────────────────────────────────
@@ -27,6 +28,11 @@
 //   · GLOBAL budget:  ≤ kMaxStoreBytes, which is EXACTLY the 12.1 worst case of
 //     32 × 60 s stereo @ 44.1 kHz float ≈ 646 MiB — so multisampling cannot exceed the RAM
 //     envelope the 12.1 never-free decision was based on, no matter how sets are shaped.
+// Global RAM budget = the 12.1 worst case (32 × 60 s stereo @ 44.1 kHz float). Multisample
+// sets reshape how the budget is spent but can never exceed it (Story 12.2 AC 4). Namespace
+// scope so loadZone can bound a single allocation against it BEFORE allocating.
+inline constexpr size_t kMaxSampleStoreBytes = (size_t) 32 * 60 * 44100 * 2 * sizeof (float);
+
 struct SampleZone
 {
     std::vector<float> data[2];   // [0]=L (or mono), [1]=R (empty ⇒ mono); at the FILE's rate
@@ -95,6 +101,14 @@ public:
             return false;
         if ((double) reader->lengthInSamples / reader->sampleRate > kMaxSeconds)
             return false;   // over the per-file cap — reject outright
+        // Corrupt-header guard (review 2026-08-04): a bogus 32-bit sampleRate (GHz range) can
+        // pass the SECONDS cap with a huge lengthInSamples — bound the actual allocation in
+        // 64-bit BEFORE it happens (int overflow / multi-GB alloc on the message thread).
+        const juce::int64 len64  = reader->lengthInSamples;
+        const juce::int64 bytes  = len64 * (reader->numChannels > 1 ? 2 : 1) * (juce::int64) sizeof (float);
+        if (len64 > (juce::int64) std::numeric_limits<int>::max() / 8
+            || bytes > (juce::int64) kMaxSampleStoreBytes)
+            return false;
 
         const int total = (int) reader->lengthInSamples;
         const int nCh   = juce::jmax (1, (int) reader->numChannels);
@@ -171,9 +185,7 @@ class SampleBankStore
 {
 public:
     static constexpr int MaxSets = 32;   // set-count cap (12.1 AC3, kept)
-    // Global RAM budget = the 12.1 worst case (32 × 60 s stereo @ 44.1 kHz float). Multisample
-    // sets reshape how the budget is spent but can never exceed it (Story 12.2 AC4).
-    static constexpr size_t kMaxStoreBytes = (size_t) MaxSets * 60 * 44100 * 2 * sizeof (float);
+    static constexpr size_t kMaxStoreBytes = kMaxSampleStoreBytes;   // budget: see namespace const
 
     static SampleBankStore& instance()
     {
@@ -215,8 +227,17 @@ public:
     // MESSAGE THREAD only. Duplicate-safe by name.
     int loadFile (const juce::File& file, juce::String* error = nullptr)
     {
+        // Duplicate-safe by name — but only within the SAME kind (review 2026-08-04): silently
+        // returning a mapped set for a single-file load (or vice versa) flips a preset's set
+        // identity across sessions, because preload order decides who claims the name first.
         const int existing = indexOf (file.getFileNameWithoutExtension());
-        if (existing >= 0) return existing;
+        if (existing >= 0)
+        {
+            if (! getSet (existing)->isMapped()) return existing;
+            if (error) *error = "a multisample set named \"" + file.getFileNameWithoutExtension()
+                              + "\" is already loaded — rename the file";
+            return -1;
+        }
         auto set = SampleSet::loadFromFile (file);
         if (set == nullptr)
         {
@@ -231,7 +252,13 @@ public:
     int loadFolder (const juce::File& dir, juce::String* error = nullptr)
     {
         const int existing = indexOf (dir.getFileName());
-        if (existing >= 0) return existing;
+        if (existing >= 0)
+        {
+            if (getSet (existing)->isMapped()) return existing;
+            if (error) *error = "a single sample named \"" + dir.getFileName()
+                              + "\" is already loaded — rename the folder";
+            return -1;
+        }
         juce::String err;
         auto set = SampleSet::loadFromEntries (dir.getFileName(),
                                                SampleMapping::entriesFromFolder (dir), err);
@@ -243,7 +270,13 @@ public:
     int loadSfz (const juce::File& sfzFile, juce::String* error = nullptr)
     {
         const int existing = indexOf (sfzFile.getFileNameWithoutExtension());
-        if (existing >= 0) return existing;
+        if (existing >= 0)
+        {
+            if (getSet (existing)->isMapped()) return existing;
+            if (error) *error = "a single sample named \"" + sfzFile.getFileNameWithoutExtension()
+                              + "\" is already loaded — rename the .sfz";
+            return -1;
+        }
         juce::String err;
         auto set = SampleSet::loadFromEntries (sfzFile.getFileNameWithoutExtension(),
                                                SampleMapping::entriesFromSfz (sfzFile), err);

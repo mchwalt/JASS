@@ -226,24 +226,62 @@ namespace PresetIO
     //   · audio file       → Samples\<name>.<ext>            (12.1 behaviour, unchanged)
     //   · folder           → Samples\<folder>\ (audio + any .sfz, flat)
     //   · .sfz             → Samples\<sfzname>\ (the .sfz + its referenced samples)
+    // Copy an .sfz plus its referenced samples into `dest`, preserving the sfz's relative
+    // paths. Paths escaping the sfz's tree (`..`, absolute, other drive) are skipped — that set
+    // still plays from RAM this session, it just won't survive into future sessions.
+    inline void copySfzPortable(const juce::File& sfz, const juce::File& dest)
+    {
+        dest.createDirectory();
+        auto destSfz = dest.getChildFile(sfz.getFileName());
+        if (! destSfz.existsAsFile())
+            sfz.copyFileTo(destSfz);
+        for (const auto& e : SampleMapping::entriesFromSfz(sfz))
+        {
+            auto rel = e.file.getRelativePathFrom(sfz.getParentDirectory());
+            if (rel.startsWith("..") || juce::File::isAbsolutePath(rel)) continue;
+            auto d = dest.getChildFile(rel);
+            d.getParentDirectory().createDirectory();
+            if (! d.existsAsFile())
+                e.file.copyFileTo(d);
+        }
+    }
+
     inline int importSamplerSource(const juce::File& src, juce::String* error = nullptr)
     {
         auto& store = SampleBankStore::instance();
-        // Folder / .sfz: LOAD FIRST, COPY ONLY ON SUCCESS. The audio lives in RAM once loaded —
-        // the AppData copy exists purely so future sessions can re-resolve the set by name, so
-        // a REJECTED set must not leave a dead folder behind (it would silently fail at every
-        // preload from then on). Copy failures are non-fatal: the set still plays this session.
+        // All branches: LOAD FIRST, COPY ONLY ON SUCCESS (review 2026-08-04: now including the
+        // single-file branch). The audio lives in RAM once loaded — the AppData copy exists
+        // purely so future sessions can re-resolve the set by name, so a REJECTED source must
+        // not leave a dead copy behind (it would silently fail at every preload from then on).
+        // Copy failures are non-fatal: the set still plays this session.
         if (src.isDirectory())
         {
+            if (src == samplesFolder())
+            {   // review 2026-08-04: confirming the chooser at its start location would import
+                // the whole library root as a set named "Samples" (+ a recursive self-copy)
+                if (error) *error = "this IS the JASS sample library folder - choose a folder "
+                                    "that contains ONE instrument (or a subfolder in here)";
+                return -1;
+            }
             const int idx = loadSampleSetFolder(src, error);
             if (idx < 0) return -1;
             auto dest = samplesFolder().getChildFile(src.getFileName());
-            dest.createDirectory();
-            for (auto& f : src.findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff;*.sfz"))
+            auto sfzs = src.findChildFiles(juce::File::findFiles, false, "*.sfz");
+            if (! sfzs.isEmpty())
+            {   // mapped via the contained .sfz — its samples may live in SUBFOLDERS, which a
+                // flat copy would lose (dead AppData folder, review 2026-08-04)
+                sfzs.sort();
+                copySfzPortable(sfzs.getReference(0), dest);
+            }
+            else
             {
-                auto d = dest.getChildFile(f.getFileName());
-                if (! d.existsAsFile())
-                    f.copyFileTo(d);
+                dest.createDirectory();
+                for (auto& f : src.findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff"))
+                {
+                    auto d = dest.getChildFile(f.getFileName());
+                    if (! d.existsAsFile())
+                        f.copyFileTo(d);
+                }
             }
             return idx;
         }
@@ -251,28 +289,15 @@ namespace PresetIO
         {
             const int idx = store.loadSfz(src, error);
             if (idx < 0) return -1;
-            auto dest    = samplesFolder().getChildFile(src.getFileNameWithoutExtension());
-            dest.createDirectory();
-            auto destSfz = dest.getChildFile(src.getFileName());
-            if (! destSfz.existsAsFile())
-                src.copyFileTo(destSfz);
-            // Copy the referenced samples too, preserving the .sfz's relative paths (paths that
-            // escape the sfz's tree are skipped — the set still plays from RAM this session).
-            for (const auto& e : SampleMapping::entriesFromSfz(src))
-            {
-                auto rel = e.file.getRelativePathFrom(src.getParentDirectory());
-                if (rel.startsWith("..")) continue;
-                auto d = dest.getChildFile(rel);
-                d.getParentDirectory().createDirectory();
-                if (! d.existsAsFile())
-                    e.file.copyFileTo(d);
-            }
+            copySfzPortable(src, samplesFolder().getChildFile(src.getFileNameWithoutExtension()));
             return idx;
         }
-        auto dest = samplesFolder().getChildFile(src.getFileName());   // single audio file (12.1)
-        if (! dest.existsAsFile() && ! src.copyFileTo(dest))
-            dest = src;
-        return store.loadFile(dest, error);
+        const int idx = store.loadFile(src, error);   // single audio file (12.1)
+        if (idx < 0) return -1;
+        auto dest = samplesFolder().getChildFile(src.getFileName());
+        if (! dest.existsAsFile())
+            src.copyFileTo(dest);
+        return idx;
     }
 
     // Pre-load every sample from the Samples folder into the store at startup (message thread),
