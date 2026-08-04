@@ -9,19 +9,32 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   die Tastatur verteilt — jede deckt den Bereich bis zur Mitte zum Nachbarn ab, so bleiben
   Instrumente über mehr als eine Oktave natürlich. LOAD akzeptiert auch eine **.sfz**-Datei
   (ihre Tastenzuordnung wird importiert; gelesene Opcodes: `sample`, `key`, `lokey`/`hikey`,
-  `pitch_keycenter`, `default_path` — alles andere, auch Velocity-Layer, wird ignoriert).
+  `pitch_keycenter`, `default_path`, `offset`, `ampeg_release` — alles andere, auch
+  Velocity-Layer, wird ignoriert; eine defekte Zone in einem importierten Set korrigiert man
+  durch Editieren der .sfz).
 - **ROOT** — die Taste, bei der eine **einzelne** Aufnahme in Originalgeschwindigkeit läuft; jede
   andere Taste transponiert sie bandmaschinen-artig (Formanten wandern mit: nutzbar sind grob
   ±1 Oktave — die Natur von Einzel-Samples, kein Defekt). Bei Multisample-Sets bringt jede Zone
   ihren eigenen Root mit, ROOT ist dann inaktiv (gedimmt).
 - **START / END** beschneiden den gespielten Bereich; **MODE**: One-Shot, Loop (klickfreier
-  Crossfade-Übergang), Reverse, Rev-Loop. **SPEED** (0,25×–4×) multipliziert die
+  Crossfade-Übergang), Reverse, Rev-Loop. Beim Wählen eines **Multisample-Sets springt MODE
+  automatisch auf One-Shot und STRETCH aus** — Instrumente spielt man chromatisch (Loop koppelt
+  die Stimmen an die gemeinsame Loop-Uhr, und STRETCH bringt bei ein-zwei Halbtönen
+  Transposition pro Zone nichts). Zurückschalten ist jederzeit erlaubt. **SPEED** (0,25×–4×) multipliziert die
   Abspielgeschwindigkeit zusätzlich zur Taste, bandmaschinen-artig — die Tonhöhe wandert mit.
 - **STRETCH** entkoppelt Tonhöhe und Zeit: die Taste bestimmt nur noch die Tonhöhe, SPEED nur
   das Tempo — ein Loop behält auf jeder Taste seinen Rhythmus, und alle Loop-Stimmen bleiben
   unabhängig von der Tonhöhe im Takt. Die Engine arbeitet intern ~60 ms voraus; dieser Vorlauf
   wird beim Tastendruck vorberechnet, das Spielgefühl bleibt direkt. Preis ist ein dezenter
   Phase-Vocoder-Charakter auf Transienten. Aus = klassisches Bandmaschinen-Verhalten.
+- **REL** — der **eigene Ausklang** des Samplers: wie lange eine losgelassene Taste ausklingt
+  (der Klang schwingt unter dem Fade weiter — das Dämpfen eines echten Instruments statt eines
+  harten Schnitts). Eine importierte .sfz kann das pro Zone setzen (`ampeg_release` — die
+  Piano-Sets tun es); REL greift dann nur für Zonen ohne Wert. 0 = aus (klassisches Verhalten).
+  Einfachster Aufbau für gesampelte Instrumente: **ENVELOPE aus** — dann regelt der Sampler
+  seinen Ausklang komplett selbst. Mit ENVELOPE an formt die ADSR die Stimme obendrauf
+  (dann A 0 / D 0 / S max / R mindestens so lang wie der längste Ausklang). Das Haltepedal
+  (CC64) hält Noten; der Ausklang startet beim Loslassen des Pedals.
 - **Stereo-Dateien bleiben stereo**: links/rechts werden als zwei platzierte Quellen um PAN herum
   gerendert; in den Modi Mono und Pseudo-Stereo kollabieren sie zum Mono-Downmix.
 - **Grenzen:** 60 s pro Datei, 15 Minuten Audio pro Set, 32 Sets (plus ein globales

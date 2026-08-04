@@ -10,7 +10,8 @@
 //   1. a folder of files named  <anything>_<note>.wav  (note = "C3"/"A#4" or a MIDI number),
 //      ranges split halfway between neighbouring roots;
 //   2. a minimal .sfz subset — <group>/<region> headers and the opcodes sample / key / lokey /
-//      hikey / pitch_keycenter. EVERY other opcode is ignored, silently.
+//      hikey / pitch_keycenter / hivel / offset / ampeg_release. EVERY other opcode is ignored,
+//      silently.
 // Note names resolve with C4 = MIDI 60 — the pitch-model convention used everywhere in JASS
 // (keyboard labelling, "FREQ knobs define the sound AT C4"). MESSAGE THREAD only.
 namespace SampleMapping
@@ -64,6 +65,7 @@ namespace SampleMapping
         int hiKey   = 127;
         int hiVel   = 127;
         int offsetFrames = 0;   // sfz offset= — skip this many frames at the file start
+        float releaseSeconds = -1.0f;   // sfz ampeg_release= — note-off fade (12.4); <0 ⇒ unset
     };
 
     // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
@@ -122,7 +124,7 @@ namespace SampleMapping
     //     the caps but can never be reached.
     inline std::vector<Entry> entriesFromSfz (const juce::File& sfzFile)
     {
-        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1, hiVel = -1, offset = -1; bool bad = false; };
+        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1, hiVel = -1, offset = -1; float rel = -1.0f; bool bad = false; };
         Scope group, region;
         bool inRegion = false, ignoring = false, inControl = false;
         juce::String defaultPath;
@@ -139,6 +141,7 @@ namespace SampleMapping
             int root  = region.root  >= 0 ? region.root  : group.root;
             int hiVel = region.hiVel >= 0 ? region.hiVel : group.hiVel;
             int offs  = region.offset >= 0 ? region.offset : group.offset;
+            float rel = region.rel   >= 0.0f ? region.rel : group.rel;   // <0 stays "unset"
             if (root  < 0) root  = 60;    // SFZ default: unchanged on middle C
             if (lo    < 0) lo    = 0;
             if (hi    < 0) hi    = 127;
@@ -147,7 +150,7 @@ namespace SampleMapping
             if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi)
             {
                 Entry fresh { baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/')),
-                              juce::jlimit (0, 127, root), lo, hi, hiVel, offs };
+                              juce::jlimit (0, 127, root), lo, hi, hiVel, offs, rel };
                 bool handled = false;
                 for (auto& e : entries)
                 {
@@ -221,6 +224,11 @@ namespace SampleMapping
                     s.hiVel = juce::jlimit (0, 127, value.getIntValue());
                 else if (opcode == "offset")          // skip pre-attack junk the library trims
                     s.offset = juce::jmax (0, value.getIntValue());
+                else if (opcode == "ampeg_release")   // note-off fade in seconds (Story 12.4);
+                {                                     // ≤0 / garbage parses to 0 ⇒ treated as unset
+                    const float v = value.getFloatValue();
+                    if (v > 0.0f) s.rel = juce::jmin (v, 30.0f);
+                }
                 // every other opcode: ignored by design (minimal subset)
             }
         }

@@ -39,6 +39,7 @@ struct SampleZone
     double fileSampleRate = 44100.0;
     int rootKey = 60;             // key that plays the file at original speed (mapped sets)
     int loKey = 0, hiKey = 127;   // inclusive key range (mapped sets; 0..127 for single samples)
+    float releaseSeconds = -1.0f; // sfz ampeg_release — note-off fade (12.4); <0 ⇒ REL knob decides
 
     bool   isStereo() const            { return ! data[1].empty(); }
     const float* getData (int ch) const { return data[isStereo() && ch != 0 ? 1 : 0].data(); }
@@ -171,6 +172,7 @@ public:
             z.rootKey = e.rootKey;
             z.loKey   = e.loKey;
             z.hiKey   = e.hiKey;
+            z.releaseSeconds = e.releaseSeconds;
             totalSeconds += (double) z.getLength() / z.fileSampleRate;
             if (totalSeconds > kMaxSetSeconds)
             {
