@@ -21,6 +21,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   decorrelated by ITD/HRIR, no coherent comb.
 
 ### Added
+- **Downloadable grand-piano packs** — `JASS-SplendidPiano.zip` (AKAI Steinway,
+  samples Public Domain) and `JASS-SalamanderPiano.zip` (Alexander Holm's
+  Yamaha C5, CC BY 3.0 with attribution file) as assets of the dedicated
+  `piano-pack-v1` release; unzip into `%AppData%\JASS\Samples\`. The curated
+  `.sfz` files live in `tools/piano-packs/`, and `tools/build_piano_zips.py`
+  reproduces the zips from the upstream repos (nothing heavy enters git).
 - **SAMPLER SET menu shows long set names in full** — the SET combo is wider now
   (rack combos can declare their layout width; everything else is unchanged), so
   user-named multisample sets like "SalamanderPiano" no longer truncate.
