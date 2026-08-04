@@ -73,8 +73,9 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     if (pluckEnabled)
         pluckKarplus();   // pluck at the transposed pitch (skipped for the drone)
 
-    sampler.trigger(transposeRatio, midiNoteNumber);   // Story 12.1: (re)start the recording at the
-                                                       // note's rate; the note picks the zone (12.2)
+    sampler.trigger(transposeRatio, midiNoteNumber,    // Story 12.1: (re)start the recording at the
+                    (int) std::lround(velocity * 127.0f));   // note's rate; note picks the zone (12.2),
+                                                             // velocity picks the layer (12.5)
     pitchEnv.trigger();   // (re)start the one-shot pitch sweep at note-on
     envelope.gateOn();
     samplerTailHold = false;   // 12.4: a retrigger ends any held tail state
