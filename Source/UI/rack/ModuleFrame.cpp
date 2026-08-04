@@ -221,19 +221,23 @@ namespace rack
                         box->setSelectedItemIndex ((int) raw->load(), juce::dontSendNotification);
                     juce::ComboBox* boxPtr = box;
                     const juce::String pid = c->paramId;
-                    box->onChange = [this, boxPtr, pid]
+                    const auto userHook = c->onUserSelect;   // user-gesture-only (see descriptor)
+                    box->onChange = [this, boxPtr, pid, userHook]
                     {
+                        const int idx = juce::jmax (0, boxPtr->getSelectedItemIndex());
                         if (auto* pp = apvts.getParameter (pid))
-                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) juce::jmax (0, boxPtr->getSelectedItemIndex())));
+                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) idx));
+                        if (userHook)
+                            userHook (idx);
                     };
                     indexValueCombos.push_back ({ c->paramId, box });   // timer resyncs it from the param
                 }
                 else
                     comboAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ComboBoxAttachment> (
                         apvts, c->paramId, *box));
-                // A combo needs more width than a knob to show its item text — give it
-                // two internal slots so the dropdown isn't cramped/truncated.
-                cells.push_back ({ box, makeCaption (ownedCaptions, c->label), 2 });
+                // A combo needs more width than a knob to show its item text — two slots by
+                // default; descriptors may widen (SAMPLER SET shows user-named sets in full).
+                cells.push_back ({ box, makeCaption (ownedCaptions, c->label), juce::jmax (1, c->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
             }
             else if (auto* t = std::get_if<Toggle> (&el))

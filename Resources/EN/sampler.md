@@ -7,20 +7,33 @@ filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
   `Pad_A#4.wav` (note name with C4 = middle C, or a MIDI number) are spread across the keyboard,
   each covering the range halfway to its neighbours — so instruments stay natural over more than
   one octave. LOAD also accepts an **.sfz** file (its key mapping is imported; read opcodes:
-  `sample`, `key`, `lokey`/`hikey`, `pitch_keycenter`, `default_path` — everything else,
-  including velocity layers, is ignored).
+  `sample`, `key`, `lokey`/`hikey`, `pitch_keycenter`, `default_path`, `offset`,
+  `ampeg_release` — everything else, including velocity layers, is ignored; a broken zone in an
+  imported set is fixed by editing the .sfz).
 - **ROOT** — the key at which a **single** recording plays at its original speed; every other key
   transposes it, tape-style (formants shift with pitch: usable range is roughly ±1 octave — the
   nature of single-sample playback, not a defect). For multisample sets each zone brings its own
   root, so ROOT is inactive (dimmed).
 - **START / END** trim the played region; **MODE**: One-Shot, Loop (click-free crossfaded join),
-  Reverse, Rev-Loop. **SPEED** (0.25×–4×) multiplies the playback rate on top of the key,
+  Reverse, Rev-Loop. Picking a **multisample set sets the module up as an instrument**
+  automatically: MODE → One-Shot, STRETCH → off, REL is lifted off 0 (to ~2 s), and — only
+  when the SAMPLER is the sole active generator — the ENVELOPE module switches off (nothing
+  cuts the sampler's own tail) and the output mode goes to Stereo-Pan (the one mode that
+  renders a stereo recording untouched; Kunstkopf/Binaural re-spatialise it audibly). Presets
+  are never touched by this, and every setting can be switched right back. **SPEED** (0.25×–4×) multiplies the playback rate on top of the key,
   tape-style — pitch moves with it.
 - **STRETCH** decouples pitch from time: the key sets only the pitch, SPEED only the tempo —
   a loop keeps its rhythm on every key, and all loop voices stay beat-locked regardless of
   pitch. The engine works ~60 ms ahead internally; that lead is pre-computed at note-on, so
   playing stays immediate. The trade-off is a subtle phase-vocoder character on transients.
   Off = classic tape behaviour.
+- **REL** — the sampler's **own release**: how long a released key fades out (its ring keeps
+  sounding under the fade — a real instrument's damping, instead of a hard cut). An imported
+  .sfz can set this per zone (`ampeg_release` — the piano sets do); REL then only covers zones
+  without a value. 0 = off (classic behaviour). Simplest setup for sampled instruments:
+  **ENVELOPE off** — the sampler then governs its whole tail itself. With ENVELOPE on, the
+  ADSR shapes the voice on top (use A 0 / D 0 / S max / R at least as long as the longest
+  fade). A sustain pedal (CC64) holds notes; the fade starts when the pedal lifts.
 - **Stereo files stay stereo**: left/right render as two placed sources around PAN; in the Mono and
   Pseudo-Stereo output modes they collapse to a mono downmix.
 - **Limits:** 60 s per file, 15 minutes of audio per set, 32 sets (plus a global memory budget —

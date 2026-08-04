@@ -10,7 +10,43 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Fixed
+- **Stereo samples comb-filtered in the Stereo-Pan output mode** ("metallic" tone on
+  some piano keys): the sampler's L/R sub-sources sat at pan ±0.5, so equal-power
+  panning mixed 38% of the opposite microphone channel into each ear — a coherent
+  partial sum that cancels/boosts partials key-dependently (measured up to ±6 dB on
+  the loudest partials of the Splendid Grand's A3). In gain-based stereo mode a
+  stereo recording now renders like a stereo track (hard L/R, PAN acts as balance);
+  the Binaural and Kunstkopf modes keep the ±0.5 placement — their sub-sources are
+  decorrelated by ITD/HRIR, no coherent comb.
+
 ### Added
+- **Downloadable grand-piano packs** — `JASS-SplendidPiano.zip` (AKAI Steinway,
+  samples Public Domain) and `JASS-SalamanderPiano.zip` (Alexander Holm's
+  Yamaha C5, CC BY 3.0 with attribution file) as assets of the dedicated
+  `piano-pack-v1` release; unzip into `%AppData%\JASS\Samples\`. The curated
+  `.sfz` files live in `tools/piano-packs/`, and `tools/build_piano_zips.py`
+  reproduces the zips from the upstream repos (nothing heavy enters git).
+- **SAMPLER SET menu shows long set names in full** — the SET combo is wider now
+  (rack combos can declare their layout width; everything else is unchanged), so
+  user-named multisample sets like "SalamanderPiano" no longer truncate.
+- **Picking a multisample set sets the SAMPLER up as an instrument** (user gesture
+  only — preset loads keep their saved values): MODE → One-Shot (Loop would start
+  notes at the shared loop phase, mid-sample), STRETCH → off (buys nothing at a
+  couple semitones per zone), REL lifted off 0 to ~2 s (zones without their own
+  `ampeg_release` get a fade), and — only when the SAMPLER is the sole active
+  generator — ENVELOPE off (nothing cuts the sampler's own tail) and output mode
+  → Stereo-Pan (the one mode that renders a stereo recording untouched).
+- **SAMPLER release envelope** (Story 12.4) — the sampler fades released notes with
+  its OWN release time instead of cutting them: an imported `.sfz` sets it per zone
+  (`ampeg_release`, now read), the new **REL** knob covers zones without a value
+  (0 = off, the previous behaviour and the default — old presets are unaffected).
+  The ring keeps sounding under the fade, so fast playing, same-note retriggers and
+  voice steals hit already-decaying material instead of a hard cut. Works with the
+  ENVELOPE module off (simplest setup — the sampler governs its whole tail itself);
+  with ENVELOPE on the ADSR shapes the voice on top (A 0 / D 0 / S max / R ≥ the
+  longest fade). Sustain pedal (CC64) holds notes as before; the fade starts when
+  the pedal lifts.
 - **SAMPLER multisampling** (Story 12.2) — load a whole folder as ONE sample set:
   files named `<anything>_<note>` (`Piano_C3.wav`, `Pad_A#4.wav`, note names with
   C4 = middle C or MIDI numbers) are spread across the keyboard, each zone covering
