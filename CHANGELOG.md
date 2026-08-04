@@ -10,6 +10,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Changed
+- **JUCE 8.0.14 → 9.0.0.** JASS uses none of the APIs the major version breaks
+  (no Drawable/SVG, no typeface-metrics calls, no multi-touch, no OpenGL), so
+  the upgrade is a clean submodule bump — full rebuild passes with zero
+  warnings. JUCE 9 brings a faster software renderer, which is exactly what
+  the rack UI draws with.
+
 ### Fixed
 - **Stereo samples comb-filtered in the Stereo-Pan output mode** ("metallic" tone on
   some piano keys): the sampler's L/R sub-sources sat at pan ±0.5, so equal-power
