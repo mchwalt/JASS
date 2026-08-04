@@ -17,10 +17,13 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   ±1 Oktave — die Natur von Einzel-Samples, kein Defekt). Bei Multisample-Sets bringt jede Zone
   ihren eigenen Root mit, ROOT ist dann inaktiv (gedimmt).
 - **START / END** beschneiden den gespielten Bereich; **MODE**: One-Shot, Loop (klickfreier
-  Crossfade-Übergang), Reverse, Rev-Loop. Beim Wählen eines **Multisample-Sets springt MODE
-  automatisch auf One-Shot und STRETCH aus** — Instrumente spielt man chromatisch (Loop koppelt
-  die Stimmen an die gemeinsame Loop-Uhr, und STRETCH bringt bei ein-zwei Halbtönen
-  Transposition pro Zone nichts). Zurückschalten ist jederzeit erlaubt. **SPEED** (0,25×–4×) multipliziert die
+  Crossfade-Übergang), Reverse, Rev-Loop. Beim Wählen eines **Multisample-Sets richtet sich das
+  Modul automatisch als Instrument ein**: MODE → One-Shot, STRETCH → aus, REL wird von 0 auf
+  ~2 s angehoben, und — nur wenn der SAMPLER der einzige aktive Generator ist — schaltet das
+  ENVELOPE-Modul ab (nichts schneidet den eigenen Ausklang ab) und der Ausgabemodus auf
+  Stereo-Pan (der einzige Modus, der eine Stereo-Aufnahme unangetastet wiedergibt;
+  Kunstkopf/Binaural verräumlichen sie hörbar um). Presets bleiben davon unberührt, und jede
+  Einstellung lässt sich sofort wieder umschalten. **SPEED** (0,25×–4×) multipliziert die
   Abspielgeschwindigkeit zusätzlich zur Taste, bandmaschinen-artig — die Tonhöhe wandert mit.
 - **STRETCH** entkoppelt Tonhöhe und Zeit: die Taste bestimmt nur noch die Tonhöhe, SPEED nur
   das Tempo — ein Loop behält auf jeder Taste seinen Rhythmus, und alle Loop-Stimmen bleiben

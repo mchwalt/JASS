@@ -15,10 +15,12 @@ filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
   nature of single-sample playback, not a defect). For multisample sets each zone brings its own
   root, so ROOT is inactive (dimmed).
 - **START / END** trim the played region; **MODE**: One-Shot, Loop (click-free crossfaded join),
-  Reverse, Rev-Loop. Picking a **multisample set switches MODE to One-Shot and STRETCH off**
-  automatically — instruments are played chromatically (Loop locks voices to the shared loop
-  clock, and STRETCH buys nothing at a couple semitones of transposition per zone). Feel free
-  to switch back. **SPEED** (0.25×–4×) multiplies the playback rate on top of the key,
+  Reverse, Rev-Loop. Picking a **multisample set sets the module up as an instrument**
+  automatically: MODE → One-Shot, STRETCH → off, REL is lifted off 0 (to ~2 s), and — only
+  when the SAMPLER is the sole active generator — the ENVELOPE module switches off (nothing
+  cuts the sampler's own tail) and the output mode goes to Stereo-Pan (the one mode that
+  renders a stereo recording untouched; Kunstkopf/Binaural re-spatialise it audibly). Presets
+  are never touched by this, and every setting can be switched right back. **SPEED** (0.25×–4×) multiplies the playback rate on top of the key,
   tape-style — pitch moves with it.
 - **STRETCH** decouples pitch from time: the key sets only the pitch, SPEED only the tempo —
   a loop keeps its rhythm on every key, and all loop voices stay beat-locked regardless of
