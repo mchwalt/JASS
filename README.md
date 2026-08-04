@@ -1,6 +1,6 @@
 # JASS – Just Another Simple Synthesizer
 
-A polyphonic software synthesizer written in **C++20 / [JUCE 8](https://juce.com/)**,
+A polyphonic software synthesizer written in **C++20 / [JUCE 9](https://juce.com/)**,
 with an interface styled as a **19″ rack**. It runs as a **standalone** app, which
 is the main focus.
 

@@ -14,7 +14,7 @@ trägt dafür einen `<a id="…">`-Anker — beim Ergänzen bitte beibehalten.
 
 | Begriff | Bedeutung |
 |---------|-----------|
-| <a id="juce" name="juce"></a>**JUCE** | C++-Framework für Audio-Anwendungen und Plugins (als Git-Submodule eingebunden, aktuell 8.0.14). |
+| <a id="juce" name="juce"></a>**JUCE** | C++-Framework für Audio-Anwendungen und Plugins (als Git-Submodule eingebunden, aktuell 9.0.0). |
 | <a id="apvts" name="apvts"></a>**APVTS** | `juce::AudioProcessorValueTreeState` — zentraler Parameter-Baum und **einzige Quelle der Wahrheit** für alle Parameter; verbindet Parameter mit UI-Controls (Attachments) und Persistenz. Einziger erlaubter Cross-Modul-Kanal (AD-9). |
 | <a id="attachment" name="attachment"></a>**Attachment** | JUCE-Bindeglied zwischen einem Control und einem APVTS-Parameter (`SliderAttachment`, `ComboBoxAttachment`, `ButtonAttachment`). Mappt bei Combos **per Index** (Quelle der Combo-Index-Bug-Klasse). |
 | <a id="dsp" name="dsp"></a>**DSP** | *Digital Signal Processing* — die eigentliche Audio-Signalverarbeitung (`Source/DSP/`). |
