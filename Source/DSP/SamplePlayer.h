@@ -56,6 +56,8 @@ public:
     void setEnabled(bool e)                    { enabled = e; }
     void setLevel(double l)                    { level = l; }
     void setRootKey(int k)                     { rootKey = k; }
+    // 12.4: REL knob — the note-off fade for zones the .sfz gave no ampeg_release. 0 = OFF.
+    void setReleaseFallback(double seconds)    { relFallback = std::clamp(seconds, 0.0, 8.0); }
     void setRegion(double startFrac, double endFrac)
     {
         regionStart = std::clamp(startFrac, 0.0, 1.0);
@@ -151,7 +153,9 @@ public:
         if (mode == Mode::Loop)         pos = startSample() + syncPhase * (endSample() - startSample());
         else if (mode == Mode::RevLoop) pos = endSample()   - syncPhase * (endSample() - startSample());
         else                            pos = rev ? endSample() : startSample();
-        active = true;
+        active   = true;
+        released = false;   // 12.4: a retrigger re-arms the gate; the old ramp state is void
+        relGain  = 1.0f;
         if (stretchMode)
         {
             // Pre-roll the engine at note-on (outputSeek): without this the first ~60 ms of
@@ -193,6 +197,34 @@ public:
     // pre-roll burst above stays bounded no matter how many voices start in the same callback.
     static void resetSeekBudget() { seekBudget.store(kMaxSeeksPerBlock, std::memory_order_relaxed); }
 
+    // 12.4: true while the note-off fade is still audible (ramp running, or a stretch tail
+    // draining behind it). The voice holds its ADSR-bypass gate open on this — so the sampler's
+    // own release also works with the ENVELOPE module switched OFF (user report 2026-08-04:
+    // the 10 ms bypass gate cut the tail the moment the key was released).
+    bool isRingingOut() const { return enabled && released && (active || drainRemaining > 0); }
+
+    // ── Story 12.4: the sampler's OWN release ────────────────────────────────────────────────
+    // A recording carries its attack/decay/sustain in the material itself — the only envelope
+    // job left to the sampler is the NOTE-OFF fade. gateOff starts a per-voice exponential ramp
+    // (time-to-−60 dB, the common ampeg_release reading): the zone's .sfz value wins, the REL
+    // knob covers zones without one, neither (≤0) keeps the pre-12.4 behaviour — no sampler-side
+    // fade, the global ADSR/gate alone shapes the tail. The ramp rides INSIDE the voice gain:
+    // the global ADSR still multiplies on top (its release is the audible CEILING — documented
+    // in the help: sampled instruments want A 0 / D 0 / S max / R ≥ the longest fade). Because
+    // released voices now decay on their own, same-note retriggers and steals hit material that
+    // is already fading — the "hard cut" artefact of fast playing goes away with it.
+    void gateOff()
+    {
+        if (! active || zone == nullptr)
+            return;
+        const double sec = zone->releaseSeconds >= 0.0f ? (double) zone->releaseSeconds
+                                                        : relFallback;
+        if (sec <= 0.0)
+            return;   // no sampler-side release configured — legacy behaviour
+        released = true;
+        relCoef  = (float) std::exp(-6.907755 / (std::max(sec, 0.005) * hostSampleRate));
+    }
+
     // Hard stop — also the first half of a VOICE STEAL (stopNote(false) + immediate restart).
     // Arm the retrigger declick HERE: by the time trigger() runs, active is already false, so
     // capturing at trigger alone missed exactly the stolen-voice case (user report 2026-08-04:
@@ -228,7 +260,7 @@ public:
         const double len = s1 - s0;
         if (len < 4.0) { active = false; return { 0.0f, 0.0f }; }
 
-        const float g = (float) level;
+        const float g = (float) level * relGain;   // 12.4: the release ramp rides in the gain
         if (stretchMode)
         {
             if (outRead >= kChunk)
@@ -242,6 +274,7 @@ public:
                 --drainRemaining;
             l += clickL; r += clickR;          // retrigger step suppressor (decaying remnant)
             clickL *= kClickDecay; clickR *= kClickDecay;
+            advanceRelease();
             lastL = l; lastR = r;
             return { l, r };
         }
@@ -271,6 +304,7 @@ public:
         if (!rev && pos >= s1)      { if (looping) pos -= len; else active = false; }
         else if (rev && pos <  s0)  { if (looping) pos += len; else active = false; }
 
+        advanceRelease();
         lastL = outL * g; lastR = outR * g;
         return { lastL, lastR };
     }
@@ -280,12 +314,29 @@ private:
     static constexpr int   kChunk = 64;           // stretch FIFO granularity (~1.5 ms — negligible)
     static constexpr int   kMaxSeeksPerBlock = 4; // note-on pre-roll burst cap (user decision "B")
     static constexpr float kClickDecay = 0.97f;   // stretch retrigger remnant: ~-60 dB in ~5 ms
+    static constexpr float kRelFloor   = 1.0e-4f; // release ramp floor (−80 dB) — voice is spent
     // Shared across all voices (and plugin instances — they also share the CPU): the per-block
     // budget of full note-on pre-rolls. Reset by the processor each block (resetSeekBudget).
     static inline std::atomic<int> seekBudget { kMaxSeeksPerBlock };
 
     double startSample() const { return regionStart * (double) (zone->getLength() - 1); }
     double endSample() const   { return regionEnd   * (double) (zone->getLength() - 1); }
+
+    // 12.4: advance the release ramp one OUTPUT sample. At the −80 dB floor the tail is spent:
+    // stop the voice's sampler (and any stretch drain) so it reads no more material.
+    void advanceRelease()
+    {
+        if (! released)
+            return;
+        relGain *= relCoef;
+        if (relGain < kRelFloor)
+        {
+            released = false;
+            relGain  = 0.0f;   // silent until the next trigger() re-arms it
+            active   = false;
+            drainRemaining = -1;
+        }
+    }
 
     // Fixed at note-on (and on a mid-note SET switch). TAPE: full coupled rate. STRETCH: the
     // pitch part goes to the engine as a transpose factor, the time part (fileSR/hostSR) stays
@@ -403,6 +454,12 @@ private:
     float  inBufL[kChunk] {}, inBufR[kChunk] {};
     float  outBufL[kChunk] {}, outBufR[kChunk] {};
     std::vector<float> seekBufL, seekBufR;   // note-on pre-roll scratch (sized in setSampleRate)
+
+    // ---- 12.4 release ramp (per voice) ----
+    double relFallback = 0.0;             // REL knob (seconds to −60 dB); 0 = OFF
+    bool   released = false;              // note-off received, ramp running
+    float  relGain  = 1.0f;               // current ramp gain (1 → 0)
+    float  relCoef  = 1.0f;               // per-sample decay factor (set at gateOff)
 
     // ---- retrigger declick (user report 2026-08-04) ----
     const SampleZone* dkZone = nullptr;   // old material continuing under the new attack (tape)

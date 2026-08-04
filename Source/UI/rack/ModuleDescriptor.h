@@ -100,6 +100,14 @@ namespace rack
         // bypassing ComboBoxParameterAttachment — whose value = index/(numItems-1) mismaps when the
         // item count varies against a fixed param range (MOD MATRIX PARAM: 1..N items, range 0..N-1).
         bool indexIsValue = false;
+        // Layout width in body slots (a knob = 1). Default 2; raise it for combos whose items
+        // are user-named and can be long (SAMPLER SET: "SalamanderPiano" — user 2026-08-04).
+        int slots = 2;
+        // Fired with the selected index on a USER selection only — programmatic updates
+        // (preset load, refreshCombo, timer resync) use dontSendNotification and stay silent.
+        // Lets a descriptor react to the gesture (SAMPLER SET → auto One-Shot for mapped sets)
+        // without fighting preset restores. Supported for indexIsValue combos.
+        std::function<void(int)> onUserSelect;
     };
 
     struct Toggle

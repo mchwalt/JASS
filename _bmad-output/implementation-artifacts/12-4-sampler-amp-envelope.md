@@ -1,6 +1,6 @@
 # Story 12.4: SAMPLER amp envelope (per-zone release)
 
-Status: draft (captured 2026-08-04, from the piano listening sessions)
+Status: implemented 2026-08-04 (pending user listening test)
 
 <!-- User insight while playing the Iowa/Splendid pianos: "vermutlich braucht man für Piano
      separate ADSR … die eine Standard-ADSR-Hüllkurve taugt für diesen komplexen Klang nicht."
@@ -35,16 +35,66 @@ recording.
 
 ## Open investigation (parked)
 
-- Metallic clicking on SOME SplendidGrand keys — CONFIRMED source-material defect: `FF A2.flac`
-  (serves MIDI 57) is a bad recording; nothing documented upstream. Worked around locally by
-  deleting that region and widening the A#2 zone (lokey 57) in the flattened sfz — the generic
-  lesson for the help text: a broken zone in any imported set is fixed by editing the .sfz.
+- Metallic tone on SplendidGrand A3/A4 (MIDI 57/69) — **SOLVED 2026-08-04, and every earlier
+  diagnosis was wrong.** Elimination chain (user's ear + computed measurements, scratchpad
+  stoerton*.py + flacdec.py, a bit-exact pure-Python FLAC decoder): source files clean (Audacity)
+  → resampling 44.1→48k clean (full-spectrum Hermite-vs-sinc, no images >6 dB; user also
+  reproduced at 44.1k host) → AppData copies hash-identical → JUCE FLAC decode exonerated (WAV
+  test set from our own decoder sounded identical) → **culprit: the ±0.5 sub-source spread in
+  the gain-based STEREO-PAN mode.** Equal-power at ±0.5 leaks 38% of the opposite mic channel
+  into each ear; the coherent sum combs the recording key-dependently — measured ripple matched
+  the user's per-key perception exactly (Splendid A3/A4: 2.9 dB RMS, ±6 dB peaks on the loudest
+  partials; control C4: 1.1 dB; Salamander: 1.7 dB "only slight"). Fix in applyToVoice: stereo
+  sets spread ±1.0 (hard L/R, PAN = balance) in gain modes; Binaural/Kunstkopf keep ±0.5 (ITD/
+  HRIR decorrelate — no coherent comb). Mono/Pseudo-Stereo still mono-sum by design (documented).
+  LESSON for future sound bugs: verify the SIGNAL PATH end-to-end before blaming material —
+  and a "measurement" that searches only at predicted frequencies can acquit a guilty party
+  (piano partials are inharmonic; the first Hermite check missed sideband search windows).
 - **Fast playing still sounds UNNATURAL on piano (user, 2026-08-04, after the declick fixes):**
   the clicks are gone, but a steal/retrigger still CUTS the previous ring abruptly — a real
   piano lets the string keep ringing under a re-strike. Belongs in this story's design pass:
   (a) SAMPLER release ramp (the core scope) already softens steals; (b) evaluate same-note
   overlap (JUCE reuses the voice playing the same note — letting the old note ring in its own
   voice needs a Synthesiser-level decision) and steal-victim choice (prefer quietest voice).
+
+## Implementation record (2026-08-04)
+
+Design decisions taken (scope items 1–4 above):
+
+1. **Ramp, not a second ADSR:** one per-voice exponential release ramp inside `SamplePlayer`
+   (`gateOff()` → `relGain *= relCoef` per output sample; time-to-−60 dB reading of
+   `ampeg_release`, floor −80 dB then the voice's sampler stops reading). Applied in BOTH modes
+   by folding `relGain` into the output gain; in stretch mode it multiplies the engine OUTPUT
+   (the input feed keeps walking), and reaching the floor also cancels a running drain.
+2. **Sources:** per-zone `ampeg_release` (parser + `Entry` + `SampleZone.releaseSeconds`;
+   values ≤ 0 or unparsable ⇒ unset, capped at 30 s) wins; new append-only param
+   `samplerRelease` ("REL", 0–8 s, skew 0.5, **default 0 = OFF**) is the fallback. Default OFF
+   keeps every old preset bit-identical (missing ⇒ default).
+3. **Global ADSR interaction — decided:** the ramp rides INSIDE the voice gain; the global ADSR
+   keeps multiplying on top and its release is the audible CEILING. No max()-magic, no per-voice
+   envelope mutation (globals must not bend for wish scenarios). Documented in help EN/DE:
+   sampled instruments want A 0 / D 0 / S max / R ≥ the longest fade. Consequence accepted:
+   released voices stay allocated until the ADSR goes Idle — but JUCE's steal policy prefers
+   released voices, and those are now ALREADY fading, so steals land on decaying low-level
+   material (the fast-playing "hard cut" complaint dies with the same mechanism).
+   **Amendment (same day, user report):** with the ENVELOPE module OFF the 10 ms bypass gate
+   cut the tail at note-off — the gate is now HELD OPEN while `sampler.isRingingOut()` and
+   closes once the fade is spent (`samplerTailHold` in SynthVoice; checked per block). So the
+   SIMPLEST piano setup is ENVELOPE OFF — the sampler governs its whole tail itself. Trade-off
+   (documented): other generators in an ADSR-off preset sustain under the tail — irrelevant in
+   practice, a sampled instrument is normally the only generator then.
+4. **Sustain pedal:** nothing to do — JUCE holds note-offs while CC64 is down, so `gateOff()`
+   simply arrives at pedal-up. Mentioned in the help text.
+
+Same-note overlap (open investigation item b): JUCE's `noteOn` already tail-offs the old
+same-note voice and starts a fresh one — with the ramp the old strike now rings down under the
+new one, which IS the natural re-strike behaviour. No Synthesiser-level change needed.
+Steal-victim choice: unchanged (JUCE prefers released voices — now the right victims); revisit
+only if the user still hears churn (Story 13.1 territory).
+
+Touched: `SampleMapping.h` (parser + Entry), `SampleBank.h` (zone field), `SamplePlayer.h`
+(ramp), `SynthVoice.cpp` (gateOff wiring), `SamplerSpecs.h` + `Parameters.h` (param),
+`PluginEditor.cpp` (REL knob), help EN/DE, CHANGELOG.
 
 ## References
 

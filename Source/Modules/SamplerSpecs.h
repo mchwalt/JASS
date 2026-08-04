@@ -32,6 +32,11 @@ namespace Modules
             // sets only the time — every loop voice traverses START..END in the same wall-clock
             // time regardless of pitch, so transposed loops stay beat-locked by construction.
             { "samplerStretch", "Stretch", "STRETCH", ParamSpec::Kind::Bool, {}, 0.0f },
+            // Story 12.4: the sampler's OWN note-off fade (seconds to −60 dB). A zone's .sfz
+            // ampeg_release wins where present; this knob covers zones without one (folder /
+            // single-sample sets). Default 0 = OFF — old presets keep the pre-12.4 behaviour
+            // (missing ⇒ default). Append-only (added after first build).
+            { "samplerRelease", "Release", "REL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 8.0f, 0.01f, 0.5f), 0.0f },
         };
         return m;
     }
