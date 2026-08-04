@@ -22,6 +22,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   name like single samples; sets live in `%AppData%\JASS\Samples\<SetName>\`.
 - **SAMPLER load errors now name the file and the reason** (e.g. which file of a
   set is unreadable) instead of a generic limits message.
+- **SAMPLER reads FLAC** (everywhere: LOAD, folders, .sfz references, preload) —
+  the big free .sfz libraries (Salamander, Splendid Grand, …) ship FLAC and now
+  load without conversion. Per-set audio cap raised 5 → 15 minutes so real
+  single-layer chromatic pianos fit (the global memory budget stays the hard
+  limit); overlapping velocity layers in an .sfz now keep the LOUDEST layer
+  (`hivel` ranking) instead of whichever came first.
 - **Two shipped multisample example sets** (seeded to `%AppData%\JASS\Samples`):
   **EPiano** (5 FM e-piano recordings C2–C6, mapped by the `Name_C3.wav` folder
   convention) and **Organ** (3 drawbar recordings mapped by the commented example

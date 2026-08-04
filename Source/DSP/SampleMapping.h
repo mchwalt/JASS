@@ -54,14 +54,21 @@ namespace SampleMapping
         return parseNoteToken (fileNameNoExt.fromLastOccurrenceOf ("_", false, false));
     }
 
-    // One imported mapping entry, before the audio is loaded.
+    // One imported mapping entry, before the audio is loaded. hiVel ranks velocity layers of
+    // the same key range (the LOUDEST layer wins the dedupe — see entriesFromSfz).
     struct Entry
     {
         juce::File file;
         int rootKey = 60;
         int loKey   = 0;
         int hiKey   = 127;
+        int hiVel   = 127;
     };
+
+    // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
+    // FLAC decodes natively via juce::AudioFormatManager::registerBasicFormats — added so the
+    // big free .sfz libraries (Salamander, Splendid Grand, ...) load without conversion.
+    inline constexpr const char* kAudioWildcard = "*.wav;*.aif;*.aiff;*.flac";
 
     // Derive lo/hi for entries that only carry a root (folder convention): sort by root, split
     // halfway between neighbours, outermost zones extend to 0/127. Duplicate roots: first wins.
@@ -89,7 +96,7 @@ namespace SampleMapping
     inline std::vector<Entry> entriesFromFolder (const juce::File& dir)
     {
         std::vector<Entry> entries;
-        auto files = dir.findChildFiles (juce::File::findFiles, false, "*.wav;*.aif;*.aiff");
+        auto files = dir.findChildFiles (juce::File::findFiles, false, kAudioWildcard);
         files.sort();
         for (const auto& f : files)
             if (const int root = parseRootFromFilename (f.getFileNameWithoutExtension()); root >= 0)
@@ -114,7 +121,7 @@ namespace SampleMapping
     //     the caps but can never be reached.
     inline std::vector<Entry> entriesFromSfz (const juce::File& sfzFile)
     {
-        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1; bool bad = false; };
+        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1, hiVel = -1; bool bad = false; };
         Scope group, region;
         bool inRegion = false, ignoring = false, inControl = false;
         juce::String defaultPath;
@@ -126,21 +133,31 @@ namespace SampleMapping
             if (! inRegion)
                 return;
             const juce::String sample = region.sample.isNotEmpty() ? region.sample : group.sample;
-            int lo   = region.lo   >= 0 ? region.lo   : group.lo;
-            int hi   = region.hi   >= 0 ? region.hi   : group.hi;
-            int root = region.root >= 0 ? region.root : group.root;
-            if (root < 0) root = 60;      // SFZ default: unchanged on middle C
-            if (lo   < 0) lo   = 0;
-            if (hi   < 0) hi   = 127;
+            int lo    = region.lo    >= 0 ? region.lo    : group.lo;
+            int hi    = region.hi    >= 0 ? region.hi    : group.hi;
+            int root  = region.root  >= 0 ? region.root  : group.root;
+            int hiVel = region.hiVel >= 0 ? region.hiVel : group.hiVel;
+            if (root  < 0) root  = 60;    // SFZ default: unchanged on middle C
+            if (lo    < 0) lo    = 0;
+            if (hi    < 0) hi    = 127;
+            if (hiVel < 0) hiVel = 127;
             if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi)
             {
-                bool contained = false;   // velocity-layer duplicate: same/contained key range
-                for (const auto& e : entries)
-                    if (e.loKey <= lo && e.hiKey >= hi) { contained = true; break; }
-                if (! contained)
-                    entries.push_back ({ baseDir.getChildFile ((defaultPath + sample)
-                                                                   .replaceCharacter ('\\', '/')),
-                                         juce::jlimit (0, 127, root), lo, hi });
+                Entry fresh { baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/')),
+                              juce::jlimit (0, 127, root), lo, hi, hiVel };
+                bool handled = false;
+                for (auto& e : entries)
+                {
+                    if (e.loKey == lo && e.hiKey == hi)
+                    {   // velocity layer of the SAME zone: keep the loudest one (hivel ranks it)
+                        if (fresh.hiVel > e.hiVel) e = fresh;
+                        handled = true;
+                        break;
+                    }
+                    if (e.loKey <= lo && e.hiKey >= hi) { handled = true; break; }   // shadowed
+                }
+                if (! handled)
+                    entries.push_back (fresh);
             }
             inRegion = false;
             region = {};
@@ -197,6 +214,8 @@ namespace SampleMapping
                 else if (opcode == "hikey")           s.hi = note (value);
                 else if (opcode == "pitch_keycenter") s.root = note (value);
                 else if (opcode == "key")             s.lo = s.hi = s.root = note (value);
+                else if (opcode == "hivel")           // ranks velocity layers only (see flush)
+                    s.hiVel = juce::jlimit (0, 127, value.getIntValue());
                 // every other opcode: ignored by design (minimal subset)
             }
         }
