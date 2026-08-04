@@ -211,3 +211,23 @@ by Geraint Luff / Signalsmith Audio Ltd. (MIT license), vendored under
 together with its `signalsmith-linear` FFT dependency — see
 <https://github.com/Signalsmith-Audio/signalsmith-stretch> and the license files
 in that folder.
+
+### Optional piano multisample sets
+
+Two real grand pianos play beautifully through the SAMPLER but are not bundled
+(they would bloat the binary; one has murky licensing):
+
+- **Iowa Steinway** — build it yourself with one command:
+  `python tools/get_iowa_piano.py` downloads 13 notes of the University of Iowa
+  [Musical Instrument Samples](https://theremin.music.uiowa.edu/MIS.html)
+  (freely available without restrictions), trims them, and writes a ready
+  `Piano\` folder — copy it into `%AppData%\JASS\Samples\` or import it via
+  SAMPLER → FOLDER.
+- **Splendid Grand** (Steinway, commonly treated as public domain by AKAI —
+  no formal license file exists upstream, hence not redistributed here): clone
+  <https://github.com/sfzinstruments/SplendidGrandPiano>. Its main `.sfz` uses
+  ARIA `#include`/`#define`, which JASS's minimal parser deliberately skips —
+  make a flat variant instead: create a text file `SplendidGrand.sfz` next to
+  the `Samples/` folder containing the line `<control> default_path=Samples/`
+  followed by the contents of `Data/FF.txt` with every `$EXT` replaced by
+  `flac`, then load it via SAMPLER → LOAD.

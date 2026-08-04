@@ -32,6 +32,9 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   **EPiano** (5 FM e-piano recordings C2–C6, mapped by the `Name_C3.wav` folder
   convention) and **Organ** (3 drawbar recordings mapped by the commented example
   `Organ.sfz` — a template for writing your own).
+- **`tools/get_iowa_piano.py`** — builds an optional real-piano multisample set
+  (University of Iowa Steinway recordings, free without restrictions) with one
+  command; README documents it plus the manual route to the Splendid Grand.
 - **SAMPLER STRETCH mode** (Story 12.3) — pitch/time decoupling: the key sets only
   the pitch, SPEED only the tempo, so loops keep their rhythm on every key and all
   loop voices stay beat-locked regardless of pitch (the tape-mode hard resync
