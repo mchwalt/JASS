@@ -10,6 +10,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Changed
+- **JUCE 8.0.14 → 9.0.0.** JASS uses none of the APIs the major version breaks
+  (no Drawable/SVG, no typeface-metrics calls, no multi-touch, no OpenGL), so
+  the upgrade is a clean submodule bump — full rebuild passes with zero
+  warnings. JUCE 9 brings a faster software renderer, which is exactly what
+  the rack UI draws with.
+
 ### Fixed
 - **Stereo samples comb-filtered in the Stereo-Pan output mode** ("metallic" tone on
   some piano keys): the sampler's L/R sub-sources sat at pan ±0.5, so equal-power
@@ -21,6 +28,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   decorrelated by ITD/HRIR, no coherent comb.
 
 ### Added
+- **SAMPLER velocity layers** (Story 12.5) — `lovel`/`hivel` regions in an imported
+  `.sfz` are real zones now: the key velocity picks the layer (soft hit → soft
+  recording, with its timbre), and inside a layer the gain follows the touch
+  (`amp_veltrack`, SFZ-spec default for .sfz sets; folder/single sets stay
+  velocity-neutral as before). New opcodes `volume=` (layer balancing) and
+  `tune=` (piano stretch tuning). Bounds raised for layered instruments: 60 min
+  of audio per set, 4 GiB global sample budget.
 - **Downloadable grand-piano packs** — `JASS-SplendidPiano.zip` (AKAI Steinway,
   samples Public Domain) and `JASS-SalamanderPiano.zip` (Alexander Holm's
   Yamaha C5, CC BY 3.0 with attribution file) as assets of the dedicated

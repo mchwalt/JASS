@@ -6,10 +6,14 @@ filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
 - **Multisampling (FOLDER):** load a whole folder as ONE set. Files named like `Piano_C3.wav` /
   `Pad_A#4.wav` (note name with C4 = middle C, or a MIDI number) are spread across the keyboard,
   each covering the range halfway to its neighbours — so instruments stay natural over more than
-  one octave. LOAD also accepts an **.sfz** file (its key mapping is imported; read opcodes:
-  `sample`, `key`, `lokey`/`hikey`, `pitch_keycenter`, `default_path`, `offset`,
-  `ampeg_release` — everything else, including velocity layers, is ignored; a broken zone in an
-  imported set is fixed by editing the .sfz).
+  one octave. LOAD also accepts an **.sfz** file (read opcodes: `sample`, `key`,
+  `lokey`/`hikey`, `pitch_keycenter`, `lovel`/`hivel`, `default_path`, `offset`,
+  `ampeg_release`, `amp_veltrack`, `volume`, `tune` — everything else is ignored; a broken
+  zone in an imported set is fixed by editing the .sfz). **Velocity layers** are real zones:
+  a soft hit picks the soft recording, a hard hit the hard one (the piano packs ship four
+  layers per key), and inside each layer the gain follows your touch (`amp_veltrack`, on by
+  default for .sfz sets). Folder and single-sample sets stay velocity-neutral — route
+  Velocity → LEVEL in the mod matrix if you want them dynamic.
 - **ROOT** — the key at which a **single** recording plays at its original speed; every other key
   transposes it, tape-style (formants shift with pitch: usable range is roughly ±1 octave — the
   nature of single-sample playback, not a defect). For multisample sets each zone brings its own
@@ -36,8 +40,8 @@ filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
   fade). A sustain pedal (CC64) holds notes; the fade starts when the pedal lifts.
 - **Stereo files stay stereo**: left/right render as two placed sources around PAN; in the Mono and
   Pseudo-Stereo output modes they collapse to a mono downmix.
-- **Limits:** 60 s per file, 15 minutes of audio per set, 32 sets (plus a global memory budget —
-  roughly three fully-sized sets).
+- **Limits:** 60 s per file, 60 minutes of audio per set (a four-layer grand is ~30), 32 sets,
+  and a global memory budget of 4 GB — samples stay loaded for the whole session.
 
 Unlike WAVETABLE (a pitch-locked single-cycle timbre), the SAMPLER plays the recording through
 time — the recording's own envelope and character are the sound.
