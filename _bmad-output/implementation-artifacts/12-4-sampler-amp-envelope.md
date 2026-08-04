@@ -35,9 +35,16 @@ recording.
 
 ## Open investigation (parked)
 
-- Metallic clicking on SOME SplendidGrand keys — user assessment: likely in the source samples
-  themselves (only certain keys affected). Two keys used `offset=` (now honoured, load-time
-  trim); if clicks persist on other keys, inspect those FLACs directly before blaming playback.
+- Metallic clicking on SOME SplendidGrand keys — CONFIRMED source-material defect: `FF A2.flac`
+  (serves MIDI 57) is a bad recording; nothing documented upstream. Worked around locally by
+  deleting that region and widening the A#2 zone (lokey 57) in the flattened sfz — the generic
+  lesson for the help text: a broken zone in any imported set is fixed by editing the .sfz.
+- **Fast playing still sounds UNNATURAL on piano (user, 2026-08-04, after the declick fixes):**
+  the clicks are gone, but a steal/retrigger still CUTS the previous ring abruptly — a real
+  piano lets the string keep ringing under a re-strike. Belongs in this story's design pass:
+  (a) SAMPLER release ramp (the core scope) already softens steals; (b) evaluate same-note
+  overlap (JUCE reuses the voice playing the same note — letting the old note ring in its own
+  voice needs a Synthesiser-level decision) and steal-victim choice (prefer quietest voice).
 
 ## References
 
