@@ -222,6 +222,7 @@ namespace Parameters
         constexpr const char* samplerPan   = "samplerPan";
         constexpr const char* samplerSpeed = "samplerSpeed";   // playback-rate multiplier (tape-style)
         constexpr const char* samplerStretch = "samplerStretch";   // 12.3: pitch/time decoupling on/off
+        constexpr const char* samplerRelease = "samplerRelease";   // 12.4: note-off fade fallback (s); 0 = off
 
         // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
         // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
@@ -392,13 +393,23 @@ namespace Parameters
         generatorPanOut[PanNoise]     = *apvts.getRawParameterValue(ID::noisePan);
         generatorPanOut[PanKarplus]   = *apvts.getRawParameterValue(ID::karplusPan);
         generatorPanOut[PanWavetable] = *apvts.getRawParameterValue(ID::wavetablePan);
-        // SAMPLER (12.1): a stereo set spreads its L/R sub-sources ±0.5 around the PAN knob (the
-        // whole stereo image moves with the knob); a mono set sits at the plain pan on slot L.
+        // SAMPLER (12.1): a stereo set spreads its L/R sub-sources around the PAN knob (the whole
+        // stereo image moves with the knob); a mono set sits at the plain pan on slot L.
+        // Spread per mode (Störton fix 2026-08-04, MEASURED — scratchpad stoerton3.py): in the
+        // gain-matrix STEREO-PAN mode a ±0.5 spread leaks 38% of the OTHER mic channel into each
+        // ear (equal-power crossbleed) — the coherent partial sum comb-filters the recording,
+        // key-dependently (Splendid A3: ±5–6 dB on the loudest partials = the user's "metallic"
+        // tone; control key C4 almost clean — matched the ear exactly). A stereo RECORDING in a
+        // gain-based stereo mode must render like a stereo TRACK: hard L/R, PAN = balance ⇒
+        // spread 1.0. The binaural/Kunstkopf modes keep ±0.5: their sub-sources are decorrelated
+        // by ITD/HRIR before summing (no coherent comb), and the ±0.5 image is the 12.1 choice.
         {
             const float sPan   = *apvts.getRawParameterValue(ID::samplerPan);
             const auto* set    = SampleBankStore::instance().getSet(
                                      static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
-            const float spread = (set != nullptr && set->isStereo()) ? 0.5f : 0.0f;
+            const auto  mode   = static_cast<OutputMode>(outputModeOut);
+            const bool  hrir   = (mode == OutputMode::Binaural || mode == OutputMode::Kunstkopf);
+            const float spread = (set != nullptr && set->isStereo()) ? (hrir ? 0.5f : 1.0f) : 0.0f;
             generatorPanOut[PanSamplerL] = juce::jlimit(-1.0f, 1.0f, sPan - spread);
             generatorPanOut[PanSamplerR] = juce::jlimit(-1.0f, 1.0f, sPan + spread);
         }
@@ -438,6 +449,7 @@ namespace Parameters
         sampler.setLevel(*apvts.getRawParameterValue(ID::samplerLevel));
         sampler.setSpeed(*apvts.getRawParameterValue(ID::samplerSpeed));
         sampler.setStretchMode(*apvts.getRawParameterValue(ID::samplerStretch) > 0.5f);   // 12.3
+        sampler.setReleaseFallback(*apvts.getRawParameterValue(ID::samplerRelease));      // 12.4
         sampler.setLoopSyncPhase(samplerLoopFrac);
 
         wavetable.setEnabled(*apvts.getRawParameterValue(ID::wavetableOn) > 0.5f);

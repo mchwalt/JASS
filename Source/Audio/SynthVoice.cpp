@@ -77,6 +77,7 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
                                                        // note's rate; the note picks the zone (12.2)
     pitchEnv.trigger();   // (re)start the one-shot pitch sweep at note-on
     envelope.gateOn();
+    samplerTailHold = false;   // 12.4: a retrigger ends any held tail state
     bypassGate.setCurrentAndTargetValue(0.0f);
     bypassGate.setTargetValue(1.0f);   // fast fade-in (used only when the ADSR module is off)
     noteOn = true;
@@ -98,12 +99,23 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
     if (allowTailOff)
     {
         envelope.gateOff();
-        bypassGate.setTargetValue(0.0f);   // fast fade-out (ADSR-bypass path); frees the voice in ~10 ms
+        sampler.gateOff();   // Story 12.4: start the sampler's own release fade (zone/REL);
+                             // the sustain pedal (CC64) delays this call until the pedal lifts
+        // 12.4: with the ADSR module OFF the 10 ms bypass gate would cut that fade right off
+        // (user report 2026-08-04) — hold the gate open while the sampler rings out; it fades
+        // once the ramp is spent (checked per block in renderNextBlock). Other generators in
+        // an ADSR-off preset sustain under the tail — the documented trade-off; a sampled
+        // instrument is normally the ONLY generator when this matters.
+        if (! adsrOn && sampler.isRingingOut())
+            samplerTailHold = true;
+        else
+            bypassGate.setTargetValue(0.0f);   // fast fade-out (ADSR-bypass path); frees the voice in ~10 ms
     }
     else
     {
         envelope.reset();
         sampler.reset();   // Story 12.1: hard stop ends the recording too
+        samplerTailHold = false;
         bypassGate.setCurrentAndTargetValue(0.0f);
         clearCurrentNote();
         noteOn = false;
@@ -118,6 +130,15 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     if (!noteOn && (adsrOn ? envelope.getStage() == AdsrEnvelope::Stage::Idle
                            : bypassGate.getCurrentValue() <= 0.0f))
         return;
+
+    // 12.4: ADSR-off sampler tail — the gate was held open in stopNote; once the fade is spent,
+    // close it so the voice frees normally. Per-block granularity is fine: the ramp floor is
+    // −80 dB, one block of slack is inaudible.
+    if (samplerTailHold && ! sampler.isRingingOut())
+    {
+        samplerTailHold = false;
+        bypassGate.setTargetValue(0.0f);
+    }
 
     // Capture the knob frequencies; everything plays transposed by the note.
     for (int i = 0; i < 3; ++i)

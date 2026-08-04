@@ -154,4 +154,7 @@ private:
     double currentSampleRate = 44100.0;
     bool noteOn = false;
     bool pluckEnabled = true;   // false → startNote skips the Karplus pluck (drone)
+    // 12.4: with the ADSR module OFF, the bypass gate is held open while the SAMPLER plays its
+    // own release fade (isRingingOut) — released when the fade is spent (see renderNextBlock).
+    bool samplerTailHold = false;
 };
