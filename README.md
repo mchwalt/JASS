@@ -48,7 +48,10 @@ info** so nothing is hidden and every control explains itself.
   the keyboard, each with its own root. **STRETCH**: pitch/time decoupling — the key
   sets only the pitch, SPEED only the tempo, loops stay beat-locked on every key
   (Signalsmith Stretch, MIT). Ships with an example catalog (seeded to
-  `%AppData%\JASS\Samples`); presets reference sets by name.
+  `%AppData%\JASS\Samples`); presets reference sets by name. Two multisampled
+  **grand pianos** (AKAI's Splendid Steinway, Alexander Holm's Salamander
+  Yamaha C5) are available as free downloads — see
+  [Optional piano multisample sets](#optional-piano-multisample-sets).
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys

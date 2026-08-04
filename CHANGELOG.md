@@ -21,6 +21,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   decorrelated by ITD/HRIR, no coherent comb.
 
 ### Added
+- **SAMPLER velocity layers** (Story 12.5) — `lovel`/`hivel` regions in an imported
+  `.sfz` are real zones now: the key velocity picks the layer (soft hit → soft
+  recording, with its timbre), and inside a layer the gain follows the touch
+  (`amp_veltrack`, SFZ-spec default for .sfz sets; folder/single sets stay
+  velocity-neutral as before). New opcodes `volume=` (layer balancing) and
+  `tune=` (piano stretch tuning). Bounds raised for layered instruments: 60 min
+  of audio per set, 4 GiB global sample budget.
 - **Downloadable grand-piano packs** — `JASS-SplendidPiano.zip` (AKAI Steinway,
   samples Public Domain) and `JASS-SalamanderPiano.zip` (Alexander Holm's
   Yamaha C5, CC BY 3.0 with attribution file) as assets of the dedicated

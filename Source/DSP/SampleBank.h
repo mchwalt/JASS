@@ -5,6 +5,7 @@
 #include <atomic>
 #include <memory>
 #include <limits>
+#include <cmath>
 #include "SampleMapping.h"
 
 // ── SAMPLER sample sets (Story 12.1, zones since Story 12.2) ────────────────────────────────
@@ -21,17 +22,18 @@
 // the reasoning): loading on the MESSAGE THREAD only, visibility to the audio thread via an
 // atomic count with release/acquire, append-only slots with stable addresses, duplicate-safe by
 // name, and NO freeing (a voice caches raw SampleZone pointers across blocks — use-after-free
-// hazard). Never-free is acceptable because the store is BOUNDED (Story 12.2 caps):
-//   · per FILE/zone:  ≤ 60 s                     (kMaxSeconds, unchanged from 12.1)
-//   · per SET total:  ≤ 300 s across all zones   (kMaxSetSeconds — a real multisampled
-//     instrument at ~30 zones × a few seconds fits; a runaway folder does not)
-//   · GLOBAL budget:  ≤ kMaxStoreBytes, which is EXACTLY the 12.1 worst case of
-//     32 × 60 s stereo @ 44.1 kHz float ≈ 646 MiB — so multisampling cannot exceed the RAM
-//     envelope the 12.1 never-free decision was based on, no matter how sets are shaped.
-// Global RAM budget = the 12.1 worst case (32 × 60 s stereo @ 44.1 kHz float). Multisample
-// sets reshape how the budget is spent but can never exceed it (Story 12.2 AC 4). Namespace
-// scope so loadZone can bound a single allocation against it BEFORE allocating.
-inline constexpr size_t kMaxSampleStoreBytes = (size_t) 32 * 60 * 44100 * 2 * sizeof (float);
+// hazard). Never-free is acceptable because the store is BOUNDED (12.2 caps, 12.5 numbers):
+//   · per FILE/zone:  ≤ 60 s                      (kMaxSeconds, unchanged from 12.1)
+//   · per SET total:  ≤ 3600 s across all zones   (kMaxSetSeconds — a 4-velocity-layer piano
+//     is ~1700–2100 s; a runaway folder still fails early with a friendly message)
+//   · GLOBAL budget:  ≤ kMaxStoreBytes = 4 GiB (12.5 user decision D2) — the actual RAM
+//     protector, sized for two 4-layer grand pianos plus headroom.
+// Global RAM budget — the hard protector of the never-free store. History: 12.1/12.2 pinned
+// it to the old worst case (≈646 MiB); story 12.5 raised it to 4 GiB (user decision D2,
+// 2026-08-04) so VELOCITY-LAYERED pianos fit (Splendid ×4 ≈ 557 MB + Salamander ×4 ≈ 690 MB
+// decoded, plus headroom for bigger libraries). Namespace scope so loadZone can bound a
+// single allocation against it BEFORE allocating. (size_t) first ⇒ 64-bit multiply.
+inline constexpr size_t kMaxSampleStoreBytes = (size_t) 4 * 1024 * 1024 * 1024;
 
 struct SampleZone
 {
@@ -40,6 +42,10 @@ struct SampleZone
     int rootKey = 60;             // key that plays the file at original speed (mapped sets)
     int loKey = 0, hiKey = 127;   // inclusive key range (mapped sets; 0..127 for single samples)
     float releaseSeconds = -1.0f; // sfz ampeg_release — note-off fade (12.4); <0 ⇒ REL knob decides
+    int   loVel = 0, hiVel = 127; // inclusive velocity layer (12.5; full range for single samples)
+    float veltrack = 0.0f;        // 12.5 amp_veltrack as 0..1 — how much velocity scales the gain
+    float gainLin  = 1.0f;        // 12.5 sfz volume= as a linear factor (layer balancing)
+    double tuneRatio = 1.0;       // 12.5 sfz tune= as a rate factor 2^(cents/1200)
 
     bool   isStereo() const            { return ! data[1].empty(); }
     const float* getData (int ch) const { return data[isStereo() && ch != 0 ? 1 : 0].data(); }
@@ -69,30 +75,35 @@ public:
         return total;
     }
 
-    // Zone for a played note. Mapped: the zone whose [lo,hi] contains it; a note no zone covers
-    // (possible with imported .sfz gaps) falls back to the NEAREST zone by range distance, so
-    // every key always sounds. Unmapped: the single zone. Audio-thread callable: linear scan,
-    // no allocation.
-    const SampleZone* zoneFor (int midiNote) const
+    // Zone for a played note (12.5: and its VELOCITY — layers are a zone dimension). Mapped:
+    // the zone containing key AND velocity; anything not exactly covered (imported .sfz gaps)
+    // falls back to the NEAREST zone — key distance dominates, velocity breaks ties — so every
+    // key always sounds. Unmapped: the single zone. Audio-thread callable: linear scan, no
+    // allocation (a 4-layer piano is ~230 zones, scanned once per note-on).
+    const SampleZone* zoneFor (int midiNote, int velocity = 127) const
     {
         if (zones.empty()) return nullptr;
         const SampleZone* best = &zones.front();
-        int bestDist = 1 << 20;
+        int bestDist = 1 << 24;
         for (const auto& z : zones)
         {
-            if (midiNote >= z.loKey && midiNote <= z.hiKey)
+            const int kd = midiNote < z.loKey ? z.loKey - midiNote
+                                              : (midiNote > z.hiKey ? midiNote - z.hiKey : 0);
+            const int vd = velocity < z.loVel ? z.loVel - velocity
+                                              : (velocity > z.hiVel ? velocity - z.hiVel : 0);
+            const int dist = kd * 256 + vd;
+            if (dist == 0)
                 return &z;
-            const int dist = midiNote < z.loKey ? z.loKey - midiNote : midiNote - z.hiKey;
             if (dist < bestDist) { bestDist = dist; best = &z; }
         }
         return best;
     }
 
     static constexpr double kMaxSeconds    = 60.0;    // per-file/zone cap (12.1 AC3, kept)
-    // Per-set total cap. Raised 300 → 900 s (2026-08-04) so real single-layer chromatic pianos
-    // (~88 zones × ~10 s) load; the GLOBAL byte budget (kMaxSampleStoreBytes) remains the hard
+    // Per-set total cap. 300 → 900 s (single-layer chromatic pianos) → 3600 s (12.5: a 4-layer
+    // piano is ~1700–2100 s); the GLOBAL byte budget (kMaxSampleStoreBytes) remains the hard
     // RAM protector — this cap only catches runaway folders early with a friendlier message.
-    static constexpr double kMaxSetSeconds = 900.0;
+    static constexpr double kMaxSetSeconds = 3600.0;
 
     // Load one WAV/AIFF whole (first two channels) as a zone. Empty vectors on unreadable /
     // zero-length / over-cap files (no silent truncation).
@@ -173,10 +184,15 @@ public:
             z.loKey   = e.loKey;
             z.hiKey   = e.hiKey;
             z.releaseSeconds = e.releaseSeconds;
+            z.loVel   = e.loVel;
+            z.hiVel   = e.hiVel;
+            z.veltrack  = juce::jlimit (0.0f, 100.0f, e.veltrack) / 100.0f;
+            z.gainLin   = juce::Decibels::decibelsToGain (e.volumeDb);
+            z.tuneRatio = std::pow (2.0, e.tuneCents / 1200.0);
             totalSeconds += (double) z.getLength() / z.fileSampleRate;
             if (totalSeconds > kMaxSetSeconds)
             {
-                error = "the set exceeds 15 minutes of audio in total (reached at \""
+                error = "the set exceeds 60 minutes of audio in total (reached at \""
                       + e.file.getFileName() + "\")";
                 return nullptr;
             }
