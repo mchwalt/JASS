@@ -1341,9 +1341,29 @@ void SynthyEditor::buildRack()
         Combo setCombo{ P::samplerSet, "SET",
                         std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
         setCombo.indexIsValue = true;
+        setCombo.slots = 3;   // set names are user-given and long ("SalamanderPiano") — show them in full
+        // A mapped (multisample) set is a chromatic INSTRUMENT — Loop mode starts its notes at
+        // the shared loop phase, i.e. mid-sample, which no piano survives; and STRETCH buys
+        // nothing when every zone transposes at most a couple of semitones, while costing CPU,
+        // 60 ms engine lead and phase-vocoder character. When the USER picks a mapped set,
+        // MODE follows to One-Shot and STRETCH switches off (requests 2026-08-04); preset loads
+        // stay untouched (programmatic combo updates don't fire onUserSelect), and picking a
+        // single-sample set never flips anything back — loops keep their setting.
+        auto oneShotForMappedSet = [this] (int setIdx)
+        {
+            const auto* s = SampleBankStore::instance().getSet (setIdx);
+            if (s != nullptr && s->isMapped())
+            {
+                if (auto* pm = processor.getAPVTS().getParameter (P::samplerMode))
+                    pm->setValueNotifyingHost (pm->convertTo0to1 (0.0f));   // One-Shot
+                if (auto* ps = processor.getAPVTS().getParameter (P::samplerStretch))
+                    ps->setValueNotifyingHost (0.0f);                        // STRETCH off
+            }
+        };
+        setCombo.onUserSelect = oneShotForMappedSet;
         // Shared by LOAD (file or .sfz) and FOLDER (12.2): import via PresetIO (copies into
         // %AppData%\JASS\Samples for preset portability), select on success, explain on failure.
-        auto importSource = [this] (juce::File f)
+        auto importSource = [this, oneShotForMappedSet] (juce::File f)
         {
             juce::String err;
             const int idx = PresetIO::importSamplerSource(f, &err);
@@ -1351,6 +1371,7 @@ void SynthyEditor::buildRack()
             {
                 if (auto* pr = processor.getAPVTS().getParameter(P::samplerSet))
                     pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
+                oneShotForMappedSet(idx);   // importing an instrument is a user gesture too
             }
             else   // name the culprit — a generic limits lecture forces the user to guess
                 juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
@@ -1381,6 +1402,9 @@ void SynthyEditor::buildRack()
             Toggle{ P::samplerStretch, "STRETCH" },
             rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
             K(P::samplerSpeed, "SPEED"),
+            // 12.4: the sampler's own note-off fade — fallback for zones without an .sfz
+            // ampeg_release (those win); 0 = off (pre-12.4 behaviour).
+            K(P::samplerRelease, "REL"),
             Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));
