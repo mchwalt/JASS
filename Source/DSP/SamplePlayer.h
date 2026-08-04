@@ -121,6 +121,27 @@ public:
     // Start playback for a note. transposeRatio = f(note)/f(C4); midiNote picks the zone (12.2).
     void trigger(double transposeRatio, int midiNote)
     {
+        // Retrigger declick (user report 2026-08-04: fast piano playing crackled): a reused
+        // voice jumps from mid-ring to the attack — an unsmoothed waveform step. TAPE mode
+        // crossfades ~6 ms of the OLD material (position/rate/zone captured here; zone pointers
+        // never die — never-freed store). STRETCH mode can't crossfade by position (pos is the
+        // input FEED, ~60 ms ahead of what is heard), so it kills the step with a decaying
+        // last-output remnant instead.
+        if (active && zone != nullptr)
+        {
+            if (! stretchMode)
+            {
+                dkZone   = zone;
+                dkPos    = pos;
+                dkStep   = ((mode == Mode::Reverse || mode == Mode::RevLoop) ? -1.0 : 1.0) * rate * speed;
+                dkRemain = kXfadeSamples;
+            }
+            else
+            {
+                clickL = lastL;
+                clickR = lastR;
+            }
+        }
         lastRatio = transposeRatio;
         lastNote  = std::clamp(midiNote, 0, 127);
         zone = (set != nullptr) ? set->zoneFor(lastNote) : nullptr;
@@ -172,7 +193,30 @@ public:
     // pre-roll burst above stays bounded no matter how many voices start in the same callback.
     static void resetSeekBudget() { seekBudget.store(kMaxSeeksPerBlock, std::memory_order_relaxed); }
 
-    void reset() { active = false; drainRemaining = -1; }
+    // Hard stop — also the first half of a VOICE STEAL (stopNote(false) + immediate restart).
+    // Arm the retrigger declick HERE: by the time trigger() runs, active is already false, so
+    // capturing at trigger alone missed exactly the stolen-voice case (user report 2026-08-04:
+    // fast piano playing crackled hardest once the 16 voices were exhausted).
+    void reset()
+    {
+        if (active && zone != nullptr)
+        {
+            if (! stretchMode)
+            {
+                dkZone   = zone;
+                dkPos    = pos;
+                dkStep   = ((mode == Mode::Reverse || mode == Mode::RevLoop) ? -1.0 : 1.0) * rate * speed;
+                dkRemain = kXfadeSamples;
+            }
+            else
+            {
+                clickL = lastL;
+                clickR = lastR;
+            }
+        }
+        active = false;
+        drainRemaining = -1;
+    }
 
     Out nextSample()
     {
@@ -189,17 +233,20 @@ public:
         {
             if (outRead >= kChunk)
                 refillStretchChunk();
-            const float l = outBufL[outRead], r = outBufR[outRead];
+            float l = outBufL[outRead] * g, r = outBufR[outRead] * g;
             ++outRead;
             // Drain accounting lives on the OUTPUT side (review 2026-08-04): the note-on
             // pre-roll must not consume the budget (it made short one-shots fully silent),
             // and counting inputs cut the FIFO's last partial chunk of tail.
             if (! active && drainRemaining > 0)
                 --drainRemaining;
-            return { l * g, r * g };
+            l += clickL; r += clickR;          // retrigger step suppressor (decaying remnant)
+            clickL *= kClickDecay; clickR *= kClickDecay;
+            lastL = l; lastR = r;
+            return { l, r };
         }
 
-        // ---- TAPE mode (12.1, bit-identical) ----------------------------------------------
+        // ---- TAPE mode (12.1 + retrigger declick) -----------------------------------------
         const bool rev     = (mode == Mode::Reverse || mode == Mode::RevLoop);
         const bool looping = (mode == Mode::Loop    || mode == Mode::RevLoop);
         const bool stereo  = zone->isStereo();
@@ -207,19 +254,32 @@ public:
         float outL = readXf(pos, 0, s0, s1, len, rev, looping);
         float outR = stereo ? readXf(pos, 1, s0, s1, len, rev, looping) : outL;
 
+        if (dkRemain > 0)   // blend ~6 ms of the pre-retrigger material over the new attack
+        {
+            const float f = (float) dkRemain / (float) kXfadeSamples;
+            const float oL = readZone(dkZone, dkPos, 0);
+            const float oR = dkZone->isStereo() ? readZone(dkZone, dkPos, 1) : oL;
+            outL = outL * (1.0f - f) + oL * f;
+            outR = outR * (1.0f - f) + oR * f;
+            dkPos += dkStep;
+            --dkRemain;
+        }
+
         const double step = rate * speed;   // SPEED rides on top of the key-derived rate, live
         pos += rev ? -step : step;
 
         if (!rev && pos >= s1)      { if (looping) pos -= len; else active = false; }
         else if (rev && pos <  s0)  { if (looping) pos += len; else active = false; }
 
-        return { outL * g, outR * g };
+        lastL = outL * g; lastR = outR * g;
+        return { lastL, lastR };
     }
 
 private:
-    static constexpr int kXfadeSamples = 256;   // ~6 ms at 44.1k
-    static constexpr int kChunk = 64;           // stretch FIFO granularity (~1.5 ms — negligible)
-    static constexpr int kMaxSeeksPerBlock = 4; // note-on pre-roll burst cap (user decision "B")
+    static constexpr int   kXfadeSamples = 256;   // ~6 ms at 44.1k (loop join + retrigger declick)
+    static constexpr int   kChunk = 64;           // stretch FIFO granularity (~1.5 ms — negligible)
+    static constexpr int   kMaxSeeksPerBlock = 4; // note-on pre-roll burst cap (user decision "B")
+    static constexpr float kClickDecay = 0.97f;   // stretch retrigger remnant: ~-60 dB in ~5 ms
     // Shared across all voices (and plugin instances — they also share the CPU): the per-block
     // budget of full note-on pre-rolls. Reset by the processor each block (resetSeekBudget).
     static inline std::atomic<int> seekBudget { kMaxSeeksPerBlock };
@@ -298,10 +358,12 @@ private:
     }
 
     // 4-point Hermite (Catmull-Rom) around the fractional position, edge-clamped.
-    float read(double p, int ch) const
+    float read(double p, int ch) const { return readZone(zone, p, ch); }
+
+    static float readZone(const SampleZone* z, double p, int ch)
     {
-        const int n = zone->getLength();
-        const float* d = zone->getData(ch);
+        const int n = z->getLength();
+        const float* d = z->getData(ch);
         p = std::clamp(p, 0.0, (double) (n - 1));
         const int i = (int) p;
         const float f = (float) (p - i);
@@ -341,4 +403,11 @@ private:
     float  inBufL[kChunk] {}, inBufR[kChunk] {};
     float  outBufL[kChunk] {}, outBufR[kChunk] {};
     std::vector<float> seekBufL, seekBufR;   // note-on pre-roll scratch (sized in setSampleRate)
+
+    // ---- retrigger declick (user report 2026-08-04) ----
+    const SampleZone* dkZone = nullptr;   // old material continuing under the new attack (tape)
+    double dkPos = 0.0, dkStep = 0.0;
+    int    dkRemain = 0;
+    float  clickL = 0.0f, clickR = 0.0f;  // decaying output remnant (stretch retrigger)
+    float  lastL = 0.0f, lastR = 0.0f;    // last emitted pair (captured at retrigger)
 };

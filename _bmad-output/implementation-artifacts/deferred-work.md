@@ -90,3 +90,6 @@ working; they revised the PRD/architecture and are now formalised:
 - SAMPLER STRETCH: toggling STRETCH ON mid-note inserts ~60 ms of warm-up silence on all held
   voices (a per-voice outputSeek on toggle would burst 16 × 0.57 ms in one callback — worse).
   Rare edit action; revisit only if users toggle stretch as a performance gesture.
+- SAMPLER/SplendidGrand: metallic clicking on SOME keys — user assessment: in the source
+  samples themselves (only certain keys). offset= is honoured since 2026-08-04; if it persists,
+  inspect the affected FLACs before suspecting playback. (Tracked in story 12.4 notes.)
