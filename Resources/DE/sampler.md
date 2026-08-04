@@ -8,10 +8,14 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   `Piano_C3.wav` / `Pad_A#4.wav` (Notenname mit C4 = mittleres C, oder MIDI-Nummer) werden über
   die Tastatur verteilt — jede deckt den Bereich bis zur Mitte zum Nachbarn ab, so bleiben
   Instrumente über mehr als eine Oktave natürlich. LOAD akzeptiert auch eine **.sfz**-Datei
-  (ihre Tastenzuordnung wird importiert; gelesene Opcodes: `sample`, `key`, `lokey`/`hikey`,
-  `pitch_keycenter`, `default_path`, `offset`, `ampeg_release` — alles andere, auch
-  Velocity-Layer, wird ignoriert; eine defekte Zone in einem importierten Set korrigiert man
-  durch Editieren der .sfz).
+  (gelesene Opcodes: `sample`, `key`, `lokey`/`hikey`, `pitch_keycenter`, `lovel`/`hivel`,
+  `default_path`, `offset`, `ampeg_release`, `amp_veltrack`, `volume`, `tune` — alles andere
+  wird ignoriert; eine defekte Zone korrigiert man durch Editieren der .sfz).
+  **Velocity-Layer** sind echte Zonen: Ein leiser Anschlag wählt die leise Aufnahme, ein
+  harter die harte (die Piano-Pakete bringen vier Schichten pro Taste mit), und innerhalb
+  jeder Schicht folgt die Lautstärke dem Anschlag (`amp_veltrack`, bei .sfz-Sets standardmäßig
+  an). Ordner- und Einzel-Sample-Sets bleiben anschlagsneutral — wer sie dynamisch will,
+  routet in der Mod-Matrix Velocity → LEVEL.
 - **ROOT** — die Taste, bei der eine **einzelne** Aufnahme in Originalgeschwindigkeit läuft; jede
   andere Taste transponiert sie bandmaschinen-artig (Formanten wandern mit: nutzbar sind grob
   ±1 Oktave — die Natur von Einzel-Samples, kein Defekt). Bei Multisample-Sets bringt jede Zone
@@ -40,8 +44,8 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   (CC64) hält Noten; der Ausklang startet beim Loslassen des Pedals.
 - **Stereo-Dateien bleiben stereo**: links/rechts werden als zwei platzierte Quellen um PAN herum
   gerendert; in den Modi Mono und Pseudo-Stereo kollabieren sie zum Mono-Downmix.
-- **Grenzen:** 60 s pro Datei, 15 Minuten Audio pro Set, 32 Sets (plus ein globales
-  Speicher-Budget — grob drei voll ausgebaute Sets).
+- **Grenzen:** 60 s pro Datei, 60 Minuten Audio pro Set (ein vierlagiger Flügel hat ~30),
+  32 Sets und ein globales Speicher-Budget von 4 GB — Samples bleiben die ganze Sitzung geladen.
 
 Anders als WAVETABLE (tonhöhen-gelockter Einzelzyklus) spielt der SAMPLER die Aufnahme durch die
 Zeit — ihre eigene Hüllkurve und ihr Charakter sind der Klang.

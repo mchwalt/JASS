@@ -24,7 +24,7 @@ per-story implementation notes) lives in `_bmad-output/` — see
 ## 1. Overview
 
 JASS is a polyphonic software synthesizer written in **C++20** on
-**[JUCE 8](Glossary.md#juce)** (vendored as a Git
+**[JUCE 9](Glossary.md#juce)** (vendored as a Git
 [submodule](Glossary.md#submodule)). It builds as a
 **[Standalone](Glossary.md#standalone)** app (primary target) and a
 **[VST3](Glossary.md#vst3)** plugin (experimental) from a single CMake project.

@@ -10,8 +10,8 @@
 //   1. a folder of files named  <anything>_<note>.wav  (note = "C3"/"A#4" or a MIDI number),
 //      ranges split halfway between neighbouring roots;
 //   2. a minimal .sfz subset — <group>/<region> headers and the opcodes sample / key / lokey /
-//      hikey / pitch_keycenter / hivel / offset / ampeg_release. EVERY other opcode is ignored,
-//      silently.
+//      hikey / pitch_keycenter / lovel / hivel (velocity layers, 12.5) / offset / ampeg_release /
+//      amp_veltrack / volume / tune. EVERY other opcode is ignored, silently.
 // Note names resolve with C4 = MIDI 60 — the pitch-model convention used everywhere in JASS
 // (keyboard labelling, "FREQ knobs define the sound AT C4"). MESSAGE THREAD only.
 namespace SampleMapping
@@ -55,8 +55,9 @@ namespace SampleMapping
         return parseNoteToken (fileNameNoExt.fromLastOccurrenceOf ("_", false, false));
     }
 
-    // One imported mapping entry, before the audio is loaded. hiVel ranks velocity layers of
-    // the same key range (the LOUDEST layer wins the dedupe — see entriesFromSfz).
+    // One imported mapping entry, before the audio is loaded. Since 12.5 velocity is a real
+    // ZONE DIMENSION (loVel/hiVel select the layer at note-on) — the old "loudest layer wins"
+    // dedupe is gone.
     struct Entry
     {
         juce::File file;
@@ -66,6 +67,11 @@ namespace SampleMapping
         int hiVel   = 127;
         int offsetFrames = 0;   // sfz offset= — skip this many frames at the file start
         float releaseSeconds = -1.0f;   // sfz ampeg_release= — note-off fade (12.4); <0 ⇒ unset
+        int   loVel = 0;                // sfz lovel= — velocity layer lower bound (12.5)
+        float veltrack = 0.0f;          // sfz amp_veltrack= 0..100 — velocity→gain amount (12.5);
+                                        //   entriesFromSfz defaults it to 100 (spec), folders to 0
+        float volumeDb  = 0.0f;         // sfz volume= — per-zone gain in dB (12.5)
+        int   tuneCents = 0;            // sfz tune= — per-zone pitch offset in cents (12.5)
     };
 
     // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
@@ -113,18 +119,33 @@ namespace SampleMapping
     // <control> (ONLY for default_path= — very common in real files); any other header suspends
     // parsing until the next known one. Opcodes: sample= (value may contain spaces — runs until
     // the next token containing '='), key= / lokey= / hikey= / pitch_keycenter= (note names or
-    // numbers), default_path=. Everything else is ignored. Missing pitch_keycenter ⇒ 60 (the
-    // SFZ default). "//" starts a comment. Robustness rules:
+    // numbers), lovel= / hivel= (velocity LAYERS — real zone dimension since 12.5), offset=,
+    // ampeg_release= (12.4), amp_veltrack= / volume= / tune= (12.5), default_path=. Everything
+    // else is ignored. Missing pitch_keycenter ⇒ 60, missing amp_veltrack ⇒ 100 (both the SFZ
+    // defaults — D1 in story 12.5: imported .sfz sets respond to touch). "//" starts a comment.
+    // Robustness rules:
     //   · headers glued to their first opcode ("<region>sample=x", legal SFZ) are split;
     //   · a region with an UNPARSABLE key/lokey/hikey/pitch_keycenter value is DROPPED — the
     //     old "treat as unset" fallback turned a typo into a full-keyboard region that shadowed
     //     every other zone (zoneFor is first-match);
-    //   · regions whose key range is CONTAINED in an earlier region's range are dropped —
-    //     velocity layers (lovel/hivel, unsupported) would otherwise load N copies that charge
-    //     the caps but can never be reached.
+    //   · regions covered by an earlier region in KEY *and* VELOCITY are dropped (first-match
+    //     zoneFor could never reach them; they'd only charge the caps).
+    inline constexpr float kUnsetF = -1.0e9f;      // "opcode absent" sentinels (0 is a valid value)
+    inline constexpr int   kUnsetI = -100000;
+
     inline std::vector<Entry> entriesFromSfz (const juce::File& sfzFile)
     {
-        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1, hiVel = -1, offset = -1; float rel = -1.0f; bool bad = false; };
+        struct Scope
+        {
+            juce::String sample;
+            int lo = -1, hi = -1, root = -1, hiVel = -1, offset = -1;
+            float rel = -1.0f;
+            int   loVel = -1;             // 12.5 velocity layer bounds
+            float vt    = -1.0f;          // 12.5 amp_veltrack (percent); <0 ⇒ unset
+            float vol   = kUnsetF;        // 12.5 volume (dB)
+            int   tune  = kUnsetI;        // 12.5 tune (cents)
+            bool bad = false;
+        };
         Scope group, region;
         bool inRegion = false, ignoring = false, inControl = false;
         juce::String defaultPath;
@@ -139,31 +160,45 @@ namespace SampleMapping
             int lo    = region.lo    >= 0 ? region.lo    : group.lo;
             int hi    = region.hi    >= 0 ? region.hi    : group.hi;
             int root  = region.root  >= 0 ? region.root  : group.root;
+            int loVel = region.loVel >= 0 ? region.loVel : group.loVel;
             int hiVel = region.hiVel >= 0 ? region.hiVel : group.hiVel;
             int offs  = region.offset >= 0 ? region.offset : group.offset;
             float rel = region.rel   >= 0.0f ? region.rel : group.rel;   // <0 stays "unset"
+            float vt  = region.vt    >= 0.0f ? region.vt  : group.vt;
+            float vol = region.vol  != kUnsetF ? region.vol  : group.vol;
+            int  tune = region.tune != kUnsetI ? region.tune : group.tune;
             if (root  < 0) root  = 60;    // SFZ default: unchanged on middle C
             if (lo    < 0) lo    = 0;
             if (hi    < 0) hi    = 127;
+            if (loVel < 0) loVel = 0;
             if (hiVel < 0) hiVel = 127;
             if (offs  < 0) offs  = 0;
-            if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi)
+            if (vt    < 0.0f) vt = 100.0f;   // D1 (12.5): .sfz sets track velocity per spec default
+            if (vol  == kUnsetF) vol  = 0.0f;
+            if (tune == kUnsetI) tune = 0;
+            if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi && loVel <= hiVel)
             {
-                Entry fresh { baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/')),
-                              juce::jlimit (0, 127, root), lo, hi, hiVel, offs, rel };
-                bool handled = false;
-                for (auto& e : entries)
-                {
-                    if (e.loKey == lo && e.hiKey == hi)
-                    {   // velocity layer of the SAME zone: keep the loudest one (hivel ranks it)
-                        if (fresh.hiVel > e.hiVel) e = fresh;
-                        handled = true;
-                        break;
-                    }
-                    if (e.loKey <= lo && e.hiKey >= hi) { handled = true; break; }   // shadowed
-                }
-                if (! handled)
-                    entries.push_back (fresh);
+                Entry fresh;
+                fresh.file    = baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/'));
+                fresh.rootKey = juce::jlimit (0, 127, root);
+                fresh.loKey   = lo;
+                fresh.hiKey   = hi;
+                fresh.loVel   = loVel;
+                fresh.hiVel   = hiVel;
+                fresh.offsetFrames   = offs;
+                fresh.releaseSeconds = rel;
+                fresh.veltrack  = vt;
+                fresh.volumeDb  = vol;
+                fresh.tuneCents = tune;
+                // 12.5 dedupe: velocity is a zone dimension now. Drop a region only when an
+                // earlier one covers it in KEY *and* VELOCITY (true duplicate/subset — zoneFor
+                // is first-match, so it could never sound); distinct layers always survive.
+                bool shadowed = false;
+                for (const auto& e : entries)
+                    if (e.loKey <= lo && e.hiKey >= hi && e.loVel <= loVel && e.hiVel >= hiVel)
+                    { shadowed = true; break; }
+                if (! shadowed)
+                    entries.push_back (std::move (fresh));
             }
             inRegion = false;
             region = {};
@@ -220,7 +255,9 @@ namespace SampleMapping
                 else if (opcode == "hikey")           s.hi = note (value);
                 else if (opcode == "pitch_keycenter") s.root = note (value);
                 else if (opcode == "key")             s.lo = s.hi = s.root = note (value);
-                else if (opcode == "hivel")           // ranks velocity layers only (see flush)
+                else if (opcode == "lovel")           // velocity layer bounds (12.5: real zones)
+                    s.loVel = juce::jlimit (0, 127, value.getIntValue());
+                else if (opcode == "hivel")
                     s.hiVel = juce::jlimit (0, 127, value.getIntValue());
                 else if (opcode == "offset")          // skip pre-attack junk the library trims
                     s.offset = juce::jmax (0, value.getIntValue());
@@ -229,6 +266,12 @@ namespace SampleMapping
                     const float v = value.getFloatValue();
                     if (v > 0.0f) s.rel = juce::jmin (v, 30.0f);
                 }
+                else if (opcode == "amp_veltrack")    // velocity→gain amount (12.5); negative
+                    s.vt = juce::jlimit (0.0f, 100.0f, value.getFloatValue());   // tracking: unsupported
+                else if (opcode == "volume")          // per-zone gain in dB (12.5: layer balancing)
+                    s.vol = juce::jlimit (-60.0f, 12.0f, value.getFloatValue());
+                else if (opcode == "tune")            // per-zone cents (12.5: stretch tuning)
+                    s.tune = juce::jlimit (-1200, 1200, value.getIntValue());
                 // every other opcode: ignored by design (minimal subset)
             }
         }

@@ -86,7 +86,7 @@ public:
         if (s == set)
             return;
         set  = s;
-        zone = (s != nullptr) ? s->zoneFor(lastNote) : nullptr;
+        zone = (s != nullptr) ? s->zoneFor(lastNote, lastVel) : nullptr;
         if (! active)
             return;
         if (zone == nullptr || zone->getLength() < 4) { active = false; return; }
@@ -120,9 +120,11 @@ public:
     // ±0.5 pan-slot spread computed per block in applyToVoice.
     bool   sourceIsStereo() const { return set != nullptr && set->isStereo(); }
 
-    // Start playback for a note. transposeRatio = f(note)/f(C4); midiNote picks the zone (12.2).
-    void trigger(double transposeRatio, int midiNote)
+    // Start playback for a note. transposeRatio = f(note)/f(C4); midiNote AND velocity pick
+    // the zone (12.2 keys, 12.5 velocity layers).
+    void trigger(double transposeRatio, int midiNote, int velocity = 127)
     {
+        lastVel = std::clamp(velocity, 1, 127);
         // Retrigger declick (user report 2026-08-04: fast piano playing crackled): a reused
         // voice jumps from mid-ring to the attack — an unsmoothed waveform step. TAPE mode
         // crossfades ~6 ms of the OLD material (position/rate/zone captured here; zone pointers
@@ -146,7 +148,7 @@ public:
         }
         lastRatio = transposeRatio;
         lastNote  = std::clamp(midiNote, 0, 127);
-        zone = (set != nullptr) ? set->zoneFor(lastNote) : nullptr;
+        zone = (set != nullptr) ? set->zoneFor(lastNote, lastVel) : nullptr;
         if (zone == nullptr || zone->getLength() < 4) { active = false; return; }
         computeRate();
         const bool rev = (mode == Mode::Reverse || mode == Mode::RevLoop);
@@ -260,7 +262,8 @@ public:
         const double len = s1 - s0;
         if (len < 4.0) { active = false; return { 0.0f, 0.0f }; }
 
-        const float g = (float) level * relGain;   // 12.4: the release ramp rides in the gain
+        // 12.4: release ramp · 12.5: zone volume + velocity tracking — all ride in the gain
+        const float g = (float) level * noteGain * relGain;
         if (stretchMode)
         {
             if (outRead >= kChunk)
@@ -341,14 +344,19 @@ private:
     // Fixed at note-on (and on a mid-note SET switch). TAPE: full coupled rate. STRETCH: the
     // pitch part goes to the engine as a transpose factor, the time part (fileSR/hostSR) stays
     // in the walk step. A mapped set's zone root wins, a single sample follows the ROOT knob.
+    // 12.5: the zone's tune= rides in the pitch factor (piano stretch tuning), and the note
+    // gain combines the zone's volume= with amp_veltrack — the SFZ velocity curve (x²): at
+    // veltrack 1 the gain IS v², at 0 velocity is ignored (legacy folder/single behaviour).
     void computeRate()
     {
         const double root = (set != nullptr && set->isMapped()) ? (double) zone->rootKey
                                                                 : (double) rootKey;
-        const double pitchFactor = lastRatio * std::pow(2.0, (60.0 - root) / 12.0);
+        const double pitchFactor = lastRatio * std::pow(2.0, (60.0 - root) / 12.0) * zone->tuneRatio;
         timeStepBase = zone->fileSampleRate / hostSampleRate;
         rate = pitchFactor * timeStepBase;
         stretch.setTransposeFactor((float) pitchFactor);
+        const double x = lastVel / 127.0;
+        noteGain = zone->gainLin * (float) (1.0 + zone->veltrack * (x * x - 1.0));
     }
 
     // Region read with the loop-join crossfade (equal-gain blend against material one
@@ -435,6 +443,8 @@ private:
     double level   = 0.5;
     int    rootKey = 60;
     int    lastNote = 60;               // note that picked the zone (kept for SET switches)
+    int    lastVel  = 127;              // velocity that picked the layer (12.5)
+    float  noteGain = 1.0f;             // zone volume= × amp_veltrack gain, fixed at note-on
     double lastRatio = 1.0;             // transposeRatio at note-on (kept for SET switches)
     double regionStart = 0.0, regionEnd = 1.0;
     Mode   mode = Mode::OneShot;
