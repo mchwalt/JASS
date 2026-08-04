@@ -221,17 +221,19 @@ in that folder.
 Two real grand pianos play beautifully through the SAMPLER. They are not part
 of the repository (≈65 MB of samples don't belong in git history) — download
 them as ready-made zips from the
-[**piano-pack release**](https://github.com/mchwalt/JASS/releases/tag/piano-pack-v1)
+[**piano-pack-v2 release**](https://github.com/mchwalt/JASS/releases/tag/piano-pack-v2)
 and unzip into `%AppData%\JASS\Samples\`:
 
 - **JASS-SplendidPiano.zip** — AKAI's Steinway recordings (samples Public
-  Domain), single FF layer, 57 zones. Ships a `NOTICE.txt` crediting the
-  upstream SFZ mapping at
+  Domain), four velocity layers (PP/MP/MF/FF), 242 regions. Ships a
+  `NOTICE.txt` crediting the upstream SFZ mapping at
   [sfzinstruments/SplendidGrandPiano](https://github.com/sfzinstruments/SplendidGrandPiano).
 - **JASS-SalamanderPiano.zip** — Alexander Holm's Yamaha C5
   ([sfzinstruments/SalamanderGrandPiano](https://github.com/sfzinstruments/SalamanderGrandPiano),
-  **CC BY 3.0**), loudest velocity layer, 30 zones; `ATTRIBUTION.txt` inside
-  carries the license details and the change list.
+  **CC BY 3.0**), four velocity layers (v4/v8/v12/v16) with the natural
+  stretch tuning; `ATTRIBUTION.txt` inside carries the license details and
+  the change list. (Builds without velocity layers use
+  [piano-pack-v1](https://github.com/mchwalt/JASS/releases/tag/piano-pack-v1).)
 
 Picking either set in the SAMPLER auto-configures the module as an instrument
 (One-Shot, no STRETCH, its own release; ENVELOPE off and Stereo-Pan output when

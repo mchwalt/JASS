@@ -38,11 +38,13 @@ Derived from the SFZ instrument at
 those features are not part of this subset).
 
 Changes for JASS (https://github.com/mchwalt/JASS):
-  - flattened, single velocity layer (FF; Mf in the undampened top range),
-    minimal opcode subset readable by the JASS SAMPLER
+  - flattened to the minimal opcode subset readable by the JASS SAMPLER,
+    four velocity layers (PP/MP/MF/FF; the original's filtered lowest band
+    merges into PP — JASS has no per-zone filter)
   - per-region release times kept from upstream data
   - keys A3/A4 (MIDI 57/69) keep their original FF recordings, which carry a
-    faint ~2 kHz ring from the source material (documented, accepted)
+    faint ~2 kHz ring from the source material (documented, accepted; audible
+    only at the hardest touch now that layers are real)
 
 Install: unzip into %AppData%\\JASS\\Samples\\  (the SplendidPiano folder),
 or load SplendidPiano.sfz via SAMPLER -> LOAD.
@@ -61,8 +63,9 @@ Source: https://github.com/sfzinstruments/SalamanderGrandPiano
 (retuned version by Markus Fiedler, SFZ reconstruction by kinwie).
 
 Changes for JASS (https://github.com/mchwalt/JASS):
-  - single velocity layer (v16) of the original 16
-  - flattened, minimal-opcode .sfz readable by the JASS SAMPLER
+  - four velocity layers (v4/v8/v12/v16) of the original 16
+  - flattened, minimal-opcode .sfz readable by the JASS SAMPLER; natural
+    stretch tuning (tune=) kept from upstream data
   - fixed per-zone release times (1.0 s damped, 3.0 s undampened range)
   - hammer noises, pedal noises, release samples and string resonance omitted
 
@@ -107,7 +110,9 @@ def main() -> int:
                                check=True)
             sample_dir = src / "Samples"
             sfz = REPO / "tools" / "piano-packs" / f"{name}.sfz"
-            files = referenced_samples(sfz)
+            # dedupe, order-preserving: layers may share files (Splendid's undampened top
+            # range reuses the same Mf/PP recordings in several velocity bands)
+            files = list(dict.fromkeys(referenced_samples(sfz)))
             missing = [f for f in files if not (sample_dir / f).is_file()]
             if missing:
                 print(f"ERROR: {name}: missing upstream samples: {missing}", file=sys.stderr)
