@@ -1,6 +1,6 @@
 # Epic 11 — Robustness & RT-Safety Hardening
 
-Status: **Ready for dev** (captured 2026-07-24 from a full-codebase BMAD code review).
+Status: done (implemented 2026-07-26 in PR #14, stories 11.1-11.4 complete)
 Type: **Correctness / real-time-safety hardening** — no new features; make the existing engine
 allocation-free & lock-free on the audio thread, fix latent crashes and a couple of DSP bugs.
 

@@ -1,6 +1,6 @@
 # Story 4.1: Ordered RackLayout model & descriptor-declared default zone/order
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

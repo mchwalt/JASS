@@ -4,7 +4,7 @@ baseline_commit: e759783
 
 # Story 2.4: Universal module enablers (Master / ADSR / Mix-Mode overridable)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

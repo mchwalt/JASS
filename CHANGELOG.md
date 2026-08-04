@@ -10,6 +10,72 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **SAMPLER multisampling** (Story 12.2) — load a whole folder as ONE sample set:
+  files named `<anything>_<note>` (`Piano_C3.wav`, `Pad_A#4.wav`, note names with
+  C4 = middle C or MIDI numbers) are spread across the keyboard, each zone covering
+  the range halfway to its neighbours. LOAD also imports a minimal **`.sfz`** subset
+  (`<group>`/`<region>`, `sample`/`key`/`lokey`/`hikey`/`pitch_keycenter`). ROOT is
+  inert (dimmed) for multisample sets — each zone brings its own root. New caps:
+  60 s per file (unchanged), 5 min of audio per set, 32 sets, and a global RAM
+  budget equal to the previous worst case. Presets reference multisample sets by
+  name like single samples; sets live in `%AppData%\JASS\Samples\<SetName>\`.
+- **SAMPLER load errors now name the file and the reason** (e.g. which file of a
+  set is unreadable) instead of a generic limits message.
+- **SAMPLER reads FLAC** (everywhere: LOAD, folders, .sfz references, preload) —
+  the big free .sfz libraries (Salamander, Splendid Grand, …) ship FLAC and now
+  load without conversion. Per-set audio cap raised 5 → 15 minutes so real
+  single-layer chromatic pianos fit (the global memory budget stays the hard
+  limit); overlapping velocity layers in an .sfz now keep the LOUDEST layer
+  (`hivel` ranking) instead of whichever came first.
+- **Two shipped multisample example sets** (seeded to `%AppData%\JASS\Samples`):
+  **EPiano** (5 FM e-piano recordings C2–C6, mapped by the `Name_C3.wav` folder
+  convention) and **Organ** (3 drawbar recordings mapped by the commented example
+  `Organ.sfz` — a template for writing your own).
+- **`tools/get_iowa_piano.py`** — builds an optional real-piano multisample set
+  (University of Iowa Steinway recordings, free without restrictions) with one
+  command; README documents it plus the manual route to the Splendid Grand.
+- **SAMPLER STRETCH mode** (Story 12.3) — pitch/time decoupling: the key sets only
+  the pitch, SPEED only the tempo, so loops keep their rhythm on every key and all
+  loop voices stay beat-locked regardless of pitch (the tape-mode hard resync
+  becomes unnecessary by construction). Engine: **Signalsmith Stretch** (MIT,
+  vendored under `Source/ThirdParty/signalsmith-stretch/`), chosen by a measured
+  bake-off (~35–40 dB spectral SNR at ±7/±12 st vs. negative SNR for a naive
+  granular; ~19 % of one core for 16 stereo voices). The engine's ~60 ms
+  warm-up is pre-computed at note-on (`outputSeek`, measured 0.57 ms/voice),
+  so attacks stay immediate even when playing fast. Off by default — existing
+  presets and the classic tape behaviour are unchanged.
+
+- **Developer documentation** — three new docs linked from the README:
+  `docs/ARCHITECTURE.md` (layers, signal flow, threading/RT-safety, state, UI),
+  `docs/MODULE_SYSTEM.md` (declarative module-spec system + extension recipes)
+  and `docs/DEVELOPER_GUIDE.md` (build, dependencies, versioning/CI, all
+  configuration surfaces, compile-time tunables, build gotchas).
+
+### Changed
+- **SAMPLER STRETCH toggle** moved next to MODE and now renders like every other
+  control (name caption above, checkbox below) — the button-side label was
+  unreadable between the knobs.
+- **SAMPLER shared loop clock runs only while voices are sounding** — during
+  silence it parks at the region start, so the first note after a pause always
+  plays the sample's attack; simultaneous/overlapping loop notes still join the
+  running round (beat-lock preserved).
+- `docs/JASS_Preset_Format.md` updated to the current FormatVersion 6 (was
+  stale at v4) with the full v3→v6 version history.
+
+### Fixed
+- **`Samples/Talkbox.wav` was MS-ADPCM-compressed** — JUCE cannot decode that,
+  so the shipped sample had never actually loaded (silently skipped since its
+  introduction). Re-encoded as 16-bit PCM; it now appears in the SET list.
+- **Rejected folder/`.sfz` imports no longer leave a dead copy** in
+  `%AppData%\JASS\Samples` (imports now validate before copying — a leftover
+  folder would have silently failed at every startup preload).
+
+### Removed
+- `docs/Modul_Architektur_Konzept.md` — the 2026-07-18 design draft is
+  superseded by `docs/MODULE_SYSTEM.md`, which documents the *implemented*
+  state (the draft's `legacyKey`/array-persistence proposals were never built).
+
 ## [2026.07.15] – 2026-07-30
 
 Collects everything released as v2026.07.1 – v2026.07.15 (the automated per-merge

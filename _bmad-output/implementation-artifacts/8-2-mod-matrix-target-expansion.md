@@ -1,6 +1,6 @@
 # Story 8.2: Mod-Matrix target expansion (per-voice FX & generator targets)
 
-Status: in-review
+Status: done
 
 <!-- Follow-on to Epic 8 (Modulation Matrix), which explicitly reserved "later stories add …
      new targets (Pan, FM-Amount, FX mixes) — each just another target on the matrix". -->

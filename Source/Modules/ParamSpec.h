@@ -4,7 +4,7 @@
 #include <vector>
 #include <memory>
 
-// AUDIO-safe half of the module-spec system (see docs/Modul_Architektur_Konzept.md): parameter
+// AUDIO-safe half of the module-spec system (see docs/MODULE_SYSTEM.md): parameter
 // declarations + APVTS generation only. NO UI includes here, so Parameters.h stays UI-free — the
 // UI half (ModuleSpec + makeModuleDescriptor) lives in ModuleSpec.h and pulls the rack headers.
 

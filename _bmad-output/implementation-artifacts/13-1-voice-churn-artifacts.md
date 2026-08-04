@@ -46,3 +46,10 @@ at the 2.5 s mark should discriminate the hypotheses immediately.
 
 The "Kopfkino" demo preset ships with release 0.3 (tails no longer stack deep enough to trigger
 it); the room feel comes from the ROOM reflections anyway. The engine question stays open here.
+
+**Update 2026-07-31 (user-confirmed):** shortening the ADSR release has so far worked reliably in
+*every* case where the artifact appeared. This is consistent with all four hypotheses (they all
+feed on overlapping release tails × voice reuse), so it confirms the story's premise without
+discriminating between them — that still needs the counter instrumentation. Practical consequence:
+a dependable workaround exists (at the cost of long pad tails), so this investigation can stay at
+low priority.

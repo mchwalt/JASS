@@ -1,0 +1,267 @@
+---
+baseline_commit: 146cd0e09c82cc698cf8f2ea98fb2a9146f3250d
+---
+
+# Story 12.3: SAMPLER pitch/time decoupling (timestretch)
+
+Status: done (user-verified + adversarial code-review passed, patches applied 2026-08-04)
+
+<!-- Split out of the original combined 12.2 draft (user decision 2026-08-03). Scope set by user
+     2026-07-30: "playing one WAV at several pitches while keeping playback speed/loops truly in
+     sync is its own topic (pitch/time DECOUPLING = timestretch)". Independent of Story 12.2
+     (multisampling) — works on single-sample sets too; if 12.2 lands first, stretch must compose
+     with zones. -->
+
+## Story
+
+As a sound designer,
+I want an optional SAMPLER mode where the key sets only the pitch and SPEED sets only the playback
+time,
+so that transposed loop voices stay truly beat-locked (instead of being hard-resynced and cut at
+each master-clock wrap) and recordings keep their duration when played across the keyboard.
+
+## The coupling, precisely
+
+Today `rate = transposeRatio · 2^((60−root)/12) · fileSR/hostSR` (`SamplePlayer::trigger`) and
+`step = rate · speed` (`nextSample()`) — pitch and time are one number. That product is the single
+place to decouple. Consequence today: differently-pitched loop voices traverse START..END at
+different speeds, so the shared loop clock HARD-resyncs them each master wrap and a transposed
+voice cuts its pass (documented in `setLoopSyncPhase`). 12.1 kept this tape-style behaviour by
+design; this story adds the alternative without touching the default.
+
+## Acceptance criteria
+
+1. **New appended param `samplerStretch`** (Bool, default OFF). OFF = 12.1 tape-style behaviour,
+   bit-identical (regression guard: old presets/state have no field ⇒ default OFF ⇒ nothing
+   changes). ON = key sets pitch only; SPEED (and the region) sets time only; all loop voices
+   traverse START..END in the same wall-clock time regardless of pitch ⇒ the master-wrap hard
+   resync becomes a no-op by construction (keep the resync code path for OFF mode).
+2. **Engine choice is MEASURED, not guessed** ([[feedback_measure_dont_guess_dsp]]). Candidates:
+   - **signalsmith-stretch** (github.com/Signalsmith-Audio/signalsmith-stretch): header-only C++11,
+     MIT (GPLv3-compatible — README "Third-party" attribution like KEMAR), built exactly for
+     polyphonic pitch-shift at time-rate 1:1. Configure/allocate in `prepareToPlay` ONLY (its
+     setup allocates); verify `process()` is alloc-free before committing (Epic 11 rules).
+   - **Own granular repitcher**: fixed ~50 ms Hann-crossfaded grains; grain read uses the existing
+     Hermite `read()`; position advances at time-rate, grains resampled at pitch ratio. RT-safe by
+     construction, "character" artifacts acceptable — JASS bends recordings, it does not imitate.
+   Scratch-harness measurement (like the 12.1 Hermite bake-off): quality on a bright reference
+   sample at ±7 and ±12 semitones AND per-voice CPU at 16 voices stereo. Record numbers in the Dev
+   Agent Record; pick the winner; wire the loser out cleanly (no dead half-integrations).
+3. **Latency/phase honesty:** if the chosen engine delays the sampler relative to the other
+   generators, measure the group delay and state it in the help text (EN+DE). No compensation
+   machinery in this story.
+4. Stretch mode composes with all four playback modes (One-Shot/Loop/Reverse/Rev-Loop), with the
+   loop crossfade (no reintroduced clicks — grain windows or stretcher continuity cover it; verify
+   by ear + capture), with LEVEL/PAN modulation, and — once Story 12.2 exists — with multisampled
+   zones.
+5. All params append-only, no APVTS ID renamed/reordered; FormatVersion stays 6.
+6. Help texts `Resources/EN/sampler.md` + `Resources/DE/sampler.md` explain the trade-off
+   (tape-style vs stretch, artifacts, latency); README feature bullet + third-party attribution if
+   signalsmith-stretch is vendored; CHANGELOG Unreleased entry; `docs/ARCHITECTURE.md` /
+   `docs/MODULE_SYSTEM.md` sampler passages extended.
+7. Module footprint: one STRETCH toggle, nothing else (W12H1 budget — large modules trigger the
+   global auto-fit downscale).
+8. Verified by build + running app ([[feedback_ui_verification]]): old preset regression
+   (Sampler Demo F7 unchanged with STRETCH off), beat-lock of transposed loop voices with STRETCH
+   on (play the same loop at C4 + G4 + C5 and hear one shared round), duration invariance of a
+   one-shot across an octave.
+
+## Tasks / Subtasks
+
+- [x] Task 1: Engine bake-off (AC 2) — scratch harness, quality + CPU numbers into Dev Agent
+      Record, decision documented
+- [x] Task 2: Vendor or implement the winner (AC 2) — `Source/ThirdParty/signalsmith-stretch/` +
+      README attribution, OR granular engine header in `Source/DSP/`
+- [x] Task 3: Integration (AC 1, 4) — `samplerStretch` param appended in `SamplerSpecs.h`,
+      decoupled step in `SamplePlayer`, `prepareToPlay` allocation, mode/crossfade/mod
+      composition, resync no-op in stretch mode
+- [x] Task 4: Editor toggle (AC 7) — STRETCH in the hand-built SAMPLER body
+      (`Source/UI/PluginEditor.cpp`)
+- [x] Task 5: Latency measurement + docs + help + CHANGELOG (AC 3, 6)
+- [x] Task 6: Verification pass (AC 8) — **clean rebuild mandatory**, see guardrails
+      (two clean rebuilds, 0 warnings each; USER verified by ear 2026-08-04: old-preset
+      regression, beat-lock of C4+G4+C5 loop voices, one-shot duration invariance, SPEED =
+      tempo-only, TestKit composition, fast playing after the note-on pre-roll fix; negative
+      cap tests: 330 s folder rejected with the named per-set message and no dead AppData
+      folder, 70 s file rejected with the per-file message)
+
+## Change Log
+
+- **2026-08-04 (during verification):**
+  1. **Note-on pre-roll** — user found fast playing impossible with STRETCH on: the engine's
+     ~60 ms warm-up after reset() ate short notes. Fixed with `outputSeek` at trigger
+     (pre-computes the latency's worth of output; MEASURED 0.567 ms per stereo voice,
+     scratchpad seekbench) — attacks are now immediate; help texts updated accordingly.
+  2. **Vendored headers wrapped in JUCE warning guards** (SamplePlayer.h) — the three upstream
+     files emitted 342 MSVC warnings under juce_recommended_warning_flags; suppressed at the
+     include site (C4127/4244/4305/4456/4458 + GCC-like equivalents), upstream untouched.
+  3. **Import hardening (12.2 path, found by the cap stress test):** folder/.sfz imports now
+     VALIDATE-THEN-COPY — a rejected set no longer leaves a dead folder in
+     `%AppData%\JASS\Samples` that would silently fail at every preload.
+
+### Review Findings (adversarial 3-layer review, 2026-08-04)
+
+- [x] [Review][Decision→Patch, user choice "B"] Note-on `outputSeek` burst stacks on chords — 0.57 ms/voice on the
+      audio thread; ~8 simultaneous note-ons exceed a 256-sample callback budget, 16-voice
+      retrigger ≈ 9.1 ms. Options: accept+document (realistic play rarely lands >4 note-ons in
+      ONE block; standalone default buffer ≈ 10 ms) vs. cap seeks per block with cheap-seek
+      fallback (~30 ms residual latency for the overflow voices).
+- [x] [Review][Patch] Short one-shots (< ~60 ms · SPEED, or narrow START/END) play SILENT in
+      stretch mode — drain budget is debited during the discarded note-on pre-roll; also tail
+      truncated up to kChunk−1 by input-domain drain accounting [Source/DSP/SamplePlayer.h:
+      trigger/fillInput/nextSample]
+- [x] [Review][Patch] Cross-zone loop voices DRIFT in stretch mode (unequal zone lengths/rates)
+      — hard resync skipped on a premise that only holds within one zone; re-enable the wrap
+      resync (it is a no-op for equal zones by construction) [SamplePlayer.h:setLoopSyncPhase]
+- [x] [Review][Patch] Mid-note SET switch keeps playing the old sample from the stretch FIFO —
+      setSource lacks the reset/re-park that setStretchMode has [SamplePlayer.h:setSource]
+- [x] [Review][Patch] AC 3 regressed during the pre-roll fix: the ~60 ms engine note vanished
+      from the help texts, and docs/MODULE_SYSTEM.md never got a STRETCH mention (AC 6)
+      [Resources/EN|DE/sampler.md, docs/MODULE_SYSTEM.md]
+- [x] [Review][Defer] Toggling STRETCH ON mid-note inserts ~60 ms of silence on held voices
+      (per-voice outputSeek on toggle would burst 16 × 0.57 ms in one block — worse); rare edit
+      action, documented — deferred
+
+## Dev Notes
+
+### Vendoring approved (user, 2026-08-03)
+
+If the bake-off favours signalsmith-stretch, third-party MIT code gets vendored into the repo
+(`Source/ThirdParty/signalsmith-stretch/`, license header kept, README "Third-party" attribution
+like KEMAR). The user has approved this in advance ("ja, es darf") — the bake-off still decides
+WHETHER it is used; approval only removes the confirmation gate before Task 2.
+
+### Integration map (subset relevant here; verified against code 2026-08-03)
+
+- `Source/DSP/SamplePlayer.h` — `trigger(transposeRatio)` computes `rate`; `nextSample()` steps
+  `rate*speed`; loop crossfade `kXfadeSamples=256` equal-gain against `pos∓len`; Hermite
+  `read(p,ch)`; `setLoopSyncPhase` detects master wrap (`f < syncPhase−0.5`) and hard-resyncs
+  loop voices — the code path that stays for OFF and becomes a no-op for ON.
+- Master loop clock: `PluginProcessor::samplerMasterFrac`, advanced once per block in
+  `processBlock` ("Story 12.1: shared SAMPLER loop clock" block), delivered via
+  `Parameters::applyToVoice(..., samplerMasterFrac, ...)` → `setLoopSyncPhase`. In stretch mode
+  the master clock still defines the round; voices simply never drift from it.
+- Voice: `Source/Audio/SynthVoice.h/.cpp` — `SamplePlayer sampler;` embedded BY VALUE;
+  `baseSamplerLevel` capture/restore per block; `LFOTarget::SamplerLevel`/`SamplerPan` per-sample
+  mod; stereo sets render as two `addPanned` calls into `PanSamplerL`/`PanSamplerR`
+  (`kNumPanGenerators = 9` in `Source/DSP/ChannelStrip.h` — unchanged by this story).
+- `Source/Modules/SamplerSpecs.h` — existing params `samplerOn/Set/Root/Start/End/Mode/Level/
+  Pan/Speed`; `samplerStretch` appends at the END. ID in `Parameters::ID`; `AllModules.h` order
+  untouched. Editor body is hand-built in `Source/UI/PluginEditor.cpp` (`// SAMPLER (Story 12.1)`
+  block).
+- Persistence: nothing new — a Bool param flows through APVTS + `PresetIO` object persistence
+  automatically (`persistObject="Sampler"`); missing field ⇒ default OFF is exactly the
+  back-compat story.
+
+### Guardrails (violations caused real defects before)
+
+- **`SamplePlayer` grows fields (stretch state) and is embedded BY VALUE in `SynthVoice` ⇒ struct
+  sizes change ⇒ `/t:Rebuild` (clean rebuild) MANDATORY** — incremental builds after header
+  struct-size changes caused the 0xC0000005 startup heap corruption (2026-07-24 lesson).
+- Audio thread: no allocation/locks/logging in `processBlock`/`nextSample` (Epic 11). Stretch
+  buffers allocated in `prepareToPlay` only (called repeatedly — re-entrant safe).
+- Never change existing param defaults for a new scenario — `samplerStretch` default OFF is the
+  pattern; SPEED semantics with STRETCH off must stay bit-identical.
+- Scratch-harness measurements use pure cmath + own FFT, no numpy
+  ([[feedback_measure_dont_guess_dsp]]).
+- Deliver on `develop`; never push/merge — author's call ([[feedback_git_workflow]]). No Claude
+  attribution in commits/PRs.
+
+### Previous story intelligence (12.1)
+
+- Hermite chosen by measurement (38.3 dB vs linear 28.5 dB at +7 st) — grains reuse `read()`.
+- Loop-click designed out via 256-sample equal-gain crossfade; stretch must not reintroduce
+  joins/clicks.
+- SPEED is a live tape-style rate multiplier (0.25×–4×, skew 0.5) — in stretch mode it becomes a
+  pure time-rate; keep it live (no retrigger needed on change).
+
+### Project Structure Notes
+
+- Granular engine: header-only in `Source/DSP/`. Vendored third-party: `Source/ThirdParty/…`
+  subfolder + README attribution (pattern: the KEMAR "Third-party data" section).
+- `_bmad-output/project-context.md` is PARTIALLY STALE (kFormatVersion is 6 not 1, AppData is
+  `%AppData%\JASS` + `.jass`, output stage is the 5-mode STEREO module) — trust
+  `docs/ARCHITECTURE.md` / `docs/MODULE_SYSTEM.md` and the code where they disagree.
+
+### Testing standards
+
+No unit-test rig. Verification = clean build + running Standalone app + user listening
+([[feedback_ui_verification]]), plus the scratch-harness bake-off numbers (AC 2) and the group
+delay measurement (AC 3).
+
+### References
+
+- [Source: _bmad-output/implementation-artifacts/12-1-sampler-module.md] — Dev Agent Record
+  (shared loop clock, SPEED, stereo sub-slots) and the 12.2 scope note that named this topic
+- [Source: _bmad-output/implementation-artifacts/12-2-sampler-multisampling.md] — sibling story;
+  AC 4 here covers composition with its zones
+- [Source: docs/ARCHITECTURE.md#3, #4.2] — RT rules, per-voice rendering
+- [Source: Source/DSP/SamplePlayer.h] — read fully before editing
+- signalsmith-stretch: github.com/Signalsmith-Audio/signalsmith-stretch (MIT, header-only) +
+  design write-up signalsmith-audio.co.uk/writing/2023/stretch-design/
+
+## Dev Agent Record
+
+### Agent Model Used
+
+Fable 5 (claude-fable-5)
+
+### Debug Log References
+
+### Bake-off results (2026-08-04, scratchpad/bakeoff/bakeoff.cpp, MSVC /O2)
+
+Bright harmonic tone (f0 220 Hz, harmonics to 7 kHz), pitch shift at time 1:1, spectral SNR
+(power at expected shifted partials vs. rest; **metric ceiling = 43.0 dB**, the unshifted
+signal's own score). CPU = % of one core for 16 stereo voices at 44.1 kHz.
+
+| engine / config | SNR +7 st | +12 st | −7 st | latency | CPU 16 voices |
+|---|---|---|---|---|---|
+| stretch default (0.12/0.03) | 45.7 | 42.5 | 42.1 | 120 ms | 18 % |
+| stretch cheaper (0.10/0.04) | 21.8 | 20.1 | 24.9 | 100 ms | 12 % |
+| **stretch short (0.06/0.015)** | **34.8** | **39.8** | **38.9** | **60 ms** | **19 %** |
+| stretch tiny (0.03/0.0075) | 9.9 | 0.7 | 16.9 | 30 ms | 18 % |
+| granular naive 30/50/80 ms | −10.5…−18 | −18…−3 | −18…+8 | 15–40 ms | 3 % |
+
+**Decision: signalsmith-stretch, "short" config (block 0.06·sr, interval 0.015·sr).** The naive
+granular's overlapping grains comb (constant offset hop·(1−ratio)) — sidebands louder than the
+signal; a competitive granular needs WSOLA-style correlation alignment = its own project.
+"default" is ~5 dB better but doubles the latency to 120 ms — too late an attack for a playable
+generator. RT-contract of the engine verified by inspection: configure() allocates;
+process()/reset() stay within configure()'s vector capacities (documented in SamplePlayer.h).
+
+### Completion Notes List
+
+- **Vendored** `Source/ThirdParty/signalsmith-stretch/` — 3 headers only (stretch @57b93f4,
+  linear @0dd6b82), MIT licenses kept, no SIMD backends (plain-C++ path = what was measured);
+  folder README documents the update procedure. Top-level README section renamed to
+  "Third-party data & code" + attribution.
+- **Param** `samplerStretch` (Bool, default OFF) appended in SamplerSpecs/Parameters/applyToVoice;
+  editor gets a STRETCH Toggle (body now 11/12 slots in W12H1). No ID renamed, FormatVersion 6.
+- **SamplePlayer**: per-voice `SignalsmithStretch<float>` member, configured in
+  `setSampleRate` (prepareToPlay) with the "short" config. STRETCH path: read position walks the
+  TIME axis only (speed · fileSR/hostSR), input fed through the shared loop-crossfade reader
+  (`readXf`, extracted from the tape path — join stays click-free in both modes), engine shifts
+  pitch (`setTransposeFactor` = transposeRatio · 2^((60−root)/12)) at 1:1 in 64-sample chunks
+  (FIFO adds ~1.5 ms). One-shot tails drain the engine latency with silence before the voice
+  frees. Master-wrap hard resync SKIPPED in stretch mode (voices share the time axis — nothing
+  drifts); trigger still starts loop notes at the master phase. Mid-note mode/SET switches
+  reset/re-park the engine (allocation-free).
+- **Master clock** (PluginProcessor): in stretch mode the round advances at speed·fileSR/hostSR
+  (no pitch factor) — matching what the voices do.
+- **Docs**: help EN/DE STRETCH bullet incl. the honest ~60 ms latency note (AC 3), README
+  feature bullet + third-party section, CHANGELOG, ARCHITECTURE.md voice-mix passage.
+
+### File List
+
+- Source/ThirdParty/signalsmith-stretch/ (NEW — signalsmith-stretch.h, signalsmith-linear/
+  {stft,fft}.h, LICENSE.txt ×2, README.md)
+- Source/DSP/SamplePlayer.h (stretch engine integration, readXf extraction)
+- Source/Modules/SamplerSpecs.h (samplerStretch appended)
+- Source/Audio/Parameters.h (ID + applyToVoice wiring)
+- Source/PluginProcessor.cpp (time-axis master clock in stretch mode)
+- Source/UI/PluginEditor.cpp (STRETCH toggle)
+- Resources/EN/sampler.md, Resources/DE/sampler.md (STRETCH bullet + latency honesty)
+- README.md (feature bullet, third-party section)
+- CHANGELOG.md (Unreleased entry)
+- docs/ARCHITECTURE.md (voice-mix passage)
+- _bmad-output/implementation-artifacts/12-3-pitch-time-decoupling.md (this file)

@@ -221,6 +221,7 @@ namespace Parameters
         constexpr const char* samplerLevel = "samplerLevel";
         constexpr const char* samplerPan   = "samplerPan";
         constexpr const char* samplerSpeed = "samplerSpeed";   // playback-rate multiplier (tape-style)
+        constexpr const char* samplerStretch = "samplerStretch";   // 12.3: pitch/time decoupling on/off
 
         // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
         // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
@@ -257,7 +258,7 @@ namespace Parameters
         std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
 
         // ALL modules are spec-driven now: every APVTS parameter comes from a ModuleSpec
-        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/Modul_Architektur_Konzept.md.
+        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/MODULE_SYSTEM.md.
         // The DSP wiring in applyToVoice + PresetIO still read the ID:: strings (unchanged ids).
         Modules::appendAllParameters(params);
 
@@ -436,6 +437,7 @@ namespace Parameters
             static_cast<int>(*apvts.getRawParameterValue(ID::samplerMode))));
         sampler.setLevel(*apvts.getRawParameterValue(ID::samplerLevel));
         sampler.setSpeed(*apvts.getRawParameterValue(ID::samplerSpeed));
+        sampler.setStretchMode(*apvts.getRawParameterValue(ID::samplerStretch) > 0.5f);   // 12.3
         sampler.setLoopSyncPhase(samplerLoopFrac);
 
         wavetable.setEnabled(*apvts.getRawParameterValue(ID::wavetableOn) > 0.5f);

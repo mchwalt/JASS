@@ -4,7 +4,7 @@ baseline_commit: b00f1efd6faaba0fdee70332717fa4fa349e6b5a
 
 # Story 1.4: Live modulation rings & display-value transforms
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

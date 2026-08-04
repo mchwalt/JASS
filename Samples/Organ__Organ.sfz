@@ -1,0 +1,8 @@
+// JASS example .sfz (Story 12.2) — shows exactly the mapping subset JASS imports:
+//   sample, key, lokey/hikey, pitch_keycenter, default_path — everything else is ignored.
+// Note values may be names (C4 = middle C = MIDI 60) or plain MIDI numbers.
+// This file is seeded to %AppData%\JASS\Samples\Organ\ next to its three recordings.
+<group>
+<region> sample=O_C2.wav lokey=0  hikey=47  pitch_keycenter=C2
+<region> sample=O_C4.wav lokey=48 hikey=71  pitch_keycenter=C4
+<region> sample=O_C6.wav lokey=72 hikey=127 pitch_keycenter=C6

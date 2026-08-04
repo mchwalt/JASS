@@ -1,6 +1,6 @@
 # Story 12.1: SAMPLER module (samples as a sound source)
 
-Status: **ready-for-dev** (scope settled 2026-07-30, see "Scope decision" below).
+Status: done (implemented 2026-07-30, PR #21, released v2026.07.14)
 
 <!-- Raised 2026-07-29 in conversation. "wir müssen das aber nochmal später ausdiskutieren, vor allem
      das Thema Multi-Sampling und ob man das ganze nicht doch in ein Schwester-Projekt packt - man muss

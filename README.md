@@ -43,8 +43,12 @@ info** so nothing is hidden and every control explains itself.
 - **SAMPLER** — play your own recordings (WAV/AIFF, ≤60 s) as a sound source through
   the whole chain: ROOT-key tape-style transposition, START/END, One-Shot / Loop
   (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
-  stereo files rendered as two placed sub-sources. Ships with an example catalog
-  (seeded to `%AppData%\JASS\Samples`); presets reference samples by name.
+  stereo files rendered as two placed sub-sources. **Multisampling**: load a folder
+  of `Name_C3.wav`-style files (or a basic `.sfz`) as one set — zones spread across
+  the keyboard, each with its own root. **STRETCH**: pitch/time decoupling — the key
+  sets only the pitch, SPEED only the tempo, loops stay beat-locked on every key
+  (Signalsmith Stretch, MIT). Ships with an example catalog (seeded to
+  `%AppData%\JASS\Samples`); presets reference sets by name.
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
@@ -143,12 +147,23 @@ Source/
 └─ UI/                    rack editor + knob/display components
 ```
 
-Architecture concept: **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Architektur_Konzept.md)**.
+Architecture details: **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** ·
+module-spec system: **[`docs/MODULE_SYSTEM.md`](docs/MODULE_SYSTEM.md)**.
 
 ## Docs
 
+**For developers:**
+
+- **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** — system architecture: layers,
+  audio signal flow, threading & RT-safety, state/persistence, UI architecture
+- **[`docs/MODULE_SYSTEM.md`](docs/MODULE_SYSTEM.md)** — the declarative module-spec
+  system ("one module = one place") + recipes for adding parameters & modules
+- **[`docs/DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md)** — build, dependencies,
+  versioning/CI, all configuration surfaces, compile-time tunables, build gotchas
+
+**Reference:**
+
 - **[`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)** — `.jass` preset format (nested v6)
-- **[`docs/Modul_Architektur_Konzept.md`](docs/Modul_Architektur_Konzept.md)** — declarative module-spec architecture
 - **[`docs/Glossary.md`](docs/Glossary.md)** — glossary
 - `docs/notes/` — internal ideas, research & cheat-sheet notes (not official docs)
 
@@ -180,7 +195,7 @@ JASS embeds **JUCE** as a submodule. JUCE is dual-licensed (**GPLv3 or a
 commercial JUCE licence**); the GPLv3 choice covers free JUCE use. Distributing
 JASS under other terms requires an appropriate JUCE licence.
 
-### Third-party data
+### Third-party data & code
 
 The **Kunstkopf (HRTF)** output mode uses the **MIT KEMAR** HRTF measurements
 (Bill Gardner & Keith Martin, MIT Media Lab, 1994), embedded as
@@ -189,3 +204,30 @@ no restrictions on use, provided the authors are cited — see
 <https://sound.media.mit.edu/resources/KEMAR.html>. The embedded header is
 regenerated from the original set by [`tools/gen_kemar_hrir.py`](tools/gen_kemar_hrir.py)
 (see [`tools/README.md`](tools/README.md)).
+
+The SAMPLER's **STRETCH** mode (pitch/time decoupling) uses **Signalsmith Stretch**
+by Geraint Luff / Signalsmith Audio Ltd. (MIT license), vendored under
+[`Source/ThirdParty/signalsmith-stretch/`](Source/ThirdParty/signalsmith-stretch/)
+together with its `signalsmith-linear` FFT dependency — see
+<https://github.com/Signalsmith-Audio/signalsmith-stretch> and the license files
+in that folder.
+
+### Optional piano multisample sets
+
+Two real grand pianos play beautifully through the SAMPLER but are not bundled
+(they would bloat the binary; one has murky licensing):
+
+- **Iowa Steinway** — build it yourself with one command:
+  `python tools/get_iowa_piano.py` downloads 13 notes of the University of Iowa
+  [Musical Instrument Samples](https://theremin.music.uiowa.edu/MIS.html)
+  (freely available without restrictions), trims them, and writes a ready
+  `Piano\` folder — copy it into `%AppData%\JASS\Samples\` or import it via
+  SAMPLER → FOLDER.
+- **Splendid Grand** (Steinway, commonly treated as public domain by AKAI —
+  no formal license file exists upstream, hence not redistributed here): clone
+  <https://github.com/sfzinstruments/SplendidGrandPiano>. Its main `.sfz` uses
+  ARIA `#include`/`#define`, which JASS's minimal parser deliberately skips —
+  make a flat variant instead: create a text file `SplendidGrand.sfz` next to
+  the `Samples/` folder containing the line `<control> default_path=Samples/`
+  followed by the contents of `Data/FF.txt` with every `$EXT` replaced by
+  `flac`, then load it via SAMPLER → LOAD.

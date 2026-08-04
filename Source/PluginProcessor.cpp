@@ -663,6 +663,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                     ? SyncDivision::delaySeconds(syncBpm, delayDiv)
                                     : (double) *apvts.getRawParameterValue(Parameters::ID::delayTime);
 
+    SamplePlayer::resetSeekBudget();   // 12.3: per-block cap on note-on stretch pre-rolls
+
     // Story 12.1: shared SAMPLER loop clock — ONE master phase advancing at the ROOT rate × SPEED
     // through the START..END region. Loop-mode notes START at this phase (SamplePlayer::trigger),
     // so simultaneous/late notes stay in step instead of each restarting the loop at START.
@@ -671,23 +673,42 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         const auto* set = SampleBankStore::instance().getSet(
             static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
         const bool on = *apvts.getRawParameterValue(ID::samplerOn) > 0.5f;
-        if (set != nullptr && on && set->getLength() > 4)
+        // 12.2 (user request, tightened 2026-08-04): the clock runs only while at least one KEY
+        // is held (sustain pedal counts) — release TAILS no longer hold the round open, so the
+        // first note after letting go always hits the sample's attack without waiting for the
+        // previous tone to fully fade. Notes added while a key is still held keep joining the
+        // running round (beat-lock preserved). The auto-play drone holds its key permanently,
+        // so with auto-play on the clock free-runs as before.
+        bool anyVoiceSounding = false;
+        for (int vi = 0; vi < synth.getNumVoices() && ! anyVoiceSounding; ++vi)
+            if (auto* v = synth.getVoice(vi))
+                anyVoiceSounding = v->isVoiceActive() && (v->isKeyDown() || v->isSustainPedalDown());
+        // The clock's reference is the zone C4 would play — for a single sample that is THE zone
+        // (12.1 unchanged); for a mapped set it anchors the round on the centre zone (its own
+        // root, since the ROOT knob is inert for mapped sets).
+        const auto* zone = (set != nullptr) ? set->zoneFor(60) : nullptr;
+        if (zone != nullptr && on && anyVoiceSounding && zone->getLength() > 4)
         {
-            const double root  = *apvts.getRawParameterValue(ID::samplerRoot);
+            const double root  = set->isMapped() ? (double) zone->rootKey
+                                                 : (double) *apvts.getRawParameterValue(ID::samplerRoot);
             const double speed = *apvts.getRawParameterValue(ID::samplerSpeed);
             const double s0 = *apvts.getRawParameterValue(ID::samplerStart);
             const double s1 = *apvts.getRawParameterValue(ID::samplerEnd);
-            const double lenFile = std::abs(s1 - s0) * (double) (set->getLength() - 1);
+            const double lenFile = std::abs(s1 - s0) * (double) (zone->getLength() - 1);
             if (lenFile > 4.0)
             {
-                const double rate = std::pow(2.0, (60.0 - root) / 12.0)
-                                  * set->getFileSampleRate() / getSampleRate() * speed;
+                // 12.3 STRETCH mode: the round advances on the TIME axis only (speed, no pitch
+                // factor) — voices walk it identically, so the clock must too. Tape mode keeps
+                // the root-rate round of 12.1.
+                const bool stretchOn = *apvts.getRawParameterValue(ID::samplerStretch) > 0.5f;
+                const double pitchPart = stretchOn ? 1.0 : std::pow(2.0, (60.0 - root) / 12.0);
+                const double rate = pitchPart * zone->fileSampleRate / getSampleRate() * speed;
                 samplerMasterFrac += (double) buffer.getNumSamples() * rate / lenFile;
                 samplerMasterFrac -= std::floor(samplerMasterFrac);
             }
         }
         else
-            samplerMasterFrac = 0.0;   // off/empty: clock parks at START
+            samplerMasterFrac = 0.0;   // off/empty/silent: clock parks at START
     }
 
     // Update all voice parameters

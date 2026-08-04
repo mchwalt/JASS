@@ -81,3 +81,15 @@ working; they revised the PRD/architecture and are now formalised:
 - **`Combo.items` empty default** — `std::variant` default-constructs to an empty `StringArray`; a combo with unset items renders empty. Add a debug check when wiring combos (Story 1.5).
 - **Default-constructed `ModuleDescriptor{}`** — a valid-but-empty descriptor is indistinguishable from a deliberate empty always-on module. Revisit only if descriptors are ever default-constructed in a container.
 - **No referential cross-check** of `Knob.modTarget` / `enableParam` against the body or APVTS — mismatches surface later as a dead modulation ring or non-functional enable toggle. Add an optional debug validator in Story 1.2/1.4.
+
+## Deferred from: code review of stories 12-2 + 12-3 (2026-08-04)
+
+- SAMPLER: synchronous message-thread import can freeze the UI for a few seconds on a full
+  300 s multisample set (and startup preload grew accordingly). Bounded by the caps; a proper
+  fix is async loading with progress — its own story if it ever bites.
+- SAMPLER STRETCH: toggling STRETCH ON mid-note inserts ~60 ms of warm-up silence on all held
+  voices (a per-voice outputSeek on toggle would burst 16 × 0.57 ms in one callback — worse).
+  Rare edit action; revisit only if users toggle stretch as a performance gesture.
+- SAMPLER/SplendidGrand: metallic clicking on SOME keys — user assessment: in the source
+  samples themselves (only certain keys). offset= is honoured since 2026-08-04; if it persists,
+  inspect the affected FLACs before suspecting playback. (Tracked in story 12.4 notes.)

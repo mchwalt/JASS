@@ -1,6 +1,6 @@
 # Epic 10 — Spatialization: per-generator panning & optional surround
 
-Status: **Idea captured / needs design sign-off** (added 2026-07-21, user request).
+Status: done (implemented 2026-07-26/27, Epic 10 merged & released)
 Type: **DSP + I/O architecture change** (the largest sanctioned so far — touches the output bus).
 
 > User intent: "Umstellung des Mono-Synthy auf Stereo oder noch besser Surround (4.1 / 5.1),

@@ -4,7 +4,7 @@ baseline_commit: f7534a3
 
 # Story 2.3: Add the graphical display modules (Oscilloscope + Spectrum)
 
-Status: review
+Status: done
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

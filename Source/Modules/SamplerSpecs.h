@@ -27,6 +27,11 @@ namespace Modules
             // Playback-speed multiplier on top of the key transposition (tape-style: pitch moves
             // with it). Log-skewed so 1.0 sits centred. Append-only (added after first build).
             { "samplerSpeed", "Speed",   "SPEED", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.25f, 4.0f, 0.01f, 0.5f), 1.0f },
+            // Story 12.3: pitch/time DECOUPLING. Off (default) = 12.1 tape-style, bit-identical.
+            // On = the key sets only the pitch (signalsmith-stretch, ~60 ms latency) and SPEED
+            // sets only the time — every loop voice traverses START..END in the same wall-clock
+            // time regardless of pitch, so transposed loops stay beat-locked by construction.
+            { "samplerStretch", "Stretch", "STRETCH", ParamSpec::Kind::Bool, {}, 0.0f },
         };
         return m;
     }

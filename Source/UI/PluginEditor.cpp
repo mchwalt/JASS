@@ -1341,29 +1341,45 @@ void SynthyEditor::buildRack()
         Combo setCombo{ P::samplerSet, "SET",
                         std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
         setCombo.indexIsValue = true;
+        // Shared by LOAD (file or .sfz) and FOLDER (12.2): import via PresetIO (copies into
+        // %AppData%\JASS\Samples for preset portability), select on success, explain on failure.
+        auto importSource = [this] (juce::File f)
+        {
+            juce::String err;
+            const int idx = PresetIO::importSamplerSource(f, &err);
+            if (idx >= 0)
+            {
+                if (auto* pr = processor.getAPVTS().getParameter(P::samplerSet))
+                    pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
+            }
+            else   // name the culprit — a generic limits lecture forces the user to guess
+                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+                    "SAMPLER", "Could not load \"" + f.getFileName() + "\": " + err);
+        };
+        // ROOT applies only to single samples — a mapped (multisample) set carries its own root
+        // per zone, so the knob dims (per-knob relevance, like STEREO's WIDTH/TIME).
+        Knob rootKnob = K(P::samplerRoot, "ROOT");
+        rootKnob.activeWhen = [this]
+        {
+            const auto* s = SampleBankStore::instance().getSet(
+                static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::samplerSet)));
+            return s == nullptr || ! s->isMapped();
+        };
         d.body = {
             setCombo,
-            FileAction{ "LOAD",
-                        [this] (juce::File f)
-                        {
-                            // Copy into the Samples folder first (preset portability), then load.
-                            auto dest = PresetIO::samplesFolder().getChildFile(f.getFileName());
-                            if (! dest.existsAsFile() && ! f.copyFileTo(dest))
-                                dest = f;   // copy failed (exotic path) → load in place
-                            const int idx = SampleBankStore::instance().loadFile(dest);
-                            if (idx >= 0)
-                            {
-                                if (auto* pr = processor.getAPVTS().getParameter(P::samplerSet))
-                                    pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
-                            }
-                            else
-                                juce::AlertWindow::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
-                                    "SAMPLER", "Could not load this file: unreadable, longer than 60 s, or the sample list is full (32).");
-                        },
+            FileAction{ "LOAD", importSource,
                         { juce::String(P::samplerSet) },   // refresh the SET combo after load
-                        PresetIO::samplesFolder(), "*.wav;*.aif;*.aiff" },
+                        PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz" },
+            // 12.2: import a whole folder as ONE multisample set (mapping derived from filenames
+            // "Name_C3.wav" — or from an .sfz found inside the folder).
+            FileAction{ "FOLDER", importSource,
+                        { juce::String(P::samplerSet) },
+                        PresetIO::samplesFolder(), "*", /*pickDirectory*/ true },
             Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
-            K(P::samplerRoot, "ROOT"), K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
+            // 12.3: pitch/time decoupling — grouped right beside MODE (both choose the playback
+            // regime); renders caption-above like the knobs (review feedback 2026-08-04).
+            Toggle{ P::samplerStretch, "STRETCH" },
+            rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
             K(P::samplerSpeed, "SPEED"),
             Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
