@@ -88,7 +88,10 @@ public:
     }
 
     static constexpr double kMaxSeconds    = 60.0;    // per-file/zone cap (12.1 AC3, kept)
-    static constexpr double kMaxSetSeconds = 300.0;   // per-set total cap (12.2 AC4)
+    // Per-set total cap. Raised 300 → 900 s (2026-08-04) so real single-layer chromatic pianos
+    // (~88 zones × ~10 s) load; the GLOBAL byte budget (kMaxSampleStoreBytes) remains the hard
+    // RAM protector — this cap only catches runaway folders early with a friendlier message.
+    static constexpr double kMaxSetSeconds = 900.0;
 
     // Load one WAV/AIFF whole (first two channels) as a zone. Empty vectors on unreadable /
     // zero-length / over-cap files (no silent truncation).
@@ -165,7 +168,7 @@ public:
             totalSeconds += (double) z.getLength() / z.fileSampleRate;
             if (totalSeconds > kMaxSetSeconds)
             {
-                error = "the set exceeds 5 minutes of audio in total (reached at \""
+                error = "the set exceeds 15 minutes of audio in total (reached at \""
                       + e.file.getFileName() + "\")";
                 return nullptr;
             }

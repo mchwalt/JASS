@@ -1,5 +1,5 @@
-Plays your own **recordings** (WAV/AIFF) as a sound source — through the whole JASS chain: filter,
-wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
+Plays your own **recordings** (WAV/AIFF/FLAC) as a sound source — through the whole JASS chain:
+filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
 
 - **LOAD** copies a file into your Samples folder (`%AppData%\JASS\Samples`) and loads it; **SET**
   picks among loaded sets. Presets remember the set **by name** from that folder.
@@ -23,7 +23,8 @@ wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
   Off = classic tape behaviour.
 - **Stereo files stay stereo**: left/right render as two placed sources around PAN; in the Mono and
   Pseudo-Stereo output modes they collapse to a mono downmix.
-- **Limits:** 60 s per file, 5 minutes of audio per set, 32 sets.
+- **Limits:** 60 s per file, 15 minutes of audio per set, 32 sets (plus a global memory budget —
+  roughly three fully-sized sets).
 
 Unlike WAVETABLE (a pitch-locked single-cycle timbre), the SAMPLER plays the recording through
 time — the recording's own envelope and character are the sound.

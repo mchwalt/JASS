@@ -286,7 +286,7 @@ namespace PresetIO
             else
             {
                 dest.createDirectory();
-                for (auto& f : src.findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff"))
+                for (auto& f : src.findChildFiles(juce::File::findFiles, false, SampleMapping::kAudioWildcard))
                 {
                     auto d = dest.getChildFile(f.getFileName());
                     if (! d.existsAsFile())
@@ -316,7 +316,7 @@ namespace PresetIO
     // Single files first (12.1 indices stay put), then subfolders = multisample sets (12.2).
     inline void preloadSamples()
     {
-        auto files = samplesFolder().findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff");
+        auto files = samplesFolder().findChildFiles(juce::File::findFiles, false, SampleMapping::kAudioWildcard);
         files.sort();
         for (auto& f : files)
             SampleBankStore::instance().loadFile(f);

@@ -1369,7 +1369,7 @@ void SynthyEditor::buildRack()
             setCombo,
             FileAction{ "LOAD", importSource,
                         { juce::String(P::samplerSet) },   // refresh the SET combo after load
-                        PresetIO::samplesFolder(), "*.wav;*.aif;*.aiff;*.sfz" },
+                        PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz" },
             // 12.2: import a whole folder as ONE multisample set (mapping derived from filenames
             // "Name_C3.wav" — or from an .sfz found inside the folder).
             FileAction{ "FOLDER", importSource,

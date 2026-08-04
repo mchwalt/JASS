@@ -1,4 +1,4 @@
-Spielt eigene **Aufnahmen** (WAV/AIFF) als Klangquelle — durch die ganze JASS-Kette: Filter,
+Spielt eigene **Aufnahmen** (WAV/AIFF/FLAC) als Klangquelle — durch die ganze JASS-Kette: Filter,
 Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
 
 - **LOAD** kopiert eine Datei in deinen Samples-Ordner (`%AppData%\JASS\Samples`) und lädt sie;
@@ -24,7 +24,8 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   Phase-Vocoder-Charakter auf Transienten. Aus = klassisches Bandmaschinen-Verhalten.
 - **Stereo-Dateien bleiben stereo**: links/rechts werden als zwei platzierte Quellen um PAN herum
   gerendert; in den Modi Mono und Pseudo-Stereo kollabieren sie zum Mono-Downmix.
-- **Grenzen:** 60 s pro Datei, 5 Minuten Audio pro Set, 32 Sets.
+- **Grenzen:** 60 s pro Datei, 15 Minuten Audio pro Set, 32 Sets (plus ein globales
+  Speicher-Budget — grob drei voll ausgebaute Sets).
 
 Anders als WAVETABLE (tonhöhen-gelockter Einzelzyklus) spielt der SAMPLER die Aufnahme durch die
 Zeit — ihre eigene Hüllkurve und ihr Charakter sind der Klang.
