@@ -238,11 +238,15 @@ namespace rack
             }
             else if (auto* t = std::get_if<Toggle> (&el))
             {
-                auto* btn = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton (t->label)));
+                // Body toggle renders like every other captioned element: NAME above, checkbox
+                // below (review feedback 2026-08-04 — button-side text was unreadable squeezed
+                // between knobs). The button itself carries no text.
+                auto* btn = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
                 addAndMakeVisible (*btn);
                 buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
                     apvts, t->paramId, *btn));
-                cells.push_back ({ btn, nullptr, 1 });
+                cells.push_back ({ btn, makeCaption (ownedCaptions, t->label), 1 });
+                if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
             }
             else if (auto* act = std::get_if<Action> (&el))
             {
@@ -265,20 +269,24 @@ namespace rack
                 auto refreshes = fa->refreshes;
                 auto startDir  = fa->startFolder;
                 auto wildcard  = fa->wildcard;
-                btn->onClick = [this, cb, refreshes, startDir, wildcard]
+                auto pickDir   = fa->pickDirectory;
+                btn->onClick = [this, cb, refreshes, startDir, wildcard, pickDir]
                 {
                     if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
-                    fileChooser = std::make_unique<juce::FileChooser> ("Select a file", startDir, wildcard);
+                    fileChooser = std::make_unique<juce::FileChooser> (pickDir ? "Select a folder" : "Select a file",
+                                                                       startDir, wildcard);
                     juce::Component::SafePointer<ModuleFrame> self (this);
                     fileChooser->launchAsync (
-                        juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
-                        [self, cb, refreshes] (const juce::FileChooser& fc)
+                        juce::FileBrowserComponent::openMode
+                            | (pickDir ? juce::FileBrowserComponent::canSelectDirectories
+                                       : juce::FileBrowserComponent::canSelectFiles),
+                        [self, cb, refreshes, pickDir] (const juce::FileChooser& fc)
                         {
                             if (self == nullptr) return;   // frame destroyed while the dialog was open
                             auto f = fc.getResult();
-                            if (cb && f.existsAsFile())
+                            if (cb && (pickDir ? f.isDirectory() : f.existsAsFile()))
                             {
                                 cb (f);
                                 for (const auto& id : refreshes) self->refreshCombo (id);   // re-list bank combo
@@ -401,11 +409,12 @@ namespace rack
                                         body.getY() + placeRow * cellH,
                                         cellW * span, cellH);
 
-            if (cell.caption != nullptr)   // knob/combo: NAME caption on top, widget below
+            if (cell.caption != nullptr)   // knob/combo/toggle: NAME caption on top, widget below
             {
                 auto cr = cellR.reduced (2);
                 const int capH = 13;   // fits the uniform 13pt caption font
-                const bool isKnob = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                const bool isKnob   = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                const bool isButton = dynamic_cast<juce::Button*> (cell.widget) != nullptr;
                 // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
                 // is just the short box. Name sits ABOVE, so the block is caption + widget.
                 const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
@@ -420,6 +429,15 @@ namespace rack
                     cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
                     const int sw = juce::jmin (cr.getWidth(), 62);
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
+                }
+                else if (isButton)
+                {
+                    // Captioned toggle: NAME above, the bare checkbox glyph centred below on the
+                    // shared widget centre-line (the glyph draws at the LEFT of the bounds, so
+                    // a narrow box centred on the cell centres the glyph itself).
+                    const int boxY = juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
+                    cell.caption->setBounds (cr.getX(), boxY - capH, cr.getWidth(), capH);
+                    cell.widget->setBounds (cr.getCentreX() - 12, boxY, 24, wH);
                 }
                 else
                 {

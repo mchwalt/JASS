@@ -190,8 +190,10 @@ namespace PresetIO
         return dir;
     }
 
-    // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav) into
-    // %AppData%\JASS\Samples. Same idempotent pattern as seedWavetables below.
+    // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav + *.sfz)
+    // into %AppData%\JASS\Samples. Same idempotent pattern as seedWavetables below.
+    // "<Folder>__<File>" names (Story 12.2 example sets) seed into a SUBFOLDER — binary-data
+    // resources are flat, so the multisample folder structure is encoded in the filename.
     inline void seedSamples()
     {
         auto dir = samplesFolder();
@@ -200,21 +202,128 @@ namespace PresetIO
             int size = 0;
             const char* data = Samples::getNamedResource(Samples::namedResourceList[i], size);
             if (data == nullptr || size <= 0) continue;
-            auto file = dir.getChildFile(Samples::getNamedResourceOriginalFilename(Samples::namedResourceList[i]));
+            juce::String name = Samples::getNamedResourceOriginalFilename(Samples::namedResourceList[i]);
+            auto target = dir;
+            if (name.contains("__"))
+            {
+                target = dir.getChildFile(name.upToFirstOccurrenceOf("__", false, false));
+                target.createDirectory();
+                name = name.fromFirstOccurrenceOf("__", false, false);
+            }
+            auto file = target.getChildFile(name);
             if (! file.existsAsFile())
                 file.replaceWithData(data, (size_t) size);
         }
     }
 
+    // Load a subfolder of the Samples folder as ONE mapped set (Story 12.2): a contained .sfz
+    // wins (imported mapping); otherwise the folder naming convention applies. Message thread.
+    inline int loadSampleSetFolder(const juce::File& dir, juce::String* error = nullptr)
+    {
+        auto sfzs = dir.findChildFiles(juce::File::findFiles, false, "*.sfz");
+        if (! sfzs.isEmpty())
+        {
+            sfzs.sort();
+            return SampleBankStore::instance().loadSfz(sfzs.getReference(0), error);
+        }
+        return SampleBankStore::instance().loadFolder(dir, error);
+    }
+
+    // Import a user-chosen SAMPLER source (Story 12.2): copies it into %AppData%\JASS\Samples
+    // first (preset portability — presets reference sets by NAME), then loads it. Handles all
+    // three source kinds; returns the set index or -1. Copy failures fall back to loading in
+    // place (exotic paths still play, they just won't survive into other sessions' presets).
+    //   · audio file       → Samples\<name>.<ext>            (12.1 behaviour, unchanged)
+    //   · folder           → Samples\<folder>\ (audio + any .sfz, flat)
+    //   · .sfz             → Samples\<sfzname>\ (the .sfz + its referenced samples)
+    // Copy an .sfz plus its referenced samples into `dest`, preserving the sfz's relative
+    // paths. Paths escaping the sfz's tree (`..`, absolute, other drive) are skipped — that set
+    // still plays from RAM this session, it just won't survive into future sessions.
+    inline void copySfzPortable(const juce::File& sfz, const juce::File& dest)
+    {
+        dest.createDirectory();
+        auto destSfz = dest.getChildFile(sfz.getFileName());
+        if (! destSfz.existsAsFile())
+            sfz.copyFileTo(destSfz);
+        for (const auto& e : SampleMapping::entriesFromSfz(sfz))
+        {
+            auto rel = e.file.getRelativePathFrom(sfz.getParentDirectory());
+            if (rel.startsWith("..") || juce::File::isAbsolutePath(rel)) continue;
+            auto d = dest.getChildFile(rel);
+            d.getParentDirectory().createDirectory();
+            if (! d.existsAsFile())
+                e.file.copyFileTo(d);
+        }
+    }
+
+    inline int importSamplerSource(const juce::File& src, juce::String* error = nullptr)
+    {
+        auto& store = SampleBankStore::instance();
+        // All branches: LOAD FIRST, COPY ONLY ON SUCCESS (review 2026-08-04: now including the
+        // single-file branch). The audio lives in RAM once loaded — the AppData copy exists
+        // purely so future sessions can re-resolve the set by name, so a REJECTED source must
+        // not leave a dead copy behind (it would silently fail at every preload from then on).
+        // Copy failures are non-fatal: the set still plays this session.
+        if (src.isDirectory())
+        {
+            if (src == samplesFolder())
+            {   // review 2026-08-04: confirming the chooser at its start location would import
+                // the whole library root as a set named "Samples" (+ a recursive self-copy)
+                if (error) *error = "this IS the JASS sample library folder - choose a folder "
+                                    "that contains ONE instrument (or a subfolder in here)";
+                return -1;
+            }
+            const int idx = loadSampleSetFolder(src, error);
+            if (idx < 0) return -1;
+            auto dest = samplesFolder().getChildFile(src.getFileName());
+            auto sfzs = src.findChildFiles(juce::File::findFiles, false, "*.sfz");
+            if (! sfzs.isEmpty())
+            {   // mapped via the contained .sfz — its samples may live in SUBFOLDERS, which a
+                // flat copy would lose (dead AppData folder, review 2026-08-04)
+                sfzs.sort();
+                copySfzPortable(sfzs.getReference(0), dest);
+            }
+            else
+            {
+                dest.createDirectory();
+                for (auto& f : src.findChildFiles(juce::File::findFiles, false, SampleMapping::kAudioWildcard))
+                {
+                    auto d = dest.getChildFile(f.getFileName());
+                    if (! d.existsAsFile())
+                        f.copyFileTo(d);
+                }
+            }
+            return idx;
+        }
+        if (src.hasFileExtension("sfz"))
+        {
+            const int idx = store.loadSfz(src, error);
+            if (idx < 0) return -1;
+            copySfzPortable(src, samplesFolder().getChildFile(src.getFileNameWithoutExtension()));
+            return idx;
+        }
+        const int idx = store.loadFile(src, error);   // single audio file (12.1)
+        if (idx < 0) return -1;
+        auto dest = samplesFolder().getChildFile(src.getFileName());
+        if (! dest.existsAsFile())
+            src.copyFileTo(dest);
+        return idx;
+    }
+
     // Pre-load every sample from the Samples folder into the store at startup (message thread),
     // so the SET combo is populated without a manual LOAD. Alphabetical => deterministic indices
     // (stable preset SET references as long as the folder is stable); bounded by the store caps.
+    // Single files first (12.1 indices stay put), then subfolders = multisample sets (12.2).
     inline void preloadSamples()
     {
-        auto files = samplesFolder().findChildFiles(juce::File::findFiles, false, "*.wav;*.aif;*.aiff");
+        auto files = samplesFolder().findChildFiles(juce::File::findFiles, false, SampleMapping::kAudioWildcard);
         files.sort();
         for (auto& f : files)
             SampleBankStore::instance().loadFile(f);
+        auto dirs = samplesFolder().findChildFiles(juce::File::findDirectories, false);
+        dirs.sort();
+        for (auto& d : dirs)
+            loadSampleSetFolder(d);
     }
 
     // First-run seeding of the shipped example wavetables (embedded from Wavetables/*.wav). Same
@@ -537,8 +646,9 @@ namespace PresetIO
 
         // SAMPLER (Story 12.1): the SET param is a session-local index, so the preset also carries
         // the selected sample's NAME ("Sampler.File", written by toVar). Re-resolve it: already
-        // loaded => re-select; else load "<name>.*" from %AppData%\JASS\Samples. Missing file =>
-        // the combo stays where the index landed (documented: samples live in the Samples folder).
+        // loaded => re-select; else load "<name>.*" from %AppData%\JASS\Samples — or, since 12.2,
+        // the subfolder "<name>\" holding a multisample set. Missing source => the combo stays
+        // where the index landed (documented: samples live in the Samples folder).
         // Message-thread only (applyVar always is), like every store load.
         if (auto* mod = v["Sampler"].getDynamicObject())
         {
@@ -551,6 +661,8 @@ namespace PresetIO
                     auto matches = samplesFolder().findChildFiles(juce::File::findFiles, false, name + ".*");
                     if (! matches.isEmpty())
                         idx = SampleBankStore::instance().loadFile(matches.getReference(0));
+                    else if (auto sub = samplesFolder().getChildFile(name); sub.isDirectory())
+                        idx = loadSampleSetFolder(sub);   // 12.2: mapped set by folder name
                 }
                 if (idx >= 0)
                     if (auto* p = a.getParameter(ID::samplerSet))

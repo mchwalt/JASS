@@ -28,3 +28,14 @@ float header (~66 KB). Requires only the Python standard library (`wave`, `struc
 **Attribution.** MIT KEMAR HRTF measurements — Bill Gardner & Keith Martin, MIT Media Lab (1994),
 free with no restrictions on use provided the authors are cited. The citation is baked into the
 generated header and noted in the project README. <https://sound.media.mit.edu/resources/KEMAR.html>
+
+## get_iowa_piano.py
+
+Builds the optional **Piano** multisample set for the SAMPLER (Story 12.2) from the University
+of Iowa *Musical Instrument Samples* (Steinway & Sons model B, ff layer — freely available
+without restrictions). Downloads 13 notes in tritone spacing (C1–C7), strips the ~0.5 s of room
+tone at each file's start (untrimmed, the set is unplayable live), trims to 10 s with a
+fade-out, and writes `Piano_<note>.wav` files following the JASS folder naming convention plus
+an attribution `README.txt`. Standard library only (no `aifc` — parses AIFF by hand, Python
+3.13-safe). Usage: `python tools/get_iowa_piano.py [output-folder]`, then copy the folder into
+`%AppData%\JASS\Samples\` or import it via SAMPLER → FOLDER.
