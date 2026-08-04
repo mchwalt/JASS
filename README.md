@@ -13,13 +13,6 @@ Windows & Linux builds (Standalone + VST3), produced automatically on every merg
 > **VST3:** a VST3 build is produced as well, but it has so far only been tested
 > **very superficially in vPlayer 4 Lite** — treat plugin support as experimental.
 
-### 🎹 Two grand pianos included
-
-Two real, multisampled **grand pianos** ship as free downloads — AKAI's
-**Splendid** Steinway and Alexander Holm's **Salamander** Yamaha C5, four
-velocity layers each. Unzip, pick the set in the SAMPLER, play:
-**[Optional piano multisample sets](#optional-piano-multisample-sets)**.
-
 ## Why this project
 
 JASS is about building a **simple synthesizer with an intuitive interface** — one
@@ -57,9 +50,10 @@ info** so nothing is hidden and every control explains itself.
   decoupling — the key sets only the pitch, SPEED only the tempo, loops stay
   beat-locked on every key (Signalsmith Stretch, MIT). Ships with an example
   catalog (seeded to `%AppData%\JASS\Samples`); presets reference sets by name.
-  **Two multisampled grand pianos included as free downloads** — AKAI's Splendid
-  Steinway and Alexander Holm's Salamander Yamaha C5, four velocity layers each:
-  see [Optional piano multisample sets](#optional-piano-multisample-sets).
+  - 🎹 **Two multisampled grand pianos included as free downloads** — AKAI's
+    **Splendid** Steinway and Alexander Holm's **Salamander** Yamaha C5, four
+    velocity layers each. Unzip, pick the set, play:
+    **[Optional piano multisample sets](#optional-piano-multisample-sets)**.
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
