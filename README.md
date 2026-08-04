@@ -214,20 +214,28 @@ in that folder.
 
 ### Optional piano multisample sets
 
-Two real grand pianos play beautifully through the SAMPLER but are not bundled
-(they would bloat the binary; one has murky licensing):
+Two real grand pianos play beautifully through the SAMPLER. They are not part
+of the repository (≈65 MB of samples don't belong in git history) — download
+them as ready-made zips from the
+[**piano-pack release**](https://github.com/mchwalt/JASS/releases/tag/piano-pack-v1)
+and unzip into `%AppData%\JASS\Samples\`:
 
-- **Iowa Steinway** — build it yourself with one command:
-  `python tools/get_iowa_piano.py` downloads 13 notes of the University of Iowa
-  [Musical Instrument Samples](https://theremin.music.uiowa.edu/MIS.html)
-  (freely available without restrictions), trims them, and writes a ready
-  `Piano\` folder — copy it into `%AppData%\JASS\Samples\` or import it via
-  SAMPLER → FOLDER.
-- **Splendid Grand** (Steinway, commonly treated as public domain by AKAI —
-  no formal license file exists upstream, hence not redistributed here): clone
-  <https://github.com/sfzinstruments/SplendidGrandPiano>. Its main `.sfz` uses
-  ARIA `#include`/`#define`, which JASS's minimal parser deliberately skips —
-  make a flat variant instead: create a text file `SplendidGrand.sfz` next to
-  the `Samples/` folder containing the line `<control> default_path=Samples/`
-  followed by the contents of `Data/FF.txt` with every `$EXT` replaced by
-  `flac`, then load it via SAMPLER → LOAD.
+- **JASS-SplendidPiano.zip** — AKAI's Steinway recordings (samples Public
+  Domain), single FF layer, 57 zones. Ships a `NOTICE.txt` crediting the
+  upstream SFZ mapping at
+  [sfzinstruments/SplendidGrandPiano](https://github.com/sfzinstruments/SplendidGrandPiano).
+- **JASS-SalamanderPiano.zip** — Alexander Holm's Yamaha C5
+  ([sfzinstruments/SalamanderGrandPiano](https://github.com/sfzinstruments/SalamanderGrandPiano),
+  **CC BY 3.0**), loudest velocity layer, 30 zones; `ATTRIBUTION.txt` inside
+  carries the license details and the change list.
+
+Picking either set in the SAMPLER auto-configures the module as an instrument
+(One-Shot, no STRETCH, its own release; ENVELOPE off and Stereo-Pan output when
+the sampler is the sole generator).
+
+Both zips are reproducible from source: `python tools/build_piano_zips.py`
+fetches the upstream repos (shallow) and assembles them around the curated
+`.sfz` files in [`tools/piano-packs/`](tools/piano-packs/). A third option,
+the **Iowa Steinway**, still builds with `python tools/get_iowa_piano.py`
+(University of Iowa [MIS](https://theremin.music.uiowa.edu/MIS.html)
+recordings, freely available without restrictions).
