@@ -24,10 +24,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **SAMPLER SET menu shows long set names in full** — the SET combo is wider now
   (rack combos can declare their layout width; everything else is unchanged), so
   user-named multisample sets like "SalamanderPiano" no longer truncate.
-- **Picking a multisample set auto-switches MODE to One-Shot and STRETCH off**
-  (user gesture only — preset loads keep their saved values): instruments are
-  played chromatically, Loop mode would start every note at the shared loop phase
-  (mid-sample), and STRETCH buys nothing at a couple semitones per zone.
+- **Picking a multisample set sets the SAMPLER up as an instrument** (user gesture
+  only — preset loads keep their saved values): MODE → One-Shot (Loop would start
+  notes at the shared loop phase, mid-sample), STRETCH → off (buys nothing at a
+  couple semitones per zone), REL lifted off 0 to ~2 s (zones without their own
+  `ampeg_release` get a fade), and — only when the SAMPLER is the sole active
+  generator — ENVELOPE off (nothing cuts the sampler's own tail) and output mode
+  → Stereo-Pan (the one mode that renders a stereo recording untouched).
 - **SAMPLER release envelope** (Story 12.4) — the sampler fades released notes with
   its OWN release time instead of cutting them: an imported `.sfz` sets it per zone
   (`ampeg_release`, now read), the new **REL** knob covers zones without a value

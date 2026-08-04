@@ -1358,6 +1358,34 @@ void SynthyEditor::buildRack()
                     pm->setValueNotifyingHost (pm->convertTo0to1 (0.0f));   // One-Shot
                 if (auto* ps = processor.getAPVTS().getParameter (P::samplerStretch))
                     ps->setValueNotifyingHost (0.0f);                        // STRETCH off
+                // An instrument wants a note-off fade everywhere: lift REL off 0 so zones the
+                // .sfz left without ampeg_release (Splendid's mid range) fade too. Only from 0 —
+                // a deliberately set knob value survives the set switch; zones with own values
+                // ignore REL either way. (user request 2026-08-04)
+                if (auto* pr = processor.getAPVTS().getParameter (P::samplerRelease))
+                    if (pr->getValue() <= 0.0f)
+                        pr->setValueNotifyingHost (pr->convertTo0to1 (2.16f));   // user's pick (by ear)
+                // ...and its tail must not be cut by the global ADSR: switch the ENVELOPE module
+                // off, but ONLY when the sampler is the sole active generator — in a hybrid
+                // preset the envelope belongs to the other generators too, and yanking it would
+                // gut the whole voice. Cross-module, but through APVTS only (AD-9); precedent:
+                // the mod matrix auto-enables source+target modules. (user request 2026-08-04)
+                auto isOn = [this] (const juce::String& id)
+                { return *processor.getAPVTS().getRawParameterValue (id) > 0.5f; };
+                const bool otherGenOn = isOn (P::oscOn (1)) || isOn (P::oscOn (2)) || isOn (P::oscOn (3))
+                                     || isOn (P::subOn) || isOn (P::noiseOn)
+                                     || isOn (P::karplusOn) || isOn (P::wavetableOn);
+                if (! otherGenOn)
+                {
+                    if (auto* pa = processor.getAPVTS().getParameter (P::adsrOn))
+                        pa->setValueNotifyingHost (0.0f);   // sampler governs its own tail (12.4)
+                    // ...and the output stage must not colour it: Stereo-Pan is the one mode
+                    // that renders a stereo recording untouched (hard L/R). Kunstkopf/Binaural
+                    // re-spatialise through HRIR/ITD — audibly wrong on a piano (user 2026-08-04);
+                    // Mono/Pseudo-Stereo sum the mic channels (comb). Same guard: sole generator.
+                    if (auto* po = processor.getAPVTS().getParameter (P::outputMode))
+                        po->setValueNotifyingHost (po->convertTo0to1 ((float) (int) OutputMode::StereoPan));
+                }
             }
         };
         setCombo.onUserSelect = oneShotForMappedSet;
