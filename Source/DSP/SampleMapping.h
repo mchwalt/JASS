@@ -63,6 +63,7 @@ namespace SampleMapping
         int loKey   = 0;
         int hiKey   = 127;
         int hiVel   = 127;
+        int offsetFrames = 0;   // sfz offset= — skip this many frames at the file start
     };
 
     // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
@@ -121,7 +122,7 @@ namespace SampleMapping
     //     the caps but can never be reached.
     inline std::vector<Entry> entriesFromSfz (const juce::File& sfzFile)
     {
-        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1, hiVel = -1; bool bad = false; };
+        struct Scope { juce::String sample; int lo = -1, hi = -1, root = -1, hiVel = -1, offset = -1; bool bad = false; };
         Scope group, region;
         bool inRegion = false, ignoring = false, inControl = false;
         juce::String defaultPath;
@@ -137,14 +138,16 @@ namespace SampleMapping
             int hi    = region.hi    >= 0 ? region.hi    : group.hi;
             int root  = region.root  >= 0 ? region.root  : group.root;
             int hiVel = region.hiVel >= 0 ? region.hiVel : group.hiVel;
+            int offs  = region.offset >= 0 ? region.offset : group.offset;
             if (root  < 0) root  = 60;    // SFZ default: unchanged on middle C
             if (lo    < 0) lo    = 0;
             if (hi    < 0) hi    = 127;
             if (hiVel < 0) hiVel = 127;
+            if (offs  < 0) offs  = 0;
             if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi)
             {
                 Entry fresh { baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/')),
-                              juce::jlimit (0, 127, root), lo, hi, hiVel };
+                              juce::jlimit (0, 127, root), lo, hi, hiVel, offs };
                 bool handled = false;
                 for (auto& e : entries)
                 {
@@ -216,6 +219,8 @@ namespace SampleMapping
                 else if (opcode == "key")             s.lo = s.hi = s.root = note (value);
                 else if (opcode == "hivel")           // ranks velocity layers only (see flush)
                     s.hiVel = juce::jlimit (0, 127, value.getIntValue());
+                else if (opcode == "offset")          // skip pre-attack junk the library trims
+                    s.offset = juce::jmax (0, value.getIntValue());
                 // every other opcode: ignored by design (minimal subset)
             }
         }

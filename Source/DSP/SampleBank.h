@@ -162,6 +162,12 @@ public:
                             + e.file.getFullPathName() + ")"));
                 return nullptr;
             }
+            // sfz offset=: drop pre-attack frames the library wants skipped (applied at load
+            // time so playback code stays offset-free).
+            if (e.offsetFrames > 0 && e.offsetFrames < z.getLength() - 4)
+                for (auto& chan : z.data)
+                    if (! chan.empty())
+                        chan.erase (chan.begin(), chan.begin() + e.offsetFrames);
             z.rootKey = e.rootKey;
             z.loKey   = e.loKey;
             z.hiKey   = e.hiKey;
