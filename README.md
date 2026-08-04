@@ -40,18 +40,19 @@ info** so nothing is hidden and every control explains itself.
   PWM, Spectral) with example WAVs, position morph, **WAV import**, own unison
 - **Noise** — white / pink / brown / blue
 - **Karplus-Strong** — plucked string, played from the keyboard
-- **SAMPLER** — play your own recordings (WAV/AIFF, ≤60 s) as a sound source through
-  the whole chain: ROOT-key tape-style transposition, START/END, One-Shot / Loop
-  (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED (0.25×–4×),
-  stereo files rendered as two placed sub-sources. **Multisampling**: load a folder
-  of `Name_C3.wav`-style files (or a basic `.sfz`) as one set — zones spread across
-  the keyboard, each with its own root. **STRETCH**: pitch/time decoupling — the key
-  sets only the pitch, SPEED only the tempo, loops stay beat-locked on every key
-  (Signalsmith Stretch, MIT). Ships with an example catalog (seeded to
-  `%AppData%\JASS\Samples`); presets reference sets by name. Two multisampled
-  **grand pianos** (AKAI's Splendid Steinway, Alexander Holm's Salamander
-  Yamaha C5) are available as free downloads — see
-  [Optional piano multisample sets](#optional-piano-multisample-sets).
+- **SAMPLER** — play your own recordings (WAV/AIFF/FLAC, ≤60 s) as a sound source
+  through the whole chain: ROOT-key tape-style transposition, START/END, One-Shot /
+  Loop (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED
+  (0.25×–4×), stereo files rendered as two placed sub-sources. **Multisampling**:
+  load a folder of `Name_C3.wav`-style files (or a basic `.sfz`) as one set — zones
+  spread across the keyboard with their own roots, and `.sfz` **velocity layers**
+  respond to your touch (soft hit → soft recording). **STRETCH**: pitch/time
+  decoupling — the key sets only the pitch, SPEED only the tempo, loops stay
+  beat-locked on every key (Signalsmith Stretch, MIT). Ships with an example
+  catalog (seeded to `%AppData%\JASS\Samples`); presets reference sets by name.
+  **Two multisampled grand pianos included as free downloads** — AKAI's Splendid
+  Steinway and Alexander Holm's Salamander Yamaha C5, four velocity layers each:
+  see [Optional piano multisample sets](#optional-piano-multisample-sets).
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
