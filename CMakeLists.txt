@@ -8,7 +8,7 @@ cmake_minimum_required(VERSION 3.22)
 # -DJASS_CALVER=YYYY.M.MICRO so release artifacts carry the exact per-merge CalVer,
 # WITHOUT committing a bump back to main. Local/dev builds use the default below.
 if(NOT DEFINED JASS_CALVER)
-    set(JASS_CALVER "2026.8.3")
+    set(JASS_CALVER "2026.8.4")
 endif()
 project(JASS VERSION ${JASS_CALVER})
 
