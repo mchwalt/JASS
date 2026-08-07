@@ -11,6 +11,6 @@ Gespielt wird über die volle Breite der Buchstabentasten: die **Grundreihe** (`
 
 Die Klaviatur muss den Fokus haben, damit die Buchstabentasten klingen (holt ihn beim Start automatisch; einmal draufklicken, falls die Tasten nicht mehr reagieren).
 
-**Akkorde auf der Computer-Tastatur**
+**Akkorde**
 
-Normale Tastaturen können nicht jede Dreier-Kombination melden: Ihre Tasten sitzen in einer Abtast-Matrix ohne eine Diode je Taste, dadurch sind bestimmte Tripel nicht eindeutig — der Controller meldet lieber gar nichts als eine erfundene Taste, und der dritte Ton kommt nie an (in jedem Texteditor nachstellbar). Welche Kombinationen betroffen sind, hängt vom Tastaturmodell ab. Verschiebe die Oktave mit den Pfeiltasten, damit die Noten auf andere physische Tasten wandern — oder spiele Akkorde über eine MIDI-Tastatur, für die die Buchstabentasten nur ein Behelf sind. Sie senden außerdem eine feste Anschlagstärke; Instrumente mit Velocity-Layern brauchen echtes MIDI.
+Normale Tastaturen verschlucken manche Dreier-Kombinationen — der dritte Ton kommt nie an. Oktave verschieben oder über MIDI spielen; die Buchstabentasten senden zudem eine feste Anschlagstärke.

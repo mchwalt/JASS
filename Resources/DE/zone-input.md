@@ -1,7 +1,7 @@
 Spiel-Eingabe — wie Noten in den Synth gelangen.
 
-- Enthält die Bildschirm-KEYBOARD. Mit der Maus oder den Computertasten spielen (a, w, s, e, … ; z / x verschieben die Oktave).
-- Ausblenden, wenn du über ein externes MIDI-Keyboard spielst, um Platz im Rack zu sparen.
+- Enthält die Bildschirm-KEYBOARD. Mit der Maus oder den Computertasten spielen (a, w, s, e, … ; ↑ / ↓ verschieben die Oktave).
+- Am besten spielst du über ein MIDI-Keyboard: echte Anschlagstärke, jeder Akkord. Standalone: Gerät vor dem Start einschalten und in den Audio/MIDI-Einstellungen wählen — die Bildschirm-KEYBOARD kannst du dann ausblenden.
 
 **Gruppenkopf-Bedienelemente**
 - **Enable** — dimmt alle sichtbaren Module dieser Gruppe / schaltet sie an.
