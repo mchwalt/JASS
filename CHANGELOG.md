@@ -10,6 +10,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Changed
+- **Documentation caught up with epic 12** — `ARCHITECTURE.md` now describes
+  background sample loading (why the store lock guards publication only, and
+  what shields the LiveState while a set is in flight), the help panel opting
+  out of the display-fit scale, and the sampler-preset trap that a preset load
+  deliberately does not run the set-pick automation, so a sampler preset has to
+  carry its own `Release`. Store caps in `DEVELOPER_GUIDE.md` corrected to the
+  values story 12.5 raised them to; README mentions background loading and the
+  GrandPiano slot.
+
 ## [2026.08.4] – 2026-08-08
 
 ### Added
