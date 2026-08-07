@@ -6,6 +6,7 @@
 #include <memory>
 #include <limits>
 #include <cmath>
+#include <mutex>
 #include "SampleMapping.h"
 
 // ── SAMPLER sample sets (Story 12.1, zones since Story 12.2) ────────────────────────────────
@@ -62,6 +63,38 @@ public:
     const juce::String& getName() const { return name; }
     bool isMapped() const               { return mapped; }
     int  getNumZones() const            { return (int) zones.size(); }
+
+    // Does the SET govern its own note-off fade? True when EVERY zone carries an .sfz
+    // ampeg_release — those always win over the REL knob (12.4), so the knob is inert for this
+    // instrument and the editor shows it dimmed. Salamander is the case in point (all 120 zones
+    // carry one); Splendid has them on its lowest regions only, so there REL still matters.
+    bool ownsRelease() const
+    {
+        if (zones.empty()) return false;
+        for (const auto& z : zones)
+            if (z.releaseSeconds <= 0.0f)
+                return false;
+        return true;
+    }
+
+    // The release time most of the keyboard actually uses — the MOST COMMON per-zone value, not
+    // an average: Salamander's damperless top regions ring far longer and would skew a mean into
+    // a number no key plays. Used for display only (the dimmed REL knob shows what is heard).
+    float typicalRelease() const
+    {
+        float best = 0.0f;
+        int   bestCount = 0;
+        for (const auto& candidate : zones)
+        {
+            if (candidate.releaseSeconds <= 0.0f) continue;
+            int n = 0;
+            for (const auto& z : zones)
+                if (std::abs (z.releaseSeconds - candidate.releaseSeconds) < 0.001f)
+                    ++n;
+            if (n > bestCount) { bestCount = n; best = candidate.releaseSeconds; }
+        }
+        return best;
+    }
     bool isStereo() const               // any-zone stereo: drives the L/R pan-slot spread
     {
         for (const auto& z : zones)
@@ -152,9 +185,13 @@ public:
     // 12.2 mapped set from a list of (file, root, lo, hi) entries. nullptr when no entry loads
     // or the set total exceeds kMaxSetSeconds — the WHOLE set is rejected (no partial sets).
     // `error` names the offending FILE and reason (user request 2026-08-03: no guessing).
+    // `shouldAbort` is polled PER ZONE, not per set: a four-layer grand piano is hundreds of
+    // files and tens of seconds, and the background preload (12.6) has to be able to stop within
+    // milliseconds when the app is closing — otherwise the shutdown would hang on it.
     static std::unique_ptr<SampleSet> loadFromEntries (const juce::String& setName,
                                                        const std::vector<SampleMapping::Entry>& entries,
-                                                       juce::String& error)
+                                                       juce::String& error,
+                                                       const std::function<bool()>& shouldAbort = {})
     {
         if (entries.empty())
         {
@@ -166,6 +203,11 @@ public:
         double totalSeconds = 0.0;
         for (const auto& e : entries)
         {
+            if (shouldAbort && shouldAbort())
+            {   // dropped, not half-built: the set is simply absent and loads normally next time
+                error = "cancelled";
+                return nullptr;
+            }
             SampleZone z;
             if (! loadZone (e.file, z))
             {   // one bad/over-cap file rejects the set — no truncation surprises
@@ -251,7 +293,9 @@ public:
 
     // Load a single audio file and append it. Returns the set index, or -1 on failure
     // (unreadable / over the caps / store full — `error`, when given, says which and why).
-    // MESSAGE THREAD only. Duplicate-safe by name.
+    // Duplicate-safe by name. Runs on ANY non-audio thread: since 12.6 the startup preload
+    // works through a background thread while the message thread may import a file or resolve
+    // a preset's set, so the load paths are serialised by `writerLock` (see below).
     int loadFile (const juce::File& file, juce::String* error = nullptr)
     {
         // Duplicate-safe by name — but only within the SAME kind (review 2026-08-04): silently
@@ -276,7 +320,8 @@ public:
 
     // 12.2: load a folder of "<anything>_<note>.wav" files as ONE mapped set named after the
     // folder. Files without a note suffix are skipped; no parsable file ⇒ -1.
-    int loadFolder (const juce::File& dir, juce::String* error = nullptr)
+    int loadFolder (const juce::File& dir, juce::String* error = nullptr,
+                    const std::function<bool()>& shouldAbort = {})
     {
         const int existing = indexOf (dir.getFileName());
         if (existing >= 0)
@@ -288,13 +333,14 @@ public:
         }
         juce::String err;
         auto set = SampleSet::loadFromEntries (dir.getFileName(),
-                                               SampleMapping::entriesFromFolder (dir), err);
+                                               SampleMapping::entriesFromFolder (dir), err, shouldAbort);
         if (set == nullptr) { if (error) *error = err; return -1; }
         return append (std::move (set), error);
     }
 
     // 12.2: import a minimal .sfz as ONE mapped set named after the file.
-    int loadSfz (const juce::File& sfzFile, juce::String* error = nullptr)
+    int loadSfz (const juce::File& sfzFile, juce::String* error = nullptr,
+                 const std::function<bool()>& shouldAbort = {})
     {
         const int existing = indexOf (sfzFile.getFileNameWithoutExtension());
         if (existing >= 0)
@@ -306,7 +352,7 @@ public:
         }
         juce::String err;
         auto set = SampleSet::loadFromEntries (sfzFile.getFileNameWithoutExtension(),
-                                               SampleMapping::entriesFromSfz (sfzFile), err);
+                                               SampleMapping::entriesFromSfz (sfzFile), err, shouldAbort);
         if (set == nullptr) { if (error) *error = err; return -1; }
         return append (std::move (set), error);
     }
@@ -319,6 +365,19 @@ private:
     int append (std::unique_ptr<SampleSet> set, juce::String* error = nullptr)
     {
         if (set == nullptr) return -1;
+
+        // ONLY the publication is serialised — never the decoding above it. Holding the lock
+        // across a set's decode would block the message thread (a preset resolving its own set)
+        // for as long as the background preload works on a grand piano: the app would look
+        // frozen and refuse to close. (12.6)
+        const std::lock_guard<std::mutex> guard (writerLock);
+
+        // Two threads may have decoded the same name concurrently — first one wins, ours is
+        // simply dropped here (it was never visible to the audio thread, so freeing it is safe).
+        if (const int existing = indexOf (set->getName()); existing >= 0)
+            if (getSet (existing)->isMapped() == set->isMapped())
+                return existing;
+
         int n = count.load (std::memory_order_acquire);
         if (n >= MaxSets)
         {
@@ -339,5 +398,10 @@ private:
 
     std::array<std::unique_ptr<SampleSet>, MaxSets> sets;
     std::atomic<int> count { 0 };
-    size_t bytesLoaded = 0;   // message-thread only (all loads are)
+    size_t bytesLoaded = 0;   // writer-side only, guarded by writerLock
+
+    // Serialises the LOADING paths against each other (background preload vs. message thread).
+    // The AUDIO thread never touches it: it only reads `count`/`sets` through acquire/release,
+    // exactly as before — the lock-free read contract of the never-free store is unchanged.
+    std::mutex writerLock;
 };

@@ -128,6 +128,7 @@ namespace PresetIO
         slots[4] = "Matrix Showcase";   // full MOD MATRIX demo (per-OSC + full coverage + 8 slots)
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
         slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
+        slots[7] = "GrandPiano";        // the plain instrument: SplendidPiano set, nothing else on
         return slots;
     }
 
@@ -218,15 +219,16 @@ namespace PresetIO
 
     // Load a subfolder of the Samples folder as ONE mapped set (Story 12.2): a contained .sfz
     // wins (imported mapping); otherwise the folder naming convention applies. Message thread.
-    inline int loadSampleSetFolder(const juce::File& dir, juce::String* error = nullptr)
+    inline int loadSampleSetFolder(const juce::File& dir, juce::String* error = nullptr,
+                                   const std::function<bool()>& shouldAbort = {})
     {
         auto sfzs = dir.findChildFiles(juce::File::findFiles, false, "*.sfz");
         if (! sfzs.isEmpty())
         {
             sfzs.sort();
-            return SampleBankStore::instance().loadSfz(sfzs.getReference(0), error);
+            return SampleBankStore::instance().loadSfz(sfzs.getReference(0), error, shouldAbort);
         }
-        return SampleBankStore::instance().loadFolder(dir, error);
+        return SampleBankStore::instance().loadFolder(dir, error, shouldAbort);
     }
 
     // Import a user-chosen SAMPLER source (Story 12.2): copies it into %AppData%\JASS\Samples
@@ -314,16 +316,36 @@ namespace PresetIO
     // so the SET combo is populated without a manual LOAD. Alphabetical => deterministic indices
     // (stable preset SET references as long as the folder is stable); bounded by the store caps.
     // Single files first (12.1 indices stay put), then subfolders = multisample sets (12.2).
-    inline void preloadSamples()
+    // Installed by the processor (12.6): "this preset wants the set named X". Loading it is the
+    // background loader's job — applyVar must never decode a set on the message thread. Left
+    // empty where no loader exists (plugin build), in which case applyVar loads synchronously.
+    inline std::function<void(const juce::String& setName)> requestSamplerSet;
+
+    // Set name a preset asked for that has not arrived yet. While this is pending, the SET index
+    // still points at some OTHER set — and the LiveState is written every 1.5 s. Saving the name
+    // behind that index would quietly swap the patch's instrument, so toVar() persists this name
+    // instead. Cleared when the set is selected, when it cannot be found, and when the user picks
+    // a set by hand (their choice wins over a pending restore).
+    inline juce::String pendingSamplerSetName;
+
+    // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
+    // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
+    inline void preloadSamples(std::function<bool()> shouldAbort = {})
     {
         auto files = samplesFolder().findChildFiles(juce::File::findFiles, false, SampleMapping::kAudioWildcard);
         files.sort();
         for (auto& f : files)
+        {
+            if (shouldAbort && shouldAbort()) return;
             SampleBankStore::instance().loadFile(f);
+        }
         auto dirs = samplesFolder().findChildFiles(juce::File::findDirectories, false);
         dirs.sort();
         for (auto& d : dirs)
-            loadSampleSetFolder(d);
+        {
+            if (shouldAbort && shouldAbort()) return;
+            loadSampleSetFolder(d, nullptr, shouldAbort);   // also polled per zone inside
+        }
     }
 
     // First-run seeding of the shipped example wavetables (embedded from Wavetables/*.wav). Same
@@ -421,9 +443,15 @@ namespace PresetIO
         // index, so applyVar can re-resolve it from the Samples folder across sessions.
         {
             const int idx = static_cast<int>(*a.getRawParameterValue(ID::samplerSet));
-            if (const auto* set = SampleBankStore::instance().getSet(idx))
+            const auto* set = SampleBankStore::instance().getSet(idx);
+            // A set still being fetched for this patch wins over whatever the index points at
+            // right now (see pendingSamplerSetName) — otherwise a save during the load would
+            // rewrite the patch to a different instrument.
+            const juce::String setName = pendingSamplerSetName.isNotEmpty() ? pendingSamplerSetName
+                                       : (set != nullptr ? set->getName() : juce::String());
+            if (setName.isNotEmpty())
                 if (auto* mod = root->getProperty("Sampler").getDynamicObject())
-                    mod->setProperty("File", set->getName());
+                    mod->setProperty("File", setName);
         }
 
         return juce::var(root);
@@ -656,8 +684,20 @@ namespace PresetIO
             if (name.isNotEmpty())
             {
                 int idx = SampleBankStore::instance().indexOf(name);
-                if (idx < 0)
+                if (idx < 0 && requestSamplerSet)
                 {
+                    // Not in the store yet: hand it to the background loader (12.6) instead of
+                    // decoding it here. A grand piano is several hundred MB — doing that on the
+                    // message thread is what kept the window from appearing for ten seconds.
+                    // The loader pulls this set to the FRONT of its queue and selects it when
+                    // it lands, so the patch ends up correct, just a moment later.
+                    pendingSamplerSetName = name;   // guards the LiveState while it loads
+                    requestSamplerSet(name);
+                    return;
+                }
+                pendingSamplerSetName.clear();   // this preset's set is already here
+                if (idx < 0)
+                {   // no loader installed (plugin build / tests): the original synchronous path
                     auto matches = samplesFolder().findChildFiles(juce::File::findFiles, false, name + ".*");
                     if (! matches.isEmpty())
                         idx = SampleBankStore::instance().loadFile(matches.getReference(0));

@@ -92,6 +92,35 @@ public:
     void restoreModifiedState(bool modified);     // on LiveState load: clean baseline, or force "modified"
 
 private:
+    // Story 12.6: the startup preload of the Samples folder runs here instead of blocking the
+    // constructor. Four-layer piano sets are ~1.2 GB decoded, which used to be dead time before
+    // the window even appeared. Sets appear in the SET combo as they arrive; anything a preset
+    // actually needs is still resolved by name on demand (PresetIO), so sound is never missed.
+    struct SamplePreloadThread : juce::Thread
+    {
+        SamplePreloadThread (SynthyProcessor& p) : juce::Thread ("JASS sample preload"), owner (p) {}
+        void run() override;
+
+        // "A preset wants this set." Jumps the queue: the loader finishes its current set, then
+        // loads this one and selects it, before carrying on with the rest of the folder. Called
+        // from the message thread (preset load), read by the loader — hence the lock.
+        void request (const juce::String& setName);
+        int  currentGeneration() const noexcept { return requestGeneration.load(); }
+
+    private:
+        juce::String takeRequest();
+        void loadRequested (const juce::String& setName);
+        SynthyProcessor& owner;
+        juce::CriticalSection requestLock;
+        juce::String  requested;                // set name a preset is waiting for ("" = none)
+        std::atomic<int> requestGeneration { 0 };   // bumped per request; a stale result is dropped
+    };
+    SamplePreloadThread samplePreload { *this };
+
+    // Select a sample set by index (message thread). Used by the loader once a requested set
+    // has arrived; `generation` guards against a preset that was loaded in the meantime.
+    void selectSamplerSet (int index, int generation);
+
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
