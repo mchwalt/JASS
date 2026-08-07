@@ -20,6 +20,13 @@ public:
         closeBtn.setWantsKeyboardFocus (false);   // never steal focus from the playable keyboard
         addAndMakeVisible (closeBtn);
 
+        // Long help texts (MOD MATRIX, KEYBOARD) scroll rather than run past the window edge.
+        view.setViewedComponent (&bodyComp, /*deleteWhenRemoved*/ false);
+        view.setScrollBarsShown (/*vertical*/ true, /*horizontal*/ false);
+        view.setScrollBarThickness (kScrollW);
+        view.setWantsKeyboardFocus (false);       // same reason as the panel itself
+        addAndMakeVisible (view);
+
         // The panel must NOT take keyboard focus: opening/moving help would otherwise stop the
         // computer keys from playing the on-screen keyboard. ESC is handled by the editor.
         setWantsKeyboardFocus (false);
@@ -34,23 +41,37 @@ public:
     // language switch while open. `body` is Markdown (compact subset) — it is rendered ONCE into
     // an AttributedString that both this measure pass and paint() reuse, so the measured height
     // can never disagree with what is drawn (no clipped last line).
-    void setContent (const juce::String& title, const juce::String& body)
+    // `width` lets the editor widen the panel for a long text (fewer wrapped lines = shorter
+    // panel), `maxHeight` caps it at what the window can show — a text longer than that SCROLLS
+    // inside the panel instead of being cut off at the bottom. Returns true when everything fits
+    // without scrolling, so the caller can try a wider panel first.
+    bool setContent (const juce::String& title, const juce::String& body,
+                     int width = kWidth, int maxHeight = 1 << 24)
     {
         titleText = title;
-        bodyAttr  = md::render (body);
+
+        const int innerW = juce::jmax (80, width - 2 * kPad - kScrollW);
+        bodyComp.attr = md::render (body);
 
         juce::TextLayout tl;
-        tl.createLayout (bodyAttr, (float) (kWidth - 2 * kPad));
+        tl.createLayout (bodyComp.attr, (float) innerW);
+        const int bodyH = (int) std::ceil (tl.getHeight()) + 4;   // +4 safety against rounding
 
-        const int bodyH   = (int) std::ceil (tl.getHeight()) + 4;   // +4 safety against rounding
-        const int totalH  = kTitleH + kPad + bodyH + kPad;
-        setSize (kWidth, juce::jmax (totalH, kTitleH + 40));
+        const int wantH = kTitleH + kPad + bodyH + kPad;
+        const int panelH = juce::jmax (kTitleH + 40, juce::jmin (wantH, maxHeight));
+        setSize (width, panelH);
+
+        // The scrolled component keeps its FULL text height; the viewport shows a window on it.
+        bodyComp.setSize (innerW, bodyH);
+        view.setViewPosition (0, 0);   // a fresh text always starts at the top
         repaint();
+        return wantH <= maxHeight;
     }
 
     void resized() override
     {
         closeBtn.setBounds (getWidth() - kTitleH + 3, 3, kTitleH - 6, kTitleH - 6);
+        view.setBounds (getLocalBounds().withTrimmedTop (kTitleH).reduced (kPad, kPad));
     }
 
     void paint (juce::Graphics& g) override
@@ -70,9 +91,7 @@ public:
         g.drawText (titleText, title.reduced (kPad, 0).withTrimmedRight (kTitleH),
                     juce::Justification::centredLeft, true);
 
-        // body — the same AttributedString that was measured in setContent()
-        auto body = getLocalBounds().withTrimmedTop (kTitleH).reduced (kPad, kPad);
-        bodyAttr.draw (g, body.toFloat());
+        // The body is drawn by the scrolled child (bodyComp) inside `view`.
     }
 
     // Drag from the title strip only (matches "drag by its title bar").
@@ -100,10 +119,22 @@ public:
     static constexpr int kWidth   = 340;
     static constexpr int kTitleH  = 26;
     static constexpr int kPad     = 12;
+    static constexpr int kScrollW = 9;    // scrollbar lane, always reserved so the text wrap
+                                          // does not change when the bar appears
 
 private:
+    // The scrolled text itself: it is as tall as the rendered Markdown needs, and the viewport
+    // shows as much of it as the panel has room for.
+    struct Body : juce::Component
+    {
+        juce::AttributedString attr;   // rendered Markdown; measured in setContent, drawn here
+        Body() { setInterceptsMouseClicks (false, false); }   // wheel scrolls, clicks pass through
+        void paint (juce::Graphics& g) override { attr.draw (g, getLocalBounds().toFloat()); }
+    };
+
     juce::String titleText;
-    juce::AttributedString bodyAttr;   // rendered Markdown; measured in setContent, drawn in paint
+    juce::Viewport view;
+    Body bodyComp;
     juce::TextButton closeBtn;
     juce::ComponentDragger dragger;
     juce::ComponentBoundsConstrainer constrainer;

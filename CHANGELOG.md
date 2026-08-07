@@ -10,7 +10,19 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.3] – 2026-08-07
+
+Collects everything released as v2026.08.0 – v2026.08.3 (the automated
+per-merge releases; the CHANGELOG is promoted in the release PR, not along
+the way).
+
 ### Changed
+- **Help text for the on-screen KEYBOARD** now explains why some three-note
+  chords do not sound on the computer keyboard: ordinary keyboards scan their
+  keys in a matrix without per-key diodes, so certain triples are ambiguous
+  and the controller reports nothing at all — the third note never reaches any
+  application. Shifting the octave moves the notes onto different physical
+  keys; chords (and anything velocity-layered) want a MIDI keyboard.
 - **JUCE 8.0.14 → 9.0.0.** JASS uses none of the APIs the major version breaks
   (no Drawable/SVG, no typeface-metrics calls, no multi-touch, no OpenGL), so
   the upgrade is a clean submodule bump — full rebuild passes with zero
@@ -18,6 +30,22 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   the rack UI draws with.
 
 ### Fixed
+- **Help text was too small to read, and long texts were cut off.** The panel
+  is a child of the editor and inherited its display-fit down-scale, which
+  rendered 14 pt body type at about 9 pt. It now cancels that transform and
+  draws at true pixel size. Placement had to be corrected along with it: JUCE
+  transforms a component's *whole* bounds, position included, so the magnified
+  panel was pushed off the bottom right by the same factor and lost its last
+  lines. A long text (MOD MATRIX, KEYBOARD) now gets a wider panel — up to
+  760 px, fewer wrapped lines — and scrolls if it still exceeds the window.
+- **The window changed size on every preset change.** Loading a preset reveals
+  the modules it enables, and the display-fit down-scale was derived from the
+  rack that happened to be visible — so a preset with more modules made the
+  rack taller, the scale smaller and the whole window (width included) shrink,
+  then grow back on the next preset. The scale is now computed once from the
+  worst-case rack (`Rack::maxHeight()`, i.e. every module visible) and kept for
+  the session: window width and module size are constant, only the height still
+  follows the visible content.
 - **Stereo samples comb-filtered in the Stereo-Pan output mode** ("metallic" tone on
   some piano keys): the sampler's L/R sub-sources sat at pan ±0.5, so equal-power
   panning mixed 38% of the opposite microphone channel into each ear — a coherent

@@ -1,0 +1,63 @@
+# JASS — project rules
+
+Read this file at the start of every session. It only carries the rules that
+are easy to get wrong; the full picture is in [`docs/`](docs/) — start with
+[`DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) and
+[`ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Language
+
+- **Every artefact in this repository is written in English**: commit
+  messages, pull-request titles *and* descriptions, code comments, and the
+  documents under `docs/`.
+- Two deliberate exceptions: [`docs/Glossary.md`](docs/Glossary.md) is
+  German, and the in-app help ships in both languages (`Help/*_DE.md`,
+  `Help/*_EN.md`).
+- Talking to the maintainer is a separate matter — that conversation is in
+  German.
+
+## Writing for the app
+
+- **In-app help (`Resources/EN`, `Resources/DE`) is terse.** Two or three
+  short paragraphs and bullet lists, phrased for a player at the instrument —
+  not prose that explains the background. If a limitation needs a paragraph to
+  justify itself, state the effect and the way out, and drop the reasoning.
+- Both languages carry the same content; write them in one pass.
+
+## Git workflow
+
+- Feature branch → PR → `develop`; the release PR then goes `develop` →
+  `main`. **Never push to `main` directly**; enable the guard once per clone
+  with `git config core.hooksPath .githooks`.
+- **Never push or merge on your own initiative.** Commit locally, then let
+  the maintainer decide — including `gh pr merge`.
+- Commit messages follow Conventional Commits (`fix(ui): …`,
+  `feat(sampler): …`, `docs(readme): …`).
+- No AI attribution anywhere — no `Co-Authored-By`, no "Generated with"
+  lines in commits or PRs.
+- Every user-visible change gets a [`CHANGELOG.md`](CHANGELOG.md) entry
+  under `## [Unreleased]`, carrying the *reasoning*, not just the what. It is
+  promoted to a `YYYY.MM.MICRO` section by the release PR.
+- On Windows PowerShell, keep **double quotes out of commit-message text** —
+  they split the native argument and git fails with "pathspec did not match".
+  Use single quotes inside the message.
+
+## Build & verify
+
+- CMake is not on `PATH`; build with MSBuild directly:
+
+  ```powershell
+  & 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe' `
+      'build\JASS_Standalone.vcxproj' /t:Rebuild /p:Configuration=Release /p:Platform=x64 `
+      /m /nodeReuse:false /v:minimal
+  ```
+
+- Use `/t:Rebuild` whenever a header changed. Core structs are embedded by
+  value in `SynthVoice`, so an incremental build can leave an ODR/ABI
+  mismatch behind that crashes at startup (0xC0000005).
+- New resource `.md` files need a CMake reconfigure plus a rebuild of the
+  help targets (`/t:Rebuild /nodeReuse:false`), otherwise the link fails with
+  LNK1236.
+- **There is no unit-test rig.** Verification means: it builds, the app runs,
+  and the maintainer confirms what they see and hear. Say so plainly when a
+  change is only build-verified.
