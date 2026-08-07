@@ -11,6 +11,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Changed
+- **Help text for the on-screen KEYBOARD** now explains why some three-note
+  chords do not sound on the computer keyboard: ordinary keyboards scan their
+  keys in a matrix without per-key diodes, so certain triples are ambiguous
+  and the controller reports nothing at all — the third note never reaches any
+  application. Shifting the octave moves the notes onto different physical
+  keys; chords (and anything velocity-layered) want a MIDI keyboard.
 - **JUCE 8.0.14 → 9.0.0.** JASS uses none of the APIs the major version breaks
   (no Drawable/SVG, no typeface-metrics calls, no multi-touch, no OpenGL), so
   the upgrade is a clean submodule bump — full rebuild passes with zero
