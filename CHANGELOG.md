@@ -24,6 +24,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   the rack UI draws with.
 
 ### Fixed
+- **Help text was too small to read, and long texts were cut off.** The panel
+  is a child of the editor and inherited its display-fit down-scale, which
+  rendered 14 pt body type at about 9 pt. It now cancels that transform and
+  draws at true pixel size. Placement had to be corrected along with it: JUCE
+  transforms a component's *whole* bounds, position included, so the magnified
+  panel was pushed off the bottom right by the same factor and lost its last
+  lines. A long text (MOD MATRIX, KEYBOARD) now gets a wider panel — up to
+  760 px, fewer wrapped lines — and scrolls if it still exceeds the window.
 - **The window changed size on every preset change.** Loading a preset reveals
   the modules it enables, and the display-fit down-scale was derived from the
   rack that happened to be visible — so a preset with more modules made the
