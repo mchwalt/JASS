@@ -540,6 +540,20 @@ namespace rack
         return const_cast<Rack*> (this)->layout (width, /*apply*/ false);
     }
 
+    int Rack::maxHeight (int width) const
+    {
+        // Measure the fully-populated rack: flip every entry visible, measure (apply == false,
+        // so nothing on screen moves), then put the real visibility back. Same const_cast-free
+        // reasoning as preferredHeight() — layout() only writes member scratch when applying.
+        auto* self  = const_cast<Rack*> (this);
+        auto  saved = self->layoutModel;
+        for (auto& e : self->layoutModel)
+            e.visible = true;
+        const int h = self->layout (width, /*apply*/ false);
+        self->layoutModel = std::move (saved);
+        return h;
+    }
+
     int Rack::layout (int width, bool apply)
     {
         if (apply)

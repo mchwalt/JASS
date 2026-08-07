@@ -444,14 +444,18 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         // Live-update an already-open panel (module OR zone help).
         if (helpPanel && helpPanel->isVisible() && currentHelpId.isNotEmpty() && rackBody)
         {
+            // Re-fit, not just re-fill: the other language's text wraps differently, so the
+            // panel's width/magnification have to be chosen again (see fitHelpContent).
+            const auto pos = helpPanel->getBoundsInParent().getPosition();   // transformed position
             if (auto* f = rackBody->moduleById(currentHelpId))
-                helpPanel->setContent(f->moduleTitle(),
-                                      HelpTextStore::instance().get(f->helpId(), currentLang));
+                fitHelpContent(f->moduleTitle(),
+                               HelpTextStore::instance().get(f->helpId(), currentLang));
             else if (currentHelpId.startsWith("zone-"))   // a group's help is showing
                 for (auto z : rackBody->zones())
                     if (rack::Rack::zoneHelpId(z) == currentHelpId)
-                        helpPanel->setContent(rack::Rack::zoneName(z),
-                                              HelpTextStore::instance().get(currentHelpId, currentLang));
+                        fitHelpContent(rack::Rack::zoneName(z),
+                                       HelpTextStore::instance().get(currentHelpId, currentLang));
+            placeHelpPanel(pos.x, pos.y);   // keep it where the user left it, but back in bounds
         }
     };
     addAndMakeVisible(langBox);
@@ -592,8 +596,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 void SynthyEditor::refitHeight()
 {
     // Fixed design width; height follows the rack's visible content so the full rack always
-    // fits without scrolling. The auto-fit-down transform scales the whole editor on smaller
-    // displays. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
+    // fits without scrolling. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
     constexpr int kDesignW    = 1520;
     constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
     constexpr int kBodyBottom = 0;    // no reserved band — the keyboard is a rack module now
@@ -601,20 +604,30 @@ void SynthyEditor::refitHeight()
     const int rackW = kDesignW - 2 * kMargin;
     const int rackH = rackBody ? rackBody->preferredHeight(rackW) : 800;
     const int designH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
-    setSize(kDesignW, designH);
 
-    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    // The display-fit down-scale is computed ONCE, from the WORST-CASE rack (every module
+    // visible) — not from what is on screen right now. Deriving it from the current content
+    // made the whole editor (width included) grow and shrink on every preset change, because
+    // a preset reveals the modules it enables: visibly jumpy. One fixed scale trades a little
+    // size for a window that never moves. Cached: the inputs cannot change while we run.
+    if (fitScale <= 0.0)
     {
-        const auto ua = disp->userBounds;        // excludes the taskbar
-        const double chrome = 90.0;              // title bar + a little breathing room
-        const double sH = (ua.getHeight() - chrome) / (double) designH;
-        const double sW =  ua.getWidth()            / (double) kDesignW;
-        const double scale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
-        // Reset to identity when no scaling is needed, so re-fitting to a shorter rack on a
-        // large display clears any transform set for an earlier, taller layout.
-        setTransform(scale < 0.999 ? juce::AffineTransform::scale((float) scale)
-                                   : juce::AffineTransform());
+        fitScale = 1.0;
+        if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        {
+            const auto ua = disp->userBounds;        // excludes the taskbar
+            const double chrome = 90.0;              // title bar + a little breathing room
+            const int worstRackH = rackBody ? rackBody->maxHeight(rackW) : rackH;
+            const int worstH = juce::jmax(1015, worstRackH + kBodyTop + kBodyBottom + 2 * kMargin);
+            const double sH = (ua.getHeight() - chrome) / (double) worstH;
+            const double sW =  ua.getWidth()            / (double) kDesignW;
+            fitScale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
+        }
+        setTransform(fitScale < 0.999 ? juce::AffineTransform::scale((float) fitScale)
+                                      : juce::AffineTransform());
     }
+
+    setSize(kDesignW, designH);
 }
 
 void SynthyEditor::showModulesMenu()
@@ -1026,6 +1039,58 @@ void SpinningTitle3D::paint(juce::Graphics& g)
                subArea.toNearestInt(), juce::Justification::centred);
 }
 
+// The editor carries a display-fit down-scale (AD-12) that shrinks EVERY child — on a 1440 px
+// display that is 0.65, which renders the panel's 14 pt body type at about 9 pt: help you need
+// reading glasses for. The panel is a plain overlay, so it can simply cancel the transform and
+// draw at true pixel size. Both helpers below exist so the two callers agree on the size the
+// panel actually occupies on screen (kWidth is its UNSCALED width).
+// Fill the panel and pick the geometry it is shown at. Text size stays at full magnification —
+// readability is the whole point of opting out of the auto-fit scale. What varies is the shape:
+// a long text (MOD MATRIX, KEYBOARD) is first given a WIDER panel, since fewer wrapped lines
+// make it shorter and this design has width to spare. Whatever is still too tall for the window
+// scrolls inside the panel, so nothing is ever cut off at the bottom.
+void SynthyEditor::fitHelpContent(const juce::String& title, const juce::String& body)
+{
+    helpScale = (fitScale > 0.0) ? 1.0 / fitScale : 1.0;
+
+    // Cap in the panel's OWN coordinates: it is drawn magnified by helpScale, so the window
+    // height it may occupy has to be divided by that factor.
+    const int availH    = juce::jmax(200, getHeight() - 8 - 80);   // 80 = keyboard clearance
+    const int maxPanelH = juce::jmax(120, (int) (availH / helpScale));
+
+    for (const int w : { HelpPanel::kWidth, 480, 620, 760 })
+        if (helpPanel->setContent(title, body, w, maxPanelH))
+            return;   // fits without scrolling at this width
+    // Still longer than the window even at 760 px: the panel stays at that width and scrolls.
+}
+
+int SynthyEditor::helpPanelWidthOnScreen() const
+{
+    return juce::roundToInt((helpPanel != nullptr ? helpPanel->getWidth() : HelpPanel::kWidth)
+                            * helpScale);
+}
+
+void SynthyEditor::placeHelpPanel(int wantX, int wantY)
+{
+    if (helpPanel == nullptr) return;
+
+    helpPanel->setTransform(helpScale > 1.001 ? juce::AffineTransform::scale((float) helpScale)
+                                              : juce::AffineTransform());
+    // Clamp against the size the panel occupies AFTER its own transform, or a scaled-up panel
+    // would hang off the right/bottom edge.
+    const int effW = juce::roundToInt(helpPanel->getWidth()  * helpScale);
+    const int effH = juce::roundToInt(helpPanel->getHeight() * helpScale);
+    const int maxX = juce::jmax(8, getWidth()  - effW - 8);
+    const int maxY = juce::jmax(8, getHeight() - effH - 80);   // keep clear of the keyboard
+    const int x    = juce::jlimit(8, maxX, wantX);
+    const int y    = juce::jlimit(8, maxY, wantY);
+    // JUCE transforms a component's WHOLE bounds — position included (getBoundsInParent()), so
+    // a scale of 1.54 would also multiply x/y and push the panel off the bottom right. Feed it
+    // the pre-image of the position we want, exactly as JUCE's own setCentrePosition() does.
+    helpPanel->setTopLeftPosition(juce::roundToInt(x / helpScale),
+                                  juce::roundToInt(y / helpScale));
+}
+
 void SynthyEditor::showModuleHelp(const juce::String& id)
 {
     if (helpPanel == nullptr || rackBody == nullptr)
@@ -1041,23 +1106,22 @@ void SynthyEditor::showModuleHelp(const juce::String& id)
     auto* f = rackBody->moduleById(id);
     const juce::String title  = (f != nullptr) ? f->moduleTitle() : id;
     const juce::String helpId = (f != nullptr) ? f->helpId()      : id;   // may alias (LFO 1..4 => "lfo")
-    helpPanel->setContent(title, HelpTextStore::instance().get(helpId, currentLang));   // sets size first
+    fitHelpContent(title, HelpTextStore::instance().get(helpId, currentLang));   // sets size first
     currentHelpId = id;
 
     // Anchor beside the clicked module: to its right if there's room, else to its left,
     // aligned to its top — then clamp fully inside the editor (above the keyboard band).
-    int x = getWidth() / 2 - HelpPanel::kWidth / 2, y = 90;
+    const int panelW = helpPanelWidthOnScreen();
+    int x = getWidth() / 2 - panelW / 2, y = 90;
     if (f != nullptr)
     {
         auto tl = getLocalPoint(f, juce::Point<int>(0, 0));   // module top-left in editor coords
         x = tl.x + f->getWidth() + 8;
-        if (x + HelpPanel::kWidth > getWidth() - 8)
-            x = tl.x - HelpPanel::kWidth - 8;                 // no room right → place left
+        if (x + panelW > getWidth() - 8)
+            x = tl.x - panelW - 8;                            // no room right → place left
         y = tl.y;
     }
-    const int maxX = juce::jmax(8, getWidth()  - HelpPanel::kWidth        - 8);
-    const int maxY = juce::jmax(8, getHeight() - helpPanel->getHeight()   - 80);   // keep clear of keyboard
-    helpPanel->setTopLeftPosition(juce::jlimit(8, maxX, x), juce::jlimit(8, maxY, y));
+    placeHelpPanel(x, y);
 
     helpPanel->setVisible(true);
     helpPanel->toFront(false);   // false = do NOT steal keyboard focus (keeps the on-screen
@@ -1080,25 +1144,24 @@ void SynthyEditor::showZoneHelp(rack::Rack::Zone zone)
     }
 
     // Panel title = the group name; content = the zone's help text in the active language.
-    helpPanel->setContent(rack::Rack::zoneName(zone),
-                          HelpTextStore::instance().get(helpId, currentLang));
+    fitHelpContent(rack::Rack::zoneName(zone),
+                   HelpTextStore::instance().get(helpId, currentLang));
     currentHelpId = helpId;
 
     // Anchor beside the clicked info icon (it sits at the header's right edge): place the panel
     // to its LEFT, just below the header row; fall back to the right if there's no room left.
-    int x = getWidth() / 2 - HelpPanel::kWidth / 2, y = 96;
+    const int panelW = helpPanelWidthOnScreen();
+    int x = getWidth() / 2 - panelW / 2, y = 96;
     if (rackBody != nullptr)
         if (auto* anchor = rackBody->zoneInfoButton(zone))
         {
             auto tl = getLocalPoint(anchor, juce::Point<int>(0, 0));
-            x = tl.x - HelpPanel::kWidth - 8;
+            x = tl.x - panelW - 8;
             if (x < 8)
                 x = tl.x + anchor->getWidth() + 8;
             y = tl.y + anchor->getHeight() + 6;
         }
-    const int maxX = juce::jmax(8, getWidth()  - HelpPanel::kWidth      - 8);
-    const int maxY = juce::jmax(8, getHeight() - helpPanel->getHeight() - 80);
-    helpPanel->setTopLeftPosition(juce::jlimit(8, maxX, x), juce::jlimit(8, maxY, y));
+    placeHelpPanel(x, y);
 
     helpPanel->setVisible(true);
     helpPanel->toFront(false);

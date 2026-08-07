@@ -1,6 +1,10 @@
 # Story 12.4: SAMPLER amp envelope (per-zone release)
 
-Status: implemented 2026-08-04 (pending user listening test)
+Status: **done** — implemented 2026-08-04, user listening test passed 2026-08-07 (fast playing /
+re-strike, tail with the ENVELOPE module off, REL fallback on the folder sets; earlier that week:
+comb-filter tone gone, Salamander tail, A3/A4 quirk accepted). **Sustain pedal (scope item 4) was
+NOT verified and will not be** — the user has no pedal. Nothing was built for it either: JUCE
+holds the note-offs while CC64 is down, so the release ramp simply starts at pedal-up.
 
 <!-- User insight while playing the Iowa/Splendid pianos: "vermutlich braucht man für Piano
      separate ADSR … die eine Standard-ADSR-Hüllkurve taugt für diesen komplexen Klang nicht."
