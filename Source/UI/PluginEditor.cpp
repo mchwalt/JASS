@@ -723,6 +723,17 @@ void SynthyEditor::timerCallback()
         modalWasOpen = modalOpen;
     }
 
+    // Story 12.6: the sample sets are preloaded on a background thread, so the SET combo has to
+    // pick up entries as they land. Edge-triggered on the set COUNT — a plain int compare per
+    // tick, and the re-list only happens while sets are still arriving (a few times at startup).
+    if (const int sets = SampleBankStore::instance().getNumSets(); sets != shownSampleSets)
+    {
+        shownSampleSets = sets;
+        if (rackBody)
+            if (auto* f = rackBody->moduleById("sampler"))
+                f->refreshCombo(Parameters::ID::samplerSet);
+    }
+
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
     if (rackBody)
         rackBody->updateLiveFeed(feed, ratio);
@@ -1414,6 +1425,9 @@ void SynthyEditor::buildRack()
         // single-sample set never flips anything back — loops keep their setting.
         auto oneShotForMappedSet = [this] (int setIdx)
         {
+            // Picking a set by hand ends any pending restore (12.6): the user's choice is the
+            // one that must be saved, not the set a preset was still waiting for.
+            PresetIO::pendingSamplerSetName.clear();
             const auto* s = SampleBankStore::instance().getSet (setIdx);
             if (s != nullptr && s->isMapped())
             {
@@ -1470,6 +1484,30 @@ void SynthyEditor::buildRack()
         };
         // ROOT applies only to single samples — a mapped (multisample) set carries its own root
         // per zone, so the knob dims (per-knob relevance, like STEREO's WIDTH/TIME).
+        // 12.4: the sampler's own note-off fade — the fallback for zones whose .sfz brought no
+        // ampeg_release (those always win). When the loaded set carries one on EVERY zone, the
+        // knob cannot change anything: it then dims like ROOT does for mapped sets, and — user
+        // request 2026-08-08 — displays the release the instrument actually plays instead of its
+        // own inert value. Decoupled display (toDisplay/fromDisplay), so the shown number follows
+        // the SET; fromDisplay is identity because a dimmed knob cannot be dragged anyway.
+        Knob relKnob = K(P::samplerRelease, "REL");
+        auto currentSampleSet = [this]
+        {
+            return SampleBankStore::instance().getSet(
+                static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::samplerSet)));
+        };
+        relKnob.activeWhen = [currentSampleSet]
+        {
+            const auto* s = currentSampleSet();
+            return s == nullptr || ! s->ownsRelease();
+        };
+        relKnob.toDisplay = [currentSampleSet](double base, double)
+        {
+            const auto* s = currentSampleSet();
+            return (s != nullptr && s->ownsRelease()) ? (double) s->typicalRelease() : base;
+        };
+        relKnob.fromDisplay = [](double shown, double) { return shown; };
+
         Knob rootKnob = K(P::samplerRoot, "ROOT");
         rootKnob.activeWhen = [this]
         {
@@ -1493,9 +1531,7 @@ void SynthyEditor::buildRack()
             Toggle{ P::samplerStretch, "STRETCH" },
             rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
             K(P::samplerSpeed, "SPEED"),
-            // 12.4: the sampler's own note-off fade — fallback for zones without an .sfz
-            // ampeg_release (those win); 0 = off (pre-12.4 behaviour).
-            K(P::samplerRelease, "REL"),
+            relKnob,
             Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));
