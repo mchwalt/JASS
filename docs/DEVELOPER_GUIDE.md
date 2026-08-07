@@ -235,7 +235,9 @@ Two independent version numbers — don't conflate them:
   the what, and note "FormatVersion stays N / append-only" for additive
   features.
 - **Commits**: English, Conventional-Commit style (`feat(sampler): …`,
-  `docs(readme): …`, `chore(version): …`).
+  `docs(readme): …`, `chore(version): …`). **PR titles and descriptions are
+  English too** — as is every artefact in this repo (see
+  [`CLAUDE.md`](../CLAUDE.md) for the short version of the house rules).
 - `.gitattributes`: `* text=auto`; `*.sh` and `.githooks/**` forced LF;
   `*.wav`, `*.jass`, images marked binary.
 - `.gitignore` highlights: `/build/`, `.vs/`, `.claude/settings.local.json`,
