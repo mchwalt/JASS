@@ -10,6 +10,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.3] – 2026-08-07
+
+Collects everything released as v2026.08.0 – v2026.08.3 (the automated
+per-merge releases; the CHANGELOG is promoted in the release PR, not along
+the way).
+
 ### Changed
 - **Help text for the on-screen KEYBOARD** now explains why some three-note
   chords do not sound on the computer keyboard: ordinary keyboards scan their
