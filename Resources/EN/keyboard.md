@@ -11,6 +11,6 @@ Play across the full width of the letter keys: the **home row** (`a s d f g h j 
 
 The keyboard must have focus for the letter keys to sound (it grabs focus on launch; click it once if the keys stop responding).
 
-**Chords on the computer keyboard**
+**Chords**
 
-Ordinary keyboards cannot report every three-key combination: their keys sit in a scan matrix without one diode per key, so certain triples are ambiguous and the controller reports nothing rather than a phantom key — the third note simply never arrives (you can reproduce it in any text editor). Which combinations are affected depends on the keyboard model. Shift the octave with the arrow keys to move the notes onto different physical keys, or play chords through a MIDI keyboard — which is what the computer keys are a stand-in for. They also send one fixed velocity, so velocity-layered instruments need real MIDI input.
+Ordinary keyboards drop some three-key combinations — the third note never arrives. Shift the octave, or play chords over MIDI; the letter keys also send one fixed velocity.
