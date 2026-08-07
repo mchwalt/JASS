@@ -18,6 +18,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   the rack UI draws with.
 
 ### Fixed
+- **The window changed size on every preset change.** Loading a preset reveals
+  the modules it enables, and the display-fit down-scale was derived from the
+  rack that happened to be visible — so a preset with more modules made the
+  rack taller, the scale smaller and the whole window (width included) shrink,
+  then grow back on the next preset. The scale is now computed once from the
+  worst-case rack (`Rack::maxHeight()`, i.e. every module visible) and kept for
+  the session: window width and module size are constant, only the height still
+  follows the visible content.
 - **Stereo samples comb-filtered in the Stereo-Pan output mode** ("metallic" tone on
   some piano keys): the sampler's L/R sub-sources sat at pan ±0.5, so equal-power
   panning mixed 38% of the opposite microphone channel into each ear — a coherent
