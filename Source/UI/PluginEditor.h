@@ -203,6 +203,7 @@ private:
     // components (ADSR curve, scope, spectrum, preset bank) that the rack's ModuleFrames reference
     // by raw pointer. rackBody MUST be declared AFTER rackOwned so it is destroyed FIRST — otherwise
     // the frames would dangle over already-freed Displays during teardown.
+    int shownSampleSets = -1;   // set count the SET combo was last listed with (12.6 background preload)
     juce::OwnedArray<juce::Component> rackOwned;   // owns the rack's Display components (ADSR curve, scope, spectrum)
     std::unique_ptr<rack::Rack> rackBody;
     void buildRack();
