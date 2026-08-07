@@ -1,9 +1,10 @@
 # Story 12.5: SAMPLER velocity layers
 
-Status: implemented 2026-08-04 — USER EAR TEST DEFERRED (MIDI keyboard not connectable at the
-time; AC1/AC2/AC5 need real velocity input). Packs-v2 zips + piano-pack release update follow
-after the test. Both 4-layer sets are installed locally (Splendid 1461 s / Salamander 1671 s,
-together ≈1.2 GB decoded — watch the startup preload time; if it hurts → lazy loading = 12.6).
+Status: **done** — implemented 2026-08-04, user ear test passed 2026-08-07 with a real MIDI
+keyboard (AC1/AC2/AC5: "works as expected, velocity included"). Packs v2 + the `piano-pack-v2`
+release shipped 2026-08-04. Both 4-layer sets are installed locally (Splendid 1461 s /
+Salamander 1671 s, together ≈1.2 GB decoded); the startup preload time was not reported as
+painful, so lazy loading (12.6) stays optional.
 
 ## Story
 
