@@ -86,6 +86,16 @@ public:
     // Poly-glide: shared read-only info filled by the processor each block (see GlideInfo).
     void setGlideInfo(const GlideInfo* g) { glideInfo = g; }
 
+    // --- VOICE module (Story 14.1) ------------------------------------------------------
+    // The two knob values, written per block by applyToVoice. Both 0 => nothing happens and
+    // the engine is bit-identical to pre-14.1 (AC1).
+    float& getVoiceHumanizeRef() { return voiceHumanize; }
+    float& getVoiceDriftRef()    { return voiceDrift; }
+    // The auto-play drone takes DRIFT but not HUMANIZE (design decision D6): it is started
+    // once and would otherwise sit permanently detuned, and it doubles as the pitch reference
+    // while a sound is being dialled in. Set by the processor around the drone's note-on.
+    void setDroneNote(bool b) { droneNote = b; }
+
 private:
     Oscillator oscillators[3];
     Oscillator subOsc;            // sub-oscillator: tracks OSC1 pitch, octave(s) down
@@ -133,6 +143,20 @@ private:
     ModSlot modSlots[ModMatrixConfig::kNumSlots];
     bool    modMatrixOn = true;    // false => explicit slots ignored (implicit LFO routing still applies)
     float   noteVelocity = 1.0f;   // MIDI velocity 0..1 (Velocity mod source)
+
+    // VOICE — per-voice error (Story 14.1). `voiceRandom` is drawn once per note (the
+    // VoiceRandom source, like noteVelocity a per-note constant); `voiceDriftVal` is the slow
+    // free-running movement (the VoiceDrift source), advanced once per block. Each voice keeps
+    // its OWN rate and phase so voices never lock into a common vibrato. The RNG is a member:
+    // drawing on the audio thread must not allocate or lock (epic 11).
+    juce::Random voiceRng;
+    float  voiceHumanize = 0.0f;   // knob 0..1 (per block from applyToVoice)
+    float  voiceDrift    = 0.0f;   // knob 0..1
+    float  voiceRandom   = 0.0f;   // this note's draw, -1..+1
+    float  voiceDriftVal = 0.0f;   // current drift value, -1..+1
+    double driftPhase = 0.0;       // radians
+    double driftInc   = 0.0;       // radians per sample (0.05–0.5 Hz, drawn per note)
+    bool   droneNote  = false;     // D6: no HUMANIZE on the auto-play drone
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

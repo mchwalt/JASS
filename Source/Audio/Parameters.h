@@ -224,6 +224,11 @@ namespace Parameters
         constexpr const char* samplerStretch = "samplerStretch";   // 12.3: pitch/time decoupling on/off
         constexpr const char* samplerRelease = "samplerRelease";   // 12.4: note-off fade fallback (s); 0 = off
 
+        // VOICE — per-voice error (Story 14.1). Both 0 = off ⇒ engine bit-identical to pre-14.1.
+        constexpr const char* voiceOn       = "voiceOn";
+        constexpr const char* voiceHumanize = "voiceHumanize";   // per-NOTE draw (pitch ±8 ct, start phase)
+        constexpr const char* voiceDrift    = "voiceDrift";      // slow per-VOICE movement (0.05–0.5 Hz)
+
         // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
         // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
         // so only this enabler is an APVTS param. Append-only, default true.
@@ -278,8 +283,17 @@ namespace Parameters
                               PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
                               ModSlot* modSlots, bool& modMatrixOn,
                               int& outputModeOut, float* generatorPanOut,   // Epic 10: output mode + 7 pans
+                              float& voiceHumanizeOut, float& voiceDriftOut,   // Story 14.1: VOICE knobs
                               const double* lfoRateHz, double delayTimeSec)
     {
+        // VOICE (14.1): both knobs are gated by the module's enable, so switching VOICE off is
+        // the same as turning both down — and 0 means the voice's pitch factor is exactly 1.0.
+        {
+            const bool on = *apvts.getRawParameterValue(ID::voiceOn) > 0.5f;
+            voiceHumanizeOut = on ? apvts.getRawParameterValue(ID::voiceHumanize)->load() : 0.0f;
+            voiceDriftOut    = on ? apvts.getRawParameterValue(ID::voiceDrift)->load()    : 0.0f;
+        }
+
         // Modulation matrix (Story 8.1): read the master enable + N slots into the voice.
         modMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f;
         for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)

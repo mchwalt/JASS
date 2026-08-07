@@ -1551,6 +1551,7 @@ void SynthyEditor::buildRack()
     addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
+    addRackModule(makeModuleDescriptor(Modules::voice()));   // Story 14.1: per-voice HUMANIZE / DRIFT
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
     // which a static spec can't capture). Lit = mixModeOn AND both SELECTED operand OSCs enabled.
     {

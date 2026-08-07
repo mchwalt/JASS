@@ -31,6 +31,7 @@
 #include "DisplaySpecs.h"
 #include "PresetBankSpecs.h"
 #include "SamplerSpecs.h"
+#include "VoiceSpecs.h"
 
 namespace Modules
 {
@@ -44,6 +45,7 @@ namespace Modules
             string(), wavetable(), adsr(), oscilloscope(), spectrum(), keyboard(),
             presetBank(),   // appended LAST: keeps APVTS param order append-only (UI order comes from buildRack)
             sampler(),      // Story 12.1 — appended after presetBank for the same reason
+            voice(),        // Story 14.1 — appended last, same append-only reason
         };
     }
 }

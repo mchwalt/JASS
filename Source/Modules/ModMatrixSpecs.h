@@ -19,7 +19,9 @@ namespace Modules
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W24H2;
 
-        const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
+        // MUST mirror ModSource exactly (the attachment maps by INDEX) and stays append-only.
+        const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4",
+                                      "Voice Rnd", "Voice Drift" };   // 14.1, appended
         juce::StringArray mod;   // MOD labels — generated from the single source (ModMatrixCatalog.h)
         for (int i = 0; i < ModDest::kNumModules; ++i) mod.add (ModDest::moduleLabel (i));
 

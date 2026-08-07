@@ -27,7 +27,8 @@ namespace PresetIO
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
     inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
     inline const juce::StringArray kGlideMode   { "Mono", "Poly" };        // Feature 4 (append-only; C# ignores)
-    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2", "LFO3", "LFO4" };   // Epic 8 (append-only)
+    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2", "LFO3", "LFO4",
+                                                  "VoiceRandom", "VoiceDrift" };   // Epic 8 (append-only); 14.1 appended the two voice sources
     // Mod-matrix MODULE names — generated from the single source (ModMatrixCatalog.h). Index == ModDest.
     inline const juce::StringArray kModModule = [] { juce::StringArray a;
         for (int i = 0; i < ModDest::kNumModules; ++i) a.add (ModDest::moduleLabel (i)); return a; }();

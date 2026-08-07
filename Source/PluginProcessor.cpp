@@ -251,6 +251,9 @@ namespace
             case ModSource::LFO2:     return ID::lfoOn (2);
             case ModSource::LFO3:     return ID::lfoOn (3);
             case ModSource::LFO4:     return ID::lfoOn (4);
+            // 14.1: both voice sources come out of the VOICE module — routing one enables it.
+            case ModSource::VoiceRandom:
+            case ModSource::VoiceDrift: return ID::voiceOn;
         }
         return {};
     }
@@ -830,6 +833,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getPitchEnvOnRef(),
                                      voice->getModSlots(), voice->getModMatrixOnRef(),
                                      voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
+                                     voice->getVoiceHumanizeRef(), voice->getVoiceDriftRef(),   // 14.1
                                      lfoRateHz, delayTimeSec);
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
@@ -877,7 +881,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)
             if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
+            {
                 v->setPluckEnabled(false);
+                v->setDroneNote(true);    // 14.1: the drone takes DRIFT but not HUMANIZE (D6)
+            }
 
     // Manual PLUCK (button / spacebar): re-excite the Karplus string on every voice.
     // RT-safe — the atomic flag is set on the message thread and consumed here.
@@ -977,7 +984,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)
             if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
+            {
                 v->setPluckEnabled(true);
+                v->setDroneNote(false);
+            }
 
     // Advance the display-only LFO so the editor can draw live modulation rings.
     // Mirrors the patch LFO params; runs regardless of whether a note sounds.

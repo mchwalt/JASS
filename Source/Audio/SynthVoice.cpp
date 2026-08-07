@@ -62,9 +62,24 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
         glideRatio.setCurrentAndTargetValue(transposeRatio);
     }
 
+    // VOICE (14.1): this note's own error. The draw itself is unconditional and cheap — the
+    // KNOBS decide whether any of it is audible, so a patch with both at 0 is unchanged.
+    // The drone draws nothing (D6): started once, it would sit permanently detuned, and it is
+    // the pitch reference while a sound is being dialled in.
+    voiceRandom = droneNote ? 0.0f : (voiceRng.nextFloat() * 2.0f - 1.0f);
+    // Own rate (0.05–0.5 Hz) and own starting phase per voice: a shared rate would turn drift
+    // into a chorus-like common vibrato, which is exactly what this is not supposed to be.
+    driftInc   = (0.05 + 0.45 * voiceRng.nextDouble()) * juce::MathConstants<double>::twoPi
+               / juce::jmax (1.0, currentSampleRate);
+    driftPhase = voiceRng.nextDouble() * juce::MathConstants<double>::twoPi;
+
+    // Start phase is the second half of HUMANIZE (D2): two voices of the same chord starting at
+    // phase 0 partly cancel into a single, static-sounding tone.
+    const double startPhase = (droneNote || voiceHumanize <= 0.0f)
+                            ? 0.0 : voiceRng.nextDouble() * voiceHumanize;
     for (auto& osc : oscillators)
-        osc.reset();
-    subOsc.reset();
+        osc.resetToPhase (startPhase);
+    subOsc.resetToPhase (startPhase);
     for (auto& l : lfos) l.reset();
     noise.reset();
     wavetable.reset();
@@ -200,6 +215,24 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Sub-oscillator octave multiplier (constant across the block).
     const double subMul = std::pow(2.0, subOctave);
 
+    // --- VOICE: per-voice error (Story 14.1) ---------------------------------
+    // DRIFT advances once per BLOCK, not per sample: at 0.05–0.5 Hz a block is a fraction of a
+    // degree, and a per-sample sine would cost more than the effect is worth. The knobs are read
+    // here (not frozen at note-on), so turning them while a note sounds is audible immediately.
+    driftPhase += driftInc * numSamples;
+    if (driftPhase > juce::MathConstants<double>::twoPi)
+        driftPhase -= juce::MathConstants<double>::twoPi;
+    voiceDriftVal = (float) std::sin (driftPhase);
+    // Cents → ratio, both contributions summed in cent space. Exactly 1.0 when both knobs are 0,
+    // which is what keeps an untouched patch bit-identical (AC1).
+    // Full scale: ±25 cents of per-note detune and ±12 cents of drift (raised from 8/3 after
+    // the first listening test — a twelfth of a semitone is inaudible between the DIFFERENT
+    // notes of a chord, which is exactly where this is supposed to work). A quarter turn still
+    // gives the subtle setting; the top of the range is meant to sound like an old analogue.
+    const double voiceCents = voiceRandom   * 25.0 * (double) voiceHumanize
+                            + voiceDriftVal * 12.0 * (double) voiceDrift;
+    const double voicePitchFactor = (voiceCents == 0.0) ? 1.0 : std::pow (2.0, voiceCents / 1200.0);
+
     // --- Modulation matrix (Story 8.1) ---------------------------------------
     // Which targets receive ANY routing this block: the LFO's own (implicit) target plus
     // every active slot's target. Only these get their per-sample offset applied, so an
@@ -331,7 +364,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // Poly-glide: the pitch ratio glides toward the target (== target once finished /
         // when glide is off). Oscillator frequencies are (re)applied every sample so both
         // the glide and the frequency modulation take effect.
-        const double ratio = glideRatio.getNextValue();
+        // VOICE (14.1): the per-voice pitch error rides on top of the glide ratio — HUMANIZE as
+        // a per-note constant (±8 cents at full), DRIFT as slow movement (±3 cents at full, the
+        // scale of an analogue oscillator wandering). Both knobs at 0 ⇒ factor exactly 1.0.
+        const double ratio = glideRatio.getNextValue() * voicePitchFactor;
 
         // Modulation sources this sample. lfo.process() advances the shared LFO ONCE (its
         // value feeds both the implicit LFO routing and any slot whose source is LFO 1).
@@ -349,6 +385,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         std::array<float, ModMatrixConfig::kNumSources> srcVals {};
         srcVals[(size_t) ModSource::Envelope] = envSource;
         srcVals[(size_t) ModSource::Velocity] = noteVelocity;
+        // 14.1: the two voice sources. Available to the matrix regardless of the knobs — routing
+        // one is a deliberate act, and the knobs only govern the built-in pitch application.
+        srcVals[(size_t) ModSource::VoiceRandom] = voiceRandom;
+        srcVals[(size_t) ModSource::VoiceDrift]  = voiceDriftVal;
         for (int i = 0; i < kNumLFOs; ++i) srcVals[(size_t) kLfoSourceIdx[i]] = lfoVals[i];
 
         // Sum the explicit matrix slots into the per-target offset + the per-OSC offsets

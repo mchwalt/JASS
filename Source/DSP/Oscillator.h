@@ -23,6 +23,10 @@ public:
     // into inharmonic/chaotic timbres. See Oscillator::nextSample.
     void setFeedback(double fb) { feedbackAmount = std::clamp(fb, 0.0, 1.0); }
     void reset() { phases.fill(0.0); lastRaw = 0.0; }
+    // Start every unison phase at `ph` (0..1) instead of zero — the VOICE module's HUMANIZE
+    // (14.1) gives each note its own start phase, which is half of what keeps two voices of
+    // the same chord from cancelling into one another.
+    void resetToPhase(double ph) { phases.fill(ph - std::floor(ph)); lastRaw = 0.0; }
 
     bool isEnabled() const { return enabled; }
     double getFrequency() const { return frequency; }
