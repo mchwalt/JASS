@@ -20,7 +20,16 @@ SynthyProcessor::SynthyProcessor()
     PresetIO::seedDemoPresets();
     PresetIO::seedWavetables();
     PresetIO::seedSamples();     // Story 12.1: SAMPLER example recordings
-    PresetIO::preloadSamples();  // ... and pre-load them so the SET combo starts populated
+    // ... and pre-load them so the SET combo fills up — on a background thread (12.6), because
+    // decoding every installed set (grand pianos: ~1.2 GB) held up the start of the app. The
+    // hook lets a preset ask for ITS set: that one is pulled to the front of the queue and
+    // selected once loaded, so restoring a piano patch no longer blocks the window either.
+    PresetIO::requestSamplerSet = [this] (const juce::String& setName)
+    {
+        samplePreload.request (setName);
+        samplePreload.notify();   // wake it if it is idling
+    };
+    samplePreload.startThread (juce::Thread::Priority::background);
 
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
@@ -72,8 +81,102 @@ SynthyProcessor::SynthyProcessor()
     }
 }
 
+void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName)
+{
+    {
+        const juce::ScopedLock sl (requestLock);
+        requested = setName;
+    }
+    ++requestGeneration;   // anything still in flight for an older request is now stale
+}
+
+// Load the set a preset asked for and select it — the ONE set the patch actually needs, so it
+// goes first. Selecting happens back on the message thread; the generation check drops the
+// result if another preset has been loaded since (its own request wins).
+void SynthyProcessor::SamplePreloadThread::loadRequested (const juce::String& setName)
+{
+    const int gen = requestGeneration.load();
+    int idx = SampleBankStore::instance().indexOf (setName);
+    if (idx < 0)
+    {
+        auto folder  = PresetIO::samplesFolder();
+        auto matches = folder.findChildFiles (juce::File::findFiles, false, setName + ".*");
+        if (! matches.isEmpty())
+            idx = SampleBankStore::instance().loadFile (matches.getReference (0));
+        else if (auto sub = folder.getChildFile (setName); sub.isDirectory())
+            idx = PresetIO::loadSampleSetFolder (sub, nullptr, [this] { return threadShouldExit(); });
+    }
+    if (idx < 0)
+    {   // not in the Samples folder (renamed/removed): stop shielding the LiveState, or the
+        // patch would keep claiming an instrument that does not exist.
+        juce::MessageManager::callAsync ([] { PresetIO::pendingSamplerSetName.clear(); });
+        return;
+    }
+    if (threadShouldExit())
+        return;
+
+    // Weak: the callback may still sit in the message queue when the processor goes away.
+    juce::WeakReference<SynthyProcessor> weak (&owner);
+    juce::MessageManager::callAsync ([weak, idx, gen]
+    {
+        if (auto* p = weak.get())
+            p->selectSamplerSet (idx, gen);
+    });
+}
+
+// Runs off the message thread (12.6). Everything it touches is thread-safe: PresetIO only reads
+// the Samples folder, and the store serialises PUBLISHING a set (decoding stays parallel), so a
+// preset request arriving mid-preload is fine. `threadShouldExit` is polled per zone, so closing
+// the app cannot leave us decoding a gigabyte for nothing.
+void SynthyProcessor::SamplePreloadThread::run()
+{
+    bool bulkDone = false;
+    while (! threadShouldExit())
+    {
+        // 1. A preset is waiting for a set — always first: the patch is silent until it lands.
+        if (auto wanted = takeRequest(); wanted.isNotEmpty())
+        {
+            loadRequested (wanted);
+            continue;
+        }
+        // 2. Nothing urgent: fill the SET combo with everything else that is installed.
+        if (! bulkDone)
+        {
+            PresetIO::preloadSamples ([this] { return threadShouldExit(); });
+            bulkDone = true;
+            continue;
+        }
+        // 3. Idle — stay alive for presets loaded later (an F-key can name a set that is not in
+        //    the folder scan yet, e.g. one imported during this session). stopThread() wakes us.
+        wait (500);
+    }
+}
+
+juce::String SynthyProcessor::SamplePreloadThread::takeRequest()
+{
+    const juce::ScopedLock sl (requestLock);
+    auto wanted = requested;
+    requested.clear();
+    return wanted;
+}
+
+void SynthyProcessor::selectSamplerSet (int index, int generation)
+{
+    if (generation != samplePreload.currentGeneration())
+        return;   // a newer preset load has since asked for a different set
+    if (auto* p = apvts.getParameter (Parameters::ID::samplerSet))
+        p->setValueNotifyingHost (p->convertTo0to1 ((float) index));
+    PresetIO::pendingSamplerSetName.clear();   // the patch's set is real now
+}
+
 SynthyProcessor::~SynthyProcessor()
 {
+    // Stop the loader before anything else goes away, and drop the hook first so a late preset
+    // load cannot queue work into a dying thread. The abort is polled per zone, so this returns
+    // in milliseconds even mid-piano.
+    PresetIO::requestSamplerSet = nullptr;
+    samplePreload.stopThread (4000);
+
     keyboardState.removeListener(this);
     apvts.removeParameterListener(Parameters::ID::mixSrcA, this);
     apvts.removeParameterListener(Parameters::ID::mixSrcB, this);

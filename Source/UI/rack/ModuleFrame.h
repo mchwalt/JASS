@@ -60,10 +60,14 @@ namespace rack
         // mouse) and dimmed, together with its caption. Only touches widgets on a real change.
         void updateCondKnobs();
 
+    public:
         // Re-poll a dynamic-provider combo's items (after an Action/FileAction that lists
         // it in .refreshes fired), then re-apply the param's current selection so the
-        // ComboBoxAttachment stays consistent (AD-4 declarative combo refresh).
+        // ComboBoxAttachment stays consistent (AD-4 declarative combo refresh). Public since
+        // 12.6: the editor re-lists the SET combo while the background preload adds sets.
         void refreshCombo (const juce::String& paramId);
+
+    private:
 
         // Enabled/lit = param-enable AND derived-predicate. A module may have EITHER (a real
         // enable param OR a derived condition) or BOTH (Mix-Mode: mixModeOn AND osc1&&osc2).
