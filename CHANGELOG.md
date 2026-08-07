@@ -10,6 +10,31 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.4] – 2026-08-08
+
+### Added
+- **Preset `GrandPiano` on F8** — the plain instrument: SAMPLER with the
+  SplendidPiano set and nothing else in the signal path (no envelope, no
+  effects, no modulation), output in Stereo-Pan so the stereo recording stays
+  stereo. REL is carried in the preset (2.16 s), because a preset load
+  deliberately does not trigger the set-pick automation that would otherwise
+  set it — without it the notes would cut off.
+
+### Changed
+- **Samples load in the background** (Story 12.6). The app used to decode every
+  installed set before showing its window — with both four-layer grand pianos
+  that is ~1.2 GB, and a restored piano patch pushed the start to ten seconds.
+  A loader thread now fills the SET combo while the app runs, and the set a
+  preset asks for jumps the queue and is selected as soon as it is there.
+  Startup with a piano patch: 10 s → 0.6 s. For a few seconds after launch the
+  sampler is silent while its set loads.
+- **The SAMPLER's REL knob dims for instruments that govern their own release**
+  and then shows the release time actually being played instead of its own
+  (inert) value — the same treatment ROOT already gets for multisample sets.
+  Salamander carries `ampeg_release` on all 120 zones, so REL cannot do
+  anything there; Splendid has it on its lowest regions only, so REL still
+  matters for most of its keyboard.
+
 ## [2026.08.3] – 2026-08-07
 
 Collects everything released as v2026.08.0 – v2026.08.3 (the automated
