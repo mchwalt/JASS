@@ -10,3 +10,7 @@ Gespielt wird über die volle Breite der Buchstabentasten: die **Grundreihe** (`
 - **Leertaste** — Karplus-String erneut anzupfen
 
 Die Klaviatur muss den Fokus haben, damit die Buchstabentasten klingen (holt ihn beim Start automatisch; einmal draufklicken, falls die Tasten nicht mehr reagieren).
+
+**Akkorde**
+
+Normale Tastaturen verschlucken manche Dreier-Kombinationen — der dritte Ton kommt nie an. Oktave verschieben oder über MIDI spielen; die Buchstabentasten senden zudem eine feste Anschlagstärke.

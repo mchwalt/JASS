@@ -147,6 +147,12 @@ private:
     void showModulesMenu();
     void refitHeight();   // recompute window height from the rack's visible content (AD-12)
     double fitScale = 0.0;   // the ONE display-fit scale (0 = not computed yet); see refitHeight()
+    // The help panel opts OUT of that scale so its text stays readable — these three keep the
+    // sizing, the "cancel the transform" and the resulting on-screen size in one place.
+    double helpScale = 1.0;   // magnification the panel is currently shown at (>= 1.0)
+    void fitHelpContent(const juce::String& title, const juce::String& body);
+    int  helpPanelWidthOnScreen() const;
+    void placeHelpPanel(int wantX, int wantY);
     std::unique_ptr<juce::FileChooser> presetChooser;
     juce::Label presetNameLabel;                 // shows the currently loaded preset
     juce::String shownLabel;                     // last text pushed to the label (change-detect)
