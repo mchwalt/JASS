@@ -146,6 +146,7 @@ private:
     juce::TextButton modulesBtn { "MODULES" };   // show/hide menu (Story 4.2)
     void showModulesMenu();
     void refitHeight();   // recompute window height from the rack's visible content (AD-12)
+    double fitScale = 0.0;   // the ONE display-fit scale (0 = not computed yet); see refitHeight()
     std::unique_ptr<juce::FileChooser> presetChooser;
     juce::Label presetNameLabel;                 // shows the currently loaded preset
     juce::String shownLabel;                     // last text pushed to the label (change-detect)

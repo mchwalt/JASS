@@ -69,7 +69,7 @@ trägt dafür einen `<a id="…">`-Anker — beim Ergänzen bitte beibehalten.
 | <a id="typetag" name="typetag"></a>**typeTag** | Identitäts-/Farb-Tag eines Moduls (Generator/Modulator/Processor). |
 | <a id="enableparam" name="enableparam"></a>**enableParam / enabledWhen** | Zwei Quellen für den Enable-Zustand eines Moduls: echter Bool-Parameter (Header-Toggle) bzw. abgeleitetes Prädikat (liest nur APVTS). Bei beidem gilt UND. |
 | <a id="activewhen" name="activewhen"></a>**activeWhen** | Per-Knob-Relevanz-Prädikat: dimmt einen einzelnen Knopf (z. B. PAN in Mono-Modi), ohne das Modul zu deaktivieren. |
-| <a id="auto-fit" name="auto-fit"></a>**Auto-Fit** | Fensterbreite fix 1520 px; die Höhe folgt automatisch dem sichtbaren Rack, auf kleinen Displays wird die ganze UI herunterskaliert (AD-12). |
+| <a id="auto-fit" name="auto-fit"></a>**Auto-Fit** | Fensterbreite fix 1520 px; die Höhe folgt automatisch dem sichtbaren Rack, auf kleinen Displays wird die ganze UI herunterskaliert (AD-12). Der Skalierungsfaktor wird **einmalig** aus dem größtmöglichen Rack (alle Module sichtbar) bestimmt und bleibt dann konstant — sonst würde das Fenster bei jedem Preset-Wechsel die Größe ändern. |
 
 ## Preset & State
 

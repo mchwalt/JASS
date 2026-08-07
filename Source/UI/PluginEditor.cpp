@@ -592,8 +592,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 void SynthyEditor::refitHeight()
 {
     // Fixed design width; height follows the rack's visible content so the full rack always
-    // fits without scrolling. The auto-fit-down transform scales the whole editor on smaller
-    // displays. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
+    // fits without scrolling. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
     constexpr int kDesignW    = 1520;
     constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
     constexpr int kBodyBottom = 0;    // no reserved band — the keyboard is a rack module now
@@ -601,20 +600,30 @@ void SynthyEditor::refitHeight()
     const int rackW = kDesignW - 2 * kMargin;
     const int rackH = rackBody ? rackBody->preferredHeight(rackW) : 800;
     const int designH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
-    setSize(kDesignW, designH);
 
-    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    // The display-fit down-scale is computed ONCE, from the WORST-CASE rack (every module
+    // visible) — not from what is on screen right now. Deriving it from the current content
+    // made the whole editor (width included) grow and shrink on every preset change, because
+    // a preset reveals the modules it enables: visibly jumpy. One fixed scale trades a little
+    // size for a window that never moves. Cached: the inputs cannot change while we run.
+    if (fitScale <= 0.0)
     {
-        const auto ua = disp->userBounds;        // excludes the taskbar
-        const double chrome = 90.0;              // title bar + a little breathing room
-        const double sH = (ua.getHeight() - chrome) / (double) designH;
-        const double sW =  ua.getWidth()            / (double) kDesignW;
-        const double scale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
-        // Reset to identity when no scaling is needed, so re-fitting to a shorter rack on a
-        // large display clears any transform set for an earlier, taller layout.
-        setTransform(scale < 0.999 ? juce::AffineTransform::scale((float) scale)
-                                   : juce::AffineTransform());
+        fitScale = 1.0;
+        if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+        {
+            const auto ua = disp->userBounds;        // excludes the taskbar
+            const double chrome = 90.0;              // title bar + a little breathing room
+            const int worstRackH = rackBody ? rackBody->maxHeight(rackW) : rackH;
+            const int worstH = juce::jmax(1015, worstRackH + kBodyTop + kBodyBottom + 2 * kMargin);
+            const double sH = (ua.getHeight() - chrome) / (double) worstH;
+            const double sW =  ua.getWidth()            / (double) kDesignW;
+            fitScale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
+        }
+        setTransform(fitScale < 0.999 ? juce::AffineTransform::scale((float) fitScale)
+                                      : juce::AffineTransform());
     }
+
+    setSize(kDesignW, designH);
 }
 
 void SynthyEditor::showModulesMenu()

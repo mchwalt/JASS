@@ -422,7 +422,11 @@ app setting, not part of any preset).
 3-D title, language combo, MODULES button) + the `rack::Rack` body. Fixed
 design width **1520 px** (`kDesignW`); the height auto-fits the visible rack
 (`refitHeight()`), with a display-fit down-scale transform (floor 0.5) on
-small screens (AD-12).
+small screens (AD-12). That scale is computed **once**, from the worst-case
+rack — `Rack::maxHeight()`, i.e. every module visible — and then never
+changes: deriving it from the *current* content made the whole window (width
+included) grow and shrink whenever a preset revealed a different number of
+modules.
 
 The **[Rack](Glossary.md#rack)** owns all placement (AD-2): a proportional
 **24-column** grid (`kDefaultCols`) × rack-unit rows (`kHu = 114 px`).
@@ -510,7 +514,7 @@ The formal architecture spine lives at
 | AD-9 | Cross-module coupling **only** through shared APVTS |
 | AD-10 | `RackLayout` model (id/zone/position/visible) is the single source of placement truth; customization is a reorderable list panel |
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
-| AD-12 | Width fixed (1520 px), height auto-fits the visible rack |
+| AD-12 | Width fixed (1520 px), height auto-fits the visible rack; the display-fit scale is fixed once from the worst-case rack |
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.
