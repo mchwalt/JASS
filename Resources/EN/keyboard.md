@@ -10,3 +10,7 @@ Play across the full width of the letter keys: the **home row** (`a s d f g h j 
 - **Space** — re-pluck the Karplus string
 
 The keyboard must have focus for the letter keys to sound (it grabs focus on launch; click it once if the keys stop responding).
+
+**Chords**
+
+Ordinary keyboards drop some three-key combinations — the third note never arrives. Shift the octave, or play chords over MIDI; the letter keys also send one fixed velocity.

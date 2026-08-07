@@ -16,6 +16,14 @@ are easy to get wrong; the full picture is in [`docs/`](docs/) — start with
 - Talking to the maintainer is a separate matter — that conversation is in
   German.
 
+## Writing for the app
+
+- **In-app help (`Resources/EN`, `Resources/DE`) is terse.** Two or three
+  short paragraphs and bullet lists, phrased for a player at the instrument —
+  not prose that explains the background. If a limitation needs a paragraph to
+  justify itself, state the effect and the way out, and drop the reasoning.
+- Both languages carry the same content; write them in one pass.
+
 ## Git workflow
 
 - Feature branch → PR → `develop`; the release PR then goes `develop` →
