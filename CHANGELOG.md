@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.4] – 2026-08-08
+
 ### Added
 - **Preset `GrandPiano` on F8** — the plain instrument: SAMPLER with the
   SplendidPiano set and nothing else in the signal path (no envelope, no
