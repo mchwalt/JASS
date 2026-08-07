@@ -130,6 +130,12 @@ namespace rack
         // editor size/verify the fixed window without scrolling (AC4).
         int preferredHeight (int width) const;
 
+        // Worst-case height: what the rack would need at `width` with EVERY module visible.
+        // The editor derives its ONE display-fit scale from this (AD-12), so revealing modules
+        // — e.g. loading a preset that enables more of them — never resizes the window.
+        // Pure measurement: the layout model is restored before returning.
+        int maxHeight (int width) const;
+
         // --- fixed grid constants (frozen from the mockup; AC4) ---
         static constexpr int kDefaultCols = 24;   // fine proportional grid (was 12); a pure layout
                                                   // raster, independent of knob size. 24 columns give
