@@ -10,6 +10,18 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **STEP SEQ — a 16-step note sequencer.** Hold a key and an authored figure plays,
+  transposed by that key (the lowest held note is the root). Each step carries its own
+  semitone offset and a gate, where 0 is a rest and 1 holds the note into the next step;
+  step length is a note division on the same clock the LFOs and DELAY ride on, or a free
+  rate in steps per second. This is the thing the ARPEGGIATOR could never do: it can only
+  re-order the notes you are already holding, and it runs free in Hz rather than in time.
+  Both replace the held chord, so only one of the two can run — switching one on switches
+  the other off. Hidden by default (rack height is a budget); a preset that enables it
+  reveals it. Legato is the point of the gate design: at 1.0 the previous step's note-off
+  is emitted after the next note-on, so the notes overlap instead of leaving a hole.
+
 ## [2026.08.6] – 2026-08-10
 
 ### Changed
