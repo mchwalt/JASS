@@ -83,16 +83,29 @@ internal sequencer only earns its keep in the standalone.
     1.0 and the offsets `0,+15,0,+12,0,0,+12,0,+12,0,+12,+10,0,+12,0,+5`, holding **B1** must produce
     the measured line. Verified by the user against the record.
 
+## Rack body: `W24H2`, two rows of eight
+
+A `W24H2` module has the full rack width inside it — **1496 px** at the design width. Two rows of
+eight steps give **187 px per step**, ample for two small sliders (pitch above, gate below) plus the
+step number; even sixteen abreast would still be 93 px each. An earlier draft of this story claimed
+32 controls would not fit — that measured against MOD MATRIX, whose slots are full-size combos. A
+step is two narrow sliders, the standard sequencer idiom, and a third row is not needed.
+
+Ship it **`defaultVisible = false`**. It costs no rack height until it is used, and a preset that
+enables it is revealed automatically by `revealEnabledModules()`.
+
+## Depends on Story 7.3 — do not start before it lands
+
+`W24H2` is 2 × 114 px + gutter = **238 px** of rack height. Under the rule in force before 7.3 that
+came straight off the display-fit scale, which is **already at its readable floor** (0.65 on the
+maintainer's screen = 1981 px of worst-case rack, exactly where we are). Story 7.3 raises the floor
+to a named constant, makes the worst case count only what may appear, and hides seven never-used
+modules — that is what pays for this module. **7.3 also reports the measured headroom; if there is
+none, that is a decision point before any code is written here.**
+
 ## Decide with the user before building the rack body
 
-1. **Size, and what it costs.** 16 steps × 2 controls = 32 controls; the largest existing class is
-   `W24H2` (MOD MATRIX fits 6 slots × 4 controls there), so this needs a **hand-built body** like the
-   SAMPLER's, or a third row. The trap: `Rack::maxHeight()` measures the rack **with every module
-   visible** (`Rack.cpp:543-551`) and the editor derives its one display-fit scale from that — so a
-   new tall module shrinks the **entire window**, permanently, *even when the module is hidden*.
-   Today: worst-case rack 1980 px → factor 0.65 → 988 px window. Measure the new factor before and
-   after and put the number in front of the user; a taller rack is his call, not ours.
-2. **ARP vs STEP SEQ.** Both replace the held chord, so they cannot both run. Recommendation: make
+1. **ARP vs STEP SEQ.** Both replace the held chord, so they cannot both run. Recommendation: make
    them mutually exclusive (enabling one switches the other off, so the rack always shows the truth)
    rather than a silent precedence rule that leaves a lit ARP doing nothing.
 
