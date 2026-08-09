@@ -10,7 +10,24 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Fixed
+- **Shifting the computer-keyboard octave no longer kills notes.** Up/Down
+  released held notes through `MidiKeyboardState::allNotesOff()`, which silences
+  the state but leaves `MidiKeyboardComponent`'s own `keysPressed` bitmask set
+  for the old note numbers. Once the octave moved, nothing mapped to those notes
+  again, so the bits were never cleared — and returning to that octave found the
+  bit already set and skipped the note-on. Every visited octave left dead keys
+  behind. The shift now goes through `clearKeyMappings()` (the only public JUCE
+  call that also resets that bitmask) and re-registers the QWERTZ map afterwards.
+  Bonus: only notes this component started are released, so playing on external
+  MIDI hardware survives an octave shift.
+
 ### Changed
+- **MOD MATRIX AMT steps in 0.001 instead of 0.01.** One AMT unit means
+  something different per target: FILTER CUTOFF spans ±3 octaves, but FREQ spans
+  ±1 octave — so a 0.01 step was 12 cents, and the entire useful range for an
+  analog-style pitch drift (±10..25 cents) fell on two knob positions. Stored
+  values are unaffected (no migration); the read-out gains a decimal.
 - **Documentation caught up with epic 12** — `ARCHITECTURE.md` now describes
   background sample loading (why the store lock guards publication only, and
   what shields the LiveState while a set is in flight), the help panel opting

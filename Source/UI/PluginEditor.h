@@ -175,8 +175,9 @@ private:
     juce::uint32  fKeyLastPressMs[12]{ };   // time of the previous press (double-press detection)
 
     // On-screen keyboard (auto-play drone is handled automatically by the processor)
+    void applyComputerKeyMap();   // (re-)registers the QWERTZ note map; also on every octave shift
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
-    int kbBaseOctave = 4;   // computer-keyboard octave (z / x shift it)
+    int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
     bool modalWasOpen = false;      // edge-detect: a modal popup (e.g. MODULES) closing => refocus keyboard
 
