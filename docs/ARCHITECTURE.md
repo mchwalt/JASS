@@ -439,16 +439,35 @@ of them). Without it the notes cut off at note-off.
 
 `SynthyEditor` = header band (SAVE/LOAD/RANDOM/RESET, preset name, spinning
 3-D title, language combo, MODULES button) + the `rack::Rack` body. Fixed
-design width **1520 px** (`kDesignW`); the height auto-fits the visible rack
-(`refitHeight()`), with a display-fit down-scale transform (floor 0.5) on
-small screens (AD-12). That scale is computed **once**, from the worst-case
-rack — `Rack::maxHeight()`, i.e. every module visible — and then never
-changes: deriving it from the *current* content made the whole window (width
-included) grow and shrink whenever a preset revealed a different number of
-modules.
+design width **1920 px** (`kDesignW`); the height auto-fits the visible rack
+(`refitHeight()`), with a display-fit down-scale transform on small screens
+(AD-12).
+
+That scale comes from the worst case — `Rack::maxHeight()` — but since Story
+7.3 the worst case is every module that **may appear** (visible now, or
+visible in the descriptor defaults), not every module that exists. Revealing
+a module (a preset enabling one) only ever *adds* to the visible set, so
+preset switching still cannot make the window jump, which is what the
+measure-the-worst-case rule was introduced for; but hiding a module now gives
+its height *back*, which the old "count everything" rule never did.
+
+The floor is **derived, not a constant**: `1.0 / display->scale`, i.e. never
+render smaller than 1:1 in physical pixels. On a desktop at 150 % that is
+0.667 — measured as exactly the point where the rack stops being readable.
+
+Rack height is a **budget**, not something the scale can keep absorbing: it
+already sits at that floor. The MODULES panel therefore shows what the
+current selection costs (`Rack 1608 / 1929 px · scale 0.79`) so revealing a
+module is a visible trade rather than type that silently shrinks.
 
 The **[Rack](Glossary.md#rack)** owns all placement (AD-2): a proportional
-**24-column** grid (`kDefaultCols`) × rack-unit rows (`kHu = 114 px`).
+**30-column** grid (`kDefaultCols`) × rack-unit rows (`kHu = 114 px`). The
+grid went 24 → 30 with Story 7.3, hand in hand with the design width
+1520 → 1920: that keeps a column at ~53 px, so **no module changed physical
+size** — size classes are absolute column counts — while six more columns per
+row pack the rack two rows shorter (measured: 1980 → 1608 px, scale 0.65 →
+0.79). Height was the scarce dimension; width was idle. Only the full-width
+modules had to follow, `W24 → W30` (MOD MATRIX, KEYBOARD).
 [Zones](Glossary.md#zone) (append-only enum, persisted by name):
 `Generators, Modulation, Processing, Visualization,
 MasterBus, Input`. Zone headers are *derived* — a zone renders iff it has a
@@ -542,7 +561,7 @@ The formal architecture spine lives at
 | AD-9 | Cross-module coupling **only** through shared APVTS |
 | AD-10 | `RackLayout` model (id/zone/position/visible) is the single source of placement truth; customization is a reorderable list panel |
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
-| AD-12 | Width fixed (1520 px), height auto-fits the visible rack; the display-fit scale is fixed once from the worst-case rack |
+| AD-12 | Width fixed (1920 px), height auto-fits the visible rack; the display-fit scale comes from the may-appear worst case, with a floor of 1:1 physical pixels |
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.

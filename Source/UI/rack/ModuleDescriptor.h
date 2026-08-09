@@ -21,7 +21,7 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
@@ -233,10 +233,14 @@ namespace rack
     {
         switch (c)
         {
-            // Column spans on the 24-column grid (cols × units). Decoupled from knob size —
-            // the body fills the module width from its CONTENT (see ModuleFrame::resized).
-            // slotCapacity is only a generous debug guard, not a layout driver. Names encode the
-            // footprint (W{cols}H{rows}); widths are 24ths, so 8/24 = one third of the rack.
+            // Column spans on the rack grid (cols × units) — 30 columns since Story 7.3, so a
+            // width is 30ths and 8 columns are just over a quarter of the rack. Decoupled from
+            // knob size: the body fills the module width from its CONTENT (see
+            // ModuleFrame::resized). slotCapacity is only a generous debug guard, not a layout
+            // driver. Names encode the footprint (W{cols}H{rows}) in ABSOLUTE columns, which is
+            // why widening the grid from 24 to 30 left every module below untouched — they keep
+            // their physical size and simply pack more per row. Full-width modules are the
+            // exception: those had to move W24 → W30.
             case SizeClass::W2H1:  return {  2, 1,  2, KnobSize::Small };  // single control (was XXS)
             case SizeClass::W3H1:  return {  3, 1,  3, KnobSize::Small };  // single control, wider header (fits title + 3 icons)
             case SizeClass::W4H1:  return {  4, 1,  4, KnobSize::Small };  // 1–2 controls   (was XS)
@@ -256,6 +260,8 @@ namespace rack
             case SizeClass::W12H1: return { 12, 1, 12, KnobSize::Small };  // widest single row (WAVETABLE: BANK+LOAD+6 knobs)
             case SizeClass::W13H1: return { 13, 1, 13, KnobSize::Small };  // WAVETABLE (BANK+LOAD+6 knobs, roomier)
             case SizeClass::W14H1: return { 14, 1, 14, KnobSize::Small };  // WAVETABLE with PAN (BANK+LOAD+6 knobs)
+            case SizeClass::W30H1: return { 30, 1, 30, KnobSize::Small };  // full-width single row (on-screen keyboard)
+            case SizeClass::W30H2: return { 30, 2, 60, KnobSize::Small };  // full-width two rows   (MOD MATRIX, STEP SEQ)
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };

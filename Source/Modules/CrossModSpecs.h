@@ -13,6 +13,7 @@ namespace Modules
         // CROSS MOD shapes the oscillators (RingMod/FM) — it is a modulator, not a sound source,
         // so it lives in the MODULATION zone (user decision 2026-07-19).
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W5H1;
+        m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning
         m.params = {
             { "mixModeOn", "On",   "",      ParamSpec::Kind::Bool },   // default off => additive
             { "mixMode",   "Mode", "MODE",  ParamSpec::Kind::Choice, {}, 0.0f, { "RingMod", "FM" } },
