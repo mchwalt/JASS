@@ -151,8 +151,9 @@ namespace rack
         // came out 106 px wide in MOD MATRIX and 120 px in FILTER — visibly ragged across the rack
         // for no reason. 106 is the width MOD MATRIX has always had and which reads fine there
         // (its MOD combo shows "DISTORTION"), so it is the proven lower bound rather than a guess.
-        // A combo declaring more slots than the default 2 (SAMPLER SET, whose set names are
-        // user-given and long) scales with them.
+        // A combo declaring more slots than the default 2 scales with them — nothing does today
+        // (SAMPLER SET gave up its extra slot: once every combo shares one width, a wider one just
+        // stands out), but the mechanism stays for a genuinely long item list.
         static constexpr int kComboW  = 106;
         static constexpr int kButtonW = 90;   // Action/FileAction/Toggle button: capped width
         static constexpr int kButtonH = 26;   //   …and fixed height (never stretched to the cell)
