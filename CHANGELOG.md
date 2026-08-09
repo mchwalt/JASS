@@ -11,16 +11,20 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Fixed
-- **Shifting the computer-keyboard octave no longer kills notes.** Up/Down
-  released held notes through `MidiKeyboardState::allNotesOff()`, which silences
-  the state but leaves `MidiKeyboardComponent`'s own `keysPressed` bitmask set
-  for the old note numbers. Once the octave moved, nothing mapped to those notes
-  again, so the bits were never cleared — and returning to that octave found the
-  bit already set and skipped the note-on. Every visited octave left dead keys
-  behind. The shift now goes through `clearKeyMappings()` (the only public JUCE
-  call that also resets that bitmask) and re-registers the QWERTZ map afterwards.
-  Bonus: only notes this component started are released, so playing on external
-  MIDI hardware survives an octave shift.
+- **Shifting the computer-keyboard octave no longer interrupts playing.** Up/Down
+  used to release every held note first, and worse, notes went permanently dead:
+  the release ran through `MidiKeyboardState::allNotesOff()`, which silences the
+  state but leaves `MidiKeyboardComponent`'s own `keysPressed` bitmask set for the
+  old note numbers. Once the octave moved nothing mapped to those notes again, so
+  the bits were never cleared — and returning to that octave found the bit already
+  set and skipped the note-on. Every visited octave left dead keys behind.
+  Computer-key playing is now handled by JASS instead of JUCE (whose implementation
+  keys its state by note number and therefore cannot survive an octave shift): the
+  note is resolved once, at press time, and remembered per PHYSICAL key. A held key
+  keeps sounding across any number of shifts, releases correctly, and only the next
+  key press lands in the new octave — like the octave switch on a hardware synth.
+  Only notes JASS itself started are ever released, so external MIDI hardware and
+  the auto-play drone are untouched.
 
 ### Changed
 - **MOD MATRIX AMT steps in 0.001 instead of 0.01.** One AMT unit means
