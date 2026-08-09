@@ -49,8 +49,14 @@ Meanwhile the shipped and local presets show that a good part of the rack is asl
 
 ## Acceptance Criteria
 
-1. **Readability floor.** The clamp becomes a named constant — `kMinFitScale = 0.65` — carrying the
-   reason ("below this the rack is not readable; maintainer, 2026-08-09") instead of the bare `0.5`.
+1. **Readability floor, derived rather than hard-coded.** The clamp becomes
+   `kMinFitScale = 1.0 / display->scale` (itself clamped into a sane band, and falling back to 0.65
+   when no display is available). Rationale, measured 2026-08-09: the maintainer's panel is
+   5120×2160 with Windows at **150 %**, so JUCE sees 3413×1440 logical — and the 0.65 he names as the
+   readability limit is almost exactly `1 / 1.5`. At that factor JASS renders **1:1 in physical
+   pixels**; below it, it is smaller than an unscaled UI. So the floor means "never render smaller
+   than 1:1", which is a criterion that travels to other machines instead of a constant measured on
+   one. It yields 1.0 at 100 %, 0.8 at 125 %, 0.667 at 150 %.
 2. **The worst case counts only what may appear**: the factory-default visible set plus whatever the
    user has explicitly shown — not every module that exists. Recomputed on a deliberate layout edit
    (MODULES panel, RESET), **never** on a preset load, so the PR #27 property survives: switching
@@ -79,6 +85,19 @@ Meanwhile the shipped and local presets show that a good part of the rack is asl
 - **Sleeping ≠ useless.** A module no preset demonstrates is already invisible; hiding it makes that
   permanent. The other cure is a demo preset that finally shows PHASER, FORMANT and SUB off. The
   recommendation is to do both — hide now, demo later — but the second half is not this story.
+
+## The way out, if the budget ever really breaks (NOT this story)
+
+Height is the scarce dimension and **width is idle**: JASS designs at 1520 px and the maintainer's
+desktop offers 3413 logical px, so 55 % of the width is unused while the rack runs out of height.
+Note also that "modern high resolution" does not automatically help — his panel is 5120×2160, but
+Windows' 150 % scaling hands JUCE 1440 px of height, less than the 1536 he assumed as a floor.
+
+So if the rack genuinely outgrows the budget, the answer is neither scrolling (rejected, PR #27) nor
+shrinking below 1:1 (this story's floor) — it is **using the width**: zones laid out side by side
+instead of stacked, which roughly halves the rack height and makes the fit scale a non-issue. That is
+a change to the AD-2 layout model and its own epic; recorded here so the option is not forgotten the
+next time the budget is the topic.
 
 ## Dev Notes
 
