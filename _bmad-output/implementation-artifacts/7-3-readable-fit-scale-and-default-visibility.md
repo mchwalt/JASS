@@ -1,0 +1,173 @@
+# Story 7.3: a readable fit scale, a rack that only pays for what it shows, and a grid that uses the width
+
+Status: ready-for-dev — raised 2026-08-09 by the maintainer while planning Story 15.1.
+**Sequenced BEFORE 15.1**: the sequencer adds rack height, and today that height is paid for by
+shrinking the whole editor. Fix the rule first, then add the module.
+
+## Story
+
+As the person using JASS every day,
+I want the editor to stay readable and to stop paying for modules I never show,
+so that adding a module is a decision about rack space, not a silent cut in legibility.
+
+## Context — the numbers
+
+`SynthyEditor::refitHeight()` (`Source/UI/PluginEditor.cpp:573-607`) does two separate things:
+
+- the **logical height** follows the **visible** rack (`Rack::preferredHeight`) — this part is fine;
+- the **display-fit scale** is computed **once** from the **worst case** (`Rack::maxHeight`, which
+  forces *every* module visible, `Rack.cpp:543-551`), clamped to `jlimit(0.5, 1.0, …)`, and applied
+  as one uniform transform over the whole editor.
+
+That rule came from PR #27 and was the right trade then: deriving the scale from the visible content
+made the window grow and shrink on every preset change, because a preset reveals the modules it
+enables. Stable beat big.
+
+Two things have changed since:
+
+1. **The scale is out of headroom.** On the maintainer's screen the factor is **0.65**, and he states
+   plainly that this is the readability limit — below it nothing can be read. Back-calculated:
+   1440 px screen − 90 px chrome = 1350 px available; `1350 / 0.65 = 2077`; minus the 96 px of header
+   and margins ⇒ **1981 px of worst-case rack**. That is exactly where we are. The scale is therefore
+   no longer a buffer that absorbs new modules — it is a **budget that is already spent**.
+2. **Hiding a module buys nothing.** `maxHeight()` counts every module that exists, so the MODULES
+   panel can tidy the rack but can never give back a single pixel of legibility.
+
+Meanwhile the shipped and local presets show that a good part of the rack is asleep. All 17 presets
+(8 shipped + 9 in `%AppData%`) were scanned; **these modules are enabled in none of them**:
+
+| module | zone | size |
+|---|---|---|
+| SUB | GENERATORS | W4H1 |
+| CROSS MOD | MODULATION | W5H1 |
+| GLIDE | MODULATION | W3H1 |
+| PITCH ENV | MODULATION | W3H1 |
+| BITCRUSH | PROCESSING | W3H1 |
+| FORMANT | PROCESSING | W3H1 |
+| PHASER | PROCESSING | W6H1 |
+| COMPRESSOR | MASTER BUS | W8H1 — already `defaultVisible = false` |
+
+## Measured: what actually moves the rack height
+
+`Rack::layout()`'s packing (row-major first-fit per zone, `Rack.cpp:641-750`) was modelled against
+the real module census. The model reproduces the app exactly — **1980 px, factor 0.650** — so the
+rest of the table can be trusted:
+
+| columns | design width | column px | all visible | default | default − sleepers |
+|---|---|---|---|---|---|
+| 24 | 1520 (today) | 52.1 | 1980 px · **0.65** | 1856 · 0.69 | 1732 · 0.74 |
+| 24 | **1920** | 68.8 | 1980 px · **0.65** | 1856 · 0.69 | 1732 · 0.74 |
+| 28 | 1780 | 52.5 | 1856 · 0.69 | 1856 · 0.69 | 1732 · 0.74 |
+| **30** | **1920** | 53.0 | 1856 · 0.69 | 1856 · 0.69 | **1608 · 0.79** |
+| 32 | 2040 | 52.8 | 1732 · 0.74 | 1732 · 0.74 | 1484 · 0.85 |
+
+**Design width alone changes nothing** — rows 1 and 2 are identical. Widening from 1520 to 1920 at
+24 columns only makes each column 52 → 69 px, i.e. more air inside the modules; the module footprints
+are counted in columns, so the same modules fit per row, the row count is unchanged, `kHu` is a fixed
+114 px, and the scale does not move. **Column count is the lever**, and 30 columns at 1920 keeps the
+column width at today's 53 px, so module sizes tuned in Story 7.2 stay physically as they are.
+
+With Story 15.1's `W24H2` sequencer added, against the 1/1.5 = 0.667 floor:
+
+| columns | design width | rack | scale | |
+|---|---|---|---|---|
+| 24 | 1520 | 1980 px | 0.65 | **below the floor** |
+| 24 | 1920 | 1980 px | 0.65 | **below the floor** |
+| 28 | 1780 | 1980 px | 0.65 | **below the floor** |
+| **30** | **1920** | 1856 px | **0.69** | fits |
+| 32 | 2040 | 1732 px | 0.74 | comfortable |
+
+So at 24 columns the sequencer is **not affordable at a readable scale**, even with the sleepers
+hidden: they free 248 px and it costs 238. Widening the grid is what pays for it.
+
+**Decision (maintainer, 2026-08-09): 30 columns at a design width of 1920.**
+
+## Acceptance Criteria
+
+1. **Readability floor, derived rather than hard-coded.** The clamp becomes
+   `kMinFitScale = 1.0 / display->scale` (itself clamped into a sane band, and falling back to 0.65
+   when no display is available). Rationale, measured 2026-08-09: the maintainer's panel is
+   5120×2160 with Windows at **150 %**, so JUCE sees 3413×1440 logical — and the 0.65 he names as the
+   readability limit is almost exactly `1 / 1.5`. At that factor JASS renders **1:1 in physical
+   pixels**; below it, it is smaller than an unscaled UI. So the floor means "never render smaller
+   than 1:1", which is a criterion that travels to other machines instead of a constant measured on
+   one. It yields 1.0 at 100 %, 0.8 at 125 %, 0.667 at 150 %.
+2. **The worst case counts only what may appear**: the factory-default visible set plus whatever the
+   user has explicitly shown — not every module that exists. Recomputed on a deliberate layout edit
+   (MODULES panel, RESET), **never** on a preset load, so the PR #27 property survives: switching
+   presets must not move the window. Verify by loading F1…F8 in sequence and confirming the window
+   geometry does not change.
+3. **Seven sleepers default to hidden**: SUB, CROSS MOD, GLIDE, PITCH ENV, BITCRUSH, FORMANT, PHASER
+   (`defaultVisible = false`, as COMPRESSOR already is). Safe by construction — they are off in every
+   preset, "hidden ⇒ silent" is already an invariant (`enforceHiddenDisabled`), and
+   `revealEnabledModules()` brings any of them straight back the moment a preset enables it.
+   **Existing presets that carry a custom layout keep it** — this changes the *default*, not saved layouts.
+4. **Measure and report the payoff.** After 3, record the new worst-case rack height and the resulting
+   scale on the maintainer's screen. That number decides whether Story 15.1's module fits at all; put
+   it in front of him rather than assuming.
+5. **The budget is visible.** The MODULES panel shows what the current selection costs, e.g.
+   `Rack 1780 / 1981 px · Anzeige 0.72`. When a selection would push the scale below `kMinFitScale`,
+   say so in that line. Silent shrinking is what this story exists to end.
+6. **Grid: `kDefaultCols` 24 → 30, `kDesignW` 1520 → 1920.** Column width lands at 53.0 px (today
+   52.1), so every module keeps its physical size and the Story 7.2 tuning stands. **The three
+   full-width modules must follow: MOD MATRIX, KEYBOARD (and Story 15.1's STEP SEQ) go from `W24H2` /
+   `W24H1` to `W30H2` / `W30H1`** — otherwise they sit at 80 % width with six empty columns beside
+   them. Add the `W30H1`/`W30H2` enumerators; the existing size-class names keep their meaning
+   (absolute columns), so no other module changes.
+7. **Verify the model against the app.** The packing model predicts 1608 px / 0.79 for
+   30 columns with the sleepers hidden. Read the real values from the running editor and record any
+   discrepancy — the model reproduced today's 1980 px / 0.650 exactly, so a mismatch means the model
+   missed something and the conclusion has to be revisited.
+8. No audio, parameter or preset-format change anywhere in this story.
+
+## Decide with the user
+
+- **What happens when the budget is genuinely exceeded** (floor reached and the rack still too tall).
+  Options: let the window exceed the screen (bad), clip (worse), or refuse to grow and let the panel
+  state that something must be hidden first. Recommendation: the last one — the constraint is real,
+  and making it explicit is more honest than either silently shrinking or silently clipping. Scrolling
+  is off the table (maintainer, PR #27: "scrollen ist scheiße").
+- **Sleeping ≠ useless.** A module no preset demonstrates is already invisible; hiding it makes that
+  permanent. The other cure is a demo preset that finally shows PHASER, FORMANT and SUB off. The
+  recommendation is to do both — hide now, demo later — but the second half is not this story.
+
+## Why widening is the right lever at all
+
+Height is the scarce dimension and **width is idle**: JASS designed at 1520 px while the maintainer's
+desktop offers 3413 logical px, so 55 % of the width sat unused while the rack ran out of height.
+Note that "modern high resolution" does not automatically help — his panel is 5120×2160, but Windows'
+150 % scaling hands JUCE 1440 px of height, *less* than the 1536 he assumed as a floor. On screen the
+window goes from 988 px wide today to about 1325 px at 30 columns; the height fills the display either
+way, because that is the binding dimension.
+
+If the budget is ever exhausted again, the next step in the same direction is **zones side by side**
+rather than stacked, which roughly halves the rack height. That is a deeper change to the AD-2 layout
+model and its own epic — recorded so the option is not forgotten.
+
+## Dev Notes
+
+- `maxHeight()`'s doc comment in `Rack.h:133-137` states the old contract verbatim; update it with the
+  new one, including why preset loads must not recompute.
+- The scale is cached via `if (fitScale <= 0.0)`. Any recompute path has to invalidate that cache
+  explicitly — and, per AC2, only from the layout-edit path.
+- Watch the interaction with `revealEnabledModules()`: it exists because a hidden module must never be
+  audible. Do not weaken it to save pixels.
+- The grid change touches **AD-2**: `ARCHITECTURE.md` / `MODULE_SYSTEM.md` name the 24-column raster
+  and the 1520 px design width in several places. Update them in the same PR, or the docs start lying
+  the day this merges.
+- The packing model used to produce the table above is reproducible: per zone, row-major first-fit
+  over the registration order, left-aligned entries partitioned before right-aligned ones; height
+  `y = kPad`, then per non-empty zone `+ kZoneHeaderH + kGutter`, `rows*kHu + (rows-1)*kGutter`,
+  `+ kGutter`, and `+ kPad` at the end.
+- Files (expected): `Source/UI/PluginEditor.cpp`, `Source/UI/rack/Rack.{h,cpp}`,
+  `Source/UI/rack/ModuleDescriptor.h` (new `W30H1`/`W30H2`),
+  `Source/Modules/{Sub,CrossMod,Glide,PitchEnv,Bitcrush,Formant,Phaser}Specs.h`,
+  `Source/Modules/ModMatrixSpecs.h` + the KEYBOARD registration in `PluginEditor.cpp`,
+  `docs/ARCHITECTURE.md`, `docs/MODULE_SYSTEM.md`, `CHANGELOG.md`.
+- No unit-test rig: verification is build + running app + the maintainer's eye. State plainly what is
+  only build-verified.
+- Feature branch, **no push, no merge**.
+
+## Dev Agent Record
+
+_Not started — story recorded 2026-08-09._
