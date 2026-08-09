@@ -1732,7 +1732,7 @@ void SynthyEditor::buildRack()
         // the 8 slots were laid out for a 24-column rack and only gained whitespace at 30. The
         // zone height does not change either way — MOD MATRIX is the zone's last module and owns
         // its two rows regardless of how wide it is.
-        d.sizeClass = SizeClass::W24H2; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
+        d.sizeClass = SizeClass::W28H2; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 
