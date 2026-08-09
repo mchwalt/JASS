@@ -16,6 +16,27 @@
 // SynthyLookAndFeel now lives in Source/UI/rack/SynthyLookAndFeel.{h,cpp} (AD-7) —
 // the rack framework owns the single shared look.
 
+// --- Editor geometry (shared by refitHeight and the MODULES panel's budget line) -------------
+// The design width went 1520 → 1920 with Story 7.3, hand in hand with the 24 → 30 column grid:
+// together they keep the column at ~53 px, so no module changed physical size — the rack simply
+// packs two rows shorter. Height is the scarce dimension (the fit scale was at its readable floor);
+// width was idle, 1520 designed against 3413 available.
+namespace EditorGeom
+{
+    constexpr int kDesignW    = 1920;
+    constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
+    constexpr int kBodyBottom = 0;    // no reserved band — the keyboard is a rack module now
+    constexpr int kMargin     = 12;   // getLocalBounds().reduced(12)
+    constexpr double kChrome  = 90.0; // title bar + a little breathing room
+
+    // Rack height that still fits on this display at `scale`, i.e. the budget the MODULES panel
+    // reports against. Inverse of the sH computation in refitHeight.
+    inline int affordableRackHeight (double scale, double screenH)
+    {
+        return (int) ((screenH - kChrome) / juce::jmax (0.01, scale)) - kBodyTop - kBodyBottom - 2 * kMargin;
+    }
+}
+
 // --- Rack customization panel (Story 4.2) -----------------------------------
 // A reorderable list of every module, grouped by zone. A left checkbox toggles
 // visibility; dragging a module row reorders it (list order = on-screen order) and
@@ -28,13 +49,14 @@ namespace
                                private juce::Timer
     {
     public:
-        explicit RackCustomizePanel (rack::Rack& r, const juce::String& lang = "EN") : rack (r)
+        explicit RackCustomizePanel (rack::Rack& r, const juce::String& lang = "EN")
+            : rack (r), isDE (lang == "DE")
         {
             rebuildRows();
             addAndMakeVisible (resetBtn);
             resetBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff334155));
             resetBtn.onClick = [this] { rack.resetLayout(); rebuildRows(); repaint(); };
-            setSize (kW, listHeight() + kBtnH);
+            setSize (kW, listHeight() + kBudgetH + kBtnH);
 
             // Discoverability toast (localized): drag-to-reorder isn't obvious, so after the
             // mouse rests a moment over the list we fade in a one-line hint, then fade it out.
@@ -49,10 +71,41 @@ namespace
 
         void resized() override
         {
-            resetBtn.setBounds (juce::Rectangle<int> (0, listHeight(), getWidth(), kBtnH).reduced (6, 5));
+            resetBtn.setBounds (juce::Rectangle<int> (0, listHeight() + kBudgetH, getWidth(), kBtnH)
+                                    .reduced (6, 5));
         }
 
         int listHeight() const { return juce::jmax (kRowH, (int) rows.size() * kRowH); }
+
+        // Story 7.3: rack height is a BUDGET, not something the fit scale can keep absorbing —
+        // it already sits at its readable floor. Show what the current selection costs, so hiding
+        // or revealing a module is a visible trade instead of type that silently gets smaller.
+        // Returns { text, overBudget }.
+        std::pair<juce::String, bool> budgetLine() const
+        {
+            using namespace EditorGeom;
+            auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+            if (disp == nullptr)
+                return { {}, false };
+            const auto ua = disp->userBounds;
+            const double minScale = juce::jlimit (0.5, 1.0, 1.0 / juce::jmax (1.0, (double) disp->scale));
+            const int need   = rack.maxHeight (kDesignW - 2 * kMargin);
+            const int budget = affordableRackHeight (minScale, (double) ua.getHeight());
+            const double worstH = (double) juce::jmax (1015, need + kBodyTop + kBodyBottom + 2 * kMargin);
+            const double scale  = juce::jlimit (minScale, 1.0,
+                                                juce::jmin ((ua.getHeight() - kChrome) / worstH,
+                                                            ua.getWidth() / (double) kDesignW));
+            const bool over = need > budget;
+            juce::String t;
+            t << "Rack " << need << " / " << budget << " px"
+              << (isDE ? juce::String (juce::CharPointer_UTF8 (" · Anzeige "))
+                       : juce::String (" · scale "))
+              << juce::String (scale, 2);
+            if (over)
+                t << (isDE ? juce::String (juce::CharPointer_UTF8 (" — zu hoch, ein Modul ausblenden"))
+                           : juce::String (" — over budget, hide a module"));
+            return { t, over };
+        }
 
         void paint (juce::Graphics& g) override
         {
@@ -94,6 +147,17 @@ namespace
                 }
                 g.setColour (juce::Colours::black.withAlpha (0.30f));
                 g.drawHorizontalLine (i * kRowH, 0.0f, (float) getWidth());
+            }
+
+            // Height budget band, between the list and the RESET button.
+            {
+                auto band = juce::Rectangle<int> (0, listHeight(), getWidth(), kBudgetH);
+                g.setColour (juce::Colour (0xff11141a));
+                g.fillRect (band);
+                const auto [text, over] = budgetLine();
+                g.setColour (over ? juce::Colour (0xffe0b050) : juce::Colours::white.withAlpha (0.55f));
+                g.setFont (juce::FontOptions (12.0f));
+                g.drawText (text, band.reduced (8, 0), juce::Justification::centredLeft);
             }
 
             paintToast (g);   // drag-to-reorder hint (fades in after a rest, then out)
@@ -275,6 +339,7 @@ namespace
         }
 
         rack::Rack& rack;
+        const bool  isDE = false;   // budget-line language (the panel is built per language)
         std::vector<Row> rows;
         juce::TextButton resetBtn { "Reset layout" };
         int dragIndex = -1;
@@ -290,6 +355,7 @@ namespace
         bool          mouseInside  = false;
 
         static constexpr int kW = 300, kRowH = 26, kBtnH = 30;   // +40 vs. before for the L/R align tags
+        static constexpr int kBudgetH = 20;   // Story 7.3: the rack-height budget line
         static constexpr juce::uint32 kRestMs = 3000;   // rest time before the hint appears
         static constexpr juce::uint32 kFadeMs =  300;   // fade in / out duration
         static constexpr juce::uint32 kHoldMs = 4300;   // fully-visible hold (=> ~4.9 s total)
@@ -572,38 +638,39 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 
 void SynthyEditor::refitHeight()
 {
-    // Fixed design width; height follows the rack's visible content so the full rack always
-    // fits without scrolling. (kBodyTop/kBodyBottom mirror the bands reserved in resized().)
-    constexpr int kDesignW    = 1520;
-    constexpr int kBodyTop    = 72;   // header row + gap (matches resized())
-    constexpr int kBodyBottom = 0;    // no reserved band — the keyboard is a rack module now
-    constexpr int kMargin     = 12;   // getLocalBounds().reduced(12)
+    using namespace EditorGeom;
+    // Height follows the rack's visible content so the full rack always fits without scrolling.
     const int rackW = kDesignW - 2 * kMargin;
     const int rackH = rackBody ? rackBody->preferredHeight(rackW) : 800;
     const int designH = juce::jmax(1015, rackH + kBodyTop + kBodyBottom + 2 * kMargin);
 
-    // The display-fit down-scale is computed ONCE, from the WORST-CASE rack (every module
-    // visible) — not from what is on screen right now. Deriving it from the current content
-    // made the whole editor (width included) grow and shrink on every preset change, because
-    // a preset reveals the modules it enables: visibly jumpy. One fixed scale trades a little
-    // size for a window that never moves. Cached: the inputs cannot change while we run.
-    if (fitScale <= 0.0)
+    // The display-fit down-scale comes from the WORST CASE — but since Story 7.3 that means every
+    // module which MAY appear (Rack::maxHeight), not every module that exists. Deriving it from
+    // what is on screen right now made the editor grow and shrink on every preset change (a preset
+    // reveals the modules it enables): visibly jumpy, which is what PR #27 fixed. Measuring the
+    // may-appear set keeps that property — revealing only ever ADDS to the visible set, so preset
+    // switching cannot oscillate — while giving the height back when the user hides a module, which
+    // the old "count everything" rule never did.
+    //
+    // The floor is DERIVED, not a magic number: never render smaller than 1:1 in physical pixels.
+    // On a desktop at 150 % that is 1/1.5 = 0.667 — and 0.65 is exactly where the maintainer says
+    // the rack stops being readable (2026-08-09). At 100 % it is 1.0, at 125 % it is 0.8. Below
+    // this JASS would be smaller than an unscaled UI, which is not a trade worth making.
+    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
     {
-        fitScale = 1.0;
-        if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
-        {
-            const auto ua = disp->userBounds;        // excludes the taskbar
-            const double chrome = 90.0;              // title bar + a little breathing room
-            const int worstRackH = rackBody ? rackBody->maxHeight(rackW) : rackH;
-            const int worstH = juce::jmax(1015, worstRackH + kBodyTop + kBodyBottom + 2 * kMargin);
-            const double sH = (ua.getHeight() - chrome) / (double) worstH;
-            const double sW =  ua.getWidth()            / (double) kDesignW;
-            fitScale = juce::jlimit(0.5, 1.0, juce::jmin(sH, sW));
-        }
-        setTransform(fitScale < 0.999 ? juce::AffineTransform::scale((float) fitScale)
-                                      : juce::AffineTransform());
+        const auto ua = disp->userBounds;        // excludes the taskbar
+        const double minScale = juce::jlimit(0.5, 1.0, 1.0 / juce::jmax(1.0, (double) disp->scale));
+        const int worstRackH = rackBody ? rackBody->maxHeight(rackW) : rackH;
+        const int worstH = juce::jmax(1015, worstRackH + kBodyTop + kBodyBottom + 2 * kMargin);
+        const double sH = (ua.getHeight() - kChrome) / (double) worstH;
+        const double sW =  ua.getWidth()             / (double) kDesignW;
+        fitScale = juce::jlimit(minScale, 1.0, juce::jmin(sH, sW));
     }
+    else if (fitScale <= 0.0)
+        fitScale = 1.0;
 
+    setTransform(fitScale < 0.999 ? juce::AffineTransform::scale((float) fitScale)
+                                  : juce::AffineTransform());
     setSize(kDesignW, designH);
 }
 
@@ -1502,7 +1569,12 @@ void SynthyEditor::buildRack()
         Combo setCombo{ P::samplerSet, "SET",
                         std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
         setCombo.indexIsValue = true;
-        setCombo.slots = 3;   // set names are user-given and long ("SalamanderPiano") — show them in full
+        // Standard width (2 slots), NOT the 3 it used to claim for long set names like
+        // "SalamanderPiano" (user 2026-08-09: "beim SAMPLER ist die Combo noch zu breit").
+        // Since every combo is now capped at one width, a wider one just stands out. The
+        // full name still shows in the drop-down list; only the closed box may clip it.
+        // Side benefit: one content slot back makes the SAMPLER cells - and its knobs -
+        // a little larger (52 -> 56 px; still under the standard 62, accepted by the user).
         // A mapped (multisample) set is a chromatic INSTRUMENT — Loop mode starts its notes at
         // the shared loop phase, i.e. mid-sample, which no piano survives; and STRETCH buys
         // nothing when every zone transposes at most a couple of semitones, while costing CPU,
@@ -1661,7 +1733,11 @@ void SynthyEditor::buildRack()
     // ComboDependency (clamp PARAM if out of range, then re-list) where apvts is available.
     {
         ModuleDescriptor d;
-        d.sizeClass = SizeClass::W24H2; d.type = ModuleType::Modulator;   // full width: 8 slots (4/row × 2),
+        // 24 of the 30 columns (Story 7.3, user 2026-08-09: "könnte ein Fünftel schmaler sein"):
+        // the 8 slots were laid out for a 24-column rack and only gained whitespace at 30. The
+        // zone height does not change either way — MOD MATRIX is the zone's last module and owns
+        // its two rows regardless of how wide it is.
+        d.sizeClass = SizeClass::W28H2; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 
@@ -1747,8 +1823,8 @@ void SynthyEditor::buildRack()
     // as a Display (AD-5; the editor owns its lifetime). enableParam keyboardOn is a UI-only
     // placeholder (drives only the dim state for now; the keyboard stays playable). The onReset
     // is a no-op placeholder so the header carries the uniform reset ↺ like every other module.
-    // Full-width single row (W24H1). Its own info icon carries the play/shortcut help.
-    add(Rack::Zone::Input, SizeClass::W24H1, ModuleType::Generator, "KEYBOARD", P::keyboardOn,
+    // Full-width single row (W30H1). Its own info icon carries the play/shortcut help.
+    add(Rack::Zone::Input, SizeClass::W30H1, ModuleType::Generator, "KEYBOARD", P::keyboardOn,
         { Display{ keyboard.get(), 24 } },
         [] { });
 

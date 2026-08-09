@@ -16,7 +16,12 @@ namespace Modules
         m.title  = "LFO " + juce::String (i);
         m.persistObject = "Lfo" + juce::String (i);
         m.enableParamId = p + "On";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W7H1;
+        // W6, not W7 (Story 7.3, user 2026-08-09): the body is WAVE + SYNC + RATE + DEPTH, which
+        // W7 gave more room than it needed. Not just cosmetics — three LFOs one column narrower
+        // let the MODULATION zone pack into 3 rows instead of 4 (measured: rack 1608 → 1484 px,
+        // fit scale 0.79 → 0.85). W5 packs no better, so 6 is the point where narrowing stops
+        // paying and only starts squeezing the two combos.
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W6H1;
         m.defaultVisible = (i <= 3);   // LFO 1..3 visible by default; LFO 4 hidden (show via MODULES)
         m.params = {
             { p + "On",      "Enabled",  "",       ParamSpec::Kind::Bool },

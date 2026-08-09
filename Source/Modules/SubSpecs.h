@@ -11,6 +11,11 @@ namespace Modules
         ModuleSpec m;
         m.id = "sub"; m.title = "SUB"; m.persistObject = "Sub"; m.enableParamId = "subOn";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W4H1;
+        // Story 7.3: default-hidden. Enabled in NONE of the 17 presets we ship or keep locally, and
+        // rack height is a hard budget (see the fit-scale floor in PluginEditor). Nothing is lost:
+        // "hidden ⇒ silent" is already the invariant, and revealEnabledModules() brings it straight
+        // back the moment a preset switches it on. Show it any time via the MODULES panel.
+        m.defaultVisible = false;
         m.params = {
             { "subOn",     "Enabled",  "",      ParamSpec::Kind::Bool },
             { "subWave",   "Waveform", "WAVE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Square" } },

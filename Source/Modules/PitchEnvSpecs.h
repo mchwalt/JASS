@@ -9,6 +9,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "pitchenv"; m.title = "PITCH ENV"; m.persistObject = "PitchEnv"; m.enableParamId = "pitchEnvOn";
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W3H1;
+        m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning
         m.params = {
             { "pitchEnvOn",     "Enabled", "",       ParamSpec::Kind::Bool },
             { "pitchEnvAmount", "Amount",  "AMOUNT", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-48.0f, 48.0f, 0.1f),        0.0f, {}, {}, LFOTarget::PitchEnvAmount },
