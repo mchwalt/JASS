@@ -21,6 +21,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   the other off. Hidden by default (rack height is a budget); a preset that enables it
   reveals it. Legato is the point of the gate design: at 1.0 the previous step's note-off
   is emitted after the next note-on, so the notes overlap instead of leaving a hole.
+- **Demo preset `DAF Bass`** on F9 for fresh installs — the sequencer showing what it is for,
+  with the 16-step figure and the tone measured off the record it was built against: a
+  sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced
+  LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
 
 ## [2026.08.6] – 2026-08-10
 

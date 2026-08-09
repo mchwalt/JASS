@@ -129,6 +129,7 @@ namespace PresetIO
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
         slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
         slots[7] = "GrandPiano";        // the plain instrument: SplendidPiano set, nothing else on
+        slots[8] = "DAF Bass";          // STEP SEQ showcase (Story 15.1): the measured 16-step figure
         return slots;
     }
 
