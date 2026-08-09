@@ -990,8 +990,8 @@ void SynthyEditor::assignPresetSlot(int slot)
 
 // Computer-key → note map for a German (QWERTZ) keyboard: HOME row = white keys, TOP row = black
 // keys, spanning the full width from 'a' up to the 'ä'/'#' keys (~2.5 octaves). Playing is detected
-// via KeyPress::isCurrentlyDown → VkKeyScan (Windows), which resolves each character to the physical
-// key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
+// via KeyPress::isKeyCurrentlyDown → VkKeyScan (Windows), which resolves each character to the
+// physical key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
 void SynthyEditor::buildComputerKeyMap()
 {
     // Letters use CHARACTERS — JUCE resolves them to the active layout via VkKeyScan. The keys
@@ -1027,12 +1027,22 @@ void SynthyEditor::updateComputerKeys(bool allowNoteOn)
     if (keyboard == nullptr)
         return;
     const int ch = keyboard->getMidiChannel();
+    // A note key must NOT care about modifiers. KeyPress::isCurrentlyDown() also compares them
+    // against the KeyPress's own (none, here), so holding SHIFT made every note key read as
+    // released â and the sweep below then cut the sound. Which is exactly what SHIFT is for while
+    // playing: fine-dragging a knob (user report 2026-08-10, "damit hÃ¶rt abrupt das Spiel auf").
+    // The static form asks only about the physical key, with the same layout resolution.
+    //
+    // Typing into a value box must not play either: this handler hangs off the EDITOR, so key
+    // events bubble up to it even while a TextEditor has focus. Note-ONs are suppressed there â
+    // releases are not, or a note started before the click would hang.
+    const bool typing = dynamic_cast<juce::TextEditor*> (juce::Component::getCurrentlyFocusedComponent()) != nullptr;
     for (auto& k : computerKeys)
     {
-        const bool down = k.key.isCurrentlyDown();
+        const bool down = juce::KeyPress::isKeyCurrentlyDown (k.key.getKeyCode());
         if (down && k.sounding < 0)
         {
-            if (! allowNoteOn || ! keyboardPlayable)
+            if (! allowNoteOn || ! keyboardPlayable || typing)
                 continue;
             k.sounding = juce::jlimit(0, 127, 12 * kbBaseOctave + k.offsetFromC);
             processor.getKeyboardState().noteOn(ch, k.sounding, 1.0f);

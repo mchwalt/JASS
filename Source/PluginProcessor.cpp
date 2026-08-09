@@ -877,10 +877,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             stepSeq.stepSeconds = SyncDivision::isSynced(sdiv)
                                       ? SyncDivision::delaySeconds(syncBpm, sdiv)
                                       : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::seqRate));
+            stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
             for (int s = 0; s < StepSequencer::kMaxSteps; ++s)
             {
                 stepSeq.pitch[(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
-                stepSeq.gate [(size_t) s] =       *apvts.getRawParameterValue(ID::seqGate (s + 1));
+                stepSeq.on   [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
             }
 
             // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16

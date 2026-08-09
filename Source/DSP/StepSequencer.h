@@ -3,18 +3,25 @@
 #include <array>
 #include <algorithm>
 
-// STEP SEQ (Story 15.1) — a 16-step note sequencer. Where the Arpeggiator turns a held chord into
+// STEP SEQ (Story 15.1) — a 24-step note sequencer. Where the Arpeggiator turns a held chord into
 // an automatic sequence, this plays an AUTHORED figure: each step carries its own semitone offset
-// and gate, and the whole pattern is transposed by the key you hold (the LOWEST held note is the
-// root). Emitted as MIDI into the synth's buffer from processBlock, exactly like Arpeggiator — the
-// raw held notes are filtered out upstream so only the pattern sounds.
+// and an on/off, and the whole pattern is transposed by the key you hold (the LOWEST held note is
+// the root). Emitted as MIDI into the synth's buffer from processBlock, exactly like Arpeggiator —
+// the raw held notes are filtered out upstream so only the pattern sounds.
+//
+// Note LENGTH is ONE global gate, not a value per step (user 2026-08-10: "braucht man die G1-G16
+// überhaupt? die stehen allesamt auf 1"). The two jobs a per-step gate did are not equally useful:
+// making a step silent is essential — without it a pattern can only ever be a continuous run —
+// while varying the length step by step is a refinement almost no figure uses, and it cost a knob
+// per step in visual noise. The SQ-10 this is modelled on splits them the same way: step switches
+// plus one gate control.
 //
 // The reference this was built against is measured, not described (DAF "Der Mussolini", 1981):
 // 192.0 ms per step = 156.25 BPM on eighths, dead stable over the full track; a 16-step figure of
 // `0,+15,0,+12,0,0,+12,0,+12,0,+12,+10,0,+12,0,+5` semitones over a B pedal; **legato** — the
 // envelope never falls between steps — and no accents. Legato is the reason gate is a fraction with
 // 1.0 meaning "hold through": at gate 1.0 the previous step's note-off is emitted AFTER the next
-// note-on, so the voices overlap instead of leaving a hole. Gate 0 is a rest (no note at all).
+// note-on, so the voices overlap instead of leaving a hole.
 //
 // Timing is sample-accurate and driven by a step interval the processor resolves once per block
 // (tempo-synced via SyncDivision, or the free-running RATE knob). Allocation-free: the pattern is a
@@ -22,13 +29,14 @@
 class StepSequencer
 {
 public:
-    static constexpr int kMaxSteps = 16;
+    static constexpr int kMaxSteps = 24;
 
     bool   enabled = false;
     double stepSeconds = 0.192;                  // one step; resolved per block by the processor
-    int    length = kMaxSteps;                   // 1..16 steps before the pattern repeats
-    std::array<int, kMaxSteps>   pitch {};       // semitone offset from the root, -24..+24
-    std::array<double, kMaxSteps> gate {};       // 0 = rest, 1 = legato (hold into the next step)
+    int    length = kMaxSteps;                   // 1..24 steps before the pattern repeats
+    std::array<int, kMaxSteps>  pitch {};        // semitone offset from the root, -24..+24
+    std::array<bool, kMaxSteps> on {};           // false = rest (that step stays silent)
+    double gate = 1.0;                           // note length, ONE value for the whole pattern
 
     void prepare (double sr) { sampleRate = sr; reset(); }
 
@@ -84,9 +92,9 @@ public:
 
             if (sampleCounter == 0)
             {
-                const int  s = stepIndex % steps;
-                const double g = juce::jlimit (0.0, 1.0, gate[(size_t) s]);
-                if (g > 0.0)
+                const int s = stepIndex % steps;
+                const double g = juce::jlimit (0.05, 1.0, gate);
+                if (on[(size_t) s])
                 {
                     const int note = juce::jlimit (0, 127, root + pitch[(size_t) s]);
                     // Same note as the one still sounding? Re-strike it: note-off first, or the
