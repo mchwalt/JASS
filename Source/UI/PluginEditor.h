@@ -187,6 +187,7 @@ private:
     };
     void buildComputerKeyMap();                    // fills computerKeys (QWERTZ layout)
     void updateComputerKeys (bool allowNoteOn);    // reconcile physical key state -> notes
+    void retuneSoundingComputerKeys();             // held keys follow an octave shift
     void releaseComputerKeys();                    // note-off everything we started
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)

@@ -978,6 +978,28 @@ void SynthyEditor::updateComputerKeys(bool allowNoteOn)
     }
 }
 
+// Move every SOUNDING computer-key note to the current octave (called when Up/Down shifts it while
+// keys are held). It is a re-trigger, not a glide: the new note starts a fresh envelope, which is
+// what makes the switch audible. Keys that are not sounding are untouched — they pick up the new
+// octave at their next press, like always.
+void SynthyEditor::retuneSoundingComputerKeys()
+{
+    if (keyboard == nullptr)
+        return;
+    const int ch = keyboard->getMidiChannel();
+    for (auto& k : computerKeys)
+    {
+        if (k.sounding < 0)
+            continue;
+        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + k.offsetFromC);
+        if (note == k.sounding)
+            continue;                       // clamped to the same note — leave it playing
+        processor.getKeyboardState().noteOff(ch, k.sounding, 0.0f);
+        processor.getKeyboardState().noteOn(ch, note, 1.0f);
+        k.sounding = note;
+    }
+}
+
 // Note-off everything we started (KEYBOARD module switched off, focus lost, …). Only our own
 // notes — external MIDI hardware and the ch.16 auto-play drone are untouched.
 void SynthyEditor::releaseComputerKeys()
@@ -1006,11 +1028,16 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
     {
         int dir = (key == juce::KeyPress::upKey) ? 1 : -1;
-        // Nothing is released here: a held key keeps its note (resolved at press time in
-        // updateComputerKeys), so playing continues across the shift and only the NEXT key press
-        // lands in the new octave. Shifting mid-note is a normal performance gesture — the octave
-        // switch on a hardware synth does not cut the sound either.
-        kbBaseOctave = juce::jlimit(1, 7, kbBaseOctave + dir);
+        const int oct = juce::jlimit(1, 7, kbBaseOctave + dir);
+        if (oct == kbBaseOctave)
+            return true;                    // already at the end of the range — nothing to do
+        kbBaseOctave = oct;
+        // Shifting mid-play is a performance gesture, so held keys FOLLOW the octave: their note
+        // moves with the switch instead of either dying (the pre-2026-08-09 behaviour) or sitting
+        // stubbornly at the old pitch. Because we own the key→note bookkeeping, moving a note is
+        // just note-off/note-on on OUR remembered note — no bitmask can fall out of sync, and
+        // releasing the key later still lands on whatever note it is currently sounding.
+        retuneSoundingComputerKeys();
         return true;
     }
     // Spacebar re-plucks the Karplus string. Trigger the actual PLUCK button so it
