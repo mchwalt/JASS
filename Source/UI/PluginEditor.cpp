@@ -483,8 +483,8 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     keyboard->setOctaveForMiddleC(4);      // label MIDI 60 as "C4" (Roland convention) — matches the
                                            // docs/help everywhere ("FREQ knobs = sound at C4", SAMPLER
                                            // ROOT default 60 = C4); JUCE's default label was C3.
-    keyboard->setKeyPressBaseOctave(kbBaseOctave);
-    applyComputerKeyMap();
+    keyboard->clearKeyMappings();   // computer keys are handled by US (see buildComputerKeyMap)
+    buildComputerKeyMap();
     keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
     // Up / Down shift the octave; the keyboard must have focus — grabbed on launch/click).
@@ -685,9 +685,22 @@ void SynthyEditor::timerCallback()
             keyboard->setWantsKeyboardFocus (kbOn);
             if (kbOn)
                 keyboard->grabKeyboardFocus();
-            else if (keyboard->hasKeyboardFocus (true))
-                keyboard->giveAwayKeyboardFocus();
+            else
+            {
+                releaseComputerKeys();   // module switched off mid-note: don't leave notes hanging
+                if (keyboard->hasKeyboardFocus (true))
+                    keyboard->giveAwayKeyboardFocus();
+            }
         }
+
+        // Safety sweep for the computer-key notes: a key released while JASS is NOT the foreground
+        // app sends us no event, so its note would hang. Releases only — starting a note still
+        // requires a real key event, otherwise typing elsewhere would play JASS. Also drop
+        // everything the moment we lose the foreground, mirroring what JUCE's own focusLost did.
+        if (juce::Process::isForegroundProcess())
+            updateComputerKeys (false);
+        else
+            releaseComputerKeys();
 
         // A modal popup (MODULES call-out, a combo dropdown, …) grabs the keyboard focus, so
         // computer-key playing pauses while it's open. When it closes, hand focus back to the
@@ -765,8 +778,9 @@ void SynthyEditor::pollPresetHotkeys()
 
 bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
 {
-    pollPresetHotkeys();   // we have focus here → lowest-latency path
-    return false;          // observe only; let the event propagate normally
+    pollPresetHotkeys();       // we have focus here → lowest-latency path
+    updateComputerKeys(true);  // start/stop notes for the note keys (focus implied by the event)
+    return false;              // observe only; let the event propagate normally
 }
 
 // A loaded-and-untouched preset shows its name; once any parameter changes
@@ -907,19 +921,12 @@ void SynthyEditor::assignPresetSlot(int slot)
     });
 }
 
-// Custom computer-key → note map for a German (QWERTZ) keyboard: HOME row = white keys, TOP row =
-// black keys, spanning the full width from 'a' up to the 'ä'/'#' keys (~2.5 octaves). JUCE detects
-// playing via KeyPress::isCurrentlyDown → VkKeyScan (Windows), which resolves each character to the
-// physical key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
-//
-// Re-applied on every octave shift: clearKeyMappings() is the ONLY public JUCE entry point that also
-// resets MidiKeyboardComponent's internal keysPressed bitmask (see keyPressed).
-void SynthyEditor::applyComputerKeyMap()
+// Computer-key → note map for a German (QWERTZ) keyboard: HOME row = white keys, TOP row = black
+// keys, spanning the full width from 'a' up to the 'ä'/'#' keys (~2.5 octaves). Playing is detected
+// via KeyPress::isCurrentlyDown → VkKeyScan (Windows), which resolves each character to the physical
+// key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
+void SynthyEditor::buildComputerKeyMap()
 {
-    if (keyboard == nullptr)
-        return;
-
-    keyboard->clearKeyMappings();
     // Letters use CHARACTERS — JUCE resolves them to the active layout via VkKeyScan. The keys
     // PAST the letter block are addressed by their raw virtual-key CODE (physical key) instead of
     // the layout character (ö/ä/#/+), so they don't depend on the German character assignment.
@@ -935,8 +942,55 @@ void SynthyEditor::applyComputerKeyMap()
     const KM whites[] = { {'a',0},{'s',2},{'d',4},{'f',5},{'g',7},{'h',9},{'j',11},
                           {'k',12},{'l',14},{keyOe,16},{keyAe,17},{keyHash,19} };   // C D E F G A B C D E F G
     const KM blacks[] = { {'w',1},{'e',3},{'t',6},{'z',8},{'u',10},{'o',13},{'p',15},{keyPlus,18} };   // C# D# F# G# A# C# D# F#
-    for (const auto& k : whites) keyboard->setKeyPressForNote(juce::KeyPress(k.code, juce::ModifierKeys(), 0), k.offsetFromC);
-    for (const auto& k : blacks) keyboard->setKeyPressForNote(juce::KeyPress(k.code, juce::ModifierKeys(), 0), k.offsetFromC);
+    computerKeys.clear();
+    computerKeys.reserve(std::size(whites) + std::size(blacks));
+    for (const auto& k : whites) computerKeys.push_back({ juce::KeyPress(k.code, juce::ModifierKeys(), 0), k.offsetFromC, -1 });
+    for (const auto& k : blacks) computerKeys.push_back({ juce::KeyPress(k.code, juce::ModifierKeys(), 0), k.offsetFromC, -1 });
+}
+
+// Reconcile the physical key state with what is sounding. The note is resolved ONCE, at press time,
+// and remembered per key — that is the whole point: the octave may move underneath a held key and
+// its note-off still lands on the note that was actually started. (JUCE's own implementation keys
+// its state by note number and cannot do this, which is why we do not use its key mappings.)
+//
+// allowNoteOn=false is the timer's safety sweep: releases only. Starting notes requires a real key
+// event (i.e. focus), otherwise typing in another application would play JASS.
+void SynthyEditor::updateComputerKeys(bool allowNoteOn)
+{
+    if (keyboard == nullptr)
+        return;
+    const int ch = keyboard->getMidiChannel();
+    for (auto& k : computerKeys)
+    {
+        const bool down = k.key.isCurrentlyDown();
+        if (down && k.sounding < 0)
+        {
+            if (! allowNoteOn || ! keyboardPlayable)
+                continue;
+            k.sounding = juce::jlimit(0, 127, 12 * kbBaseOctave + k.offsetFromC);
+            processor.getKeyboardState().noteOn(ch, k.sounding, 1.0f);
+        }
+        else if (! down && k.sounding >= 0)
+        {
+            processor.getKeyboardState().noteOff(ch, k.sounding, 0.0f);
+            k.sounding = -1;
+        }
+    }
+}
+
+// Note-off everything we started (KEYBOARD module switched off, focus lost, …). Only our own
+// notes — external MIDI hardware and the ch.16 auto-play drone are untouched.
+void SynthyEditor::releaseComputerKeys()
+{
+    if (keyboard == nullptr)
+        return;
+    const int ch = keyboard->getMidiChannel();
+    for (auto& k : computerKeys)
+        if (k.sounding >= 0)
+        {
+            processor.getKeyboardState().noteOff(ch, k.sounding, 0.0f);
+            k.sounding = -1;
+        }
 }
 
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
@@ -952,23 +1006,11 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
     {
         int dir = (key == juce::KeyPress::upKey) ? 1 : -1;
-        // Held computer-keyboard notes MUST be released before the octave moves, or the key's
-        // note-off (on release) maps to the NEW octave and the old note hangs. A plain
-        // MidiKeyboardState::allNotesOff() is not enough (user report 2026-08-09: after a couple of
-        // octave shifts, keys went silent): it silences the STATE but leaves MidiKeyboardComponent's
-        // own `keysPressed` bitmask set for the old note numbers. Those bits are never cleared —
-        // nothing maps to them once the octave moved — so returning to that octave finds the bit
-        // already set and skips the noteOn entirely. clearKeyMappings() is the only public JUCE call
-        // that resets that bitmask (it runs the private resetAnyKeysInUse), so re-apply the map after
-        // shifting. It also releases exactly the notes this component started, leaving notes played
-        // on external MIDI hardware — and the ch.16 auto-play drone — untouched.
+        // Nothing is released here: a held key keeps its note (resolved at press time in
+        // updateComputerKeys), so playing continues across the shift and only the NEXT key press
+        // lands in the new octave. Shifting mid-note is a normal performance gesture — the octave
+        // switch on a hardware synth does not cut the sound either.
         kbBaseOctave = juce::jlimit(1, 7, kbBaseOctave + dir);
-        if (keyboard)
-        {
-            keyboard->clearKeyMappings();
-            keyboard->setKeyPressBaseOctave(kbBaseOctave);
-            applyComputerKeyMap();
-        }
         return true;
     }
     // Spacebar re-plucks the Karplus string. Trigger the actual PLUCK button so it

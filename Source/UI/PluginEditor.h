@@ -175,7 +175,20 @@ private:
     juce::uint32  fKeyLastPressMs[12]{ };   // time of the previous press (double-press detection)
 
     // On-screen keyboard (auto-play drone is handled automatically by the processor)
-    void applyComputerKeyMap();   // (re-)registers the QWERTZ note map; also on every octave shift
+    // Computer-key playing is OURS, not JUCE's (its mappings are cleared): MidiKeyboardComponent
+    // keys its internal state by NOTE NUMBER, so shifting the octave under a held key desynchronises
+    // it — the note-off would land on the new octave. We remember the note each PHYSICAL key started,
+    // so a held note keeps playing (and releases correctly) across any number of octave shifts.
+    struct ComputerKey
+    {
+        juce::KeyPress key;
+        int offsetFromC = 0;
+        int sounding    = -1;   // MIDI note this key started, or -1
+    };
+    void buildComputerKeyMap();                    // fills computerKeys (QWERTZ layout)
+    void updateComputerKeys (bool allowNoteOn);    // reconcile physical key state -> notes
+    void releaseComputerKeys();                    // note-off everything we started
+    std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
