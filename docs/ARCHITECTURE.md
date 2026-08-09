@@ -138,10 +138,20 @@ Two threads matter: the **[audio thread](Glossary.md#audio-thread)** (all of
   atomic `count` (release/acquire). A voice caches a raw
   `WavetableBank*`/`SampleSet*` (and since Story 12.2 a `SampleZone*` picked at
   note-on) for a whole render block or longer, so entries are **never freed** —
-  "reset" merely lowers `count` (deferred reclamation). Loading is
-  message-thread-only. The sample store is bounded by three caps (60 s per
-  file, 300 s per set, global byte budget = the pre-multisampling worst case of
-  32 × 60 s stereo), so never-free stays a bounded policy, not a leak.
+  "reset" merely lowers `count` (deferred reclamation). The sample store is
+  bounded by three caps (60 s per file, 3600 s per set, 4 GiB global byte
+  budget — raised in Story 12.5 for velocity-layered pianos), so never-free
+  stays a bounded policy, not a leak.
+- **Sample loading is off the message thread** (Story 12.6): a background
+  thread in the processor scans the Samples folder, and a preset asks for the
+  set it needs by NAME through `PresetIO::requestSamplerSet` instead of
+  decoding it inline — the loader pulls that set to the front of its queue and
+  selects it when it lands. `SampleBankStore::writerLock` serialises only
+  `append()`, **never a decode**: holding it across a set would block the
+  message thread for as long as a grand piano takes to decode. The audio
+  thread's read path is untouched (`count`/`sets` via release/acquire).
+  `pendingSamplerSetName` keeps the 1.5 s LiveState autosave from persisting
+  the name behind an index that has not been resolved yet.
 - Spatial DSP (`HrtfPanner`, `BinauralRoom`) is fully static-sized.
 
 ### 3.2 `parameterChanged` deferral
@@ -409,8 +419,17 @@ light only the targeted oscillator's knob.
 Side channels the module specs deliberately do not cover: `RackLayout`
 (above), `Sampler.File` (sample set referenced **by name**, re-resolved on
 load — since Story 12.2 the name may also resolve to a multisample subfolder
-`Samples\<SetName>\`), and `PresetBanks.json` (F1–F12 assignments — a global
-app setting, not part of any preset).
+`Samples\<SetName>\`; since 12.6 the resolution is handed to the background
+loader instead of decoding inline), and `PresetBanks.json` (F1–F12
+assignments — a global app setting, not part of any preset).
+
+One preset-authoring trap worth naming: picking a mapped set BY HAND in the
+SET combo runs `oneShotForMappedSet`, which sets MODE, STRETCH, ENVELOPE,
+output mode and — if REL is still 0 — a release time. **A preset load
+deliberately does not run it**, so a sampler preset must carry `Release`
+itself where its `.sfz` does not supply `ampeg_release` on every region
+(Splendid has it on its six lowest regions per layer only; Salamander on all
+of them). Without it the notes cut off at note-off.
 
 ---
 
@@ -468,6 +487,15 @@ One shared movable `HelpPanel` (not a CallOutBox — it must survive outside
 clicks and be draggable); a small `MarkdownRenderer` supports paragraphs,
 headings, bullets, bold/italic/code. The UI language is a global app setting
 (`ui-language.txt`).
+
+The panel **opts out of the editor's display-fit scale** so its text keeps its
+true size (at 0.65 the 14 pt body type rendered at ~9 pt). Two things follow
+from that, both easy to get wrong: JUCE transforms a component's *whole*
+bounds — position included — so the wanted position must be fed in as its
+pre-image (`placeHelpPanel`, the same trick JUCE's own `setCentrePosition`
+uses); and a magnified panel no longer fits everywhere, so a long text first
+gets a **wider** panel (340 → 760 px, fewer wrapped lines) and scrolls inside
+its viewport only if it is still taller than the window.
 
 ### 7.4 Customization & preset bank
 
