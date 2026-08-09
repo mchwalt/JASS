@@ -9,6 +9,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "phaser"; m.title = "PHASER"; m.persistObject = "Phaser"; m.enableParamId = "phaserOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W6H1;
+        m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning
         m.params = {
             { "phaserOn",       "Enabled",  "",      ParamSpec::Kind::Bool },
             { "phaserType",     "Type",     "TYPE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Phaser", "Flanger" } },

@@ -448,9 +448,13 @@ namespace rack
                     // Combo: box centred on the cell centre-line — EXACTLY like the press
                     // buttons (LOAD WAV etc., which use withSizeKeepingCentre) — so all
                     // interactive widgets sit on one line; its NAME caption sits directly above.
+                    // Width is CAPPED and centred, exactly as a knob is capped at 62 px: one width
+                    // for every combo in the rack, instead of "whatever this module's cell happens
+                    // to be". Wider cells now leave air rather than a stretched box.
                     const int boxY = juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
+                    const int cw = juce::jmin (cr.getWidth(), kComboW * juce::jmax (1, span) / 2);
                     cell.caption->setBounds (cr.getX(), boxY - capH, cr.getWidth(), capH);
-                    cell.widget->setBounds (cr.getX(), boxY, cr.getWidth(), wH);
+                    cell.widget->setBounds (cr.getCentreX() - cw / 2, boxY, cw, wH);
                 }
             }
             else if (cell.widget != nullptr)

@@ -10,6 +10,45 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.6] – 2026-08-10
+
+### Changed
+- **The rack got wider instead of smaller, and only pays for the modules it
+  shows.** The display-fit scale had run out of headroom: it sat at 0.65, which
+  is exactly where the rack stops being readable, and it was derived from *every
+  module that exists* — so hiding a module bought nothing while the type kept
+  shrinking. Three things changed together. The floor is now derived rather than
+  guessed (`1.0 / display->scale`, i.e. never render smaller than 1:1 in physical
+  pixels — 0.667 on a 150 % desktop). The worst case now counts only the modules
+  that **may appear**; revealing one can only add to that set, so switching
+  presets still never moves the window, but hiding one gives its height back. And
+  the grid went from 24 columns at 1520 px to **30 columns at 1920 px**: a column
+  stays ~53 px, so no module changed physical size, but six more per row pack the
+  rack two rows shorter. Height was the scarce dimension while more than half the
+  screen width sat unused. Measured on a 3413×1440 desktop: 1980 px of rack at
+  scale 0.65 → 1484 px at 0.85.
+- **Seven modules start hidden**: SUB, CROSS MOD, GLIDE, PITCH ENV, BITCRUSH,
+  FORMANT and PHASER are enabled in none of the presets we ship or keep locally,
+  and rack height is now a budget worth spending on what is actually used.
+  Nothing is lost — "hidden ⇒ silent" was already the invariant, and a preset that
+  switches one of them on reveals it automatically. Show any of them at any time
+  via the MODULES panel, which now also states what the current selection costs
+  (`Rack 1484 / 1929 px · scale 0.85`) so the trade is visible instead of silent.
+- **One width for every combo box.** A combo used to fill its cell, and a cell is
+  module width divided by content — so the same control came out 106 px wide in MOD
+  MATRIX and 120 px in FILTER, ragged across the rack for no reason. Combos are now
+  capped and centred exactly the way every knob is capped at 62 px.
+- **Three modules resized to fit their contents.** The LFOs went one column
+  narrower, which is what packs MODULATION into three rows instead of four and buys
+  most of the rack height above. MOD MATRIX went the other way: its cells were
+  53 px, and a knob is capped to its cell, so its AMT knobs were visibly undersized —
+  it now spans the 28 columns at which a cell reaches the standard 62 px. The
+  SAMPLER's SET combo gave up the extra width it claimed for long set names; the full
+  name still shows in the drop-down, and the freed slot makes the module's own knobs
+  a little larger.
+
+## [2026.08.5] – 2026-08-09
+
 ### Fixed
 - **Shifting the computer-keyboard octave no longer interrupts playing.** Up/Down
   used to release every held note first, and worse, notes went permanently dead:

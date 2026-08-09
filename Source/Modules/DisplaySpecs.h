@@ -28,7 +28,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "keyboard"; m.title = "KEYBOARD"; m.persistObject = "Keyboard"; m.enableParamId = "keyboardOn";
-        m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Input; m.size = rack::SizeClass::W24H1;
+        m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Input; m.size = rack::SizeClass::W30H1;
         m.params = { { "keyboardOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 1.0f } };
         return m;
     }
