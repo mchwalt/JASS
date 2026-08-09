@@ -10,18 +10,19 @@
 // spec can't read APVTS). Here PARAM ships placeholder labels only (the editor overrides them).
 //
 // SRC item order MUST match ModSource; MOD item order MUST match ModDest::modules (both append-only,
-// ComboBoxAttachment maps by index). Amount is bipolar. Layout: W24H2 = 3 slots/row × 2 rows.
+// ComboBoxAttachment maps by index). Amount is bipolar. Layout: W28H2 = 3 slots/row × 2 rows.
 namespace Modules
 {
     inline ModuleSpec modMatrix()
     {
         ModuleSpec m;
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
-        // NOT full width since the 30-column grid (Story 7.3): its six slots were laid out for 24
-        // columns, and at 30 they only gained whitespace. 24 of 30 keeps the controls at the size
-        // they were tuned for; the zone height is unchanged either way (it is the zone's last
-        // module and owns its two rows regardless).
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W24H2;
+        // 28 of the 30 columns (Story 7.3). NOT full width - at 30 the module only gained
+        // whitespace - but not narrower either: its 8 slots make 56 content slots over 2 rows,
+        // i.e. 28 cells, and a cell must reach 62 px or ModuleFrame caps the knob to the cell.
+        // W24 gave 53 px cells and visibly undersized AMT knobs. The zone height is unchanged
+        // at any of these widths - MOD MATRIX is its zone's last module and owns its two rows.
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28H2;
 
         const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
         juce::StringArray mod;   // MOD labels — generated from the single source (ModMatrixCatalog.h)
