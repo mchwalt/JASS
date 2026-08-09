@@ -64,12 +64,12 @@ trägt dafür einen `<a id="…">`-Anker — beim Ergänzen bitte beibehalten.
 | <a id="moduledescriptor" name="moduledescriptor"></a>**ModuleDescriptor** | Deklarative Beschreibung eines Moduls (Größenklasse, Titel, Typ-Tag, Enable-Param, Body-Elemente). Trägt eine stabile `id` (= Layout-Schlüssel). |
 | <a id="bodyelement" name="bodyelement"></a>**BodyElement** | Ein Bestandteil des Modul-Bodys: `Knob`, `Combo`, `Toggle`, `Action`, `FileAction`, `Caption`, `Display`. |
 | <a id="caption" name="caption"></a>**Caption** | Statisches Text-Element im Body (heißt so wegen Namenskollision mit `juce::Label`). |
-| <a id="sizeclass" name="sizeclass"></a>**SizeClass / Größenklasse** | Grid-Footprint eines Moduls, benannt `W{Spalten}H{Reihen}` auf dem 24er-Raster (z. B. `W4H1`, `W24H2`). Eine Daten-Tabelle (`sizeClassSpec`) definiert alle. |
+| <a id="sizeclass" name="sizeclass"></a>**SizeClass / Größenklasse** | Grid-Footprint eines Moduls, benannt `W{Spalten}H{Reihen}` auf dem 30er-Raster (z. B. `W4H1`, `W30H2`). Eine Daten-Tabelle (`sizeClassSpec`) definiert alle. |
 | <a id="mod-ring" name="mod-ring"></a>**Mod-Ring** | Live-Modulations-Ring um einen Knob, der die aktuelle Modulation (Quelle: Mod-Matrix) anzeigt; deklarativ über `modTarget` (AD-8). |
 | <a id="typetag" name="typetag"></a>**typeTag** | Identitäts-/Farb-Tag eines Moduls (Generator/Modulator/Processor). |
 | <a id="enableparam" name="enableparam"></a>**enableParam / enabledWhen** | Zwei Quellen für den Enable-Zustand eines Moduls: echter Bool-Parameter (Header-Toggle) bzw. abgeleitetes Prädikat (liest nur APVTS). Bei beidem gilt UND. |
 | <a id="activewhen" name="activewhen"></a>**activeWhen** | Per-Knob-Relevanz-Prädikat: dimmt einen einzelnen Knopf (z. B. PAN in Mono-Modi), ohne das Modul zu deaktivieren. |
-| <a id="auto-fit" name="auto-fit"></a>**Auto-Fit** | Fensterbreite fix 1520 px; die Höhe folgt automatisch dem sichtbaren Rack, auf kleinen Displays wird die ganze UI herunterskaliert (AD-12). Der Skalierungsfaktor wird **einmalig** aus dem größtmöglichen Rack (alle Module sichtbar) bestimmt und bleibt dann konstant — sonst würde das Fenster bei jedem Preset-Wechsel die Größe ändern. |
+| <a id="auto-fit" name="auto-fit"></a>**Auto-Fit** | Fensterbreite fix 1920 px; die Höhe folgt automatisch dem sichtbaren Rack, auf kleinen Displays wird die ganze UI herunterskaliert (AD-12). Der Skalierungsfaktor kommt aus dem größtmöglichen Rack — seit Story 7.3 aber nur über die Module, die **erscheinen dürfen** (sichtbar oder standardmäßig sichtbar), nicht über alle vorhandenen. Ein Preset kann nur einblenden, nie ausblenden, deshalb springt das Fenster beim Preset-Wechsel weiterhin nicht; blendet man selbst ein Modul aus, bekommt man die Höhe jetzt zurück. Untergrenze: `1 / display->scale`, also nie kleiner als physisch 1:1. |
 
 ## Preset & State
 

@@ -9,6 +9,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "bitcrush"; m.title = "BITCRUSH"; m.persistObject = "Bitcrush"; m.enableParamId = "bitcrushOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W3H1;
+        m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning
         m.params = {
             { "bitcrushOn",   "Enabled", "",     ParamSpec::Kind::Bool },
             { "bitcrushBits", "Bits",    "BITS", ParamSpec::Kind::Int, juce::NormalisableRange<float> (1.0f, 16.0f, 1.0f), 8.0f, {}, {}, LFOTarget::BitcrushBits },

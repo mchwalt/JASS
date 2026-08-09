@@ -9,6 +9,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "formant"; m.title = "FORMANT"; m.persistObject = "Formant"; m.enableParamId = "formantOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W3H1;
+        m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning
         // Defaults tuned so the vowel effect is instantly recognisable when enabled (user 2026-07-19):
         // VOWEL 0.5 = "I"/"ee" (bright, distinct formants), RESO 0.7 (pronounced), MIX 0.8 (mostly
         // wet but keeps some dry so it never goes fully silent on thin/sine input).

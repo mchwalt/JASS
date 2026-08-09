@@ -137,10 +137,16 @@ namespace rack
         int maxHeight (int width) const;
 
         // --- fixed grid constants (frozen from the mockup; AC4) ---
-        static constexpr int kDefaultCols = 24;   // fine proportional grid (was 12); a pure layout
-                                                  // raster, independent of knob size. 24 columns give
-                                                  // the granularity to size small modules tightly
-                                                  // (module widths are expressed in 24ths).
+        static constexpr int kDefaultCols = 30;   // fine proportional grid (12 → 24 → 30); a pure
+                                                  // layout raster, independent of knob size.
+                                                  // Story 7.3 widened 24 → 30 together with the
+                                                  // design width 1520 → 1920: that keeps the column
+                                                  // at ~53 px, so every module keeps its physical
+                                                  // size, but six more columns per row pack the
+                                                  // rack two rows shorter. Height is the scarce
+                                                  // dimension (the display-fit scale was at its
+                                                  // readable floor); width was idle. MEASURED:
+                                                  // 1980 px → 1608 px, fit scale 0.65 → 0.79.
         static constexpr int kGutter      = 10;   // uniform gutter between cells
         static constexpr int kHu          = 114;  // one rack-unit row height (L spans 2).
                                                   // Sized so a 1-unit body fits name caption +

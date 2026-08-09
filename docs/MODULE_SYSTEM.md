@@ -173,11 +173,16 @@ dimming + green activity dots).
 
 ### Size classes
 
-`SizeClass` is named by grid footprint on the 24-column grid:
-`W{cols}H{rows}` (`W2H1 … W24H2`, 19 entries). One data table
+`SizeClass` is named by grid footprint on the 30-column grid:
+`W{cols}H{rows}` (`W2H1 … W30H2`, 21 entries). One data table
 (`sizeClassSpec` → `{cols, units, slotCapacity, knobDiameter}`) defines them
 all; `slotCapacity` is only a debug guard (`assertFitsClass`). Adding a width
 = one new enum entry + one table row. All knobs are `KnobSize::Small` (46 px).
+
+The counts are **absolute columns**, which is why widening the grid from 24 to
+30 (Story 7.3) left every module untouched: they keep their physical size and
+simply pack more per row. Only "full width" is relative — those modules moved
+`W24 → W30`.
 
 ---
 
