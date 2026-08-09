@@ -20,11 +20,11 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   set and skipped the note-on. Every visited octave left dead keys behind.
   Computer-key playing is now handled by JASS instead of JUCE (whose implementation
   keys its state by note number and therefore cannot survive an octave shift): the
-  note is resolved once, at press time, and remembered per PHYSICAL key. A held key
-  keeps sounding across any number of shifts, releases correctly, and only the next
-  key press lands in the new octave — like the octave switch on a hardware synth.
-  Only notes JASS itself started are ever released, so external MIDI hardware and
-  the auto-play drone are untouched.
+  note each PHYSICAL key started is remembered, so held keys FOLLOW the shift —
+  their note moves with the octave and keeps playing, and the later release still
+  lands on whatever note is actually sounding. Dead keys are structurally impossible
+  now, however often you switch. Only notes JASS itself started are ever released,
+  so external MIDI hardware and the auto-play drone are untouched.
 
 ### Changed
 - **MOD MATRIX AMT steps in 0.001 instead of 0.01.** One AMT unit means
