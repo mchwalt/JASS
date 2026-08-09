@@ -1708,6 +1708,12 @@ void SynthyEditor::buildRack()
     for (int i = 1; i <= kNumLFOs; ++i)
         addRackModule(makeModuleDescriptor(Modules::lfo(i)));
     addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
+    // STEP SEQ (Story 15.1) — spec-driven; the editor only adds the mutual exclusion with the ARP.
+    // Both REPLACE the held chord, so both running at once is not a thing; rather than a silent
+    // precedence rule that leaves a lit ARP doing nothing, switching one on switches the other off,
+    // so the rack always shows the truth. (The processor enforces the precedence as well, for the
+    // case where a preset arrives with both set.)
+    addRackModule(makeModuleDescriptor(Modules::stepSeq()));
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
