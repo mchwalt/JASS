@@ -1569,7 +1569,12 @@ void SynthyEditor::buildRack()
         Combo setCombo{ P::samplerSet, "SET",
                         std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
         setCombo.indexIsValue = true;
-        setCombo.slots = 3;   // set names are user-given and long ("SalamanderPiano") — show them in full
+        // Standard width (2 slots), NOT the 3 it used to claim for long set names like
+        // "SalamanderPiano" (user 2026-08-09: "beim SAMPLER ist die Combo noch zu breit").
+        // Since every combo is now capped at one width, a wider one just stands out. The
+        // full name still shows in the drop-down list; only the closed box may clip it.
+        // Side benefit: one content slot back makes the SAMPLER cells - and its knobs -
+        // a little larger (52 -> 56 px; still under the standard 62, accepted by the user).
         // A mapped (multisample) set is a chromatic INSTRUMENT — Loop mode starts its notes at
         // the shared loop phase, i.e. mid-sample, which no piano survives; and STRETCH buys
         // nothing when every zone transposes at most a couple of semitones, while costing CPU,
