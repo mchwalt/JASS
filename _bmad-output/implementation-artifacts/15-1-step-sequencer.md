@@ -83,25 +83,27 @@ internal sequencer only earns its keep in the standalone.
     1.0 and the offsets `0,+15,0,+12,0,0,+12,0,+12,0,+12,+10,0,+12,0,+5`, holding **B1** must produce
     the measured line. Verified by the user against the record.
 
-## Rack body: `W24H2`, two rows of eight
+## Rack body: full width, two rows of eight
 
-A `W24H2` module has the full rack width inside it — **1496 px** at the design width. Two rows of
-eight steps give **187 px per step**, ample for two small sliders (pitch above, gate below) plus the
-step number; even sixteen abreast would still be 93 px each. An earlier draft of this story claimed
-32 controls would not fit — that measured against MOD MATRIX, whose slots are full-size combos. A
-step is two narrow sliders, the standard sequencer idiom, and a third row is not needed.
+After Story 7.3 the grid is 30 columns at a 1920 px design width, so the module is **`W30H2`** and has
+about **1870 px** of inner width. Two rows of eight steps give **230 px per step**, ample for two small
+sliders (pitch above, gate below) plus the step number. An earlier draft claimed 32 controls would not
+fit — that measured against MOD MATRIX, whose slots are full-size combos. A step is two narrow
+sliders, the standard sequencer idiom, and a third row is not needed.
 
-Ship it **`defaultVisible = false`**. It costs no rack height until it is used, and a preset that
-enables it is revealed automatically by `revealEnabledModules()`.
+Ship it **`defaultVisible = false`**: it costs no rack height until used, and a preset that enables it
+is revealed automatically by `revealEnabledModules()`.
 
 ## Depends on Story 7.3 — do not start before it lands
 
-`W24H2` is 2 × 114 px + gutter = **238 px** of rack height. Under the rule in force before 7.3 that
-came straight off the display-fit scale, which is **already at its readable floor** (0.65 on the
-maintainer's screen = 1981 px of worst-case rack, exactly where we are). Story 7.3 raises the floor
-to a named constant, makes the worst case count only what may appear, and hides seven never-used
-modules — that is what pays for this module. **7.3 also reports the measured headroom; if there is
-none, that is a decision point before any code is written here.**
+Two rows are 2 × 114 px + gutter = **238 px** of rack height, and the display-fit scale is **already
+at its readable floor** (0.65 = 1/1.5 on the maintainer's 150 %-scaled desktop). The packing model in
+7.3 measured the consequence precisely: at today's 24 columns the sequencer lands at **1980 px / 0.65,
+below the floor — even with the seven sleeping modules hidden**, because they free 248 px and this
+module costs 238. At 7.3's 30 columns it comes out at **1856 px / 0.69**, which fits.
+
+In other words: without 7.3 this story cannot be built at a readable size. If 7.3's measurement in
+the running app disagrees with its model, that is a decision point before any code is written here.
 
 ## Decide with the user before building the rack body
 
