@@ -284,8 +284,11 @@ suppresses the migration.
 | F1–F12 preset bank (single = load, double = assign) | `PresetBanks.json` |
 | Audio/MIDI settings (standalone "Options" button — JUCE dialog): output device, sample rate, buffer, **MIDI input devices** | `JASS.settings` |
 
-Window size is *not* user-configurable: width fixed 1520 px, height auto-fits
-the visible rack, auto-downscale on small displays.
+Window size is *not* user-configurable: width fixed 1920 px, height auto-fits
+the visible rack, auto-downscale on small displays — with a floor of 1:1
+physical pixels (`1.0 / display->scale`), because below that the rack stops
+being readable. Rack height is therefore a budget; the MODULES panel shows
+what the current module selection costs against it.
 
 ### 7.3 Test-reset
 
@@ -341,9 +344,9 @@ a header struct embedded in `SynthVoice` requires a clean rebuild**
 
 | Constant | Value | Location |
 |---|---|---|
-| `kDesignW` (fixed width) | 1520 px | `UI/PluginEditor.cpp` |
+| `kDesignW` (fixed width) | 1920 px | `UI/PluginEditor.cpp` |
 | Auto-fit scale clamp | 0.5…1.0 | `UI/PluginEditor.cpp` |
-| `Rack::kDefaultCols` / `kHu` / `kGutter` | 24 / 114 px / 10 | `UI/rack/Rack.h` |
+| `Rack::kDefaultCols` / `kHu` / `kGutter` | 30 / 114 px / 10 | `UI/rack/Rack.h` |
 | `kZoneHeaderH` / `kZoneLabelW` | 28 / 172 | `UI/rack/Rack.h` |
 | `KnobSize::Small` (the standard knob) | 46 px | `UI/SynthySlider.h` |
 | `ModuleFrame` header/combo/button metrics | 22 / 22 / 90×26 | `UI/rack/ModuleFrame.h` |

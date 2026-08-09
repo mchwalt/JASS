@@ -542,13 +542,22 @@ namespace rack
 
     int Rack::maxHeight (int width) const
     {
-        // Measure the fully-populated rack: flip every entry visible, measure (apply == false,
-        // so nothing on screen moves), then put the real visibility back. Same const_cast-free
-        // reasoning as preferredHeight() — layout() only writes member scratch when applying.
+        // What the rack needs at `width` for every module that MAY appear — which is NOT every
+        // module that exists (Story 7.3). The set is "visible now, OR visible in the descriptor
+        // defaults":
+        //   · a preset revealing a module it enables (revealEnabledModules) can only ever add to
+        //     the visible set, so the measurement never oscillates while switching presets — the
+        //     property PR #27 was built for;
+        //   · a module the user hid in the MODULES panel drops out and gives its height BACK.
+        //     Before 7.3 this measured everything unconditionally, so hiding a module bought
+        //     exactly nothing while the fit scale sat at its readable floor.
+        // Measure with apply == false so nothing on screen moves; the model is restored either way.
         auto* self  = const_cast<Rack*> (this);
         auto  saved = self->layoutModel;
         for (auto& e : self->layoutModel)
-            e.visible = true;
+            if (! e.visible)
+                for (const auto& d : defaultLayout)
+                    if (d.id == e.id) { e.visible = d.visible; break; }
         const int h = self->layout (width, /*apply*/ false);
         self->layoutModel = std::move (saved);
         return h;
