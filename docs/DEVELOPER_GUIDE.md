@@ -321,6 +321,8 @@ a header struct embedded in `SynthVoice` requires a clean rebuild**
 | Constant | Value | Location |
 |---|---|---|
 | `SampleSet::kMaxSeconds` | 60 s (over-cap files rejected, never truncated) | `DSP/SampleBank.h` |
+| `SampleSet::kMaxSetSeconds` | 3600 s per set (raised in 12.5 for 4-layer pianos) | `DSP/SampleBank.h` |
+| `kMaxSampleStoreBytes` | 4 GiB global budget | `DSP/SampleBank.h` |
 | `SampleBankStore::MaxSets` | 32 | `DSP/SampleBank.h` |
 | `SamplePlayer::kXfadeSamples` (loop crossfade) | 256 | `DSP/SamplePlayer.h` |
 | `WavetableBankStore::MaxBanks` | 64 | `DSP/WavetableBank.h` |

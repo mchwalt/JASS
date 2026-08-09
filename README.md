@@ -54,6 +54,9 @@ info** so nothing is hidden and every control explains itself.
     **Splendid** Steinway and Alexander Holm's **Salamander** Yamaha C5, four
     velocity layers each. Unzip, pick the set, play:
     **[Optional piano multisample sets](#optional-piano-multisample-sets)**.
+    Sets load in the background, so a library of this size no longer delays
+    the start of the app — a patch's own instrument is fetched first and
+    selected as soon as it is ready.
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys
@@ -99,7 +102,9 @@ info** so nothing is hidden and every control explains itself.
   (incl. **"Matrix Showcase"**, which exercises the whole mod matrix) and example
   wavetables ship embedded and seed on first run
 - **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
-  double-press assigns; assignments are global
+  double-press assigns; assignments are global. **F8 = GrandPiano**: the
+  Splendid set with nothing else in the signal path, for when you just want a
+  piano
 
 Use the **MODULES** button to show/hide modules per zone, reorder them by drag &
 drop, and set each module's **left/right alignment** within its zone row via the
