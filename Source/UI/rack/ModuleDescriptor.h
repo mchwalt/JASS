@@ -261,7 +261,7 @@ namespace rack
             case SizeClass::W13H1: return { 13, 1, 13, KnobSize::Small };  // WAVETABLE (BANK+LOAD+6 knobs, roomier)
             case SizeClass::W14H1: return { 14, 1, 14, KnobSize::Small };  // WAVETABLE with PAN (BANK+LOAD+6 knobs)
             case SizeClass::W30H1: return { 30, 1, 30, KnobSize::Small };  // full-width single row (on-screen keyboard)
-            case SizeClass::W30H2: return { 30, 2, 60, KnobSize::Small };  // full-width two rows   (MOD MATRIX, STEP SEQ)
+            case SizeClass::W30H2: return { 30, 2, 60, KnobSize::Small };  // full-width two rows   (STEP SEQ)
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };

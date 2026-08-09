@@ -10,14 +10,18 @@
 // spec can't read APVTS). Here PARAM ships placeholder labels only (the editor overrides them).
 //
 // SRC item order MUST match ModSource; MOD item order MUST match ModDest::modules (both append-only,
-// ComboBoxAttachment maps by index). Amount is bipolar. Layout: W30H2 = 3 slots/row × 2 rows.
+// ComboBoxAttachment maps by index). Amount is bipolar. Layout: W24H2 = 3 slots/row × 2 rows.
 namespace Modules
 {
     inline ModuleSpec modMatrix()
     {
         ModuleSpec m;
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W30H2;
+        // NOT full width since the 30-column grid (Story 7.3): its six slots were laid out for 24
+        // columns, and at 30 they only gained whitespace. 24 of 30 keeps the controls at the size
+        // they were tuned for; the zone height is unchanged either way (it is the zone's last
+        // module and owns its two rows regardless).
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W24H2;
 
         const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
         juce::StringArray mod;   // MOD labels — generated from the single source (ModMatrixCatalog.h)
