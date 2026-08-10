@@ -74,6 +74,12 @@ info** so nothing is hidden and every control explains itself.
   parameters. Sources: LFO 1–4 / envelope / velocity. Each routing has a bipolar
   amount, auto-enables its source + target module, and shows a live modulation ring.
 - **Poly glide** (mono/legato/poly), **arpeggiator** (up/down/up-down/random)
+- **STEP SEQ** — a 32-step sequencer (two rows of sixteen) that plays a figure you
+  write, transposed by the key you hold. Per-step semitone offset and an on/off
+  switch (off = rest); one global GATE for note length, 1.0 holding each note into
+  the next step. Locked to the tempo like the LFOs and DELAY, or free-running. It
+  replaces the ARPEGGIATOR — both take over the held chord, so only one can run.
+  Point it at a drum map and the offsets pick the *instrument* instead of a pitch.
 
 **Processing & effects**
 - **Biquad filter** (lowpass/highpass, resonance) + **formant filter**
@@ -101,6 +107,8 @@ info** so nothing is hidden and every control explains itself.
 - **Presets** in the `.jass` format + an auto-saved live state; demo presets
   (incl. **"Matrix Showcase"**, which exercises the whole mod matrix) and example
   wavetables ship embedded and seed on first run
+- **`DAF Bass`** (F9) and **`Drum Pattern`** (F10) demo the STEP SEQ: a bass figure
+  measured off a 1981 record, and a drum pattern with real gaps driving the SAMPLER.
 - **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
   double-press assigns; assignments are global. **F8 = GrandPiano**: the
   Splendid set with nothing else in the signal path, for when you just want a
@@ -118,6 +126,11 @@ arrangement:
 
 **Prerequisites:** Visual Studio 2022 (C++ Desktop workload), CMake, Git.
 JUCE is a **Git submodule** (only the commit pointer lives in this repo).
+
+**CPU:** builds target **AVX** (`/arch:AVX`, `-mavx`), so a processor older than
+Sandy Bridge / Bulldozer (both 2011) will not run JASS. That is deliberate: the
+DSP is measurably ~3× faster than the SSE2 default, and AVX2 was measured to add
+nothing on top, so the lower of the two equally fast baselines was chosen.
 
 ```powershell
 # 1. Clone with the JUCE submodule
@@ -251,3 +264,17 @@ fetches the upstream repos (shallow) and assembles them around the curated
 the **Iowa Steinway**, still builds with `python tools/get_iowa_piano.py`
 (University of Iowa [MIS](https://theremin.music.uiowa.edu/MIS.html)
 recordings, freely available without restrictions).
+
+### Optional drum kit
+
+The `Drum Pattern` demo (F10) drives a drum map from the STEP SEQ: the step
+offsets pick the instrument, not a pitch. It expects
+[**SamsSonor**](https://github.com/sfzinstruments/SamsSonor) — Sam Greene's kit,
+mapped to SFZ by kinwie, **CC BY-SA 4.0**, ~35 MB. Nothing is redistributed here:
+download the repository yourself and drop it into `%AppData%\JASS\Samples\` as
+its own folder, so that `SamsSonor.sfz` sits next to its `Samples/` directory.
+JASS loads it straight from the upstream `.sfz` — no curated copy in between.
+
+One thing the kit does that JASS does not yet: **choke groups**. On a real kit a
+closed hi-hat silences the ringing open one (`group=` / `off_by=` in SFZ). JASS
+ignores those opcodes, so the two hats sound over each other.

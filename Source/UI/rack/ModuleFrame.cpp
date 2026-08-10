@@ -200,6 +200,22 @@ namespace rack
                 // here, so the initial state is set by the first poll.
                 if (k->activeWhen)
                     condKnobs.push_back ({ s, cells.back().caption, k->activeWhen });
+
+                // Per-knob ON/OFF switch (STEP SEQ steps): a checkbox in this cell's top-right,
+                // dimming the knob when off via the same condKnobs path as activeWhen. The
+                // predicate is built HERE from the parameter, so no editor injection is needed.
+                if (k->toggleParamId.isNotEmpty())
+                {
+                    auto* tb = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
+                    tb->setWantsKeyboardFocus (false);   // never steal focus from the on-screen keyboard
+                    addAndMakeVisible (*tb);
+                    buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+                        apvts, k->toggleParamId, *tb));
+                    cells.back().toggle = tb;
+                    if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
+                        condKnobs.push_back ({ s, cells.back().caption,
+                                               [v] { return v->load() > 0.5f; } });
+                }
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
@@ -433,6 +449,10 @@ namespace rack
                     cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
                     const int sw = juce::jmin (cr.getWidth(), 62);
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
+                    // The optional switch rides in the cell's top-right corner, on the caption's
+                    // line: it belongs to this knob, so it must not claim a cell of its own.
+                    if (cell.toggle != nullptr)
+                        cell.toggle->setBounds (cr.getRight() - 16, top - 1, 16, capH + 2);
                 }
                 else if (isButton)
                 {

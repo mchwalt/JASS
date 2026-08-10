@@ -10,6 +10,57 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **STEP SEQ — a 32-step note sequencer** (two rows of sixteen). Hold a key and an authored figure plays,
+  transposed by that key (the lowest held note is the root). Each step carries its own
+  semitone offset and a switch — off is a rest — while note length is one GATE for the whole
+  pattern, 1.0 holding each note into the next step;
+  step length is a note division on the same clock the LFOs and DELAY ride on, or a free
+  rate in steps per second. This is the thing the ARPEGGIATOR could never do: it can only
+  re-order the notes you are already holding, and it runs free in Hz rather than in time.
+  Both replace the held chord, so only one of the two can run — switching one on switches
+  the other off. Hidden by default (rack height is a budget); a preset that enables it
+  reveals it. Legato is the point of the gate design: at 1.0 the previous step's note-off
+  is emitted after the next note-on, so the notes overlap instead of leaving a hole.
+- **SFZ `#define` macros are understood.** A library that names its drum map once
+  (`#define $KEY_KICK 36` … `key=$KEY_KICK`) used to load as *nothing*: an unresolved
+  macro made every key unparsable, and an unparsable key drops its region. Kits like
+  SamsSonor now load straight from their own `.sfz`, with no curated copy in between.
+- **Generated SFZ sources no longer break a load.** SFZ reserves sample values starting
+  with `*` — `*silence` and the built-in waveforms — for sources it synthesises rather
+  than reads from disk. JASS looked them up as filenames, so one `*silence` region was
+  enough to fail an entire kit with “*silence is missing”. Those regions are skipped now.
+- **Free-running knobs grey out while tempo-synced.** With SYNC on a note division the
+  DSP ignores the LFO/STEP SEQ RATE and the DELAY TIME entirely, so those knobs now dim
+  the way any other inactive control does instead of sitting there looking live.
+- **Demo preset `Drum Pattern`** on F10 — the sequencer driving a drum map instead of a
+  melody: the step offsets pick the instrument (kick, snare, hats) rather than a pitch, and
+  two steps are switched off so the pattern has real gaps. Needs the free SamsSonor kit in
+  `%AppData%\JASS\Samples`; without it the SAMPLER simply finds no set.
+- **Demo preset `DAF Bass`** on F9 for fresh installs — the sequencer showing what it is for,
+  with the 16-step figure and the tone measured off the record it was built against: a
+  sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced
+  LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
+
+### Changed
+- **Builds target AVX** (`/arch:AVX`, `-mavx`) instead of the SSE2 default. Measured on
+  the HRIR convolution: 303 ns per sample at SSE2, 94 ns at AVX — and 94 ns at AVX2, which
+  buys nothing here, so the lower of two equally fast baselines was taken. It does raise
+  the floor: a CPU older than 2011 (Sandy Bridge / Bulldozer) will no longer run JASS.
+- **`Drum Pattern` plays at a sensible level.** The sequencer sends velocity 100 and an SFZ
+  without `amp_veltrack` tracks velocity per the spec default, which alone costs 4.2 dB; the
+  preset's SAMPLER level now compensates.
+
+### Fixed
+- **Kunstkopf stopped stumbling on busy patches.** Every voice pans all nine generators
+  every sample, whether or not their modules are on — a disabled generator just returns 0.
+  In Kunstkopf that zero still went through the full 128-tap HRIR convolution, which is not
+  free: one render costs ~1.3 % of a core, so nine generators across eight voices spent
+  ~94 % of a core filtering silence, and the audio callback started missing its deadline.
+  A single held note stayed clean, which is why it only showed up on the drum pattern. The
+  panner now skips a render once its history holds nothing but zeros — exact, not
+  approximate: measured 303 ns → 1.3 ns per silent sample with bit-identical output.
+
 ## [2026.08.6] – 2026-08-10
 
 ### Changed
