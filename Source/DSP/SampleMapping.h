@@ -13,7 +13,8 @@
 //   2. a minimal .sfz subset — <group>/<region> headers and the opcodes sample / key / lokey /
 //      hikey / pitch_keycenter / lovel / hivel (velocity layers, 12.5) / offset / ampeg_release /
 //      amp_veltrack / volume / tune, plus `#define $NAME value` macro substitution. EVERY other
-//      opcode is ignored, silently.
+//      opcode is ignored, silently, and a region whose sample is a generated source (`*silence`,
+//      `*sine`, …) is skipped rather than looked up as a file.
 // Note names resolve with C4 = MIDI 60 — the pitch-model convention used everywhere in JASS
 // (keyboard labelling, "FREQ knobs define the sound AT C4"). MESSAGE THREAD only.
 namespace SampleMapping
@@ -178,7 +179,14 @@ namespace SampleMapping
             if (vt    < 0.0f) vt = 100.0f;   // D1 (12.5): .sfz sets track velocity per spec default
             if (vol  == kUnsetF) vol  = 0.0f;
             if (tune == kUnsetI) tune = 0;
-            if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi && loVel <= hiVel)
+            // SFZ reserves sample values starting with '*' for generated sources — *silence and
+            // the built-in waveforms (*sine, *saw, *square, *noise). They are not filenames, and
+            // treating them as one made a whole kit fail to load ("*silence is missing"). Skip the
+            // region: we synthesise none of them, and *silence exists only to carry a choke group
+            // (Story 12.7), which contributes no sound of its own in any case.
+            const bool generated = sample.startsWithChar ('*');
+            if (! region.bad && ! group.bad && sample.isNotEmpty() && ! generated
+                && lo <= hi && loVel <= hiVel)
             {
                 Entry fresh;
                 fresh.file    = baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/'));
