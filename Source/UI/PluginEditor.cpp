@@ -1585,10 +1585,10 @@ void SynthyEditor::buildRack()
 
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
                    juce::String enableParam, std::vector<BodyElement> body,
-                   std::function<void()> onReset = {})
+                   std::function<void()> onReset = {}, bool visualOnly = false)
     {
         ModuleDescriptor d;
-        d.sizeClass = sc; d.type = type;
+        d.sizeClass = sc; d.type = type; d.visualOnly = visualOnly;
         // Stable slug from the title (e.g. "OSC 1" -> "osc1") — the RackLayout key for
         // show/hide + drag-drop (AD-10). Derived once here so every module gets one.
         d.id = title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
@@ -1970,9 +1970,15 @@ void SynthyEditor::buildRack()
     scope->setShowTitle(false);
     scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
     rackOwned.add(scope);
+    // visualOnly: the two VISUALIZATION modules are the only ones in the rack that nothing can be
+    // heard from, so hiding them frees their height for good (see ModuleDescriptor::visualOnly).
+    // Together they are one row of 2 units plus the zone header — measured at 286 px (1732 → 1446
+    // of a 1929 px budget), which is what makes room for another module of that size without
+    // touching the readability floor.
     add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
         { Display{ scope, 12 } },
-        [scope] { scope->resetTimeRange(); });   // ↺ restores the 10 ms default time-base
+        [scope] { scope->resetTimeRange(); },   // ↺ restores the 10 ms default time-base
+        /*visualOnly*/ true);
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
     spec->setShowTitle(false);
     spec->setEnableSource(apvts.getRawParameterValue(P::spectrumOn));   // spectrumOn off => freeze+blank
@@ -1981,7 +1987,8 @@ void SynthyEditor::buildRack()
     // for now) so every module carries the same header controls; wire real params here later.
     add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
         { Display{ spec, 12 } },
-        [] { });
+        [] { },
+        /*visualOnly*/ true);
 
     // The on-screen keyboard is itself a module (INPUT zone) so it can be hidden like any
     // other — e.g. when playing via an external MIDI keyboard. It wraps the existing keyboard

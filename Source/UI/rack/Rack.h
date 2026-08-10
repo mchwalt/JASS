@@ -136,6 +136,10 @@ namespace rack
         // Pure measurement: the layout model is restored before returning.
         int maxHeight (int width) const;
 
+        // Does this module only draw (see ModuleDescriptor::visualOnly)? Such a module may be
+        // hidden for good: it is exempt from the worst-case measurement and from auto-reveal.
+        bool isVisualOnly (const juce::String& id) const;
+
         // --- fixed grid constants (frozen from the mockup; AC4) ---
         static constexpr int kDefaultCols = 30;   // fine proportional grid (12 → 24 → 30); a pure
                                                   // layout raster, independent of knob size.
