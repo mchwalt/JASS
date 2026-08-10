@@ -11,7 +11,7 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
-- **STEP SEQ — a 24-step note sequencer.** Hold a key and an authored figure plays,
+- **STEP SEQ — a 32-step note sequencer** (two rows of sixteen). Hold a key and an authored figure plays,
   transposed by that key (the lowest held note is the root). Each step carries its own
   semitone offset and a switch — off is a rest — while note length is one GATE for the whole
   pattern, 1.0 holding each note into the next step;
@@ -41,6 +41,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   with the 16-step figure and the tone measured off the record it was built against: a
   sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced
   LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
+
+### Fixed
+- **Kunstkopf stopped stumbling on busy patches.** Every voice pans all nine generators
+  every sample, whether or not their modules are on — a disabled generator just returns 0.
+  In Kunstkopf that zero still went through the full 128-tap HRIR convolution, which is not
+  free: one render costs ~1.3 % of a core, so nine generators across eight voices spent
+  ~94 % of a core filtering silence, and the audio callback started missing its deadline.
+  A single held note stayed clean, which is why it only showed up on the drum pattern. The
+  panner now skips a render once its history holds nothing but zeros — exact, not
+  approximate: measured 303 ns → 1.3 ns per silent sample with bit-identical output.
 
 ## [2026.08.6] – 2026-08-10
 
