@@ -65,8 +65,14 @@ public:
 
         const double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
 
-        // Small discrete ranges (e.g. unison voices 1..7, octaves): exactly one interval per notch.
-        if (interval > 0.0 && range / interval <= 24.0)
+        // Discrete ranges (unison voices 1..7, octaves, a STEP SEQ step at ±24 semitones): exactly
+        // one interval per notch, and modifiers change nothing — there is nothing finer to reach.
+        // The bound was 24 positions until the sequencer arrived: at 49 positions a step knob fell
+        // through to the proportional branch below and moved TWO semitones per notch, which is not
+        // a pitch you can aim at (user 2026-08-10). A knob whose interval is a semitone is discrete
+        // however wide it is; only genuinely long integer ranges (SAMPLER ROOT, 24..96) still need
+        // the proportional feel, or crossing them would take a hundred notches.
+        if (interval > 0.0 && range / interval <= 48.0)
         {
             setValue(getValue() + dir * interval, juce::sendNotificationSync);
             return;

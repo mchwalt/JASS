@@ -80,6 +80,9 @@ info** so nothing is hidden and every control explains itself.
   the next step. Locked to the tempo like the LFOs and DELAY, or free-running. It
   replaces the ARPEGGIATOR — both take over the held chord, so only one can run.
   Point it at a drum map and the offsets pick the *instrument* instead of a pitch.
+  Clicking or turning a step sounds it — over the keyboard's current C, so you can
+  write the figure by ear instead of playing the pattern back to find out what you
+  wrote.
 
 **Processing & effects**
 - **Biquad filter** (lowpass/highpass, resonance) + **formant filter**

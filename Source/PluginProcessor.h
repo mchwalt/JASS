@@ -47,6 +47,12 @@ public:
     juce::MidiKeyboardState& getKeyboardState() { return keyboardState; }
     WaveformCapture& getWaveformCapture() { return waveformCapture; }
 
+    // Channel the editor previews a STEP SEQ step on (Story 15.3). It cannot be channel 1: while
+    // the sequencer (or the ARP) runs, every channel-1 note in the buffer is dropped so that only
+    // the pattern sounds — which is exactly when the preview is wanted. 15 passes through
+    // untouched, the same trick the auto-play drone plays on 16.
+    static constexpr int kAuditionChannel = 15;
+
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
     // from the message thread).

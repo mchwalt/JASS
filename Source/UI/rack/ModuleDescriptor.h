@@ -93,6 +93,13 @@ namespace rack
         // other greyed control in the rack. Unlike activeWhen this needs no editor injection:
         // ModuleFrame owns the parameter and builds the predicate itself.
         juce::String toggleParamId;
+
+        // Optional preview hook (Story 15.3): a knob whose value IS a pitch can sound it while it
+        // is being edited — STEP SEQ, where a step is a number of semitones and writing a figure
+        // otherwise means guessing. Called with (value, true) on every user-driven change and
+        // (0, false) when the gesture ends. Injected by the EDITOR, which is the only place that
+        // knows the keyboard state and the current octave.
+        std::function<void (int value, bool sounding)> audition;
     };
 
     struct Combo
