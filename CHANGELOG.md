@@ -42,6 +42,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced
   LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
 
+### Changed
+- **Builds target AVX** (`/arch:AVX`, `-mavx`) instead of the SSE2 default. Measured on
+  the HRIR convolution: 303 ns per sample at SSE2, 94 ns at AVX — and 94 ns at AVX2, which
+  buys nothing here, so the lower of two equally fast baselines was taken. It does raise
+  the floor: a CPU older than 2011 (Sandy Bridge / Bulldozer) will no longer run JASS.
+- **`Drum Pattern` plays at a sensible level.** The sequencer sends velocity 100 and an SFZ
+  without `amp_veltrack` tracks velocity per the spec default, which alone costs 4.2 dB; the
+  preset's SAMPLER level now compensates.
+
 ### Fixed
 - **Kunstkopf stopped stumbling on busy patches.** Every voice pans all nine generators
   every sample, whether or not their modules are on — a disabled generator just returns 0.

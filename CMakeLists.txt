@@ -89,6 +89,24 @@ file(GLOB JASS_SAMPLES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Samples/*.
                                          "${CMAKE_CURRENT_SOURCE_DIR}/Samples/*.sfz")
 juce_add_binary_data(JASS_Samples HEADER_NAME Samples.h NAMESPACE Samples SOURCES ${JASS_SAMPLES})
 
+# Vectorisation baseline: AVX, not the compiler default.
+#
+# MSVC on x64 defaults to SSE2, which leaves most of the DSP scalar. MEASURED on the Kunstkopf
+# 128-tap HRIR convolution (2026-08-10, tools-free microbenchmark, one panner, ns per sample):
+#     SSE2  303.2      AVX  93.9      AVX2  93.9
+# So AVX is worth 3.2x here — and AVX2 is worth NOTHING on top of it, because this code is
+# multiply-accumulate over contiguous floats and gains nothing from AVX2's integer/gather work.
+# Taking the lower of two equally fast settings costs nothing and keeps two more years of CPUs
+# running: AVX is Sandy Bridge (2011) / Bulldozer (2011), AVX2 would demand Haswell (2013).
+#
+# This does raise the floor: a pre-2011 CPU will fault on an illegal instruction rather than run
+# slowly. That is the trade being made deliberately, not a side effect.
+if (MSVC)
+    target_compile_options(JASS PUBLIC /arch:AVX)
+else()
+    target_compile_options(JASS PUBLIC -mavx)
+endif()
+
 target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
