@@ -33,6 +33,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **Free-running knobs grey out while tempo-synced.** With SYNC on a note division the
   DSP ignores the LFO/STEP SEQ RATE and the DELAY TIME entirely, so those knobs now dim
   the way any other inactive control does instead of sitting there looking live.
+- **Demo preset `Drum Pattern`** on F10 — the sequencer driving a drum map instead of a
+  melody: the step offsets pick the instrument (kick, snare, hats) rather than a pitch, and
+  two steps are switched off so the pattern has real gaps. Needs the free SamsSonor kit in
+  `%AppData%\JASS\Samples`; without it the SAMPLER simply finds no set.
 - **Demo preset `DAF Bass`** on F9 for fresh installs — the sequencer showing what it is for,
   with the 16-step figure and the tone measured off the record it was built against: a
   sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced

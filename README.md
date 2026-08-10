@@ -251,3 +251,17 @@ fetches the upstream repos (shallow) and assembles them around the curated
 the **Iowa Steinway**, still builds with `python tools/get_iowa_piano.py`
 (University of Iowa [MIS](https://theremin.music.uiowa.edu/MIS.html)
 recordings, freely available without restrictions).
+
+### Optional drum kit
+
+The `Drum Pattern` demo (F10) drives a drum map from the STEP SEQ: the step
+offsets pick the instrument, not a pitch. It expects
+[**SamsSonor**](https://github.com/sfzinstruments/SamsSonor) — Sam Greene's kit,
+mapped to SFZ by kinwie, **CC BY-SA 4.0**, ~35 MB. Nothing is redistributed here:
+download the repository yourself and drop it into `%AppData%\JASS\Samples\` as
+its own folder, so that `SamsSonor.sfz` sits next to its `Samples/` directory.
+JASS loads it straight from the upstream `.sfz` — no curated copy in between.
+
+One thing the kit does that JASS does not yet: **choke groups**. On a real kit a
+closed hi-hat silences the ringing open one (`group=` / `off_by=` in SFZ). JASS
+ignores those opcodes, so the two hats sound over each other.

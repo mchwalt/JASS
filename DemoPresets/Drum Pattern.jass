@@ -1,0 +1,337 @@
+{
+  "FormatVersion": 6,
+  "Name": "Drum Pattern",
+  "Modified": false,
+  "Filter": {
+    "Enabled": false,
+    "Type": "Lowpass",
+    "Cutoff": 550.0,
+    "Resonance": 0.710000038146973
+  },
+  "Compressor": {
+    "Enabled": false,
+    "Threshold": -18.0,
+    "Ratio": 2.0,
+    "Attack": 10.000000953674316,
+    "Release": 120.0,
+    "Makeup": 0.0
+  },
+  "Stereo": {
+    "Enabled": true,
+    "Mode": "Stereo-Pan",
+    "Width": 0.5,
+    "Time": 12.0,
+    "Room": 0.5
+  },
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 120.0
+  },
+  "Sub": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Octave": "-1 Oct",
+    "Level": 0.5,
+    "Pan": 0.0
+  },
+  "Noise": {
+    "Enabled": false,
+    "Type": "White",
+    "Amount": 0.5,
+    "Pan": 0.0
+  },
+  "Formant": {
+    "Enabled": false,
+    "Vowel": 0.5,
+    "Resonance": 0.699999988079071,
+    "Mix": 0.799999952316284
+  },
+  "Distortion": {
+    "Enabled": false,
+    "Type": "SoftClip",
+    "Drive": 0.5,
+    "Mix": 1.0
+  },
+  "Wavefold": {
+    "Enabled": false,
+    "Drive": 0.299999982118607,
+    "Symmetry": 0.0,
+    "Mix": 1.0
+  },
+  "Bitcrush": {
+    "Enabled": false,
+    "Bits": 8.0,
+    "Rate": 1.0,
+    "Mix": 1.0
+  },
+  "Phaser": {
+    "Enabled": false,
+    "Type": "Phaser",
+    "Rate": 0.5,
+    "Depth": 0.699999988079071,
+    "Feedback": 0.5,
+    "Mix": 0.5
+  },
+  "Chorus": {
+    "Enabled": false,
+    "Rate": 1.5,
+    "Depth": 0.005000000353903,
+    "Mix": 0.5
+  },
+  "Delay": {
+    "Enabled": false,
+    "SyncDiv": "Free",
+    "Time": 0.299999982118607,
+    "Feedback": 0.399999976158142,
+    "Mix": 0.299999982118607
+  },
+  "Reverb": {
+    "Enabled": false,
+    "RoomSize": 0.699999988079071,
+    "Damping": 0.5,
+    "Mix": 0.299999982118607
+  },
+  "Arp": {
+    "Enabled": false,
+    "Mode": "Up",
+    "Rate": 8.0,
+    "Octaves": 2.0,
+    "Gate": 0.5
+  },
+  "Glide": {
+    "Enabled": false,
+    "Mode": "Mono",
+    "Time": 0.300000011920929
+  },
+  "PitchEnv": {
+    "Enabled": false,
+    "Amount": 0.0,
+    "Time": 0.300000011920929
+  },
+  "Osc1": {
+    "Enabled": false,
+    "Waveform": "Sawtooth",
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "Osc2": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Frequency": 523.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "Osc3": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Frequency": 131.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Feedback": 0.0,
+    "Pan": 0.0
+  },
+  "CrossMod": {
+    "On": false,
+    "Mode": "RingMod",
+    "SrcA": "OSC 1",
+    "SrcB": "OSC 2"
+  },
+  "Lfo1": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "Lfo2": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "Lfo3": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "Lfo4": {
+    "Enabled": false,
+    "Waveform": "Sine",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 2.0,
+    "Depth": 0.5
+  },
+  "ModMatrix": {
+    "On": false,
+    "Slot1Source": "LFO 1",
+    "Slot1Module": "Off",
+    "Slot1Param": 0.0,
+    "Slot1Amount": 0.5,
+    "Slot2Source": "LFO 1",
+    "Slot2Module": "Off",
+    "Slot2Param": 0.0,
+    "Slot2Amount": 0.5,
+    "Slot3Source": "LFO 1",
+    "Slot3Module": "Off",
+    "Slot3Param": 0.0,
+    "Slot3Amount": 0.5,
+    "Slot4Source": "LFO 1",
+    "Slot4Module": "Off",
+    "Slot4Param": 0.0,
+    "Slot4Amount": 0.5,
+    "Slot5Source": "LFO 1",
+    "Slot5Module": "Off",
+    "Slot5Param": 0.0,
+    "Slot5Amount": 0.5,
+    "Slot6Source": "LFO 1",
+    "Slot6Module": "Off",
+    "Slot6Param": 0.0,
+    "Slot6Amount": 0.5,
+    "Slot7Source": "LFO 1",
+    "Slot7Module": "Off",
+    "Slot7Param": 0.0,
+    "Slot7Amount": 0.5,
+    "Slot8Source": "LFO 1",
+    "Slot8Module": "Off",
+    "Slot8Param": 0.0,
+    "Slot8Amount": 0.5
+  },
+  "Karplus": {
+    "Enabled": false,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "Damping": 0.5,
+    "Stretch": 0.0,
+    "Pan": 0.0
+  },
+  "Wavetable": {
+    "Enabled": false,
+    "BankIndex": 0.0,
+    "Position": 0.160000011324883,
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.200000002980232,
+    "Pan": 0.0
+  },
+  "Adsr": {
+    "Enabled": false,
+    "Attack": 0.005,
+    "Decay": 0.05,
+    "Sustain": 1.0,
+    "Release": 0.05
+  },
+  "Scope": {
+    "Enabled": true
+  },
+  "Spectrum": {
+    "Enabled": true
+  },
+  "Keyboard": {
+    "Enabled": true
+  },
+  "PresetBank": {
+    "Enabled": true
+  },
+  "Sampler": {
+    "Enabled": true,
+    "Set": 0.0,
+    "Root": 60.0,
+    "Start": 0.0,
+    "End": 1.0,
+    "Mode": "One-Shot",
+    "Stretch": false,
+    "Level": 0.6,
+    "Pan": 0.0,
+    "Speed": 1.0,
+    "Release": 1.0,
+    "File": "SamsSonor"
+  },
+  "StepSeq": {
+    "Enabled": true,
+    "Pitch1": 0.0,
+    "Step1": true,
+    "Pitch2": 6.0,
+    "Step2": true,
+    "Pitch3": 6.0,
+    "Step3": true,
+    "Pitch4": 6.0,
+    "Step4": true,
+    "Pitch5": 2.0,
+    "Step5": true,
+    "Pitch6": 6.0,
+    "Step6": true,
+    "Pitch7": 0.0,
+    "Step7": false,
+    "Pitch8": 6.0,
+    "Step8": true,
+    "Pitch9": 0.0,
+    "Step9": true,
+    "Pitch10": 6.0,
+    "Step10": true,
+    "Pitch11": 0.0,
+    "Step11": true,
+    "Pitch12": 6.0,
+    "Step12": true,
+    "Pitch13": 2.0,
+    "Step13": true,
+    "Pitch14": 6.0,
+    "Step14": true,
+    "Pitch15": 0.0,
+    "Step15": false,
+    "Pitch16": 10.0,
+    "Step16": true,
+    "SyncDiv": "1/16",
+    "Rate": 8.0,
+    "Pitch17": 0.0,
+    "Step17": true,
+    "Pitch18": 0.0,
+    "Step18": true,
+    "Pitch19": 0.0,
+    "Step19": true,
+    "Pitch20": 0.0,
+    "Step20": true,
+    "Pitch21": 0.0,
+    "Step21": true,
+    "Pitch22": 0.0,
+    "Step22": true,
+    "Pitch23": 0.0,
+    "Step23": true,
+    "Pitch24": 0.0,
+    "Step24": true,
+    "Pitch25": 0.0,
+    "Step25": true,
+    "Pitch26": 0.0,
+    "Step26": true,
+    "Pitch27": 0.0,
+    "Step27": true,
+    "Pitch28": 0.0,
+    "Step28": true,
+    "Pitch29": 0.0,
+    "Step29": true,
+    "Pitch30": 0.0,
+    "Step30": true,
+    "Pitch31": 0.0,
+    "Step31": true,
+    "Pitch32": 0.0,
+    "Step32": true,
+    "Length": 16.0,
+    "Gate": 0.5
+  }
+}
