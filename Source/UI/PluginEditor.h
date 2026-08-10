@@ -148,6 +148,11 @@ private:
     void showModulesMenu();
     void refitHeight();   // recompute window height from the rack's visible content (AD-12)
     double fitScale = 0.0;   // the ONE display-fit scale (0 = not computed yet); see refitHeight()
+    // The screen the current fit was measured on. Dragging the window to a monitor of a different
+    // size or scaling has to re-fit — nothing else triggers refitHeight() when only the position
+    // changes, and the window would keep the other screen's scale.
+    juce::Rectangle<float> lastFitDisplay;   // JUCE 9: userBounds is float
+    double lastFitDisplayScale = 0.0;
     // The help panel opts OUT of that scale so its text stays readable — these three keep the
     // sizing, the "cancel the transform" and the resulting on-screen size in one place.
     double helpScale = 1.0;   // magnification the panel is currently shown at (>= 1.0)

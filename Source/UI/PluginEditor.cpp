@@ -35,6 +35,21 @@ namespace EditorGeom
     {
         return (int) ((screenH - kChrome) / juce::jmax (0.01, scale)) - kBodyTop - kBodyBottom - 2 * kMargin;
     }
+
+    // The display a given on-screen rectangle sits on — NOT the primary one. Both the fit scale and
+    // the MODULES budget line asked for getPrimaryDisplay(), which is only the same thing on a
+    // single-monitor desk. On the maintainer's (JASS on a 5120x2160 at 150 %, a smaller primary
+    // elsewhere) the budget line reported a screen the window had never been on: 1732 px needed
+    // against 1020 px "available", while the window sat comfortably on a screen with room to spare.
+    // Falls back to the primary display before the editor has a peer (bounds still empty).
+    inline const juce::Displays::Display* displayFor (juce::Rectangle<int> screenArea)
+    {
+        const auto& displays = juce::Desktop::getInstance().getDisplays();
+        if (! screenArea.isEmpty())
+            if (auto* d = displays.getDisplayForRect (screenArea))
+                return d;
+        return displays.getPrimaryDisplay();
+    }
 }
 
 // --- Rack customization panel (Story 4.2) -----------------------------------
@@ -80,13 +95,16 @@ namespace
         // Story 7.3: rack height is a BUDGET, not something the fit scale can keep absorbing —
         // it already sits at its readable floor. Show what the current selection costs, so hiding
         // or revealing a module is a visible trade instead of type that silently gets smaller.
-        // Returns { text, overBudget }.
-        std::pair<juce::String, bool> budgetLine() const
+        // Returns { text, detail, overBudget } — the detail line names the DISPLAY the numbers were
+        // measured on. Without it the line is a riddle when it disagrees with what one sees, and it
+        // did disagree: it used to measure the primary display rather than this one.
+        struct Budget { juce::String text, detail; bool over = false; };
+        Budget budgetLine() const
         {
             using namespace EditorGeom;
-            auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+            auto* disp = displayFor (getScreenBounds());
             if (disp == nullptr)
-                return { {}, false };
+                return {};
             const auto ua = disp->userBounds;
             const double minScale = juce::jlimit (0.5, 1.0, 1.0 / juce::jmax (1.0, (double) disp->scale));
             const int need   = rack.maxHeight (kDesignW - 2 * kMargin);
@@ -96,15 +114,26 @@ namespace
                                                 juce::jmin ((ua.getHeight() - kChrome) / worstH,
                                                             ua.getWidth() / (double) kDesignW));
             const bool over = need > budget;
+            // Both separators must be declared UTF-8. juce::String(const char*) takes plain ASCII,
+            // so the raw '·' and '—' in the English literals arrived as mojibake ("Ä") while the
+            // German ones, already wrapped, were fine (maintainer 2026-08-10: "Sonderzeichen!").
             juce::String t;
             t << "Rack " << need << " / " << budget << " px"
-              << (isDE ? juce::String (juce::CharPointer_UTF8 (" · Anzeige "))
-                       : juce::String (" · scale "))
+              << juce::String (juce::CharPointer_UTF8 (isDE ? " · Anzeige " : " · scale "))
               << juce::String (scale, 2);
             if (over)
-                t << (isDE ? juce::String (juce::CharPointer_UTF8 (" — zu hoch, ein Modul ausblenden"))
-                           : juce::String (" — over budget, hide a module"));
-            return { t, over };
+                t << juce::String (juce::CharPointer_UTF8 (isDE ? " — zu hoch!" : " — over budget!"));
+
+            // Second line: which screen this was measured on. The warning above had to shrink to
+            // fit the 300 px panel, so the advice moves down here where there is room for it.
+            juce::String d;
+            d << juce::roundToInt (ua.getWidth()) << juce::String (juce::CharPointer_UTF8 (" × "))
+              << juce::roundToInt (ua.getHeight())
+              << " @ " << juce::String (disp->scale * 100.0, 0) << " %";
+            if (over)
+                d << juce::String (juce::CharPointer_UTF8 (isDE ? " · Modul ausblenden"
+                                                                : " · hide a module"));
+            return { t, d, over };
         }
 
         void paint (juce::Graphics& g) override
@@ -154,10 +183,14 @@ namespace
                 auto band = juce::Rectangle<int> (0, listHeight(), getWidth(), kBudgetH);
                 g.setColour (juce::Colour (0xff11141a));
                 g.fillRect (band);
-                const auto [text, over] = budgetLine();
-                g.setColour (over ? juce::Colour (0xffe0b050) : juce::Colours::white.withAlpha (0.55f));
+                const auto b = budgetLine();
+                auto top = band.removeFromTop (kBudgetH / 2);
+                g.setColour (b.over ? juce::Colour (0xffe0b050) : juce::Colours::white.withAlpha (0.55f));
                 g.setFont (juce::FontOptions (12.0f));
-                g.drawText (text, band.reduced (8, 0), juce::Justification::centredLeft);
+                g.drawText (b.text, top.reduced (8, 0), juce::Justification::centredLeft);
+                g.setColour (juce::Colours::white.withAlpha (b.over ? 0.55f : 0.35f));
+                g.setFont (juce::FontOptions (11.0f));
+                g.drawText (b.detail, band.reduced (8, 0), juce::Justification::centredLeft);
             }
 
             paintToast (g);   // drag-to-reorder hint (fades in after a rest, then out)
@@ -355,7 +388,8 @@ namespace
         bool          mouseInside  = false;
 
         static constexpr int kW = 300, kRowH = 26, kBtnH = 30;   // +40 vs. before for the L/R align tags
-        static constexpr int kBudgetH = 20;   // Story 7.3: the rack-height budget line
+        static constexpr int kBudgetH = 34;   // Story 7.3: the rack-height budget line — two rows
+                                              // since the display it measured is named underneath
         static constexpr juce::uint32 kRestMs = 3000;   // rest time before the hint appears
         static constexpr juce::uint32 kFadeMs =  300;   // fade in / out duration
         static constexpr juce::uint32 kHoldMs = 4300;   // fully-visible hold (=> ~4.9 s total)
@@ -658,9 +692,15 @@ void SynthyEditor::refitHeight()
     // On a desktop at 150 % that is 1/1.5 = 0.667 — and 0.65 is exactly where the maintainer says
     // the rack stops being readable (2026-08-09). At 100 % it is 1.0, at 125 % it is 0.8. Below
     // this JASS would be smaller than an unscaled UI, which is not a trade worth making.
-    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    //
+    // Measured on the display the WINDOW IS ON, not the primary one — those are the same thing only
+    // on a single-monitor desk. On the maintainer's (JASS on a 5120x2160 at 150 %, primary elsewhere)
+    // the scale was being derived from a screen the window had never touched.
+    if (auto* disp = EditorGeom::displayFor(getScreenBounds()))
     {
         const auto ua = disp->userBounds;        // excludes the taskbar
+        lastFitDisplay = ua;                     // so the timer can spot a move to another screen
+        lastFitDisplayScale = disp->scale;
         const double minScale = juce::jlimit(0.5, 1.0, 1.0 / juce::jmax(1.0, (double) disp->scale));
         const int worstRackH = rackBody ? rackBody->maxHeight(rackW) : rackH;
         const int worstH = juce::jmax(1015, worstRackH + kBodyTop + kBodyBottom + 2 * kMargin);
@@ -682,11 +722,30 @@ void SynthyEditor::showModulesMenu()
     // The reorderable customization list (Story 4.2) in a call-out anchored to the button.
     // Parent = nullptr (desktop) so the editor's auto-fit transform doesn't skew mouse coords.
     auto panel = std::make_unique<RackCustomizePanel>(*rackBody, currentLang);
+
+    // NOT CallOutBox::launchAsynchronously: its private callback runs a 200 ms timer that dismisses
+    // the box as soon as JASS is no longer the foreground process (juce_CallOutBox.cpp ~line 78).
+    // For a menu that is fine; for this panel it is wrong — it carries the rack height BUDGET, a
+    // number one reads while doing something else, and it vanished the moment the user clicked into
+    // another window (maintainer 2026-08-10). Everything else is JUCE's own pattern: the modal
+    // callback owns both the panel and the box, and ModalComponentManager deletes it once the modal
+    // state ends — so clicking outside still closes it, and nothing leaks.
+    struct KeepOpenCallout final : juce::ModalComponentManager::Callback
+    {
+        KeepOpenCallout (std::unique_ptr<juce::Component> c, juce::Rectangle<int> area)
+            : content (std::move (c)), box (*content, area, nullptr)
+        {
+            box.setVisible (true);
+            box.enterModalState (true, this);
+        }
+        void modalStateFinished (int) override {}
+        std::unique_ptr<juce::Component> content;
+        juce::CallOutBox box;
+    };
+
     // Keep a SafePointer to the call-out so the destructor can dismiss it before rackBody dies
     // (the panel references *rackBody).
-    modulesCallout = &juce::CallOutBox::launchAsynchronously(std::move(panel),
-                                                             modulesBtn.getScreenBounds(),
-                                                             nullptr);
+    modulesCallout = &(new KeepOpenCallout (std::move (panel), modulesBtn.getScreenBounds()))->box;
 }
 
 void SynthyEditor::timerCallback()
@@ -694,6 +753,16 @@ void SynthyEditor::timerCallback()
     // RT-safety (11.1): run any auto-enable coupling deferred from the audio thread (host automation)
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
+
+    // Dragged onto another monitor? Re-fit. Moving a window changes no bounds we already watch, so
+    // without this the rack keeps the previous screen's scale — on a desk that mixes a 5120x2160 at
+    // 150 % with a smaller display, that is the difference between fitting and being cut off. The
+    // check itself is two comparisons; refitHeight (which re-measures the rack) runs only on a
+    // real change.
+    if (lastFitDisplayScale > 0.0)
+        if (auto* disp = EditorGeom::displayFor (getScreenBounds()))
+            if (disp->userBounds != lastFitDisplay || disp->scale != lastFitDisplayScale)
+                refitHeight();
 
     double ratio = processor.getCurrentNoteRatio();
 
