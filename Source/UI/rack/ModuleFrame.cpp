@@ -215,6 +215,49 @@ namespace rack
                     if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
                         condKnobs.push_back ({ s, cells.back().caption,
                                                [v] { return v->load() > 0.5f; } });
+
+                    // Bringing a rest back sounds the step once (15.3), so you hear what you just
+                    // restored. The switch has no value of its own — it shares the knob's cell and
+                    // previews the knob's pitch. Nothing here releases the note: there is no
+                    // gesture to end, so the editor's safety cutoff closes it.
+                    if (k->audition)
+                        tb->onClick = [tb, s, aud = k->audition]
+                        {
+                            if (tb->getToggleState())
+                                aud ((int) s->getValue(), true);
+                        };
+                }
+
+                // Preview while editing (Story 15.3): re-trigger on every step of the knob so a
+                // drag scrubs the scale, and release when the drag ends. Chained ONTO whatever
+                // onValueChange already does — for a transform knob that is the write-back.
+                if (k->audition)
+                {
+                    // A CLICK sounds the step too, without changing it — the quickest way to ask
+                    // "what is on this step?". That is why the note is not released unconditionally
+                    // at the end of the gesture: a click and its release are milliseconds apart, so
+                    // a plain click has to ring on and be closed by the editor's timeout, while a
+                    // drag ends when the button does. The flag tells the two apart.
+                    auto moved = std::make_shared<bool> (false);
+                    s->onValueChange = [s, moved, aud = k->audition, prev = std::move (s->onValueChange)]
+                    {
+                        if (prev) prev();
+                        // Only a real gesture may sound. onValueChange also fires when a preset or
+                        // host automation moves the knob, and loading a preset must stay silent.
+                        // Dragging keeps the button captured even off the cell, while the wheel
+                        // never presses one — so either is enough to call it a gesture.
+                        if (s->isMouseButtonDown (true) || s->isMouseOver (true))
+                        {
+                            *moved = true;
+                            aud ((int) s->getValue(), true);
+                        }
+                    };
+                    s->onDragStart = [s, moved, aud = k->audition]
+                    {
+                        *moved = false;
+                        aud ((int) s->getValue(), true);
+                    };
+                    s->onDragEnd = [moved, aud = k->audition] { if (*moved) aud (0, false); };
                 }
             }
             else if (auto* c = std::get_if<Combo> (&el))
