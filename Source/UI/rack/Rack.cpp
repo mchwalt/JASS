@@ -472,11 +472,20 @@ namespace rack
                 driveEnable (e.id, false);   // hidden ⇒ silent (invariant)
     }
 
+    bool Rack::isVisualOnly (const juce::String& id) const
+    {
+        const auto* p = placedById (id);
+        return p != nullptr && p->frame != nullptr && p->frame->isVisualOnly();
+    }
+
     bool Rack::revealEnabledModules()
     {
         bool changed = false;
         for (auto& e : layoutModel)
-            if (! e.visible)
+            // A hidden VISUAL-ONLY module stays hidden: the user put the scope away, and no preset
+            // is entitled to bring back the 266 px that bought. Its enable param is driven off by
+            // enforceHiddenDisabled, which for a display only stops it drawing.
+            if (! e.visible && ! isVisualOnly (e.id))
                 if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
                 {
                     const auto pid = p->frame->enableParamId();
@@ -552,10 +561,14 @@ namespace rack
         //     Before 7.3 this measured everything unconditionally, so hiding a module bought
         //     exactly nothing while the fit scale sat at its readable floor.
         // Measure with apply == false so nothing on screen moves; the model is restored either way.
+        // A VISUAL-ONLY module (scope, spectrum) is the exception: it cannot be revealed behind the
+        // user's back — revealEnabledModules skips it — so what it frees, it frees for good. Before
+        // this, hiding either of them changed the worst case by nothing at all, while the panel's
+        // own over-budget advice said "hide a module" (maintainer measured it: 1732 px, unmoved).
         auto* self  = const_cast<Rack*> (this);
         auto  saved = self->layoutModel;
         for (auto& e : self->layoutModel)
-            if (! e.visible)
+            if (! e.visible && ! isVisualOnly (e.id))
                 for (const auto& d : defaultLayout)
                     if (d.id == e.id) { e.visible = d.visible; break; }
         const int h = self->layout (width, /*apply*/ false);
