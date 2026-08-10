@@ -41,6 +41,10 @@ namespace rack
         // Enable param id ("" if the module has no on/off) — lets the Rack couple
         // visibility to enable (hide ⇒ disable, show ⇒ enable once; Story 4.2).
         const juce::String& enableParamId() const noexcept { return desc.enableParam; }
+
+        // A module that only DRAWS (scope, spectrum): hiding it changes nothing you can hear, so
+        // the rack may take it at its word — see ModuleDescriptor::visualOnly.
+        bool isVisualOnly() const noexcept { return desc.visualOnly; }
         // Visibly "press" this module's first Action button (shows the press animation AND
         // fires its onClick) — lets a keyboard shortcut mirror the on-screen button.
         void clickFirstAction();
