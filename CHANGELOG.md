@@ -26,6 +26,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   (`#define $KEY_KICK 36` … `key=$KEY_KICK`) used to load as *nothing*: an unresolved
   macro made every key unparsable, and an unparsable key drops its region. Kits like
   SamsSonor now load straight from their own `.sfz`, with no curated copy in between.
+- **Generated SFZ sources no longer break a load.** SFZ reserves sample values starting
+  with `*` — `*silence` and the built-in waveforms — for sources it synthesises rather
+  than reads from disk. JASS looked them up as filenames, so one `*silence` region was
+  enough to fail an entire kit with “*silence is missing”. Those regions are skipped now.
 - **Free-running knobs grey out while tempo-synced.** With SYNC on a note division the
   DSP ignores the LFO/STEP SEQ RATE and the DELAY TIME entirely, so those knobs now dim
   the way any other inactive control does instead of sitting there looking live.
