@@ -51,7 +51,22 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   without `amp_veltrack` tracks velocity per the spec default, which alone costs 4.2 dB; the
   preset's SAMPLER level now compensates.
 
-### Fixed
+- **The MODULES panel no longer disappears when you leave JASS.** `CallOutBox::launchAsynchronously`
+  runs a timer that dismisses the box as soon as the app is not the foreground process. That is
+  right for a menu and wrong for this panel: it carries the rack height budget, a number one reads
+  while doing something else in another window. It now closes on a click outside, on ESC, or on the
+  MODULES button — not on losing focus.
+- **The window fits the screen it is actually on.** The display-fit scale and the budget line both
+  asked for the *primary* display, which is the same thing only on a single-monitor desk. Both now
+  measure the display under the window, and dragging JASS onto a monitor of a different size or
+  scaling re-fits it instead of keeping the old one's scale.
+- **The budget line names the display it measured**, on a second row — usable area and scaling — so
+  a number that disagrees with what you see can be diagnosed instead of guessed at. The
+  over-budget warning moved there too — the panel is 300 px wide and the old one-line form ran off
+  the edge unseen.
+- **No more mojibake in the English budget line.** `juce::String(const char*)` takes plain ASCII, so
+  the raw `·` and `—` in the English literals came out as garbage while the German ones — already
+  declared UTF-8 — were fine.
 - **Kunstkopf stopped stumbling on busy patches.** Every voice pans all nine generators
   every sample, whether or not their modules are on — a disabled generator just returns 0.
   In Kunstkopf that zero still went through the full 128-tap HRIR convolution, which is not
