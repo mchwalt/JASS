@@ -1460,6 +1460,21 @@ void SynthyEditor::buildRack()
              { Knob k{ std::move(id), std::move(lbl) }; k.modTarget = mt; return k; };
     // (Kfreq — the FREQ display-transform helper — is now in OscSpecs.h via freqDisplay.)
 
+    // A free-running knob is meaningless while its module is tempo-synced: SYNC other than "Free"
+    // means the division decides and the DSP ignores the knob entirely. Grey it out instead of
+    // leaving it sitting there looking live (user 2026-08-10) - the same treatment STEREO's
+    // WIDTH/TIME get outside Pseudo-Stereo. Index 0 is "Free" (SyncDivision::kNames), so the knob
+    // is active exactly when the index is 0.
+    auto greyWhenSynced = [&apvts] (ModuleDescriptor& d, const juce::String& knobId,
+                                    const juce::String& syncParamId)
+    {
+        auto* sync = apvts.getRawParameterValue (syncParamId);
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob> (&el))
+                if (k->paramId == knobId)
+                    k->activeWhen = [sync] { return sync != nullptr && (int) sync->load() == 0; };
+    };
+
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
                    juce::String enableParam, std::vector<BodyElement> body,
                    std::function<void()> onReset = {})
@@ -1716,14 +1731,29 @@ void SynthyEditor::buildRack()
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
     // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
     for (int i = 1; i <= kNumLFOs; ++i)
-        addRackModule(makeModuleDescriptor(Modules::lfo(i)));
+    {
+        auto d = makeModuleDescriptor(Modules::lfo(i));
+        greyWhenSynced(d, P::lfoRate(i), P::lfoSyncDiv(i));
+        addRackModule(std::move(d));
+    }
     addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
     // STEP SEQ (Story 15.1) — spec-driven; the editor only adds the mutual exclusion with the ARP.
     // Both REPLACE the held chord, so both running at once is not a thing; rather than a silent
     // precedence rule that leaves a lit ARP doing nothing, switching one on switches the other off,
     // so the rack always shows the truth. (The processor enforces the precedence as well, for the
     // case where a preset arrives with both set.)
-    addRackModule(makeModuleDescriptor(Modules::stepSeq()));
+    {
+        auto d = makeModuleDescriptor(Modules::stepSeq());
+        // Pin each step's on/off into the corner of its own pitch knob. The switch params are
+        // declared showInBody=false so they claim no grid cell; ModuleFrame draws them top-right
+        // and greys the knob when a step is off, through the same path as any inactive control.
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob>(&el))
+                if (k->paramId.startsWith("seqPitch"))
+                    k->toggleParamId = "seqStep" + k->paramId.substring(8);
+        greyWhenSynced(d, P::seqRate, P::seqSync);
+        addRackModule(std::move(d));
+    }
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
@@ -1811,7 +1841,12 @@ void SynthyEditor::buildRack()
     addRackModule(makeModuleDescriptor(Modules::bitcrush()));
     addRackModule(makeModuleDescriptor(Modules::phaser()));
     addRackModule(makeModuleDescriptor(Modules::chorus()));
-    addRackModule(makeModuleDescriptor(Modules::delay()));
+    {
+        // DELAY's free-running knob is TIME rather than RATE, but the relationship is identical.
+        auto d = makeModuleDescriptor(Modules::delay());
+        greyWhenSynced(d, P::delayTime, P::delaySyncDiv);
+        addRackModule(std::move(d));
+    }
     addRackModule(makeModuleDescriptor(Modules::reverb()));
     // Real visualizers (own instances, separate from the legacy ones behind the rack —
     // one-parent rule). setShowTitle(false): the module header already shows the title.

@@ -3,18 +3,18 @@
 #include <array>
 #include <algorithm>
 
-// STEP SEQ (Story 15.1) — a 24-step note sequencer. Where the Arpeggiator turns a held chord into
-// an automatic sequence, this plays an AUTHORED figure: each step carries its own semitone offset
-// and an on/off, and the whole pattern is transposed by the key you hold (the LOWEST held note is
-// the root). Emitted as MIDI into the synth's buffer from processBlock, exactly like Arpeggiator —
-// the raw held notes are filtered out upstream so only the pattern sounds.
+// STEP SEQ (Story 15.1) — a 32-step note sequencer. Where the Arpeggiator turns a held chord into
+// an automatic sequence, this plays an AUTHORED figure: each step carries its own semitone offset,
+// and the whole pattern is transposed by the key you hold (the LOWEST held note is the root).
+// Emitted as MIDI into the synth's buffer from processBlock, exactly like Arpeggiator — the raw
+// held notes are filtered out upstream so only the pattern sounds.
 //
-// Note LENGTH is ONE global gate, not a value per step (user 2026-08-10: "braucht man die G1-G16
-// überhaupt? die stehen allesamt auf 1"). The two jobs a per-step gate did are not equally useful:
-// making a step silent is essential — without it a pattern can only ever be a continuous run —
-// while varying the length step by step is a refinement almost no figure uses, and it cost a knob
-// per step in visual noise. The SQ-10 this is modelled on splits them the same way: step switches
-// plus one gate control.
+// A step has a pitch and an ON switch; note LENGTH is one global gate rather than a value per step.
+// That split took two rounds to find. Per-step gate knobs went first (they were all sitting at 1 —
+// the length of a single step is a refinement almost no figure uses). The switches that replaced
+// them went too, briefly, because in a LEGATO figure a silent step reads as the sound breaking off
+// rather than as rhythm. They came back for percussion, where a targeted gap is exactly the point —
+// but in the corner of the pitch knob instead of a row of their own, so they cost no rack height.
 //
 // The reference this was built against is measured, not described (DAF "Der Mussolini", 1981):
 // 192.0 ms per step = 156.25 BPM on eighths, dead stable over the full track; a 16-step figure of
@@ -29,13 +29,13 @@
 class StepSequencer
 {
 public:
-    static constexpr int kMaxSteps = 24;
+    static constexpr int kMaxSteps = 32;
 
     bool   enabled = false;
     double stepSeconds = 0.192;                  // one step; resolved per block by the processor
-    int    length = kMaxSteps;                   // 1..24 steps before the pattern repeats
+    int    length = kMaxSteps;                   // 1..32 steps before the pattern repeats
     std::array<int, kMaxSteps>  pitch {};        // semitone offset from the root, -24..+24
-    std::array<bool, kMaxSteps> on {};           // false = rest (that step stays silent)
+    std::array<bool, kMaxSteps> on {};           // false = rest: that step stays silent
     double gate = 1.0;                           // note length, ONE value for the whole pattern
 
     void prepare (double sr) { sampleRate = sr; reset(); }
@@ -114,7 +114,8 @@ public:
                 }
                 else if (soundingNote >= 0)
                 {
-                    // A rest ends the previous note even if its gate would have run on.
+                    // A rest ends the note that is running, even mid-gate. That IS a hole in a
+                    // legato pattern — which is what a rest is for.
                     out.addEvent (juce::MidiMessage::noteOff (channel, soundingNote), i);
                     soundingNote = -1;
                     gateCountdown = -1;
