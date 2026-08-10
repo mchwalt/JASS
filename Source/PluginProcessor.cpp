@@ -203,6 +203,15 @@ void SynthyProcessor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, in
         currentNoteRatio.store(1.0f);   // our drone note (C4) → FREQ knobs show base
         return;
     }
+    if (midiChannel == kAuditionChannel)
+    {
+        // A previewed STEP SEQ step (15.3) is not a played key: it must not enter the held-note
+        // set (the sequencer would take it as its root) and it must not move the FREQ display.
+        // It does step on the auto-play drone, though — auditioning against a droning C4 is
+        // exactly what one does not want to hear.
+        autoPlayEnabled.store(false);
+        return;
+    }
 
     // A real keypress silences the auto-play drone and, while held, drives the
     // FREQ-knob display to the played frequency (it reverts to base on release).
@@ -215,8 +224,8 @@ void SynthyProcessor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, in
 
 void SynthyProcessor::handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNote, float)
 {
-    if (midiChannel == kDroneChannel)
-        return;
+    if (midiChannel == kDroneChannel || midiChannel == kAuditionChannel)
+        return;                          // neither one ever entered the held-note set
     if (midiNote >= 0 && midiNote < 128)
         (midiNote < 64 ? heldNotesLo : heldNotesHi).fetch_and(~(1ULL << (midiNote & 63)));
     if (heldNotesLo.load() == 0 && heldNotesHi.load() == 0)

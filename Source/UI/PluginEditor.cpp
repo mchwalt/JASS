@@ -551,7 +551,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                                            // ROOT default 60 = C4); JUCE's default label was C3.
     keyboard->clearKeyMappings();   // computer keys are handled by US (see buildComputerKeyMap)
     buildComputerKeyMap();
-    keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
+    // Highlight played (ch.1) notes and the STEP SEQ preview (15.3) — turning a step lights the key
+    // it will play — but never the ch.16 auto-play drone, which nobody played.
+    keyboard->setMidiChannelsToDisplay(1 | (1 << (SynthyProcessor::kAuditionChannel - 1)));
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
     // Up / Down shift the octave; the keyboard must have focus — grabbed on launch/click).
     // The keyboard is added to the rack as a Display module (Input zone) in buildRack();
@@ -768,6 +770,11 @@ void SynthyEditor::timerCallback()
             updateComputerKeys (false);
         else
             releaseComputerKeys();
+
+        // Same idea for the STEP SEQ preview (15.3): a knob moved by the wheel or the value box
+        // never reports a drag end, so the note is closed on a timeout instead.
+        if (auditionTicks > 0 && --auditionTicks == 0)
+            auditionStep (0, false);
 
         // A modal popup (MODULES call-out, a combo dropdown, …) grabs the keyboard focus, so
         // computer-key playing pauses while it's open. When it closes, hand focus back to the
@@ -1075,6 +1082,38 @@ void SynthyEditor::retuneSoundingComputerKeys()
         processor.getKeyboardState().noteOn(ch, note, 1.0f);
         k.sounding = note;
     }
+}
+
+// Sound the step that is being edited (Story 15.3). A step's value is a number of SEMITONES, so it
+// needs a reference pitch: the computer keyboard's current C — MIDI 48 (C3) by default, moving with
+// the Up/Down octave keys, so the preview matches the octave you are playing in.
+//
+// It rides its own MIDI channel. Channel 1 would be swallowed: while STEP SEQ (or the ARP) runs the
+// processor drops every channel-1 note so that only the pattern sounds — precisely the moment a
+// preview is wanted. Velocity is the 100 the sequencer itself emits, or the preview would be louder
+// than the step it previews.
+void SynthyEditor::auditionStep(int semitones, bool sounding)
+{
+    auto& state = processor.getKeyboardState();
+    const int ch = SynthyProcessor::kAuditionChannel;
+    if (! sounding)
+    {
+        if (auditionNote >= 0)
+            state.noteOff(ch, auditionNote, 0.0f);
+        auditionNote  = -1;
+        auditionTicks = 0;
+        return;
+    }
+    const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + semitones);
+    if (note != auditionNote)
+    {
+        if (auditionNote >= 0)
+            state.noteOff(ch, auditionNote, 0.0f);   // re-trigger: a drag scrubs the scale
+        state.noteOn(ch, note, 100.0f / 127.0f);
+        auditionNote = note;
+    }
+    auditionTicks = 24;   // ~0.8 s at the editor's 30 Hz — the wheel and the value box have no
+                          // drag end, and a hanging note is worse than a short one
 }
 
 // Note-off everything we started (KEYBOARD module switched off, focus lost, …). Only our own
@@ -1747,10 +1786,16 @@ void SynthyEditor::buildRack()
         // Pin each step's on/off into the corner of its own pitch knob. The switch params are
         // declared showInBody=false so they claim no grid cell; ModuleFrame draws them top-right
         // and greys the knob when a step is off, through the same path as any inactive control.
+        // ... and let each step sound while it is being edited (Story 15.3): a semitone offset is
+        // a number, not a note, so writing a figure without hearing it is guesswork. The hook is
+        // injected here because only the editor knows the keyboard state and the current octave.
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
                 if (k->paramId.startsWith("seqPitch"))
+                {
                     k->toggleParamId = "seqStep" + k->paramId.substring(8);
+                    k->audition = [this](int semis, bool sounding) { auditionStep(semis, sounding); };
+                }
         greyWhenSynced(d, P::seqRate, P::seqSync);
         addRackModule(std::move(d));
     }

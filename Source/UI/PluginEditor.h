@@ -121,6 +121,7 @@ public:
     ~SynthyEditor() override
     {
         stopTimer();
+        auditionStep (0, false);   // the timer is gone — close a running STEP SEQ preview by hand
         // Dismiss the MODULES call-out NOW (before rackBody is destroyed): its RackCustomizePanel
         // holds a reference to *rackBody, so a callout left open when the editor closes would dangle.
         if (auto* co = modulesCallout.getComponent())
@@ -192,6 +193,14 @@ private:
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
+
+    // Preview of a STEP SEQ step while it is edited (Story 15.3). The step's value is an offset in
+    // semitones, so it is sounded against the computer keyboard's current C — C3 by default, and it
+    // follows the Up/Down octave keys, so the reference is the one you are playing on.
+    void auditionStep (int semitones, bool sounding);
+    int auditionNote  = -1;   // MIDI note currently previewing, or -1
+    int auditionTicks = 0;    // 30 Hz timer ticks until the safety release (a wheel or a typed
+                              // value has no drag end that could close the note)
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
     bool modalWasOpen = false;      // edge-detect: a modal popup (e.g. MODULES) closing => refocus keyboard
 
