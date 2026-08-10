@@ -11,6 +11,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **A STEP SEQ step sounds while you edit it.** A step's value is a number of semitones, not a
+  note, so writing a figure meant guessing an interval and then holding a key to find out what you
+  had written. Turning a step's knob now plays it — re-triggered on every semitone, so a drag
+  scrubs the scale — and so does simply clicking one, which is the quickest way to ask what a step
+  holds without changing it. Switching a rest back on sounds it once, too. The reference pitch is the
+  computer keyboard's current C (C3 by default), so it moves with the Up / Down octave keys and the
+  preview is in the octave you are playing in. It rides its own MIDI channel: while the sequencer
+  runs, every played note on channel 1 is deliberately swallowed so that only the pattern sounds —
+  which is exactly when the preview is wanted.
 - **STEP SEQ — a 32-step note sequencer** (two rows of sixteen). Hold a key and an authored figure plays,
   transposed by that key (the lowest held note is the root). Each step carries its own
   semitone offset and a switch — off is a rest — while note length is one GATE for the whole
@@ -43,6 +52,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
 
 ### Changed
+- **The mouse wheel counts in single steps on a discrete knob.** A knob whose interval is one
+  whole unit was only treated as discrete up to 24 positions; wider ones fell through to the
+  proportional feel, which on a STEP SEQ step (±24 semitones) meant **two semitones per notch** —
+  an interval you cannot aim at, and reachable only by holding Shift. Up to 48 positions the wheel
+  now moves exactly one unit, whatever the modifiers. Genuinely long integer ranges (SAMPLER ROOT,
+  24…96) keep the proportional feel, or crossing them would take a hundred notches.
 - **Builds target AVX** (`/arch:AVX`, `-mavx`) instead of the SSE2 default. Measured on
   the HRIR convolution: 303 ns per sample at SSE2, 94 ns at AVX — and 94 ns at AVX2, which
   buys nothing here, so the lower of two equally fast baselines was taken. It does raise
