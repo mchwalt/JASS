@@ -84,6 +84,7 @@ namespace rack
             juce::Component* widget  = nullptr;   // the primary widget in this cell
             juce::Label*     caption = nullptr;   // optional caption below it (knob/combo)
             int              slots   = 1;         // grid slots this cell spans
+            juce::Button*    toggle  = nullptr;   // optional per-knob on/off (top-right corner)
         };
 
         juce::AudioProcessorValueTreeState& apvts;

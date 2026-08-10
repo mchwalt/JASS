@@ -396,7 +396,6 @@ namespace
 
 void SynthyProcessor::parameterChanged(const juce::String& paramId, float newValue)
 {
-    juce::ignoreUnused(newValue);
     // APVTS calls this synchronously on the changing thread — the AUDIO thread under host automation.
     // Off the message thread we do NO allocation / setValueNotifyingHost: just flag the needed
     // reconciliation (atomic) and let reconcileParamCouplingsIfDirty() run it on the message thread.
@@ -406,6 +405,20 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     {
         if (onMsgThread) updateMatrixModuleEnables();
         else             matrixEnablesDirty.store(true);
+        return;
+    }
+
+    // ARP and STEP SEQ both REPLACE the held chord, so only one can run. Switching one ON
+    // switches the other OFF, which keeps the rack honest: no lit module sitting there doing
+    // nothing. Writing a parameter is a message-thread job (setValueNotifyingHost allocates and
+    // notifies), so under host automation this only raises the flag.
+    if (paramId == Parameters::ID::seqOn || paramId == Parameters::ID::arpOn)
+    {
+        if (newValue <= 0.5f)          // switching OFF frees the other one; nothing to reconcile
+            return;
+        pendingExclusiveIsSeq.store(paramId == Parameters::ID::seqOn);
+        if (onMsgThread) applySeqArpExclusion();
+        else             seqArpDirty.store(true);
         return;
     }
 
@@ -428,6 +441,18 @@ void SynthyProcessor::reconcileParamCouplingsIfDirty()
         updateMatrixModuleEnables();
     if (crossModDirty.exchange(false))
         applyCrossModCoupling(crossModIdFromCode(pendingCrossModCode.load()));
+    if (seqArpDirty.exchange(false))
+        applySeqArpExclusion();
+}
+
+// Message thread only: the module that was just switched on wins, the other is switched off.
+void SynthyProcessor::applySeqArpExclusion()
+{
+    using namespace Parameters;
+    const char* loser = pendingExclusiveIsSeq.load() ? ID::arpOn : ID::seqOn;
+    if (auto* p = apvts.getParameter(loser))
+        if (*apvts.getRawParameterValue(loser) > 0.5f)
+            p->setValueNotifyingHost(0.0f);
 }
 
 // The CROSS-MOD coupling body (message thread only): operand distinctness + enable coupling.
@@ -670,6 +695,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
     for (auto& l : uiLfos) l.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
+    stepSeq.prepare(sampleRate);
     arpHeldScratch.reserve(128);
 
     // Feed the real sample rate to the scope/spectrum displays (ms-window + bin→Hz).
@@ -835,7 +861,56 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {
         using namespace Parameters;
-        bool arpOn = *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
+        // STEP SEQ (15.1) and the ARP both REPLACE the held chord, so they cannot both run. The
+        // sequencer wins: it is the more specific instrument. The editor also switches the other
+        // module off when one is enabled, so the rack never shows a lit module doing nothing.
+        const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
+        bool arpOn = ! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
+        if (seqOn)
+        {
+            stepSeq.enabled = true;
+            stepSeq.length  = (int) *apvts.getRawParameterValue(ID::seqLength);
+            // Step length: the musical division against the resolved tempo (host BPM when hosted,
+            // else the MASTER knob), or the free-running RATE in steps/s. Same clock the LFOs and
+            // DELAY ride on, so a synced pattern cannot drift against a synced delay.
+            const int sdiv = (int) *apvts.getRawParameterValue(ID::seqSync);
+            stepSeq.stepSeconds = SyncDivision::isSynced(sdiv)
+                                      ? SyncDivision::delaySeconds(syncBpm, sdiv)
+                                      : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::seqRate));
+            stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
+            for (int s = 0; s < StepSequencer::kMaxSteps; ++s)
+            {
+                stepSeq.pitch[(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
+                stepSeq.on   [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
+            }
+
+            // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16
+            // auto-play drone is excluded, exactly as for the arp.
+            int root = -1;
+            for (int n = 0; n < 128 && root < 0; ++n)
+                if (keyboardState.isNoteOn(1, n)) root = n;
+            if (root >= 0)
+                stepSeq.setRoot(root);
+
+            // Drop the raw chord so only the pattern sounds; keep everything else.
+            auto& kept = arpKeptScratch; kept.clear();
+            for (const auto meta : midiMessages)
+            {
+                auto m = meta.getMessage();
+                if ((m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
+                    continue;
+                kept.addEvent(m, meta.samplePosition);
+            }
+            stepSeq.processBlock(buffer.getNumSamples(), kept, 1, root >= 0);
+            midiMessages.swapWith(kept);
+        }
+        else if (stepSeq.enabled)
+        {
+            stepSeq.enabled = false;       // just switched off => release its note
+            stepSeq.releaseAll(midiMessages, 1);
+            stepSeq.reset();
+        }
+
         if (arpOn)
         {
             arp.enabled = true;

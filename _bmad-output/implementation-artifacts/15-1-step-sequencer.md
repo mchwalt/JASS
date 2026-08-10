@@ -1,7 +1,9 @@
-# Story 15.1: STEP SEQ — a 16-step note sequencer
+# Story 15.1: STEP SEQ — a step sequencer (shipped with 32 steps)
 
-Status: ready-for-dev — scope agreed with the user 2026-08-09 ("erst Preset, dann (einfacher)
-Sequenzer"). Two decisions below need the user before the rack body is built.
+Status: **done** — implemented and user-verified 2026-08-10 ("die figur läuft"). The measured DAF
+figure plays; the module also drives a drum map in the `Drum Pattern` demo. Shipped as **32 steps**,
+not the 16 this story was written for — see the record at the bottom for why, and for the two other
+places where the plan and the result part company.
 
 <!-- Raised 2026-08-09 after measuring DAF "Der Mussolini" (1981) as a concrete target. The
      measurement is the acceptance test: the figure either comes out, or it does not. -->
@@ -141,4 +143,49 @@ the SRC list in `ModMatrixSpecs.h` (append-only, order must match).
 
 ## Dev Agent Record
 
-_Not started — story recorded 2026-08-09._
+Implemented 2026-08-10. `Source/DSP/StepSequencer.h` (new), `Source/Modules/StepSeqSpecs.h` (new),
+`Source/Audio/Parameters.h`, `Source/PluginProcessor.{h,cpp}`, `Source/UI/PluginEditor.cpp`,
+`Source/UI/rack/{ModuleDescriptor.h,ModuleFrame.h,ModuleFrame.cpp}`, `Resources/{EN,DE}/stepseq.md`,
+two demo presets. PR #40.
+
+### Where the result differs from the plan, and why
+
+**32 steps, not 16 — and the width went DOWN.** Written for 16, built to 24 on the maintainer's
+observation that the module had room, then to 32 as two rows of sixteen. The arithmetic decided it:
+24 steps in one row need the full W30 to keep cells at the 62 px a knob wants, while 32 split over
+two rows fit **W20**. More steps in ten columns less. W28 would be the hard limit at 19 cells per row.
+
+**The per-step gate took three rounds.** The story specified a gate value per step (0 = rest, 1 =
+legato). Shipped: one global GATE plus a per-step on/off. The path there is the useful part —
+(1) per-step gate knobs were all sitting at 1, because varying note *length* per step is a refinement
+almost no figure uses; (2) so they became switches, and then went entirely, because a silent step in
+a legato figure reads as the sound breaking off rather than as rhythm; (3) and came back for
+percussion, where a targeted gap is exactly the point. The resolution was placement, not semantics:
+the switch sits in the **corner of its own pitch knob** rather than in a row of its own, so rests
+cost no rack height. That needed one addition to the rack framework, `Knob::toggleParamId`.
+
+**Body layout came from the standard grid, not a hand-built step widget.** The story allowed for a
+custom body; it turned out unnecessary. The order of params in the spec is therefore **load-bearing**:
+cells fill in list order and wrap at 19, so SYNC and RATE have to sit between the two pitch blocks or
+every step in row 2 lands off its partner in row 1. That is stated in the spec header.
+
+**ARP interaction** went the recommended way: mutually exclusive, enabling one switches the other off,
+with the processor enforcing precedence for a preset that arrives with both set.
+
+### What this story did not foresee
+
+Driving a *drum map* — the maintainer's question "then each step would need its own voice?" — needed
+no sequencer feature at all: a chromatically mapped SAMPLER set turns the step offsets into
+instrument selection. Getting a free kit to load, however, uncovered two parser gaps (SFZ `#define`
+macros, and `sample=*silence`), each of which made a kit load as *nothing*. Using it then exposed a
+CPU cliff in Kunstkopf that had been there since Epic 10 (silent generators being convolved), and the
+AVX baseline. All four are in PR #40 and none of them are sequencer work.
+
+### Still open
+
+- **Story 15.2** — the per-step modulation row. Deliberately not built: a tempo-synced LFO on FILTER
+  CUTOFF already covers the reference case, as `DAF Bass` demonstrates.
+- **Story 12.7** — SFZ choke groups. Without it the drum kit's open and closed hi-hats sound over
+  each other. README says so.
+- The demo presets exist in two places (`DemoPresets/` and `%AppData%`). `seedDemoPresets` never
+  overwrites, so tuning one does not update the other — copy back deliberately.

@@ -8,6 +8,7 @@
 #include "DSP/BinauralRoom.h"
 #include "DSP/Compressor.h"
 #include "DSP/Arpeggiator.h"
+#include "DSP/StepSequencer.h"   // Story 15.1
 #include <vector>
 #include <map>
 
@@ -140,6 +141,7 @@ private:
     float prevMasterGain = 0.0f;   // last block's applied master gain — ramp target so LFO-modulated
                                    // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;
+    StepSequencer stepSeq;   // Story 15.1 — shares the ARP's note-replacement slot in processBlock
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
     juce::MidiBuffer arpKeptScratch;       // RT-safety (11.1): reused per block instead of a fresh
     juce::MidiBuffer glideRebuiltScratch;  // MidiBuffer (arp filter + mono-glide rebuild)
@@ -195,8 +197,11 @@ public:
 private:
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
+    std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion
+    std::atomic<bool> pendingExclusiveIsSeq { false };// which of the two was just switched on
     std::atomic<int>  pendingCrossModCode { -1 };   // encodes which CROSS-MOD param changed (alloc-free)
     void applyCrossModCoupling(const juce::String& paramId);   // the message-thread coupling body
+    void applySeqArpExclusion();   // Story 15.1: ARP and STEP SEQ cannot both replace the chord
 
     // CROSS MOD enable coupling: keep the two operand OSCs enabled while CROSS MOD is on (auto-on
     // with memory), and switch CROSS MOD off when a used operand OSC is turned off. Mirrors the
