@@ -111,8 +111,8 @@ namespace Parameters
         constexpr const char* seqRate   = "seqRate";
         constexpr const char* seqLength = "seqLength";
         constexpr const char* seqGate   = "seqGate";     // ONE note length for the whole pattern
-        JASS_INDEXED_ID (seqPitch, 24, "seqPitch", "")   // max index = StepSequencer::kMaxSteps
-        JASS_INDEXED_ID (seqStep,  24, "seqStep",  "")   // per-step on/off (off = rest)
+        JASS_INDEXED_ID (seqPitch, 32, "seqPitch", "")   // max index = StepSequencer::kMaxSteps
+        JASS_INDEXED_ID (seqStep,  32, "seqStep",  "")   // per-step on/off (off = rest)
 
         // Portamento / glide (append-only)
         constexpr const char* glideOn   = "glideOn";
@@ -259,7 +259,7 @@ namespace Parameters
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
-            for (int i = 1; i <= 24; ++i)       { seqPitch(i); seqStep(i); }
+            for (int i = 1; i <= 32; ++i)       { seqPitch(i); seqStep(i); }
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
                 { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); }
         }

@@ -22,6 +22,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   the other off. Hidden by default (rack height is a budget); a preset that enables it
   reveals it. Legato is the point of the gate design: at 1.0 the previous step's note-off
   is emitted after the next note-on, so the notes overlap instead of leaving a hole.
+- **SFZ `#define` macros are understood.** A library that names its drum map once
+  (`#define $KEY_KICK 36` … `key=$KEY_KICK`) used to load as *nothing*: an unresolved
+  macro made every key unparsable, and an unparsable key drops its region. Kits like
+  SamsSonor now load straight from their own `.sfz`, with no curated copy in between.
+- **Free-running knobs grey out while tempo-synced.** With SYNC on a note division the
+  DSP ignores the LFO/STEP SEQ RATE and the DELAY TIME entirely, so those knobs now dim
+  the way any other inactive control does instead of sitting there looking live.
 - **Demo preset `DAF Bass`** on F9 for fresh installs — the sequencer showing what it is for,
   with the 16-step figure and the tone measured off the record it was built against: a
   sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced

@@ -21,7 +21,7 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
@@ -86,6 +86,13 @@ namespace rack
         // EDITOR injects it after makeModuleDescriptor (a static spec can't capture apvts).
         // Purely cosmetic/interaction: the DSP already ignores an irrelevant param.
         std::function<bool()> activeWhen;
+
+        // Optional per-knob ON/OFF switch, drawn as a small checkbox in the TOP-RIGHT of the
+        // knob's own cell (STEP SEQ: a step that is off is a rest). Off dims the knob through
+        // the same activeWhen path the mode-dependent knobs use, so it reads exactly like every
+        // other greyed control in the rack. Unlike activeWhen this needs no editor injection:
+        // ModuleFrame owns the parameter and builds the predicate itself.
+        juce::String toggleParamId;
     };
 
     struct Combo
@@ -267,6 +274,9 @@ namespace rack
             // its standard size (below that ModuleFrame caps the knob to the cell). At 30 columns
             // that lands exactly on 28: W24 gave 53 px cells and visibly small AMT knobs.
             case SizeClass::W28H2: return { 28, 2, 56, KnobSize::Small };
+            // STEP SEQ: 32 steps as 2 x 16 plus five globals = 19 cells per row; 20 columns is
+            // the narrowest width at which such a cell still reaches the 62 px a knob wants.
+            case SizeClass::W20H2: return { 20, 2, 40, KnobSize::Small };
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };
