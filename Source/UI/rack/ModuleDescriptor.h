@@ -215,6 +215,19 @@ namespace rack
         // left exactly as before.
         bool alignRight = false;
 
+        // A module that only DRAWS — the OSCILLOSCOPE and the SPECTRUM. Their enable param freezes
+        // and blanks a picture; nothing about them can be heard. That makes hiding them a decision
+        // the rack may simply BELIEVE, which for every other module it must not:
+        //   · Rack::maxHeight counts a hidden module anyway when it is factory-visible, because a
+        //     preset enabling it would reveal it again and the window would resize (PR #27). A
+        //     visual-only module is exempt: hiding it gives its height back for real.
+        //   · revealEnabledModules therefore must NOT bring it back — otherwise the height it just
+        //     freed returns on the next preset and the measurement oscillates.
+        // The narrow scope is deliberate. Applying "hidden stays hidden" to a module that makes
+        // sound would let a preset load without a part of its patch, which is a far worse trade
+        // than a scope one has to switch on again by hand.
+        bool visualOnly = false;
+
         // Dependent-combo links (see ComboDependency). Polled in the frame's timer (message thread),
         // so a MODULE change re-lists its slot's PARAM combo without touching the audio thread.
         std::vector<ComboDependency> comboDeps;

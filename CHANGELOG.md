@@ -66,6 +66,17 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   without `amp_veltrack` tracks velocity per the spec default, which alone costs 4.2 dB; the
   preset's SAMPLER level now compensates.
 
+### Fixed
+- **Hiding the scope or the spectrum actually gives their height back.** The panel's own advice
+  when the rack is over budget is "hide a module" — and for almost every module it did nothing:
+  the worst-case measurement counts a hidden module anyway if it is factory-visible, because a
+  preset enabling it would reveal it again and resize the window. Measured on the maintainer's
+  machine, hiding both VISUALIZATION modules moved the number by zero. They are now marked as
+  visual-only — the two modules in the rack that nothing can be heard from — so hiding them is
+  taken at face value and no preset reveals them behind your back. Measured again afterwards:
+  1732 px → **1446 px**, so the two of them were holding **286 px** of a 1929 px budget.
+  Deliberately narrow: applying the same rule to a module that makes sound would let a preset
+  load without part of its patch.
 - **The MODULES panel no longer disappears when you leave JASS.** `CallOutBox::launchAsynchronously`
   runs a timer that dismisses the box as soon as the app is not the foreground process. That is
   right for a menu and wrong for this panel: it carries the rack height budget, a number one reads
