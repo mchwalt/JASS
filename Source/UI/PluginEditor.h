@@ -115,13 +115,18 @@ private:
 };
 
 class SynthyEditor : public juce::AudioProcessorEditor,
-                     private juce::Timer
+                     private juce::Timer,
+                     private juce::MidiKeyboardState::Listener   // notes played WHILE recording a
+                                                                 // STEP SEQ figure (Story 15.4)
 {
 public:
     explicit SynthyEditor(SynthyProcessor&);
     ~SynthyEditor() override
     {
         stopTimer();
+        processor.getKeyboardState().removeListener (this);
+        processor.setSeqRecordArmed (false);   // a closed window must never leave the sequencer
+                                               // rootless — it would look enabled and stay silent
         auditionStep (0, false);   // the timer is gone — close a running STEP SEQ preview by hand
         // Dismiss the MODULES call-out NOW (before rackBody is destroyed): its RackCustomizePanel
         // holds a reference to *rackBody, so a callout left open when the editor closes would dangle.
@@ -207,6 +212,23 @@ private:
     int auditionNote  = -1;   // MIDI note currently previewing, or -1
     int auditionTicks = 0;    // 30 Hz timer ticks until the safety release (a wheel or a typed
                               // value has no drag end that could close the note)
+
+    // --- Writing a figure by playing it (Story 15.4) ------------------------------------------
+    // The write cursor is the ONE step the next played note goes into: 0-based, -1 = not recording.
+    // Pure UI state — nothing about it belongs in a preset (AC9). Reset (↺) arms it at step 0, a
+    // click on any step knob moves it there, and it clears itself past LEN or when STEP SEQ goes off.
+    int  seqCursor = -1;
+    void seqSetCursor (int step);            // -1 stops; also drives the processor's record flag
+    void seqWriteNote (int midiNote);        // write the cursor's step from a played note, advance
+    void seqAdvanceCursor();                 // next step, or stop past LEN
+    void seqSkipStep();                      // SPACE: switch this step OFF (a rest) and move on
+    // handleNoteOn runs on the AUDIO thread for hardware MIDI (MidiKeyboardState is pumped in
+    // processBlock), so it only parks the note here; the 30 Hz timer picks it up on the message
+    // thread and does the parameter write. -1 = nothing pending.
+    std::atomic<int> seqPendingNote { -1 };
+    bool seqOnLast = false;   // edge detect for "STEP SEQ was switched off" (ends a recording)
+    void handleNoteOn  (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override;
+    void handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override;
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
     bool modalWasOpen = false;      // edge-detect: a modal popup (e.g. MODULES) closing => refocus keyboard
 

@@ -5,5 +5,5 @@ Playing input — how notes get into the synth.
 
 **Group header controls**
 - **Enable** — dims/enables every visible module in this group at once.
-- **↺ Reset** — restores this group's *default module selection* (which modules are shown, their order and zone). It does not change any knob values.
-- **ⓘ Info** — this help.
+- **Reset** (circular arrow) — restores this group's *default module selection* (which modules are shown, their order and zone). It does not change any knob values.
+- **Info** (circled i) — this help.

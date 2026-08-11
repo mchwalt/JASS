@@ -109,6 +109,11 @@ namespace rack
         // knows the keyboard state and the current octave.
         std::function<void (int value, bool sounding)> audition;
 
+        // Optional HIGHLIGHT predicate: when it returns true this one knob is ringed in the module's
+        // colour. Polled in the frame timer beside activeWhen, and injected by the EDITOR — it marks
+        // UI state, not a parameter (STEP SEQ: the step the keyboard is about to write, Story 15.4).
+        std::function<bool()> highlightWhen;
+
         // Layout width in body slots (a plain control = 1), exactly like Combo::slots. A knob grows
         // to fill its cell (see ModuleFrame::resized), and a 1-slot cell in a densely packed module
         // is narrower than it is tall — the rotary is then capped by the WIDTH and the row's height

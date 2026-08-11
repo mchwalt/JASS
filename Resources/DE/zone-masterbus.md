@@ -5,5 +5,5 @@ Die Ausgangsstufe — der gemischte Summensignal läuft hier zuletzt durch.
 
 **Gruppenkopf-Bedienelemente**
 - **Enable** — schaltet alle sichtbaren Module dieser Gruppe auf einmal an/in Bypass.
-- **↺ Reset** — stellt die *Standard-Auswahl* dieser Gruppe wieder her (welche Module sichtbar sind, deren Reihenfolge und Zone). Reglerwerte bleiben unverändert.
-- **ⓘ Info** — diese Hilfe.
+- **Reset** (Kreispfeil) — stellt die *Standard-Auswahl* dieser Gruppe wieder her (welche Module sichtbar sind, deren Reihenfolge und Zone). Reglerwerte bleiben unverändert.
+- **Info** (eingekreistes i) — diese Hilfe.

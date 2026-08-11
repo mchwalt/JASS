@@ -11,6 +11,18 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Write a STEP SEQ figure by playing it.** A step's value is a number of semitones, so authoring a
+  figure meant knowing the interval and then converting it into a number — the conversion is exactly
+  what a sequencer is supposed to do for you. The module's **Reset** button now empties the pattern
+  and starts writing at step 1: a ring marks the step waiting for a note, and every key you play —
+  computer keyboard, on-screen keyboard or a MIDI keyboard — is written there, switched on, sounded
+  once for confirmation, and the ring moves on. **SPACE** leaves a step silent, which is how a rest
+  is written, since every key already means a note. Writing stops by itself after LEN steps. A
+  **click on any step knob** puts the ring there, so a wrong note is corrected by clicking it and
+  playing again — and the correction runs on into its neighbours. While the ring shows, the keyboard
+  writes instead of starting the pattern: otherwise every note entered would restart and transpose
+  the figure under your hands. The reference pitch is the keyboard's current C, the same one the
+  step preview plays, so what you hear when turning a knob and what you get when playing a key agree.
 - **PERC — four percussion tracks on a 32-step grid**, with their own kit, their own clock and a
   level per track, played **dry into the master bus**. It runs the moment you switch it on: no key,
   no root, because it never becomes a note. **Left click sets a step and sounds it**, right click

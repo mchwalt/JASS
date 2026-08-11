@@ -928,9 +928,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
             // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16
             // auto-play drone is excluded, exactly as for the arp.
+            // While the editor is RECORDING a figure (15.4) the search is skipped outright: those
+            // keys are being written into the steps, and taking one as the root would restart and
+            // transpose the pattern on every note entered.
             int root = -1;
-            for (int n = 0; n < 128 && root < 0; ++n)
-                if (keyboardState.isNoteOn(1, n)) root = n;
+            if (! seqRecordArmed.load())
+                for (int n = 0; n < 128 && root < 0; ++n)
+                    if (keyboardState.isNoteOn(1, n)) root = n;
             if (root >= 0)
                 stepSeq.setRoot(root);
 
