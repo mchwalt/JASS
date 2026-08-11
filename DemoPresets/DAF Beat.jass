@@ -332,7 +332,8 @@
     "Pitch32": 0.0,
     "Step32": true,
     "Length": 16.0,
-    "Gate": 1.0
+    "Gate": 1.0,
+    "LatchRoot": 48
   },
   "RackLayout": [
     {
@@ -584,7 +585,7 @@
   "Perc": {
     "Enabled": true,
     "Kit": 0.0,
-    "Amp": 0.5,
+    "Amp": 1.0,
     "SyncDiv": "1/8",
     "Rate": 8.0,
     "Length": 16.0,

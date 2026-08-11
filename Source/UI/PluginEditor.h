@@ -18,6 +18,19 @@ class FillWidthKeyboard : public juce::MidiKeyboardComponent
 {
 public:
     using juce::MidiKeyboardComponent::MidiKeyboardComponent;
+
+    // Show what the STEP SEQ is playing. Its notes never enter the MidiKeyboardState (they would
+    // come back as held keys and the pattern would re-root itself on its own output), so the
+    // component cannot know them: the editor pushes the note in from the processor's atomic instead.
+    // Purely a paint state — nothing here sounds, and -1 means "the pattern is between notes".
+    void setPatternNote (int midiNote)
+    {
+        if (midiNote == patternNote)
+            return;
+        patternNote = midiNote;
+        repaint();
+    }
+
     void resized() override
     {
         juce::MidiKeyboardComponent::resized();
@@ -27,6 +40,34 @@ public:
         if (whiteKeys > 0 && getWidth() > 0)
             setKeyWidth((float) getWidth() / (float) whiteKeys);
     }
+
+    // The pattern's note is drawn like a pressed key, in the MODULATION colour so it reads as
+    // "played by the machine" rather than "held by you" — the two happen at the same time, since
+    // the key you hold is the pattern's root.
+    void drawWhiteNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area,
+                        bool isDown, bool isOver, juce::Colour lineColour, juce::Colour textColour) override
+    {
+        juce::MidiKeyboardComponent::drawWhiteNote (midiNote, g, area, isDown, isOver, lineColour, textColour);
+        paintPatternNote (midiNote, g, area);
+    }
+
+    void drawBlackNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area,
+                        bool isDown, bool isOver, juce::Colour noteFillColour) override
+    {
+        juce::MidiKeyboardComponent::drawBlackNote (midiNote, g, area, isDown, isOver, noteFillColour);
+        paintPatternNote (midiNote, g, area);
+    }
+
+private:
+    void paintPatternNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) const
+    {
+        if (midiNote != patternNote)
+            return;
+        g.setColour (juce::Colour (0xff9384b6).withAlpha (0.75f));   // rack::typeColour(Modulator)
+        g.fillRect (area.reduced (1.0f));
+    }
+
+    int patternNote = -1;
 };
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →

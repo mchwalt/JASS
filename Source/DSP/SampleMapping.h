@@ -75,6 +75,8 @@ namespace SampleMapping
                                         //   entriesFromSfz defaults it to 100 (spec), folders to 0
         float volumeDb  = 0.0f;         // sfz volume= — per-zone gain in dB (12.5)
         int   tuneCents = 0;            // sfz tune= — per-zone pitch offset in cents (12.5)
+        int   group     = 0;            // sfz group=   — "I belong to choke group N" (12.7)
+        int   offBy     = 0;            // sfz off_by=  — "when I sound, silence group N"; 0 = none
     };
 
     // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
@@ -147,6 +149,8 @@ namespace SampleMapping
             float vt    = -1.0f;          // 12.5 amp_veltrack (percent); <0 ⇒ unset
             float vol   = kUnsetF;        // 12.5 volume (dB)
             int   tune  = kUnsetI;        // 12.5 tune (cents)
+            int   group = kUnsetI;        // 12.7 choke group membership
+            int   offBy = kUnsetI;        // 12.7 choke group this region silences
             bool bad = false;
         };
         Scope group, region;
@@ -170,6 +174,8 @@ namespace SampleMapping
             float vt  = region.vt    >= 0.0f ? region.vt  : group.vt;
             float vol = region.vol  != kUnsetF ? region.vol  : group.vol;
             int  tune = region.tune != kUnsetI ? region.tune : group.tune;
+            int  grp  = region.group != kUnsetI ? region.group : group.group;   // 12.7
+            int  offB = region.offBy != kUnsetI ? region.offBy : group.offBy;
             if (root  < 0) root  = 60;    // SFZ default: unchanged on middle C
             if (lo    < 0) lo    = 0;
             if (hi    < 0) hi    = 127;
@@ -179,6 +185,8 @@ namespace SampleMapping
             if (vt    < 0.0f) vt = 100.0f;   // D1 (12.5): .sfz sets track velocity per spec default
             if (vol  == kUnsetF) vol  = 0.0f;
             if (tune == kUnsetI) tune = 0;
+            if (grp  == kUnsetI) grp  = 0;   // 12.7: 0 = belongs to no choke group / silences none
+            if (offB == kUnsetI) offB = 0;
             // SFZ reserves sample values starting with '*' for generated sources — *silence and
             // the built-in waveforms (*sine, *saw, *square, *noise). They are not filenames, and
             // treating them as one made a whole kit fail to load ("*silence is missing"). Skip the
@@ -200,6 +208,8 @@ namespace SampleMapping
                 fresh.veltrack  = vt;
                 fresh.volumeDb  = vol;
                 fresh.tuneCents = tune;
+                fresh.group     = grp;
+                fresh.offBy     = offB;
                 // 12.5 dedupe: velocity is a zone dimension now. Drop a region only when an
                 // earlier one covers it in KEY *and* VELOCITY (true duplicate/subset — zoneFor
                 // is first-match, so it could never sound); distinct layers always survive.
@@ -309,6 +319,14 @@ namespace SampleMapping
                     s.vol = juce::jlimit (-60.0f, 12.0f, value.getFloatValue());
                 else if (opcode == "tune")            // per-zone cents (12.5: stretch tuning)
                     s.tune = juce::jlimit (-1200, 1200, value.getIntValue());
+                // Choke groups (12.7): group= names the group a region BELONGS to, off_by= the group
+                // it SILENCES when it sounds. Every drum kit uses the pair for its hi-hats. 0 means
+                // "none", which is also what unparsable input lands on — the same silent tolerance
+                // the rest of this parser shows.
+                else if (opcode == "group")
+                    s.group = juce::jmax (0, value.getIntValue());
+                else if (opcode == "off_by" || opcode == "offby")
+                    s.offBy = juce::jmax (0, value.getIntValue());
                 // every other opcode: ignored by design (minimal subset)
             }
         }

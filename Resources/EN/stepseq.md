@@ -1,4 +1,4 @@
-Plays a 32-step figure you write yourself, transposed by the key you hold. Hold a note and the pattern runs; the lowest held key is the root.
+Plays a 32-step figure you write yourself, transposed by the key you play. **The first key starts it and it keeps running** — you do not have to hold anything. A new key moves the figure to that root, the Up / Down octave keys shift it by an octave, and **SPACE stops it**. Switching the module off stops it too.
 
 - **1 … 32** — pitch of each step in semitones above the root (0 = the root itself, +12 = one octave up). The switch in a knob's corner turns that step off: a rest.
 - **SYNC** — step length as a note division. Set it to *Free* to use RATE instead.
