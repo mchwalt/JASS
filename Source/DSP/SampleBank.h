@@ -38,6 +38,10 @@ inline constexpr size_t kMaxSampleStoreBytes = (size_t) 4 * 1024 * 1024 * 1024;
 
 struct SampleZone
 {
+    // What this zone is called — the source file's stem ("Kick", "SnareRim"). The mapping knew it
+    // all along (SampleMapping::Entry::file) and threw it away here; PERC's NOTE knob reads it out
+    // so a lane says "Kick" instead of "36" (Story 16.1). Empty for sets built without files.
+    juce::String name;
     std::vector<float> data[2];   // [0]=L (or mono), [1]=R (empty ⇒ mono); at the FILE's rate
     double fileSampleRate = 44100.0;
     int rootKey = 60;             // key that plays the file at original speed (mapped sets)
@@ -222,6 +226,7 @@ public:
                 for (auto& chan : z.data)
                     if (! chan.empty())
                         chan.erase (chan.begin(), chan.begin() + e.offsetFrames);
+            z.name    = e.file.getFileNameWithoutExtension();   // 16.1: "Kick", for PERC's NOTE read-out
             z.rootKey = e.rootKey;
             z.loKey   = e.loKey;
             z.hiKey   = e.hiKey;

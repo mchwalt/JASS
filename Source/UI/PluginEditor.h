@@ -7,6 +7,7 @@
 #include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
 #include "rack/Rack.h"
 #include "HelpPanel.h"                // movable per-module help panel (Story 6.1)
+#include "PercGrid.h"                 // PERC step field + instrument names (Story 16.1)
 
 // On-screen keyboard that always spreads its full note range across its own width, so
 // the keys fill the module with no blank gap on the right. Now that the KEYBOARD lives in

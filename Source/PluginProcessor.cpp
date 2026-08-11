@@ -24,9 +24,11 @@ SynthyProcessor::SynthyProcessor()
     // decoding every installed set (grand pianos: ~1.2 GB) held up the start of the app. The
     // hook lets a preset ask for ITS set: that one is pulled to the front of the queue and
     // selected once loaded, so restoring a piano patch no longer blocks the window either.
-    PresetIO::requestSamplerSet = [this] (const juce::String& setName)
+    PresetIO::requestSamplerSet = [this] (const juce::String& setName, const juce::String& target)
     {
-        samplePreload.request (setName);
+        if (target == Parameters::ID::percKit)
+            percKitPending.store (true);   // PERC stays silent until its kit is really here
+        samplePreload.request (setName, target);
         samplePreload.notify();   // wake it if it is idling
     };
     samplePreload.startThread (juce::Thread::Priority::background);
@@ -81,21 +83,34 @@ SynthyProcessor::SynthyProcessor()
     }
 }
 
-void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName)
+void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName,
+                                                    const juce::String& targetParamId)
 {
-    {
-        const juce::ScopedLock sl (requestLock);
-        requested = setName;
-    }
-    ++requestGeneration;   // anything still in flight for an older request is now stale
+    const juce::ScopedLock sl (requestLock);
+    int& gen = (targetParamId == Parameters::ID::samplerSet) ? genSampler : genPerc;
+    ++gen;   // anything still in flight for THIS selector is now stale
+    for (auto& r : queue)
+        if (r.target == targetParamId)     // one pending set per selector: replace, never queue up
+        {
+            r.name = setName; r.gen = gen;
+            return;
+        }
+    queue.push_back ({ setName, targetParamId, gen });
+}
+
+int SynthyProcessor::SamplePreloadThread::currentGeneration (const juce::String& targetParamId) const
+{
+    const juce::ScopedLock sl (requestLock);
+    return (targetParamId == Parameters::ID::samplerSet) ? genSampler : genPerc;
 }
 
 // Load the set a preset asked for and select it — the ONE set the patch actually needs, so it
 // goes first. Selecting happens back on the message thread; the generation check drops the
 // result if another preset has been loaded since (its own request wins).
-void SynthyProcessor::SamplePreloadThread::loadRequested (const juce::String& setName)
+void SynthyProcessor::SamplePreloadThread::loadRequested (const Request& req)
 {
-    const int gen = requestGeneration.load();
+    const juce::String setName = req.name;
+    const int gen = req.gen;
     int idx = SampleBankStore::instance().indexOf (setName);
     if (idx < 0)
     {
@@ -106,10 +121,20 @@ void SynthyProcessor::SamplePreloadThread::loadRequested (const juce::String& se
         else if (auto sub = folder.getChildFile (setName); sub.isDirectory())
             idx = PresetIO::loadSampleSetFolder (sub, nullptr, [this] { return threadShouldExit(); });
     }
+    const juce::String target = req.target;
     if (idx < 0)
     {   // not in the Samples folder (renamed/removed): stop shielding the LiveState, or the
         // patch would keep claiming an instrument that does not exist.
-        juce::MessageManager::callAsync ([] { PresetIO::pendingSamplerSetName.clear(); });
+        juce::WeakReference<SynthyProcessor> gone (&owner);
+        juce::MessageManager::callAsync ([target, gone]
+        {
+            (target == Parameters::ID::samplerSet ? PresetIO::pendingSamplerSetName
+                                                  : PresetIO::pendingPercKitName).clear();
+            // Give up waiting: PERC may sound again with whatever kit the index points at, rather
+            // than staying silent forever because a preset named a set that is not installed.
+            if (auto* p = gone.get(); p != nullptr && target == Parameters::ID::percKit)
+                p->percKitPending.store (false);
+        });
         return;
     }
     if (threadShouldExit())
@@ -117,10 +142,10 @@ void SynthyProcessor::SamplePreloadThread::loadRequested (const juce::String& se
 
     // Weak: the callback may still sit in the message queue when the processor goes away.
     juce::WeakReference<SynthyProcessor> weak (&owner);
-    juce::MessageManager::callAsync ([weak, idx, gen]
+    juce::MessageManager::callAsync ([weak, idx, gen, target]
     {
         if (auto* p = weak.get())
-            p->selectSamplerSet (idx, gen);
+            p->selectSamplerSet (idx, gen, target);
     });
 }
 
@@ -134,7 +159,7 @@ void SynthyProcessor::SamplePreloadThread::run()
     while (! threadShouldExit())
     {
         // 1. A preset is waiting for a set — always first: the patch is silent until it lands.
-        if (auto wanted = takeRequest(); wanted.isNotEmpty())
+        if (auto wanted = takeRequest(); wanted.name.isNotEmpty())
         {
             loadRequested (wanted);
             continue;
@@ -152,21 +177,28 @@ void SynthyProcessor::SamplePreloadThread::run()
     }
 }
 
-juce::String SynthyProcessor::SamplePreloadThread::takeRequest()
+SynthyProcessor::SamplePreloadThread::Request SynthyProcessor::SamplePreloadThread::takeRequest()
 {
     const juce::ScopedLock sl (requestLock);
-    auto wanted = requested;
-    requested.clear();
+    if (queue.empty())
+        return {};
+    auto wanted = queue.front();
+    queue.erase (queue.begin());
     return wanted;
 }
 
-void SynthyProcessor::selectSamplerSet (int index, int generation)
+void SynthyProcessor::selectSamplerSet (int index, int generation, const juce::String& targetParamId)
 {
-    if (generation != samplePreload.currentGeneration())
-        return;   // a newer preset load has since asked for a different set
-    if (auto* p = apvts.getParameter (Parameters::ID::samplerSet))
-        p->setValueNotifyingHost (p->convertTo0to1 ((float) index));
-    PresetIO::pendingSamplerSetName.clear();   // the patch's set is real now
+    if (generation != samplePreload.currentGeneration (targetParamId))
+        return;   // a newer preset load has since asked for a different set in this selector
+    // PERC's KIT counts from 1 (0 = no kit), the SAMPLER's SET from 0.
+    const int value = index + (targetParamId == Parameters::ID::percKit ? 1 : 0);
+    if (auto* p = apvts.getParameter (targetParamId))
+        p->setValueNotifyingHost (p->convertTo0to1 ((float) value));
+    (targetParamId == Parameters::ID::samplerSet ? PresetIO::pendingSamplerSetName
+                                                 : PresetIO::pendingPercKitName).clear();
+    if (targetParamId == Parameters::ID::percKit)
+        percKitPending.store (false);   // the kit is real now — PERC may sound
 }
 
 SynthyProcessor::~SynthyProcessor()
@@ -705,6 +737,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     for (auto& l : uiLfos) l.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     stepSeq.prepare(sampleRate);
+    perc.prepare(sampleRate);   // 16.1: four SamplePlayers, configured once (their stretch engine allocates)
     arpHeldScratch.reserve(128);
 
     // Feed the real sample rate to the scope/spectrum displays (ms-window + bin→Hz).
@@ -901,6 +934,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (root >= 0)
                 stepSeq.setRoot(root);
 
+            // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
+            // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
+            // running figure must not restart or delay anything, exactly as in 15.1.
+            if (root >= 0 && ! seqKeyWasHeld && perc.enabled)
+                stepSeq.setStartDelay(perc.samplesToPatternStart());
+            seqKeyWasHeld = (root >= 0);
+
             // Drop the raw chord so only the pattern sounds; keep everything else.
             auto& kept = arpKeptScratch; kept.clear();
             for (const auto meta : midiMessages)
@@ -1057,6 +1097,49 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     }
 
     synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+
+    // ---- PERC (Story 16.1): layer B, straight into the summed mix -----------------------------
+    // Here and not inside a voice, which is the whole point: a voice would drag the kit through
+    // the patch's filter and effect chain. After the synth so it mixes with it, before the
+    // compressor so the master glue and the MASTER level still apply — and nothing else does.
+    {
+        using namespace Parameters;
+        const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
+        if (! percOn && perc.enabled)
+            perc.reset();          // switched off ⇒ the next start is a downbeat, not where it stopped
+        perc.enabled = percOn;
+
+        // Its OWN kit, independent of the SAMPLER's set — a sampled instrument and a drum kit have
+        // to coexist, which is the case this module exists for. While a preset's kit is still being
+        // fetched, hand in NOTHING rather than the set the stale index points at.
+        // KIT is the store index PLUS ONE; 0 means no kit at all, and getSet(-1) yields nullptr.
+        const int kitIdx = (int) *apvts.getRawParameterValue(ID::percKit) - 1;
+        perc.setSource(percKitPending.load() ? nullptr
+                                             : SampleBankStore::instance().getSet(kitIdx));
+        perc.amp    = *apvts.getRawParameterValue(ID::percAmp);
+        perc.length = (int) *apvts.getRawParameterValue(ID::percLength);
+        const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);
+        perc.stepSeconds = SyncDivision::isSynced(pdiv)
+                               ? SyncDivision::delaySeconds(syncBpm, pdiv)
+                               : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
+        for (int l = 0; l < PercSequencer::kLanes; ++l)
+        {
+            perc.note [(size_t) l] = (int) *apvts.getRawParameterValue(ID::percNote (l + 1));
+            perc.level[(size_t) l] =       *apvts.getRawParameterValue(ID::percLevel(l + 1));
+            perc.pan  [(size_t) l] =       *apvts.getRawParameterValue(ID::percPan  (l + 1));
+            if (percOn)
+                for (int s = 0; s < PercSequencer::kMaxSteps; ++s)
+                    perc.on[(size_t) l][(size_t) s] =
+                        *apvts.getRawParameterValue(ID::percStep(l + 1, s + 1)) > 0.5f;
+        }
+        // A step just placed in the grid sounds once, whether or not the pattern is running.
+        if (const int lane = percAuditionLane.exchange(-1); lane >= 0)
+            perc.triggerLane(lane);
+        // Rendered even when the module is off: the preview above, and the tail of a hit still
+        // ringing when it was switched off, both have to come out.
+        perc.processBlock(buffer, buffer.getNumSamples());
+        percStepDisplay.store(percOn ? perc.currentStep() : -1);
+    }
 
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)
