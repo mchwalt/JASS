@@ -32,11 +32,14 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "stepseq"; m.title = "STEP SEQ"; m.persistObject = "StepSeq"; m.enableParamId = "seqOn";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W20H2;
-        // Default-hidden like COMPRESSOR: a special-purpose module should not spend rack height
-        // (a hard budget since Story 7.3) until it is used. A preset that switches it on reveals
-        // it automatically via revealEnabledModules().
-        m.defaultVisible = false;
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W20U7;   // 207 px: two knob rows at the standard size
+        // Visible by default (maintainer 2026-08-11), overriding the "special-purpose modules stay
+        // hidden until used" rule this shipped with. It is a deliberate trade, made with the price
+        // on the table: a factory-VISIBLE module always counts towards the may-appear worst case
+        // (Rack::maxHeight), so the display-fit scale must accommodate it whether or not it is on
+        // screen — the whole rack draws about a fifth smaller than it would with STEP SEQ and PERC
+        // hidden. Story 7.4 bought most of that back by shortening the two-row modules.
+        m.defaultVisible = true;
 
         m.params.push_back ({ "seqOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 

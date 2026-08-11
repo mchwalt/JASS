@@ -265,7 +265,10 @@ namespace rack
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
-        placed.push_back ({ id, f, spec.cols, spec.units, alignR });
+        // Placement uses the GRID height (quarter units), never the content-row count — those are
+        // two different numbers since Story 7.4 and conflating them is what kept a module from
+        // being any height other than a multiple of 114 px.
+        placed.push_back ({ id, f, spec.cols, spec.heightUnits, alignR });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
         // default layout reproduces today's insertion-order packing. Factory visibility from
