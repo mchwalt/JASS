@@ -81,6 +81,18 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
 
 ### Changed
+- **A knob now fills the cell it sits in.** Its block was a constant 81 px — caption, a 46 px rotary
+  and a value box — which fits a one-row module exactly and leaves a two-row module's cell a fifth
+  empty. In MOD MATRIX that showed as a band of nothing between the two routing rows. The cause was
+  derived from the layout code twice and guessed wrong twice, so it was finally **measured**: the
+  cell there is 104 px tall but only 62 px wide, and since the rotary is capped by the narrower
+  side, the row's height simply went to waste. The diameter is therefore taken from the cell now —
+  bounded by the height left after caption and value box, by the cell width, and clamped so the old
+  46 px stays the **floor** and nothing in the rack gets smaller. MOD MATRIX's AMT additionally
+  claims a second body slot, which is what makes its cell wide enough: **46 → 65 px**, and the gap
+  between the rows falls from 26 px to 4. STEP SEQ and PERC reach 53 px, where the cell width is the
+  limit. No module changes its footprint, so the window, the height budget and the fit scale are
+  untouched.
 - **The mouse wheel counts in single steps on a discrete knob.** A knob whose interval is one
   whole unit was only treated as discrete up to 24 positions; wider ones fell through to the
   proportional feel, which on a STEP SEQ step (±24 semitones) meant **two semitones per notch** —

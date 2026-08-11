@@ -106,6 +106,13 @@ namespace rack
         // (0, false) when the gesture ends. Injected by the EDITOR, which is the only place that
         // knows the keyboard state and the current octave.
         std::function<void (int value, bool sounding)> audition;
+
+        // Layout width in body slots (a plain control = 1), exactly like Combo::slots. A knob grows
+        // to fill its cell (see ModuleFrame::resized), and a 1-slot cell in a densely packed module
+        // is narrower than it is tall — the rotary is then capped by the WIDTH and the row's height
+        // goes to waste. MOD MATRIX's AMT claims 2 so its cell is wide enough for the knob to reach
+        // the height its row actually offers (measured: 46 px → 65 px, Story 7.5).
+        int slots = 1;
     };
 
     struct Combo
@@ -302,11 +309,11 @@ namespace rack
             case SizeClass::W14H1: return { 14, 1, 14, KnobSize::Small };  // WAVETABLE with PAN (BANK+LOAD+6 knobs)
             case SizeClass::W30H1: return { 30, 1, 30, KnobSize::Small };  // full-width single row (on-screen keyboard)
             case SizeClass::W30H2: return { 30, 2, 60, KnobSize::Small };  // full-width two rows   (STEP SEQ)
-            // MOD MATRIX: 28 is not a round number, it is the measured one. Its 8 slots make 56
-            // content slots over 2 rows = 28 cells, and a cell must be ≥ 62 px for a knob to reach
-            // its standard size (below that ModuleFrame caps the knob to the cell). At 30 columns
-            // that lands exactly on 28: W24 gave 53 px cells and visibly small AMT knobs.
-            case SizeClass::W28H2: return { 28, 2, 56, KnobSize::Small };
+            // MOD MATRIX: 28 is not a round number, it is the measured one. Its 8 slots make 64
+            // content slots over 2 rows = 32 cells (the AMT knob claims 2 of them since Story 7.5,
+            // so it is wide enough to grow into its row's height). At 30 columns 28 keeps the cell
+            // at 54 px; W24 gave 45 px cells and visibly small AMT knobs.
+            case SizeClass::W28H2: return { 28, 2, 64, KnobSize::Small };
             // STEP SEQ: 32 steps as 2 x 16 plus five globals = 19 cells per row; 20 columns is
             // the narrowest width at which such a cell still reaches the 62 px a knob wants.
             case SizeClass::W20H2: return { 20, 2, 40, KnobSize::Small };
