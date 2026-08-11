@@ -138,7 +138,8 @@ namespace rack
 
     void ModuleFrame::buildBody()
     {
-        const int knobD = sizeClassSpec (desc.sizeClass).knobDiameter;
+        // Seed only — resized() sets the real diameter per cell (one standard, capped by the cell).
+        const int knobD = KnobSize::Standard;
 
         for (auto& el : desc.body)
         {
@@ -475,6 +476,25 @@ namespace rack
         const int cellW = body.getWidth()  / nCols;
         const int cellH = body.getHeight() / juce::jmax (1, nRows);
 
+        // Cells are a whole number of pixels wide, so nCols of them rarely fill the body exactly —
+        // in MOD MATRIX 32 × 54 px leave 16 px, which piled up at the RIGHT edge as a dead strip
+        // ("Trauerrand", maintainer 2026-08-11). A module that repeats a GROUP of controls
+        // (desc.slotActivity, a routing slot) can spend that remainder instead of hoarding it: the
+        // leftover is split into the gaps BETWEEN the groups, which both empties the right edge and
+        // separates the slots. paint() fills these gaps in the dim colour so the grouping reads as
+        // grouping rather than as a layout accident. Modules without groups are untouched.
+        groupGaps.clear();
+        int groupSpan = 0;
+        if (const int gs = desc.slotActivity.groupSize; gs > 0)
+            for (int i = 0; i < gs && i < (int) cells.size(); ++i)
+                groupSpan += juce::jlimit (1, nCols, cells[(size_t) i].slots);
+        const int groupsPerRow = (groupSpan > 0) ? nCols / groupSpan : 0;
+        const int leftover     = body.getWidth() - nCols * cellW;
+        const int groupGap     = (groupsPerRow > 1 && leftover > 0) ? leftover / (groupsPerRow - 1) : 0;
+        for (int gi = 1; gi < groupsPerRow && groupGap > 0; ++gi)
+            groupGaps.push_back ({ body.getX() + gi * groupSpan * cellW + (gi - 1) * groupGap,
+                                   body.getY(), groupGap, body.getHeight() });
+
         int col = 0, row = 0;
         for (auto& cell : cells)
         {
@@ -484,7 +504,8 @@ namespace rack
             // Never lay a (spanning) cell out below the body's bottom edge: bound the
             // row to the grid we sized for. (deferred 1.2 review item)
             const int placeRow = juce::jmin (row, nRows - 1);
-            juce::Rectangle<int> cellR (body.getX() + col * cellW,
+            const int gapShift = (groupGap > 0 && groupSpan > 0) ? (col / groupSpan) * groupGap : 0;
+            juce::Rectangle<int> cellR (body.getX() + col * cellW + gapShift,
                                         body.getY() + placeRow * cellH,
                                         cellW * span, cellH);
 
@@ -496,23 +517,28 @@ namespace rack
                 const bool isKnob   = knob != nullptr;
                 const bool isButton = dynamic_cast<juce::Button*> (cell.widget) != nullptr;
 
-                // A knob GROWS INTO ITS CELL (Story 7.5). It used to be one fixed diameter
-                // everywhere, which fits a 1-row module exactly (cell 80 px, block 81) but leaves a
-                // 2-row module's cell a fifth empty — measured in MOD MATRIX: an 81 px block in a
-                // 100 px cell, so 26 px of nothing between the two rows while the knob next to it
-                // stayed small. The diameter is therefore derived from the cell, bounded by
+                // ONE knob size for the whole rack (KnobSize::Standard), exactly as kComboW is one
+                // width for every combo — the cell no longer decides how big a knob is, it only
+                // decides whether the standard FITS. It is capped by
                 //   · height: what is left after caption + value box,
                 //   · width : the cell minus the 4 px per side drawRotarySlider reduces by,
-                // clamped to [Small, Large] — Small stays the floor, so nothing in the rack shrinks.
+                // and never falls below Minimum. A module whose cell cannot host the standard is
+                // telling us its size class is wrong; that is a layout fix, not a knob fix. This is
+                // why the module HEIGHTS below are derived from the standard (a knob row is
+                // 13 caption + 40 + 8 + 14 value + 4 = 79 px) instead of the reverse.
                 const int kValueH = 14, kKnobPad = 8;
                 const int knobD = isKnob
-                    ? juce::jlimit (KnobSize::Small, KnobSize::Large,
+                    ? juce::jlimit (KnobSize::Minimum, KnobSize::Standard,
                                     juce::jmin (cr.getHeight() - capH - kKnobPad - kValueH,
                                                 cr.getWidth() - kKnobPad))
-                    : KnobSize::Small;
-                // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
-                // is just the short box. Name sits ABOVE, so the block is caption + widget.
-                const int wH = isKnob ? (knobD + kKnobPad + kValueH) : kComboH;
+                    : KnobSize::Standard;
+                // A knob's widget takes the whole cell below its caption: the value box then always
+                // sits on the cell's bottom edge and the rotary — which the LookAndFeel caps at
+                // knobD — is centred in what is left. Sizing the widget to the diameter instead
+                // would let a WIDTH-limited knob (a narrow cell in SAMPLER or STEP SEQ) float in the
+                // middle of its cell with air under the value box. A combo is just the short box.
+                const int wH = isKnob ? juce::jmax (knobD + kKnobPad + kValueH, cr.getHeight() - capH)
+                                      : kComboH;
 
                 if (isKnob)
                 {
@@ -600,6 +626,14 @@ namespace rack
             if (moduleEnabled()) { g.setColour (juce::Colour (0xff7bd88f)); g.fillEllipse (dot); }
             else                 { g.setColour (juce::Colours::white.withAlpha (0.28f)); g.drawEllipse (dot, 1.0f); }
         }
+
+        // Separators between repeated control groups (see resized/groupGaps): the pixels the cell
+        // grid could not use, spent between MOD MATRIX's routing slots instead of left over at the
+        // right edge. Same dim tone the inactive slots use, so it reads as "nothing here" rather
+        // than as a fifth column.
+        g.setColour (juce::Colour (0xff15181d).withAlpha (0.45f));
+        for (const auto& gap : groupGaps)
+            g.fillRect (gap);
     }
 
     void ModuleFrame::paintOverChildren (juce::Graphics& g)

@@ -74,6 +74,14 @@ passt jetzt".
 - No unit-test rig: build, run, and the maintainer's eye — plus the runtime dump above, which is the
   method this story exists to establish. **Measure the rectangles before changing the layout.**
 
+## Revised the same day by Story 7.4
+
+The maintainer asked for ONE knob size rather than a per-cell one ("so wie du es schon für die
+Combo-Boxen geschafft hast"), so the derived diameter became a single 40 px standard capped by the
+cell, and the module heights are now derived from it. AC1's floor of 46 px is gone as well: it made a
+shorter module impossible, because an 81 px block laid into a 69 px cell overflows into the row
+below. See `7-4-finer-height-raster.md`.
+
 ## Follow-up, not this story
 
 - The combo columns still hold 35 px of content in a 104 px cell (72 px between the rows). A cheap

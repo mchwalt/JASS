@@ -1842,7 +1842,7 @@ void SynthyEditor::buildRack()
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
     // curve), a Display body element (AD-5), owned by rackOwned so its lifetime is tied
     // to the editor.
-    add(Rack::Zone::Modulation, SizeClass::W4H2, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
+    add(Rack::Zone::Modulation, SizeClass::W4U7, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
@@ -1959,7 +1959,10 @@ void SynthyEditor::buildRack()
         // the 8 slots were laid out for a 24-column rack and only gained whitespace at 30. The
         // zone height does not change either way — MOD MATRIX is the zone's last module and owns
         // its two rows regardless of how wide it is.
-        d.sizeClass = SizeClass::W28H2; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
+        // Height: 7 quarter units = 207 px instead of 238 (Story 7.4). Two rows at the standard knob
+        // size, captions and value boxes intact — the maintainer's call: "Beschriftungen werden NICHT
+        // geopfert". (176 px is reachable, but only by dropping the 32 repeated SRC/MOD/PARAM/AMT.)
+        d.sizeClass = SizeClass::W28U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 

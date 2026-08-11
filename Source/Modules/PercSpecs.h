@@ -26,8 +26,9 @@ namespace Modules
         // Next to STEP SEQ rather than in a zone of its own: a PERCUSSION zone for a single module
         // is an empty drawer, and the point of the layer-B framing is that PERC is not a new
         // category but a second instance of something the rack already has (decision 2026-08-10).
-        m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W20H2;
-        m.defaultVisible = false;   // rack height is a budget (Story 7.3); a preset enabling it reveals it
+        m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W20U7;   // 207 px: the step grid plus one knob row
+        m.defaultVisible = true;    // maintainer 2026-08-11; see the same note in StepSeqSpecs.h —
+                                    // a factory-visible module is always in the worst-case height
 
         m.params.push_back ({ "percOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 
