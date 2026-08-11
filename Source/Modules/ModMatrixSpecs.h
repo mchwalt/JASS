@@ -22,7 +22,9 @@ namespace Modules
         // i.e. 28 cells, and a cell must reach 62 px or ModuleFrame caps the knob to the cell.
         // W24 gave 53 px cells and visibly undersized AMT knobs. The zone height is unchanged
         // at any of these widths - MOD MATRIX is its zone's last module and owns its two rows.
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28H2;
+        // W28U3 (Story 7.4): the same two rows of content, but three HALF units of height instead
+        // of four. The rows are combos plus one AMT knob and were sitting in 101 px each.
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28U3;
 
         const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
         juce::StringArray mod;   // MOD labels — generated from the single source (ModMatrixCatalog.h)

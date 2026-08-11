@@ -265,7 +265,7 @@ namespace rack
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
-        placed.push_back ({ id, f, spec.cols, spec.units, alignR });
+        placed.push_back ({ id, f, spec.cols, spec.units, spec.heightUnits, alignR });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
         // default layout reproduces today's insertion-order packing. Factory visibility from
@@ -710,7 +710,9 @@ namespace rack
                 // the inner fit-loop's `c + fcols <= cols` never true, so `found` never flips and the
                 // outer `for(;!found;++fr)` loops forever (growing rows unbounded). Placing it
                 // full-width is the sane fallback for such a misconfiguration.
-                const int fcols = juce::jmin (pl->cols, cols), funits = pl->units;
+                // The packing grid counts in HALF units now (Story 7.4): a classic module occupies
+                // two rows of it, so the arithmetic below is unchanged for everything that existed.
+                const int fcols = juce::jmin (pl->cols, cols), funits = pl->heightUnits;
 
                 // first free top-left cell that fits the cols×units footprint
                 int fr = 0, fc = 0;

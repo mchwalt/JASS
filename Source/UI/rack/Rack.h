@@ -152,9 +152,15 @@ namespace rack
                                                   // readable floor); width was idle. MEASURED:
                                                   // 1980 px → 1608 px, fit scale 0.65 → 0.79.
         static constexpr int kGutter      = 10;   // uniform gutter between cells
-        static constexpr int kHu          = 114;  // one rack-unit row height (L spans 2).
-                                                  // Sized so a 1-unit body fits name caption +
-                                                  // 46px knob + value box without shrinking.
+        static constexpr int kHu          = 52;   // HALF a rack-unit row (Story 7.4). A classic unit
+                                                  // is two of these: 2·52 + 10 = 114 px, exactly what
+                                                  // kHu used to be, and the row pitch n·(kHu+kGutter)
+                                                  // reproduces the old 124 px per unit. Halving it
+                                                  // changes no existing module — every size class
+                                                  // carries twice its row count in heightUnits — and
+                                                  // lets a body of combos claim three halves instead
+                                                  // of four, which is where the MOD MATRIX was
+                                                  // spending 101 px on rows a knob fills in 74.
         static constexpr int kZoneHeaderH = 28;   // full-width zone separator band
         static constexpr int kZoneLabelW  = 172;  // reserved width for the zone title before its
                                                   // header controls (>= widest label at 15pt bold)
@@ -165,7 +171,8 @@ namespace rack
         {
             juce::String id;           // stable module id (RackLayout key, AD-10)
             ModuleFrame* frame = nullptr;
-            int cols = 1, units = 1;   // footprint from the size class
+            int cols = 1, units = 1;   // footprint from the size class (units = CONTENT rows)
+            int heightUnits = 2;       // height in HALF rack units (Story 7.4; 2 = one classic row)
             bool alignRight = false;   // pack right within the zone row (from the descriptor)
         };
         // AD-10: the ordered, editable placement model — the single source of truth for

@@ -496,13 +496,25 @@ namespace rack
                 const bool isButton = dynamic_cast<juce::Button*> (cell.widget) != nullptr;
                 // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
                 // is just the short box. Name sits ABOVE, so the block is caption + widget.
-                const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
+                // A knob block is caption + rotary + value box. That was a FIXED 81 px, which is
+                // taller than a cell whenever a module claims less height than a knob row wants
+                // (Story 7.4's half units make that possible) — it then simply overflowed. Fit it
+                // to what the cell has instead, and let the rotary come out smaller: the slider
+                // already caps its drawing to its bounds.
+                const int wH = isKnob ? juce::jlimit (28, KnobSize::Small + 8 + 14, cr.getHeight() - capH)
+                                      : kComboH;
+                // TIGHT cell = one whose module deliberately claims less height than a knob row
+                // wants (Story 7.4's odd half-unit classes; today only the MOD MATRIX). There the
+                // widgets align to the TOP so the leftover space collects in one place instead of
+                // as air above AND below every combo. Every classic module keeps its centred look —
+                // this is not a rack-wide restyle (maintainer 2026-08-11: "es betrifft nur MOD
+                // MATRIX").
+                const bool tight = cr.getHeight() < capH + KnobSize::Small + 8 + 14;
 
                 if (isKnob)
                 {
-                    // Knob block (NAME + rotary + value box) centred vertically in the cell.
-                    // ONE fixed knob size everywhere (AD-3), CENTRED horizontally; the slider
-                    // draws the rotary in its top square and the value box in the bottom 14 px.
+                    // Knob block (NAME + rotary + value box) at the TOP of the cell, so its caption
+                    // lines up with the captions of the combos beside it (see below).
                     const int blockH = capH + wH;
                     const int top = juce::jmax (cr.getY(), cr.getCentreY() - blockH / 2);
                     cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
@@ -515,22 +527,25 @@ namespace rack
                 }
                 else if (isButton)
                 {
-                    // Captioned toggle: NAME above, the bare checkbox glyph centred below on the
-                    // shared widget centre-line (the glyph draws at the LEFT of the bounds, so
-                    // a narrow box centred on the cell centres the glyph itself).
-                    const int boxY = juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
+                    // Captioned toggle: NAME above, the bare checkbox glyph directly beneath it on
+                    // the same top-aligned line as the combos (the glyph draws at the LEFT of the
+                    // bounds, so a narrow box centred on the cell centres the glyph itself).
+                    const int boxY = tight ? cr.getY() + capH
+                                           : juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
                     cell.caption->setBounds (cr.getX(), boxY - capH, cr.getWidth(), capH);
                     cell.widget->setBounds (cr.getCentreX() - 12, boxY, 24, wH);
                 }
                 else
                 {
-                    // Combo: box centred on the cell centre-line — EXACTLY like the press
-                    // buttons (LOAD WAV etc., which use withSizeKeepingCentre) — so all
-                    // interactive widgets sit on one line; its NAME caption sits directly above.
-                    // Width is CAPPED and centred, exactly as a knob is capped at 62 px: one width
-                    // for every combo in the rack, instead of "whatever this module's cell happens
-                    // to be". Wider cells now leave air rather than a stretched box.
-                    const int boxY = juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
+                    // Combo: caption at the TOP of the cell, box directly beneath it. It used to be
+                    // centred on the cell's middle line, which in a cell sized for a knob left ~20 px
+                    // of air above AND below — and in a two-row module those four gaps read as the
+                    // module wasting a third of its height (maintainer 2026-08-11, MOD MATRIX).
+                    // Aligning to the top puts the leftover space in ONE place, at the bottom, and
+                    // lines every caption in a row up with its neighbours.
+                    // Width stays CAPPED and centred, exactly as a knob is capped at 62 px.
+                    const int boxY = tight ? cr.getY() + capH
+                                           : juce::jmax (cr.getY() + capH, cr.getCentreY() - wH / 2);
                     const int cw = juce::jmin (cr.getWidth(), kComboW * juce::jmax (1, span) / 2);
                     cell.caption->setBounds (cr.getX(), boxY - capH, cr.getWidth(), capH);
                     cell.widget->setBounds (cr.getCentreX() - cw / 2, boxY, cw, wH);

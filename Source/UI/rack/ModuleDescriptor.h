@@ -21,7 +21,10 @@ namespace rack
     // dropping rotaries below their minimum. Current set mirrors the old XXS..XL 1:1 (doubled):
     //   W2H1=old XXS, W4H1=XS, W6H1=S, W8H1=M, W8H2=L, W12H2=XL. Add intermediate widths
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2 };
+    // Names ending in H{n} are the classic ones: n CONTENT rows at the full row height. Names
+    // ending in U{n} state the height in HALF units directly (Story 7.4) — W28U3 is two rows of
+    // content in three halves, i.e. one and a half classic rows.
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2, W28U3 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
@@ -264,9 +267,15 @@ namespace rack
     struct SizeClassSpec
     {
         int cols = 0;
-        int units = 0;
+        int units = 0;          // CONTENT rows — how many rows the body lays its cells out over
         int slotCapacity = 0;
         int knobDiameter = 0;
+        // HEIGHT in half rack units (Story 7.4). These were the same number until a module needed
+        // a height between two rows: the MOD MATRIX spends 101 px on rows a knob fills in 74, and
+        // the grid had no way to say "one and a half". Rack::kHu is the HALF unit now (52 px) and
+        // every classic class carries twice its row count here, which reproduces the old geometry
+        // to the pixel: 2·52+10 = 114, 4·52+3·10 = 238, 6·52+5·10 = 362. Odd counts are the point.
+        int heightUnits = 0;
     };
 
     inline SizeClassSpec sizeClassSpec (SizeClass c) noexcept
@@ -281,35 +290,40 @@ namespace rack
             // why widening the grid from 24 to 30 left every module below untouched — they keep
             // their physical size and simply pack more per row. Full-width modules are the
             // exception: those had to move W24 → W30.
-            case SizeClass::W2H1:  return {  2, 1,  2, KnobSize::Small };  // single control (was XXS)
-            case SizeClass::W3H1:  return {  3, 1,  3, KnobSize::Small };  // single control, wider header (fits title + 3 icons)
-            case SizeClass::W4H1:  return {  4, 1,  4, KnobSize::Small };  // 1–2 controls   (was XS)
-            case SizeClass::W4H2:  return {  4, 2, 12, KnobSize::Small };  // narrow 2-row (ADSR: 4 knobs + curve)
-            case SizeClass::W5H1:  return {  5, 1,  6, KnobSize::Small };  // ~4 controls incl. 1–2 combos (LFO)
-            case SizeClass::W6H1:  return {  6, 1,  6, KnobSize::Small };  // 3–4 controls   (was S)
-            case SizeClass::W7H1:  return {  7, 1,  7, KnobSize::Small };  // ~4 controls, one unit narrower than W8 (LFO)
-            case SizeClass::W8H1:  return {  8, 1,  8, KnobSize::Small };  // 5–6 controls   (was M; 3 per row)
-            case SizeClass::W8H2:  return {  8, 2, 16, KnobSize::Small };  // knobs + curve display (was L)
-            case SizeClass::W9H2:  return {  9, 2, 24, KnobSize::Small };  // MOD MATRIX (2 routing rows, ~LFO width)
-            case SizeClass::W9H3:  return {  9, 3, 36, KnobSize::Small };  // MOD MATRIX (3 routing rows = 6 slots)
-            case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small };  // wide visualisers (2 per row)
-            case SizeClass::W16H2: return { 16, 2, 32, KnobSize::Small };  // MOD MATRIX wide: 2 rows × 3 slots
-            case SizeClass::W24H1: return { 24, 1, 24, KnobSize::Small };  // full-width single row  (on-screen keyboard, flat)
-            case SizeClass::W24H2: return { 24, 2, 48, KnobSize::Small };  // full-width two rows    (on-screen keyboard, tall keys)
-            case SizeClass::W10H1: return { 10, 1, 10, KnobSize::Small };  // ~7-8 controls single row (WAVETABLE + PAN)
-            case SizeClass::W12H1: return { 12, 1, 12, KnobSize::Small };  // widest single row (WAVETABLE: BANK+LOAD+6 knobs)
-            case SizeClass::W13H1: return { 13, 1, 13, KnobSize::Small };  // WAVETABLE (BANK+LOAD+6 knobs, roomier)
-            case SizeClass::W14H1: return { 14, 1, 14, KnobSize::Small };  // WAVETABLE with PAN (BANK+LOAD+6 knobs)
-            case SizeClass::W30H1: return { 30, 1, 30, KnobSize::Small };  // full-width single row (on-screen keyboard)
-            case SizeClass::W30H2: return { 30, 2, 60, KnobSize::Small };  // full-width two rows   (STEP SEQ)
+            case SizeClass::W2H1:  return { 2, 1, 2, KnobSize::Small, 2 };  // single control (was XXS)
+            case SizeClass::W3H1:  return { 3, 1, 3, KnobSize::Small, 2 };  // single control, wider header (fits title + 3 icons)
+            case SizeClass::W4H1:  return { 4, 1, 4, KnobSize::Small, 2 };  // 1–2 controls   (was XS)
+            case SizeClass::W4H2:  return { 4, 2, 12, KnobSize::Small, 4 };  // narrow 2-row (ADSR: 4 knobs + curve)
+            case SizeClass::W5H1:  return { 5, 1, 6, KnobSize::Small, 2 };  // ~4 controls incl. 1–2 combos (LFO)
+            case SizeClass::W6H1:  return { 6, 1, 6, KnobSize::Small, 2 };  // 3–4 controls   (was S)
+            case SizeClass::W7H1:  return { 7, 1, 7, KnobSize::Small, 2 };  // ~4 controls, one unit narrower than W8 (LFO)
+            case SizeClass::W8H1:  return { 8, 1, 8, KnobSize::Small, 2 };  // 5–6 controls   (was M; 3 per row)
+            case SizeClass::W8H2:  return { 8, 2, 16, KnobSize::Small, 4 };  // knobs + curve display (was L)
+            case SizeClass::W9H2:  return { 9, 2, 24, KnobSize::Small, 4 };  // MOD MATRIX (2 routing rows, ~LFO width)
+            case SizeClass::W9H3:  return { 9, 3, 36, KnobSize::Small, 6 };  // MOD MATRIX (3 routing rows = 6 slots)
+            case SizeClass::W12H2: return { 12, 2, 24, KnobSize::Small, 4 };  // wide visualisers (2 per row)
+            case SizeClass::W16H2: return { 16, 2, 32, KnobSize::Small, 4 };  // MOD MATRIX wide: 2 rows × 3 slots
+            case SizeClass::W24H1: return { 24, 1, 24, KnobSize::Small, 2 };  // full-width single row  (on-screen keyboard, flat)
+            case SizeClass::W24H2: return { 24, 2, 48, KnobSize::Small, 4 };  // full-width two rows    (on-screen keyboard, tall keys)
+            case SizeClass::W10H1: return { 10, 1, 10, KnobSize::Small, 2 };  // ~7-8 controls single row (WAVETABLE + PAN)
+            case SizeClass::W12H1: return { 12, 1, 12, KnobSize::Small, 2 };  // widest single row (WAVETABLE: BANK+LOAD+6 knobs)
+            case SizeClass::W13H1: return { 13, 1, 13, KnobSize::Small, 2 };  // WAVETABLE (BANK+LOAD+6 knobs, roomier)
+            case SizeClass::W14H1: return { 14, 1, 14, KnobSize::Small, 2 };  // WAVETABLE with PAN (BANK+LOAD+6 knobs)
+            case SizeClass::W30H1: return { 30, 1, 30, KnobSize::Small, 2 };  // full-width single row (on-screen keyboard)
+            case SizeClass::W30H2: return { 30, 2, 60, KnobSize::Small, 4 };  // full-width two rows   (STEP SEQ)
             // MOD MATRIX: 28 is not a round number, it is the measured one. Its 8 slots make 56
             // content slots over 2 rows = 28 cells, and a cell must be ≥ 62 px for a knob to reach
             // its standard size (below that ModuleFrame caps the knob to the cell). At 30 columns
             // that lands exactly on 28: W24 gave 53 px cells and visibly small AMT knobs.
-            case SizeClass::W28H2: return { 28, 2, 56, KnobSize::Small };
+            case SizeClass::W28H2: return { 28, 2, 56, KnobSize::Small, 4 };
+            // MOD MATRIX: the same two rows of content in THREE halves instead of four — 176 px
+            // instead of 238. Its rows were getting 101 px for a knob that needs about 74, so the
+            // surplus showed as air above, between and below them (maintainer 2026-08-11). At 70 px
+            // per row the AMT knobs are capped a little smaller, which was the accepted trade.
+            case SizeClass::W28U3: return { 28, 2, 56, KnobSize::Small, 3 };
             // STEP SEQ: 32 steps as 2 x 16 plus five globals = 19 cells per row; 20 columns is
             // the narrowest width at which such a cell still reaches the 62 px a knob wants.
-            case SizeClass::W20H2: return { 20, 2, 40, KnobSize::Small };
+            case SizeClass::W20H2: return { 20, 2, 40, KnobSize::Small, 4 };
         }
         jassertfalse;
         return { 1, 1, 3, KnobSize::Small };
