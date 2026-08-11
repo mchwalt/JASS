@@ -85,7 +85,8 @@ info** so nothing is hidden and every control explains itself.
   **Write the figure by playing it**: Reset arms step entry, a ring shows which step
   is waiting, every key you press is written there, SPACE leaves a rest. Clicking or
   turning a step sounds it too — over the keyboard's current C, so the whole figure
-  can be written by ear.
+  can be written by ear. While it runs, a lit dot marks the step being played and the
+  on-screen keyboard shows the note.
 - **PERC** — four percussion tracks on a 32-step grid with their own kit, their own
   clock and a level per track, played **dry into the master bus**. It runs as soon as
   you switch it on, no key needed, and the drums are the clock: a STEP SEQ figure
