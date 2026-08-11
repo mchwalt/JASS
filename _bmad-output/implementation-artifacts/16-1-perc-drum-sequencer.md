@@ -200,7 +200,32 @@ Decisions taken while building, beyond the story:
 - **Steps past LEN are drawn dimmed** rather than hidden — the same honesty as the greyed-out knobs
   elsewhere: the pattern is still there, it just does not play.
 
-Build-verified (Release rebuild, no warnings) and the app runs; **the beat has not been heard yet**.
+**User-verified 2026-08-11** at the instrument: "klingt jetzt auch schon ganz ordentlich — er war
+vorher einfach viel zu leise". The loudness was the whole complaint, and it was gain staging, not
+the pattern or the kit.
+
+### What using it changed, all on the maintainer's report
+
+- **AMP is 0..1 like every level knob in the rack**, with the headroom inside (`kAmpScale = 4`).
+  A knob that reads 0..4 in one module and 0..1 everywhere else teaches nothing but mistrust.
+- **A global AMP beside the per-lane ones.** Balance and level are different jobs; without the
+  second, changing the kit's loudness meant moving four knobs and wrecking the balance on the way.
+- **PAN per lane**, constant power — PERC has to do its own, it never reaches the STEREO stage.
+- **Lane names in the grid**, uppercase and sized off the row height. Four unlabelled rows of boxes
+  were the first thing that made the module unusable ("mir ist unklar, wie ich das programmiere").
+- **Left click sets and sounds a step — including one already set — right click clears.** One
+  preview per cell, so a drag does not machine-gun the sample.
+- **KIT lists only mapped sets, and 0 means no kit.** That needed a framework addition:
+  `rack::Combo::itemValues`, a value list parallel to the items. A filtered list whose POSITION is
+  the value is exactly how this project has twice loaded the wrong sample; with the value list the
+  parameter keeps meaning store-index-plus-one whatever the list shows.
+
+### The lesson worth carrying to the next module
+
+PERC inherited the sampler substrate but none of Epic 12's retrofits, and paid for each one
+separately: persist the set **by name**, keep the loader's queue and generation **per selector**,
+and **refresh the combo** as sets arrive. All three were bugs the maintainer found by using it —
+the last one had the module reading "(no kit)" while the drums were audibly playing.
 
 ## Follow-ups (not this story)
 

@@ -20,7 +20,9 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   own sample names. Per track an AMP and a PAN, plus one AMP for the whole kit — balance and level
   are different jobs, and the module's own AMP reaches +12 dB because a drum kit is mastered with
   headroom while three oscillators with unison are not. While a preset's kit is still loading in
-  the background, PERC stays **silent** rather than play whatever set the stale index points at. LEN 16 on 1/16 is the
+  the background, PERC stays **silent** rather than play whatever set the stale index points at,
+  and its KIT list offers **only mapped sets** — a single recording would put the same file on all
+  four tracks at four pitches. Nothing is selected until you choose something. LEN 16 on 1/16 is the
   classic one-bar drum grid, 32 leaves room for the fill in bar two. And the drums are the clock:
   with PERC running, a STEP SEQ figure started from silence enters on the **next start of the drum
   pattern** rather than wherever the key happened to fall.
