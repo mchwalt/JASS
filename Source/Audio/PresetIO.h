@@ -129,9 +129,11 @@ namespace PresetIO
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
         slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
         slots[7] = "GrandPiano";        // the plain instrument: SplendidPiano set, nothing else on
-        slots[8] = "DAF Bass";          // STEP SEQ showcase (Story 15.1): the measured 16-step figure
-        slots[9] = "Drum Pattern";      // STEP SEQ with rests, driving the SamsSonor drum map
-        slots[10] = "DAF Beat";         // 16.1: the same bass with PERC underneath it
+        // F9 and F10 are deliberately EMPTY. They held `DAF Bass` and `Drum Pattern`, the two
+        // presets that introduced the STEP SEQ — both retired 2026-08-11: `DAF Beat` plays the same
+        // bass figure with PERC underneath it, which is the better demonstration of either, and a
+        // drum map driven through the STEP SEQ was the workaround PERC replaced.
+        slots[10] = "DAF Beat";         // 16.1: the bass figure with PERC underneath it
         return slots;
     }
 
@@ -336,6 +338,13 @@ namespace PresetIO
     inline juce::String pendingSamplerSetName;
     inline juce::String pendingPercKitName;      // the same guard for PERC's kit (Story 16.1)
 
+    // STEP SEQ latch root (Story 15.5), read on save and applied on load. It lives in the processor
+    // — a performance state, not a parameter — so PresetIO reaches it through hooks, exactly as it
+    // reaches the background sample loader. Unset hooks (plugin build without an editor, tests) mean
+    // the field is simply not written and not applied. -1 = no latch.
+    inline std::function<int()>     seqLatchRoot;
+    inline std::function<void(int)> applySeqLatchRoot;
+
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
     inline void preloadSamples(std::function<bool()> shouldAbort = {})
@@ -477,6 +486,17 @@ namespace PresetIO
                 if (auto* mod = root->getProperty("Perc").getDynamicObject())
                     mod->setProperty("File", kitName);
         }
+
+        // STEP SEQ (Story 15.5): the root the figure is LATCHED to. Since the latch outlives the key
+        // that started it, a patch can be saved while a figure is running — and then it should come
+        // back running, on the same note. That is what makes a sequencer patch play itself when it
+        // is loaded rather than wait to be touched. It is not a parameter: it is a performance
+        // state, it has no knob, and automating it would be meaningless. Absent / -1 ⇒ the patch
+        // loads silent, which is every preset written before this field existed.
+        if (seqLatchRoot)
+            if (const int n = seqLatchRoot(); n >= 0)
+                if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
+                    mod->setProperty("LatchRoot", n);
 
         return juce::var(root);
     }
@@ -743,6 +763,19 @@ namespace PresetIO
         };
         resolveSet (v, "Sampler", "File", ID::samplerSet, pendingSamplerSetName);
         resolveSet (v, "Perc",    "File", ID::percKit,    pendingPercKitName, 1);
+
+        // STEP SEQ latch (15.5): a patch saved with a figure running comes back running, on the note
+        // it was running on. Missing field ⇒ -1 ⇒ no latch, which also CLEARS whatever the previous
+        // patch left playing — switching presets must never leave a figure sounding under the new
+        // patch. Presets written before this field behave exactly as they did.
+        if (applySeqLatchRoot)
+        {
+            int latch = -1;
+            if (auto* seq = v["StepSeq"].getDynamicObject())
+                if (seq->hasProperty ("LatchRoot"))
+                    latch = (int) seq->getProperty ("LatchRoot");
+            applySeqLatchRoot (latch);
+        }
     }
 
     // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,

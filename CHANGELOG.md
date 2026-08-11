@@ -11,6 +11,43 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Choke groups: a closed hi-hat now silences the open one.** On a real kit an open hat cannot keep
+  ringing once the pedal closes, and every drum kit says so in its `.sfz`: a region declares
+  `group=N` ("I belong to group N") and another `off_by=N` ("when I sound, silence group N"). JASS
+  read neither, so the two hats sounded over each other — it did not read as a groove, it read as a
+  mistake. Both opcodes are parsed now and the choke acts **across voices** and across PERC's four
+  tracks. It **fades** over a few milliseconds rather than cutting: through the very same release
+  ramp a note-off uses, because a hard stop clicks and that lesson was already paid for. A kit that
+  uses neither opcode — both grand pianos, every set shipped with JASS — behaves exactly as before.
+
+- **The STEP SEQ latches: the first key starts it, and it keeps running.** Holding a key down for a
+  whole piece is not playing, it is standing still. A new key moves the figure to that root, the
+  Up / Down octave keys shift it (there is no held key left for them to retune, so the latched root
+  takes the octave instead), **SPACE stops it**, and so does switching the module off — its switch
+  is still the transport. The on-screen keyboard **shows the note the pattern is playing**, in the
+  MODULATION colour so it reads apart from the key you are holding. Those notes deliberately never
+  enter the keyboard state: the sequencer looks there for its root, and it would have kept
+  re-rooting itself on its own output.
+- **STEP SEQ shows the step it is playing**, the way PERC's grid does: a lit dot on the step's own
+  number, beside its on/off box. It reads apart from the write cursor's ring on purpose — the two are
+  visible at once and mean opposite things, what is sounding versus what your next key will overwrite.
+- **A patch can be saved while its figure is running, and comes back running.** The new
+  `StepSeq.LatchRoot` field carries the note the pattern is latched to, so a sequencer preset plays
+  itself the moment you load it instead of waiting to be touched — `DAF Beat` starts on C3. A preset
+  without the field loads silent, exactly as every preset written before it, and clears whatever the
+  previous patch left playing.
+- **Write a STEP SEQ figure by playing it.** A step's value is a number of semitones, so authoring a
+  figure meant knowing the interval and then converting it into a number — the conversion is exactly
+  what a sequencer is supposed to do for you. The module's **Reset** button now empties the pattern
+  and starts writing at step 1: a ring marks the step waiting for a note, and every key you play —
+  computer keyboard, on-screen keyboard or a MIDI keyboard — is written there, switched on, sounded
+  once for confirmation, and the ring moves on. **SPACE** leaves a step silent, which is how a rest
+  is written, since every key already means a note. Writing stops by itself after LEN steps. A
+  **click on any step knob** puts the ring there, so a wrong note is corrected by clicking it and
+  playing again — and the correction runs on into its neighbours. While the ring shows, the keyboard
+  writes instead of starting the pattern: otherwise every note entered would restart and transpose
+  the figure under your hands. The reference pitch is the keyboard's current C, the same one the
+  step preview plays, so what you hear when turning a knob and what you get when playing a key agree.
 - **PERC — four percussion tracks on a 32-step grid**, with their own kit, their own clock and a
   level per track, played **dry into the master bus**. It runs the moment you switch it on: no key,
   no root, because it never becomes a note. **Left click sets a step and sounds it**, right click
@@ -81,6 +118,11 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
 
 ### Changed
+- **`DAF Bass` (F9) and `Drum Pattern` (F10) are retired.** They introduced the STEP SEQ: a bass
+  figure measured off a 1981 record, and a drum map driven step by step because there was nothing
+  else to play drums with. `DAF Beat` on F11 does both better — the same bass with PERC underneath
+  it — and PERC replaced the drum-map workaround outright. F9 and F10 are free for your own patches
+  now; existing bank assignments are untouched. `DAF Beat` also drives its kit at **full AMP**.
 - **One knob size for the whole rack, and modules built around it.** The rack drew six different
   rotary sizes — 34, 40, 44, 45, 46 and 53 px — none of them chosen: a knob simply took what its
   cell happened to leave. Every rotary is now **40 px**, capped by its cell the way every combo box
@@ -125,6 +167,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   preset's SAMPLER level now compensates.
 
 ### Fixed
+- **PERC's playhead marked the wrong step.** It showed the sequencer's step counter, which is
+  advanced to the *next* step the instant one fires — so the marker ran a whole cell ahead of the
+  beat you hear (125 ms on a 1/16 grid at 120 BPM). Both sequencers now remember which step is
+  actually sounding, and both mark that one.
 - **Hiding the scope or the spectrum actually gives their height back.** The panel's own advice
   when the rack is over budget is "hide a module" — and for almost every module it did nothing:
   the worst-case measurement counts a hidden module anyway if it is factory-visible, because a

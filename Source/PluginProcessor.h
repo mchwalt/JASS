@@ -53,6 +53,17 @@ public:
     // the pattern sounds — which is exactly when the preview is wanted. 15 passes through
     // untouched, the same trick the auto-play drone plays on 16.
     static constexpr int kAuditionChannel = 15;
+    // The auto-play drone's own channel (see autoPlayEnabled). Public because the editor has to
+    // recognise it: a drone note is not a played key, so it must not be written into a STEP SEQ
+    // step while a figure is being recorded (Story 15.4).
+    static constexpr int kDroneChannel = 16;
+
+    // While the editor is recording a figure into STEP SEQ (Story 15.4), a played key WRITES a step
+    // instead of playing the pattern: the sequencer must not take it as its root, or every entered
+    // note would restart and transpose the figure under the writer's hands. Set from the message
+    // thread, read once per block — the editor clears it when it stops recording and in its
+    // destructor, so a closed window can never leave the sequencer rootless.
+    void setSeqRecordArmed (bool armed) { seqRecordArmed.store (armed); }
 
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
@@ -80,6 +91,36 @@ public:
 
     // Which step PERC is on, for the grid's playhead (Story 16.1). Plain atomic read.
     int getPercStep() const { return percStepDisplay.load(); }
+    // MIDI note the STEP SEQ is sounding, or -1. For the on-screen keyboard only (see seqNoteDisplay).
+    int getSeqNote() const { return seqNoteDisplay.load(); }
+    // Step the STEP SEQ is on (0-based), or -1. Drives the module's playhead, like PERC's grid.
+    int getSeqStep() const { return seqStepDisplay.load(); }
+
+    // Move the LATCHED sequencer root (see seqLatchedRoot). The pattern keeps running after the key
+    // is released, so an octave shift has no held note left to move — the editor sends the ±12 here
+    // instead, and the figure follows the octave keys exactly as a held key would have.
+    void transposeSeqLatch (int semitones)
+    {
+        const int r = seqLatchedRoot.load();
+        if (r >= 0)
+            seqLatchedRoot.store (juce::jlimit (0, 127, r + semitones));
+    }
+    // Is a latched figure running? (SPACE stops it — the editor needs to know whether there is
+    // anything to stop before it falls through to the Karplus pluck.)
+    bool isSeqLatched() const { return seqLatchedRoot.load() >= 0; }
+    // Stop the latched figure. Clearing the root is enough: the next block sees nothing playing,
+    // releases the sounding note and re-arms the pattern at step 0, exactly as letting go of the
+    // key did before the latch existed.
+    void stopSeqLatch() { seqLatchedRoot.store (-1); }
+    // Start a latched figure without a key — used when a preset whose STEP SEQ is ON is loaded, so
+    // the patch plays itself the moment it arrives instead of waiting to be touched. It also ends
+    // the auto-play drone: the instrument IS playing now, and hearing a held C4 under a bass figure
+    // is exactly the confusion this is meant to remove.
+    void startSeqLatch (int midiNote)
+    {
+        seqLatchedRoot.store (juce::jlimit (0, 127, midiNote));
+        autoPlayEnabled.store (false);
+    }
 
     // Sound one PERC lane once — the grid plays a step as it is placed. Message thread → audio
     // thread through one atomic; the block consumes it.
@@ -144,6 +185,10 @@ private:
     void selectSamplerSet (int index, int generation, const juce::String& targetParamId);
 
     juce::Synthesiser synth;
+    // Flat list of the synth's voices, built once in the constructor and handed to every voice so a
+    // note-on can reach its siblings (Story 12.7 choke groups). Non-owning — the synthesiser owns
+    // them — and never mutated afterwards, so reading it on the audio thread needs no lock.
+    std::vector<SynthVoice*> voiceRoster;
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
     // Snapshot length = the LONGEST scope window (100 ms) at the highest sample rate we
@@ -169,7 +214,11 @@ private:
     PercSequencer perc;
     bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
                                   // entry can be quantised to the drum pattern (16.1 AC6)
+    std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)
     std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
+    std::atomic<int> seqNoteDisplay { -1 };   // note the STEP SEQ holds, for the on-screen keyboard
+    std::atomic<int> seqLatchedRoot { -1 };   // STEP SEQ latch: the root outlives the key (see below)
+    std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
     // index still points at whatever set sits there, and playing a random one — a drum loop, a
@@ -192,8 +241,8 @@ private:
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON
     // when a sound generator is (re)activated. No user-facing parameter. The drone
-    // lives on its own MIDI channel so it never collides with played notes.
-    static constexpr int kDroneChannel = 16;
+    // lives on its own MIDI channel so it never collides with played notes
+    // (kDroneChannel is declared public above — the editor has to recognise it too).
     static constexpr int kDroneNote = 60;        // C4 → transpose ratio 1.0
     std::atomic<bool> autoPlayEnabled { true };
     unsigned prevSourcesMask = 0;                // for rising-edge "generator enabled" detection
