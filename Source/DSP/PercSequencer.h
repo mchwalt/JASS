@@ -62,6 +62,7 @@ public:
     {
         sampleCounter = 0;
         stepIndex = 0;
+        litStep   = -1;
     }
 
     // The kit. Handed in per block like the SAMPLER's set, so switching kits (or one arriving from
@@ -86,6 +87,10 @@ public:
     }
 
     int currentStep() const noexcept { return stepIndex; }
+    // What is sounding NOW. `stepIndex` has already been advanced to the next step by the time the
+    // grid paints, so using it put the playhead one cell ahead of the beat you hear (fixed
+    // 2026-08-11, when STEP SEQ got a playhead of its own and the two had to agree).
+    int playingStep() const noexcept { return litStep; }
 
     // Advance the clock and ADD the four tracks into the buffer. Called after the synth has
     // rendered and before the compressor, so PERC gets the master glue and the MASTER level and
@@ -139,6 +144,7 @@ public:
             if (enabled && sampleCounter == 0)
             {
                 const int s = stepIndex % steps;
+                litStep = s;
                 for (int l = 0; l < kLanes; ++l)
                     if (on[(size_t) l][(size_t) s])
                     {
@@ -187,5 +193,6 @@ private:
     double sampleRate = 44100.0;
     int    sampleCounter = 0;
     int    stepIndex = 0;
+    int    litStep = -1;   // step sounding right now (playhead); stepIndex is already the next one
     bool   haveSet = false;
 };

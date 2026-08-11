@@ -93,6 +93,8 @@ public:
     int getPercStep() const { return percStepDisplay.load(); }
     // MIDI note the STEP SEQ is sounding, or -1. For the on-screen keyboard only (see seqNoteDisplay).
     int getSeqNote() const { return seqNoteDisplay.load(); }
+    // Step the STEP SEQ is on (0-based), or -1. Drives the module's playhead, like PERC's grid.
+    int getSeqStep() const { return seqStepDisplay.load(); }
 
     // Move the LATCHED sequencer root (see seqLatchedRoot). The pattern keeps running after the key
     // is released, so an octave shift has no held note left to move — the editor sends the ±12 here
@@ -216,6 +218,7 @@ private:
     std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
     std::atomic<int> seqNoteDisplay { -1 };   // note the STEP SEQ holds, for the on-screen keyboard
     std::atomic<int> seqLatchedRoot { -1 };   // STEP SEQ latch: the root outlives the key (see below)
+    std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
     // index still points at whatever set sits there, and playing a random one — a drum loop, a

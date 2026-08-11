@@ -1179,7 +1179,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // Rendered even when the module is off: the preview above, and the tail of a hit still
         // ringing when it was switched off, both have to come out.
         perc.processBlock(buffer, buffer.getNumSamples());
-        percStepDisplay.store(percOn ? perc.currentStep() : -1);
+        percStepDisplay.store(percOn ? perc.playingStep() : -1);
     }
 
     // Mirror the note the STEP SEQ is holding, so the on-screen keyboard can show what the pattern
@@ -1187,6 +1187,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // MIDI buffer and must stay out of the keyboard STATE, or they would come back as held keys and
     // the pattern would keep re-rooting itself.
     seqNoteDisplay.store(stepSeq.enabled ? stepSeq.currentNote() : -1);
+    // …and the step it is on, so STEP SEQ can mark the running step the way PERC's grid does.
+    seqStepDisplay.store(stepSeq.enabled ? stepSeq.playingStep() : -1);
 
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)

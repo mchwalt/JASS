@@ -28,6 +28,9 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   MODULATION colour so it reads apart from the key you are holding. Those notes deliberately never
   enter the keyboard state: the sequencer looks there for its root, and it would have kept
   re-rooting itself on its own output.
+- **STEP SEQ shows the step it is playing**, the way PERC's grid does: a lit dot on the step's own
+  number, beside its on/off box. It reads apart from the write cursor's ring on purpose — the two are
+  visible at once and mean opposite things, what is sounding versus what your next key will overwrite.
 - **A patch can be saved while its figure is running, and comes back running.** The new
   `StepSeq.LatchRoot` field carries the note the pattern is latched to, so a sequencer preset plays
   itself the moment you load it instead of waiting to be touched — `DAF Beat` starts on C3. A preset
@@ -164,6 +167,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   preset's SAMPLER level now compensates.
 
 ### Fixed
+- **PERC's playhead marked the wrong step.** It showed the sequencer's step counter, which is
+  advanced to the *next* step the instant one fires — so the marker ran a whole cell ahead of the
+  beat you hear (125 ms on a 1/16 grid at 120 BPM). Both sequencers now remember which step is
+  actually sounding, and both mark that one.
 - **Hiding the scope or the spectrum actually gives their height back.** The panel's own advice
   when the rack is over budget is "hide a module" — and for almost every module it did nothing:
   the worst-case measurement counts a hidden module anyway if it is factory-visible, because a

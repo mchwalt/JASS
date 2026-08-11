@@ -126,7 +126,10 @@ namespace rack
         struct CondKnob { SynthySlider* slider; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
         // Knobs carrying Knob::highlightWhen: polled by the timer, ringed by paintOverChildren while
         // the predicate holds. `on` caches the last state so we only repaint on a real change.
-        struct MarkedKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate; char on = -1; };
+        // `ring` false => the mark is a lit dot (a sequencer playhead) instead of a ring (the write
+        // cursor). Both kinds share one list so the timer polls them in one pass.
+        struct MarkedKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate;
+                            bool ring = true; size_t cellIndex = 0; char on = -1; };
         std::vector<MarkedKnob> markedKnobs;
 
         std::vector<RingKnob>  ringKnobs;

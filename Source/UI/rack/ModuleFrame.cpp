@@ -214,8 +214,13 @@ namespace rack
 
                 // Highlight predicate (Story 15.4): the ring is drawn over the children, so the cell
                 // keeps its widget and only gains a mark.
+                // The cell index, not the toggle pointer: the step's on/off switch is created a few
+                // lines further down, so it does not exist yet — and the playhead dot is anchored
+                // to it at paint time.
                 if (k->highlightWhen)
-                    markedKnobs.push_back ({ s, cells.back().caption, k->highlightWhen });
+                    markedKnobs.push_back ({ s, cells.back().caption, k->highlightWhen, true, cells.size() - 1 });
+                if (k->playingWhen)
+                    markedKnobs.push_back ({ s, cells.back().caption, k->playingWhen, false, cells.size() - 1 });
 
                 // Per-knob ON/OFF switch (STEP SEQ steps): a checkbox in this cell's top-right,
                 // dimming the knob when off via the same condKnobs path as activeWhen. The
@@ -653,8 +658,25 @@ namespace rack
             if (m.on != 1 || m.widget == nullptr) continue;
             auto b = m.widget->getBounds();
             if (m.caption != nullptr) b = b.getUnion (m.caption->getBounds());
-            g.setColour (typeColour (desc.type).brighter (0.7f));
-            g.drawRoundedRectangle (b.expanded (2).toFloat(), 4.0f, 2.0f);
+            if (m.ring)
+            {
+                g.setColour (typeColour (desc.type).brighter (0.7f));
+                g.drawRoundedRectangle (b.expanded (2).toFloat(), 4.0f, 2.0f);
+            }
+            else
+            {
+                // Playhead: the same lit dot the MOD MATRIX marks a live slot with. It rides the
+                // caption's line, BETWEEN the step number and its on/off box (maintainer 2026-08-11:
+                // at the cell's left edge it sat in front of the knob and read as belonging to the
+                // neighbour). Without a switch to anchor to it hugs the caption's right edge.
+                const float d  = 6.0f;
+                const auto& cell = cells[juce::jmin (m.cellIndex, cells.size() - 1)];
+                const auto  line = m.caption != nullptr ? m.caption->getBounds() : b;
+                const float right = cell.toggle != nullptr ? (float) cell.toggle->getX() - 2.0f
+                                                           : (float) line.getRight();
+                g.setColour (juce::Colour (0xff7bd88f));
+                g.fillEllipse (right - d, (float) line.getCentreY() - d * 0.5f, d, d);
+            }
         }
 
         if (dimmed)
