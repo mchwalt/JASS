@@ -131,6 +131,7 @@ namespace PresetIO
         slots[7] = "GrandPiano";        // the plain instrument: SplendidPiano set, nothing else on
         slots[8] = "DAF Bass";          // STEP SEQ showcase (Story 15.1): the measured 16-step figure
         slots[9] = "Drum Pattern";      // STEP SEQ with rests, driving the SamsSonor drum map
+        slots[10] = "DAF Beat";         // 16.1: the same bass with PERC underneath it
         return slots;
     }
 
@@ -321,7 +322,11 @@ namespace PresetIO
     // Installed by the processor (12.6): "this preset wants the set named X". Loading it is the
     // background loader's job — applyVar must never decode a set on the message thread. Left
     // empty where no loader exists (plugin build), in which case applyVar loads synchronously.
-    inline std::function<void(const juce::String& setName)> requestSamplerSet;
+    // `targetParamId` says WHICH selector the set belongs to once it lands: the SAMPLER's SET, or
+    // PERC's KIT (Story 16.1) — two independent instruments that must be able to wait for two
+    // different sets. Without the parameter this hook would always drop the loaded set on the
+    // sampler, which for a drum kit is exactly the wrong instrument.
+    inline std::function<void(const juce::String& setName, const juce::String& targetParamId)> requestSamplerSet;
 
     // Set name a preset asked for that has not arrived yet. While this is pending, the SET index
     // still points at some OTHER set — and the LiveState is written every 1.5 s. Saving the name
@@ -329,6 +334,7 @@ namespace PresetIO
     // instead. Cleared when the set is selected, when it cannot be found, and when the user picks
     // a set by hand (their choice wins over a pending restore).
     inline juce::String pendingSamplerSetName;
+    inline juce::String pendingPercKitName;      // the same guard for PERC's kit (Story 16.1)
 
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
@@ -454,6 +460,22 @@ namespace PresetIO
             if (setName.isNotEmpty())
                 if (auto* mod = root->getProperty("Sampler").getDynamicObject())
                     mod->setProperty("File", setName);
+        }
+
+        // PERC (Story 16.1): the same treatment for the drum kit, and for the same reason — KIT is
+        // an index into a store whose contents depend on what is installed locally. A preset that
+        // carried only the index would point at whatever set happens to sit there on another
+        // machine, which for a drum pattern means a piano.
+        {
+            const int idx = static_cast<int>(*a.getRawParameterValue(ID::percKit)) - 1;   // 0 = no kit
+            const auto* set = SampleBankStore::instance().getSet(idx);
+            const juce::String kitName = pendingPercKitName.isNotEmpty() ? pendingPercKitName
+                                       : (set != nullptr ? set->getName() : juce::String());
+            // "File", not "Kit": the module's own writeState already puts the session-local INDEX
+            // under "Kit". The name goes beside it, exactly as the SAMPLER stores "Set" + "File".
+            if (kitName.isNotEmpty())
+                if (auto* mod = root->getProperty("Perc").getDynamicObject())
+                    mod->setProperty("File", kitName);
         }
 
         return juce::var(root);
@@ -680,37 +702,47 @@ namespace PresetIO
         // the subfolder "<name>\" holding a multisample set. Missing source => the combo stays
         // where the index landed (documented: samples live in the Samples folder).
         // Message-thread only (applyVar always is), like every store load.
-        if (auto* mod = v["Sampler"].getDynamicObject())
+        // One routine, two instruments (Story 16.1): the SAMPLER's SET and PERC's KIT are both
+        // session-local indices into the same store, so both persist a NAME and both re-resolve it
+        // the same way. A patch can now be waiting for TWO sets at once — an instrument and a drum
+        // kit — which is why this resolves both instead of returning after the first request.
+        // `valueOffset` is 1 for PERC, whose KIT counts from 1 so that 0 can mean "no kit".
+        auto resolveSet = [&a] (const juce::var& src, const char* object, const char* field,
+                                const char* paramId, juce::String& pending, int valueOffset = 0)
         {
-            const juce::String name = mod->getProperty("File").toString();
-            if (name.isNotEmpty())
+            auto* mod = src[object].getDynamicObject();
+            if (mod == nullptr)
+                return;
+            const juce::String name = mod->getProperty (field).toString();
+            if (name.isEmpty())
+                return;
+            int idx = SampleBankStore::instance().indexOf (name);
+            if (idx < 0 && requestSamplerSet)
             {
-                int idx = SampleBankStore::instance().indexOf(name);
-                if (idx < 0 && requestSamplerSet)
-                {
-                    // Not in the store yet: hand it to the background loader (12.6) instead of
-                    // decoding it here. A grand piano is several hundred MB — doing that on the
-                    // message thread is what kept the window from appearing for ten seconds.
-                    // The loader pulls this set to the FRONT of its queue and selects it when
-                    // it lands, so the patch ends up correct, just a moment later.
-                    pendingSamplerSetName = name;   // guards the LiveState while it loads
-                    requestSamplerSet(name);
-                    return;
-                }
-                pendingSamplerSetName.clear();   // this preset's set is already here
-                if (idx < 0)
-                {   // no loader installed (plugin build / tests): the original synchronous path
-                    auto matches = samplesFolder().findChildFiles(juce::File::findFiles, false, name + ".*");
-                    if (! matches.isEmpty())
-                        idx = SampleBankStore::instance().loadFile(matches.getReference(0));
-                    else if (auto sub = samplesFolder().getChildFile(name); sub.isDirectory())
-                        idx = loadSampleSetFolder(sub);   // 12.2: mapped set by folder name
-                }
-                if (idx >= 0)
-                    if (auto* p = a.getParameter(ID::samplerSet))
-                        p->setValueNotifyingHost(p->convertTo0to1((float) idx));
+                // Not in the store yet: hand it to the background loader (12.6) instead of
+                // decoding it here. A grand piano is several hundred MB — doing that on the
+                // message thread is what kept the window from appearing for ten seconds. The
+                // loader pulls this set to the FRONT of its queue and selects it into `paramId`
+                // when it lands, so the patch ends up correct, just a moment later.
+                pending = name;   // guards the LiveState while it loads
+                requestSamplerSet (name, paramId);
+                return;
             }
-        }
+            pending.clear();      // this preset's set is already here
+            if (idx < 0)
+            {   // no loader installed (plugin build / tests): the original synchronous path
+                auto matches = samplesFolder().findChildFiles (juce::File::findFiles, false, name + ".*");
+                if (! matches.isEmpty())
+                    idx = SampleBankStore::instance().loadFile (matches.getReference (0));
+                else if (auto sub = samplesFolder().getChildFile (name); sub.isDirectory())
+                    idx = loadSampleSetFolder (sub);   // 12.2: mapped set by folder name
+            }
+            if (idx >= 0)
+                if (auto* p = a.getParameter (paramId))
+                    p->setValueNotifyingHost (p->convertTo0to1 ((float) (idx + valueOffset)));
+        };
+        resolveSet (v, "Sampler", "File", ID::samplerSet, pendingSamplerSetName);
+        resolveSet (v, "Perc",    "File", ID::percKit,    pendingPercKitName, 1);
     }
 
     // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,

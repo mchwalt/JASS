@@ -114,6 +114,34 @@ namespace Parameters
         JASS_INDEXED_ID (seqPitch, 32, "seqPitch", "")   // max index = StepSequencer::kMaxSteps
         JASS_INDEXED_ID (seqStep,  32, "seqStep",  "")   // per-step on/off (off = rest)
 
+        // PERC (Story 16.1) — four percussion tracks rendered straight to the master bus. The step
+        // grid is one indexed id PER LANE (a 2-D index would have to build a String on the audio
+        // thread; these are the same cached-array ids as everywhere else, RT-safe by Story 11.1).
+        constexpr const char* percOn     = "percOn";
+        constexpr const char* percKit    = "percKit";     // dynamic set list, stored as an index
+        constexpr const char* percAmp    = "percAmp";     // the kit's master level (per-lane AMPs balance)
+        constexpr const char* percSync   = "percSync";
+        constexpr const char* percRate   = "percRate";
+        constexpr const char* percLength = "percLength";
+        JASS_INDEXED_ID (percNote,  4, "percNote",  "")   // which instrument of the kit a lane fires
+        JASS_INDEXED_ID (percLevel, 4, "percLevel", "")
+        JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
+        JASS_INDEXED_ID (percStep1, 32, "percStep1_", "")
+        JASS_INDEXED_ID (percStep2, 32, "percStep2_", "")
+        JASS_INDEXED_ID (percStep3, 32, "percStep3_", "")
+        JASS_INDEXED_ID (percStep4, 32, "percStep4_", "")
+        // Lane (1..4) + step (1..32) -> id. Audio thread safe: pure array lookups, no String built.
+        inline const juce::String& percStep (int lane, int step)
+        {
+            switch (juce::jlimit (1, 4, lane))
+            {
+                case 1:  return percStep1 (step);
+                case 2:  return percStep2 (step);
+                case 3:  return percStep3 (step);
+                default: return percStep4 (step);
+            }
+        }
+
         // Portamento / glide (append-only)
         constexpr const char* glideOn   = "glideOn";
         constexpr const char* glideTime = "glideTime";
@@ -260,6 +288,8 @@ namespace Parameters
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
             for (int i = 1; i <= 32; ++i)       { seqPitch(i); seqStep(i); }
+            for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
+            for (int i = 1; i <= 32; ++i)       { percStep1(i); percStep2(i); percStep3(i); percStep4(i); }
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
                 { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); }
         }

@@ -61,6 +61,12 @@ public:
 
     void setRoot (int midiNote) { root = juce::jlimit (0, 127, midiNote); }
 
+    // Quantised entry (Story 16.1): hold down the samples until PERC's pattern wraps, so a figure
+    // started mid-bar joins the beat on its downbeat instead of running a fixed distance off it
+    // forever. Set once by the processor at the moment the first key arrives; ignored (0) when no
+    // drum pattern is running, which leaves 15.1's immediate start exactly as it was.
+    void setStartDelay (int samples) { startDelay = juce::jmax (0, samples); }
+
     void processBlock (int numSamples, juce::MidiBuffer& out, int channel, bool anyKeyHeld)
     {
         if (! anyKeyHeld)
@@ -71,6 +77,7 @@ public:
             releaseAll (out, channel);
             sampleCounter = 0;
             stepIndex = 0;
+            startDelay = 0;   // a new entry gets a fresh quantisation, not the last one's leftover
             return;
         }
 
@@ -79,6 +86,14 @@ public:
 
         for (int i = 0; i < numSamples; ++i)
         {
+            // Waiting for the drums' downbeat: nothing sounds and the clock does not advance, so
+            // the pattern still enters at step 0 — it just enters later.
+            if (startDelay > 0)
+            {
+                --startDelay;
+                continue;
+            }
+
             // Gate expiry: release the sounding note. At gate 1.0 the countdown reaches the step
             // boundary, where the note-on below is emitted FIRST (same sample) — so a legato
             // pattern overlaps by construction and never leaves a gap.
@@ -137,4 +152,5 @@ private:
     int    stepIndex = 0;
     int    soundingNote = -1;
     int    gateCountdown = -1;
+    int    startDelay = 0;   // samples still to wait before the first step (quantised entry, 16.1)
 };

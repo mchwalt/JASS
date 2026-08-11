@@ -863,8 +863,17 @@ void SynthyEditor::timerCallback()
     {
         shownSampleSets = sets;
         if (rackBody)
+        {
             if (auto* f = rackBody->moduleById("sampler"))
                 f->refreshCombo(Parameters::ID::samplerSet);
+            // ...and PERC's KIT, for exactly the same reason. Without this its list stayed as it was
+            // built — at startup that is EMPTY apart from "(no kit)" — so the combo could not show
+            // the kit the patch was actually playing: the parameter pointed at a real set, the
+            // resync skipped an item index the list did not have yet, and the box kept reading
+            // "(no kit)" while the drums ran (maintainer 2026-08-11).
+            if (auto* f = rackBody->moduleById("perc"))
+                f->refreshCombo(Parameters::ID::percKit);
+        }
     }
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
@@ -1866,6 +1875,59 @@ void SynthyEditor::buildRack()
                     k->audition = [this](int semis, bool sounding) { auditionStep(semis, sounding); };
                 }
         greyWhenSynced(d, P::seqRate, P::seqSync);
+        addRackModule(std::move(d));
+    }
+    // PERC (Story 16.1) — the drum grid next to the note sequencer. Two things the spec cannot
+    // declare: the step field is a painted component (128 switches would be six rack units at the
+    // grid's 62 px cell), and the KIT list is dynamic, exactly like the SAMPLER's SET.
+    {
+        auto d = makeModuleDescriptor(Modules::perc());
+        auto* grid = rackOwned.add(new PercGrid(apvts,
+                                                [this] { return processor.getPercStep(); },
+                                                [this](int lane) { processor.auditionPercLane(lane); }));
+        // The grid goes FIRST so it fills row 1 and the controls wrap into row 2 beneath it. Cells
+        // fill in body order, so this one insert is the whole layout.
+        d.body.insert(d.body.begin(), Display{ grid, 19 });
+        // Item 0 is "(no kit)", so the value is the store index PLUS ONE and a fresh PERC points at
+        // nothing instead of at whatever sample sits at index 0 — which on this machine was
+        // "Drums_110BPM", a one-shot loop offered as a drum kit (maintainer 2026-08-11).
+        // Only MAPPED sets are offered: a single WAV would put the same recording on all four lanes
+        // at four pitches, which is never what a drum track wants (maintainer 2026-08-11). The
+        // filtering is why the combo carries an explicit value list — its positions are no longer
+        // store indices, and a value that quietly follows the list is the oldest bug in this rack.
+        Combo kitCombo{ P::percKit, "KIT",
+                        std::function<juce::StringArray()>([]
+                        {
+                            juce::StringArray items { "(no kit)" };
+                            const auto& store = SampleBankStore::instance();
+                            for (int i = 0; i < store.getNumSets(); ++i)
+                                if (const auto* s = store.getSet(i); s != nullptr && s->isMapped())
+                                    items.add(s->getName());
+                            return items;
+                        }) };
+        kitCombo.itemValues = []
+        {
+            juce::Array<int> values { 0 };   // 0 = "(no kit)"
+            const auto& store = SampleBankStore::instance();
+            for (int i = 0; i < store.getNumSets(); ++i)
+                if (const auto* s = store.getSet(i); s != nullptr && s->isMapped())
+                    values.add(i + 1);       // the parameter stays store index + 1
+            return values;
+        };
+        kitCombo.indexIsValue = true;   // ... with itemValues supplying the value per position
+        d.body.insert(d.body.begin() + 1, kitCombo);
+        // NOTE reads out the instrument, not the number (decision B, 2026-08-10): the zone's own
+        // name if the kit brought one, else the General MIDI drum map, else the note name.
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob>(&el))
+                if (k->paramId.startsWith("percNote"))
+                    k->textFromValue = [this](double v)
+                    {
+                        const auto* kit = SampleBankStore::instance().getSet(
+                            static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
+                        return PercNames::forNote(kit, (int) v);
+                    };
+        greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));
     }
     addRackModule(makeModuleDescriptor(Modules::glide()));

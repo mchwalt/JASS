@@ -11,6 +11,35 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **PERC — four percussion tracks on a 32-step grid**, with their own kit, their own clock and a
+  level per track, played **dry into the master bus**. It runs the moment you switch it on: no key,
+  no root, because it never becomes a note. **Left click sets a step and sounds it**, right click
+  clears one, and dragging carries on — a row of hi-hats is one gesture, and you hear what you
+  place. Each row of the grid is named after the instrument it plays; the NOTE knob names it too
+  (Kick, Snare, HH Closed) instead of showing a number, from the General MIDI drum map or the kit's
+  own sample names. Per track an AMP and a PAN, plus one AMP for the whole kit — balance and level
+  are different jobs, and the module's own AMP reaches +12 dB because a drum kit is mastered with
+  headroom while three oscillators with unison are not. While a preset's kit is still loading in
+  the background, PERC stays **silent** rather than play whatever set the stale index points at,
+  and its KIT list offers **only mapped sets** — a single recording would put the same file on all
+  four tracks at four pitches. Nothing is selected until you choose something. LEN 16 on 1/16 is the
+  classic one-bar drum grid, 32 leaves room for the fill in bar two. And the drums are the clock:
+  with PERC running, a STEP SEQ figure started from silence enters on the **next start of the drum
+  pattern** rather than wherever the key happened to fall.
+  It is deliberately **not** a second note sequencer. JASS is monotimbral — a voice starts every
+  enabled generator, and filter, distortion, delay and reverb all live inside the voice — so drums
+  sent as MIDI would come out through the bass's resonant lowpass. PERC renders after the synth and
+  before the compressor instead, which makes "dry" the construction rather than a setting. Under
+  the hood it is a second SAMPLER at processor level: sets, SFZ parsing, velocity layers and
+  background loading all come from the existing sampler, so what is a drum machine today can carry
+  any sampled instrument later.
+- **Demo preset `DAF Beat`** on F11 — the `DAF Bass` patch with the drums underneath it, and the
+  first preset that plays a whole piece by itself. The pattern is the one the record's drum
+  transcription shows, on the grid the measurement supports: SYNC 1/8, so a step is an eighth and
+  the 16-step loop is two bars, exactly as long as the bass figure. Kick on 1/5/9/13, snare on
+  3/7/11/15 plus a pickup at 16, hi-hat on every step. Needs the free SamsSonor kit in
+  `%AppData%\JASS\Samples`; the preset restores it **by name**, so it finds the right kit on any
+  machine rather than whatever set happens to sit at that index.
 - **A STEP SEQ step sounds while you edit it.** A step's value is a number of semitones, not a
   note, so writing a figure meant guessing an interval and then holding a key to find out what you
   had written. Turning a step's knob now plays it — re-triggered on every semitone, so a drag

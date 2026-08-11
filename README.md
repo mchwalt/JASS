@@ -83,6 +83,12 @@ info** so nothing is hidden and every control explains itself.
   Clicking or turning a step sounds it — over the keyboard's current C, so you can
   write the figure by ear instead of playing the pattern back to find out what you
   wrote.
+- **PERC** — four percussion tracks on a 32-step grid with their own kit, their own
+  clock and a level per track, played **dry into the master bus**. It runs as soon as
+  you switch it on, no key needed, and the drums are the clock: a STEP SEQ figure
+  started from silence enters on the next start of the drum pattern. Deliberately not
+  a second note sequencer — JASS is monotimbral, so drums sent as MIDI would be
+  dragged through the patch's filter and effects.
 
 **Processing & effects**
 - **Biquad filter** (lowpass/highpass, resonance) + **formant filter**
@@ -112,6 +118,9 @@ info** so nothing is hidden and every control explains itself.
   wavetables ship embedded and seed on first run
 - **`DAF Bass`** (F9) and **`Drum Pattern`** (F10) demo the STEP SEQ: a bass figure
   measured off a 1981 record, and a drum pattern with real gaps driving the SAMPLER.
+- **`DAF Beat`** (F11) puts the two together — the same bass with **PERC** playing the
+  record's drum pattern underneath it, the first preset that plays a whole piece by
+  itself. Needs the free SamsSonor kit (see below); it is restored by name.
 - **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
   double-press assigns; assignments are global. **F8 = GrandPiano**: the
   Splendid set with nothing else in the signal path, for when you just want a
