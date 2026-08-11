@@ -9,6 +9,7 @@
 #include "DSP/Compressor.h"
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"   // Story 15.1
+#include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
 #include <vector>
 #include <map>
 
@@ -77,6 +78,13 @@ public:
     // FREQ knobs can display the actually-played frequency.
     float getCurrentNoteRatio() const { return currentNoteRatio.load(); }
 
+    // Which step PERC is on, for the grid's playhead (Story 16.1). Plain atomic read.
+    int getPercStep() const { return percStepDisplay.load(); }
+
+    // Sound one PERC lane once — the grid plays a step as it is placed. Message thread → audio
+    // thread through one atomic; the block consumes it.
+    void auditionPercLane (int lane) { percAuditionLane.store (lane); }
+
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
@@ -111,22 +119,29 @@ private:
         // "A preset wants this set." Jumps the queue: the loader finishes its current set, then
         // loads this one and selects it, before carrying on with the rest of the folder. Called
         // from the message thread (preset load), read by the loader — hence the lock.
-        void request (const juce::String& setName);
-        int  currentGeneration() const noexcept { return requestGeneration.load(); }
+        // `targetParamId` is the selector the set belongs in once it arrives (the SAMPLER's SET or
+        // PERC's KIT) — a patch can be waiting for one of each, so the request carries its own
+        // destination instead of the loader assuming the sampler.
+        void request (const juce::String& setName, const juce::String& targetParamId);
+        // Generation of the newest request for THAT selector. Per-selector, not global: a patch
+        // asking for an instrument and a kit issues two requests, and a single counter would let
+        // the second declare the first one stale.
+        int  currentGeneration (const juce::String& targetParamId) const;
 
     private:
-        juce::String takeRequest();
-        void loadRequested (const juce::String& setName);
+        struct Request { juce::String name, target; int gen = 0; };
+        Request takeRequest();
+        void loadRequested (const Request& r);
         SynthyProcessor& owner;
         juce::CriticalSection requestLock;
-        juce::String  requested;                // set name a preset is waiting for ("" = none)
-        std::atomic<int> requestGeneration { 0 };   // bumped per request; a stale result is dropped
+        std::vector<Request> queue;             // at most one entry per selector
+        int genSampler = 0, genPerc = 0;        // guarded by requestLock
     };
     SamplePreloadThread samplePreload { *this };
 
     // Select a sample set by index (message thread). Used by the loader once a requested set
     // has arrived; `generation` guards against a preset that was loaded in the meantime.
-    void selectSamplerSet (int index, int generation);
+    void selectSamplerSet (int index, int generation, const juce::String& targetParamId);
 
     juce::Synthesiser synth;
     juce::AudioProcessorValueTreeState apvts;
@@ -148,6 +163,18 @@ private:
                                    // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;
     StepSequencer stepSeq;   // Story 15.1 — shares the ARP's note-replacement slot in processBlock
+    // Story 16.1: PERC is the one sound source that is NOT a voice. It renders into the summed mix
+    // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
+    // be dragged through the patch's filter and effects. See PercSequencer.h.
+    PercSequencer perc;
+    bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
+                                  // entry can be quantised to the drum pattern (16.1 AC6)
+    std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
+    std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
+    // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
+    // index still points at whatever set sits there, and playing a random one — a drum loop, a
+    // piano — is worse than playing nothing (maintainer heard exactly that, 2026-08-11).
+    std::atomic<bool> percKitPending { false };
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
     juce::MidiBuffer arpKeptScratch;       // RT-safety (11.1): reused per block instead of a fresh
     juce::MidiBuffer glideRebuiltScratch;  // MidiBuffer (arp filter + mono-glide rebuild)

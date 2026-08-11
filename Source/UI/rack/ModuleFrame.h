@@ -143,6 +143,16 @@ namespace rack
         // re-selects the item matching the param value.
         std::vector<std::pair<juce::String, juce::ComboBox*>> indexValueCombos;
 
+        // Optional value list per indexIsValue combo (Knob-free equivalent of a lookup table). When
+        // a combo declares one, the parameter stores values[position] instead of the position, so a
+        // FILTERED list cannot silently re-point the parameter. Empty => position is the value.
+        std::vector<std::pair<juce::String, std::function<juce::Array<int>()>>> comboValues;
+        // Position of `value` in that combo's value list; without a list the value IS the position.
+        // -1 when the current value is not in the (filtered) list — the box then shows nothing,
+        // which is the honest answer: what is selected is not among the things offered.
+        int comboPositionFor (const juce::String& paramId, int value) const;
+        juce::Array<int> valuesFor (const juce::String& paramId) const;
+
         std::vector<juce::Button*> actionButtons;   // Action-button widgets, in body order (for clickFirstAction)
 
         // Per-slot activity (MOD MATRIX, desc.slotActivity): cached active state per slot so the timer
