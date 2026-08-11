@@ -1986,7 +1986,13 @@ void SynthyEditor::buildRack()
                 }) };
             paramCombo.indexIsValue = true;
             d.body.push_back (paramCombo);
-            d.body.push_back (K (P::modSlotAmount (n), "AMT"));
+            // AMT takes TWO slots (Story 7.5): a 1-slot cell here is 62 px wide but 100 px tall, and
+            // a knob is capped by the narrower side — so the row's height went to waste next to a
+            // small knob. Two slots make the cell 108 px and the knob reaches the 65 px the height
+            // offers. The module keeps its 28 columns; the combos give up 2 px of width for it.
+            Knob amt = K (P::modSlotAmount (n), "AMT");
+            amt.slots = 2;
+            d.body.push_back (amt);
             // MODULE changed → if PARAM is now beyond the new module's param count, snap it back to 0.
             d.comboDeps.push_back (ComboDependency { modId, parId,
                 [this, parId] (int newModule)

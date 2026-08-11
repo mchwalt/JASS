@@ -552,7 +552,7 @@ The formal architecture spine lives at
 |---|---|
 | AD-1 | One generic `ModuleFrame` + declarative descriptor — a module is data, adding one is a data change |
 | AD-2 | The Rack owns all placement on a fixed proportional grid × rack units; a module declares only its size class |
-| AD-3 | One uniform knob size everywhere (provisional, cosmetic) |
+| AD-3 | One knob size **per cell size** — the diameter is derived from the cell (bounded by height, by width, clamped to `[Small, Large]`); the former uniform 46 px is the floor (Story 7.5) |
 | AD-4 | Fixed descriptor/control vocabulary (`Knob/Combo/Toggle/Action/FileAction/Caption/Display`), guarded display transforms, declarative combo refresh |
 | AD-5 | Graphic displays are ordinary `Display` body elements; disabled modules dim the whole body via a frame overlay |
 | AD-6 | The frame owns parameter binding — all APVTS attachments live in `ModuleFrame` |

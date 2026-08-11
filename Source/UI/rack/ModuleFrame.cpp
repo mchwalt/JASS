@@ -201,7 +201,7 @@ namespace rack
                 if (k->modTarget != ModTarget::Off)
                     ringKnobs.push_back ({ s, k->modTarget });
 
-                cells.push_back ({ s, makeCaption (ownedCaptions, k->label), 1 });
+                cells.push_back ({ s, makeCaption (ownedCaptions, k->label), juce::jmax (1, k->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
 
                 // Mode-dependent knob (e.g. STEREO WIDTH/TIME outside Pseudo-Stereo): the timer
@@ -492,21 +492,39 @@ namespace rack
             {
                 auto cr = cellR.reduced (2);
                 const int capH = 13;   // fits the uniform 13pt caption font
-                const bool isKnob   = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                auto* knob = dynamic_cast<SynthySlider*> (cell.widget);
+                const bool isKnob   = knob != nullptr;
                 const bool isButton = dynamic_cast<juce::Button*> (cell.widget) != nullptr;
+
+                // A knob GROWS INTO ITS CELL (Story 7.5). It used to be one fixed diameter
+                // everywhere, which fits a 1-row module exactly (cell 80 px, block 81) but leaves a
+                // 2-row module's cell a fifth empty — measured in MOD MATRIX: an 81 px block in a
+                // 100 px cell, so 26 px of nothing between the two rows while the knob next to it
+                // stayed small. The diameter is therefore derived from the cell, bounded by
+                //   · height: what is left after caption + value box,
+                //   · width : the cell minus the 4 px per side drawRotarySlider reduces by,
+                // clamped to [Small, Large] — Small stays the floor, so nothing in the rack shrinks.
+                const int kValueH = 14, kKnobPad = 8;
+                const int knobD = isKnob
+                    ? juce::jlimit (KnobSize::Small, KnobSize::Large,
+                                    juce::jmin (cr.getHeight() - capH - kKnobPad - kValueH,
+                                                cr.getWidth() - kKnobPad))
+                    : KnobSize::Small;
                 // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
                 // is just the short box. Name sits ABOVE, so the block is caption + widget.
-                const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
+                const int wH = isKnob ? (knobD + kKnobPad + kValueH) : kComboH;
 
                 if (isKnob)
                 {
-                    // Knob block (NAME + rotary + value box) centred vertically in the cell.
-                    // ONE fixed knob size everywhere (AD-3), CENTRED horizontally; the slider
-                    // draws the rotary in its top square and the value box in the bottom 14 px.
+                    // Knob block (NAME + rotary + value box) centred vertically in the cell,
+                    // CENTRED horizontally; the slider draws the rotary in its top square and the
+                    // value box in the bottom 14 px. The LookAndFeel caps the rotary at the
+                    // slider's own knob diameter, so it is set here, per cell, not once per module.
+                    knob->setKnobDiameter (knobD);
                     const int blockH = capH + wH;
                     const int top = juce::jmax (cr.getY(), cr.getCentreY() - blockH / 2);
                     cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
-                    const int sw = juce::jmin (cr.getWidth(), 62);
+                    const int sw = juce::jmin (cr.getWidth(), knobD + kKnobPad);
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
                     // The optional switch rides in the cell's top-right corner, on the caption's
                     // line: it belongs to this knob, so it must not claim a cell of its own.
@@ -551,6 +569,7 @@ namespace rack
             col += span;
             if (col >= nCols) { col = 0; ++row; }
         }
+
     }
 
     void ModuleFrame::paint (juce::Graphics& g)
