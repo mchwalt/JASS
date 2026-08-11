@@ -159,6 +159,11 @@ namespace rack
         // only repaints on change; paintOverChildren dims inactive slots + draws the lit/hollow dots.
         std::vector<char> slotActiveCache;
 
+        // Vertical bands between repeated control GROUPS (MOD MATRIX's routing slots), computed in
+        // resized() from the pixels the cell grid cannot use and painted in the dim colour. Empty
+        // for every module that does not repeat a group.
+        std::vector<juce::Rectangle<int>> groupGaps;
+
         static constexpr int kHeaderH = 22;
         static constexpr int kComboH  = 22;   // combo box: short (half-height), wide, left-aligned
         // ONE width for every combo, the way AD-3 gives every knob ONE diameter. Before this a

@@ -152,9 +152,15 @@ namespace rack
                                                   // readable floor); width was idle. MEASURED:
                                                   // 1980 px → 1608 px, fit scale 0.65 → 0.79.
         static constexpr int kGutter      = 10;   // uniform gutter between cells
-        static constexpr int kHu          = 114;  // one rack-unit row height (L spans 2).
-                                                  // Sized so a 1-unit body fits name caption +
-                                                  // 46px knob + value box without shrinking.
+        static constexpr int kHu          = 21;   // one QUARTER rack unit (Story 7.4). The raster was
+                                                  // a whole 114 px row — sized so a 1-unit body fits
+                                                  // name caption + 46 px knob + value box — which made
+                                                  // every height a multiple of it: a module needing a
+                                                  // little more than one row had to take two, and the
+                                                  // second row arrived with the header height built in
+                                                  // again. n quarters are n*21 + (n-1)*10 px, so 4 is
+                                                  // still exactly 114 and 8 exactly 238 (nothing moved),
+                                                  // while 5 = 145 and 6 = 176 exist now.
         static constexpr int kZoneHeaderH = 28;   // full-width zone separator band
         static constexpr int kZoneLabelW  = 172;  // reserved width for the zone title before its
                                                   // header controls (>= widest label at 15pt bold)

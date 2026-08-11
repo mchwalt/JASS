@@ -8,7 +8,15 @@ namespace KnobSize
 {
     constexpr int Large  = 74;
     constexpr int Medium = 56;
-    constexpr int Small  = 46;  // the single standard size for all modules
+    constexpr int Small  = 46;
+    // THE size, the way kComboW is the one combo width: every rotary in the rack is 40 px, and a
+    // module's row height is derived from it rather than the other way round. 40 is not a taste,
+    // it is the measured ceiling — SAMPLER packs its row tightest and offers a 48 px cell, which
+    // hosts exactly 40 once drawRotarySlider has taken its 4 px per side. Anything larger would
+    // mean widening a module to keep the rack uniform.
+    constexpr int Standard = 40;
+    constexpr int Minimum  = 22;   // below this a rotary cannot be aimed; a cell that tight is a
+                                   // layout bug, so the knob stops shrinking and lets it show.
 }
 
 class SynthySlider : public juce::Slider
