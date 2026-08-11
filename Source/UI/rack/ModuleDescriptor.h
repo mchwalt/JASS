@@ -120,6 +120,13 @@ namespace rack
         // bypassing ComboBoxParameterAttachment — whose value = index/(numItems-1) mismaps when the
         // item count varies against a fixed param range (MOD MATRIX PARAM: 1..N items, range 0..N-1).
         bool indexIsValue = false;
+        // Optional VALUES for the items, in the same order. Without it the item's POSITION is the
+        // value, which is only safe while the list is the complete, unfiltered thing the parameter
+        // indexes. PERC's KIT lists drum kits only (a single WAV would put the same recording on
+        // all four lanes), so its positions are not store indices — and a filtered list with
+        // position-as-value is precisely how this project has twice loaded the wrong sample.
+        // Provide this and the parameter keeps meaning what it means, whatever the list shows.
+        std::function<juce::Array<int>()> itemValues;
         // Layout width in body slots (a knob = 1). Default 2; raise it for combos whose items
         // are user-named and can be long (SAMPLER SET: "SalamanderPiano" — user 2026-08-04).
         int slots = 2;

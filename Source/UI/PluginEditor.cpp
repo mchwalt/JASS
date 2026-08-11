@@ -1891,14 +1891,30 @@ void SynthyEditor::buildRack()
         // Item 0 is "(no kit)", so the value is the store index PLUS ONE and a fresh PERC points at
         // nothing instead of at whatever sample sits at index 0 — which on this machine was
         // "Drums_110BPM", a one-shot loop offered as a drum kit (maintainer 2026-08-11).
+        // Only MAPPED sets are offered: a single WAV would put the same recording on all four lanes
+        // at four pitches, which is never what a drum track wants (maintainer 2026-08-11). The
+        // filtering is why the combo carries an explicit value list — its positions are no longer
+        // store indices, and a value that quietly follows the list is the oldest bug in this rack.
         Combo kitCombo{ P::percKit, "KIT",
                         std::function<juce::StringArray()>([]
                         {
                             juce::StringArray items { "(no kit)" };
-                            items.addArray (SampleBankStore::instance().getNames());
+                            const auto& store = SampleBankStore::instance();
+                            for (int i = 0; i < store.getNumSets(); ++i)
+                                if (const auto* s = store.getSet(i); s != nullptr && s->isMapped())
+                                    items.add(s->getName());
                             return items;
                         }) };
-        kitCombo.indexIsValue = true;   // item position IS the value (0 = none, n = store index n-1)
+        kitCombo.itemValues = []
+        {
+            juce::Array<int> values { 0 };   // 0 = "(no kit)"
+            const auto& store = SampleBankStore::instance();
+            for (int i = 0; i < store.getNumSets(); ++i)
+                if (const auto* s = store.getSet(i); s != nullptr && s->isMapped())
+                    values.add(i + 1);       // the parameter stays store index + 1
+            return values;
+        };
+        kitCombo.indexIsValue = true;   // ... with itemValues supplying the value per position
         d.body.insert(d.body.begin() + 1, kitCombo);
         // NOTE reads out the instrument, not the number (decision B, 2026-08-10): the zone's own
         // name if the kit brought one, else the General MIDI drum map, else the note name.

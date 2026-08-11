@@ -280,23 +280,30 @@ namespace rack
                     dynCombos.push_back ({ c->paramId, box, *provider });   // re-pollable via refreshCombo
                 }
                 addAndMakeVisible (*box);
+                if (c->itemValues)
+                    comboValues.push_back ({ c->paramId, c->itemValues });
                 if (c->indexIsValue)
                 {
                     // Item INDEX == param value. Bypass ComboBoxParameterAttachment (its value is
                     // index/(numItems-1), which mismaps a variable item count against a fixed range —
                     // MOD MATRIX PARAM). Sync combo→param by index; param→combo via refreshCombo.
                     if (auto* raw = apvts.getRawParameterValue (c->paramId))
-                        box->setSelectedItemIndex ((int) raw->load(), juce::dontSendNotification);
+                        box->setSelectedItemIndex (comboPositionFor (c->paramId, (int) raw->load()),
+                                                   juce::dontSendNotification);
                     juce::ComboBox* boxPtr = box;
                     const juce::String pid = c->paramId;
                     const auto userHook = c->onUserSelect;   // user-gesture-only (see descriptor)
                     box->onChange = [this, boxPtr, pid, userHook]
                     {
-                        const int idx = juce::jmax (0, boxPtr->getSelectedItemIndex());
+                        const int pos = juce::jmax (0, boxPtr->getSelectedItemIndex());
+                        // With a value list the position is only where the item sits; the VALUE is
+                        // what the parameter has always meant.
+                        const auto vals = valuesFor (pid);
+                        const int value = juce::isPositiveAndBelow (pos, vals.size()) ? vals[pos] : pos;
                         if (auto* pp = apvts.getParameter (pid))
-                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) idx));
+                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) value));
                         if (userHook)
-                            userHook (idx);
+                            userHook (value);
                     };
                     indexValueCombos.push_back ({ c->paramId, box });   // timer resyncs it from the param
                 }
@@ -679,8 +686,8 @@ namespace rack
             if (iv.second == nullptr) continue;
             if (auto* raw = apvts.getRawParameterValue (iv.first))
             {
-                const int want = (int) raw->load();
-                if (want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
+                const int want = comboPositionFor (iv.first, (int) raw->load());
+                if (want >= 0 && want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
                     iv.second->setSelectedItemIndex (want, juce::dontSendNotification);
             }
         }
@@ -772,6 +779,20 @@ namespace rack
         }
     }
 
+    juce::Array<int> ModuleFrame::valuesFor (const juce::String& paramId) const
+    {
+        for (const auto& cv : comboValues)
+            if (cv.first == paramId && cv.second)
+                return cv.second();
+        return {};
+    }
+
+    int ModuleFrame::comboPositionFor (const juce::String& paramId, int value) const
+    {
+        const auto vals = valuesFor (paramId);
+        return vals.isEmpty() ? value : vals.indexOf (value);
+    }
+
     void ModuleFrame::refreshCombo (const juce::String& paramId)
     {
         for (auto& dc : dynCombos)
@@ -784,8 +805,10 @@ namespace rack
 
             // Re-apply the param's current selection so the ComboBoxAttachment and the box
             // don't drift after we repopulated the items (clearing doesn't touch the param).
+            // Item ids are position+1, and with a value list the position has to be looked up.
             if (auto* raw = apvts.getRawParameterValue (paramId))
-                dc.box->setSelectedId ((int) raw->load() + 1, juce::dontSendNotification);
+                dc.box->setSelectedId (comboPositionFor (paramId, (int) raw->load()) + 1,
+                                       juce::dontSendNotification);
         }
     }
 
