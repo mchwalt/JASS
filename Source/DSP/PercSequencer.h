@@ -100,6 +100,25 @@ public:
         const int n = juce::jlimit (0, 127, note[(size_t) lane]);
         lanes[(size_t) lane].setLevel (level[(size_t) lane] * amp * kAmpScale);
         lanes[(size_t) lane].trigger (ratioFor (n), n, 127);
+        chokeFrom (lane);
+    }
+
+    // Choke groups across the four tracks (Story 12.7). A lane retriggering itself already cuts its
+    // own tail inside SamplePlayer, so what this adds is the case a kit actually needs: the CLOSED
+    // hat on one lane silencing the OPEN hat ringing on another. The kit declares it — `off_by=N`
+    // on the closed hat, `group=N` on the open one — so nothing here knows anything about hi-hats.
+    void chokeFrom (int lane)
+    {
+        const auto* z = lanes[(size_t) lane].currentZone();
+        if (z == nullptr || z->offBy == 0)
+            return;
+        for (int o = 0; o < kLanes; ++o)
+        {
+            if (o == lane)
+                continue;   // never choke the hit that just started
+            if (const auto* oz = lanes[(size_t) o].currentZone(); oz != nullptr && oz->group == z->offBy)
+                lanes[(size_t) o].chokeOff();
+        }
     }
 
     void processBlock (juce::AudioBuffer<float>& buffer, int numSamples)
@@ -130,6 +149,7 @@ public:
                         // compensate exactly that). Balance belongs on the LEVEL knob, where one can
                         // see it.
                         lanes[(size_t) l].trigger (ratioFor (n), n, 127);
+                        chokeFrom (l);   // 12.7: a closed hat silences the open one on its own lane
                     }
                 stepIndex = (stepIndex + 1) % steps;
             }

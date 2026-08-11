@@ -144,6 +144,11 @@ public:
     }
 
     int currentStep() const noexcept { return stepIndex; }
+    // The MIDI note the pattern is holding right now, or -1 between notes. The sequencer writes its
+    // notes straight into the MIDI buffer and never touches the MidiKeyboardState — deliberately, or
+    // its own notes would come back as held keys and the root search would follow the pattern around.
+    // So the on-screen keyboard cannot see them, and the processor mirrors this into an atomic for it.
+    int currentNote() const noexcept { return soundingNote; }
 
 private:
     double sampleRate = 44100.0;

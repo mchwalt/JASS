@@ -1,7 +1,7 @@
 # Story 12.7: SFZ choke groups — a closed hi-hat that actually silences the open one
 
-Status: ready-for-dev — raised 2026-08-10 while picking a drum kit for the STEP SEQ demo.
-Independent of that pack: the kit plays fine without this, the hi-hats just pile up.
+Status: **done** — raised 2026-08-10 while picking a drum kit for the STEP SEQ demo, implemented
+2026-08-11 after the maintainer relayed the same idea from a second reviewer.
 
 ## Story
 
@@ -64,4 +64,21 @@ makes it RT-safe and simple (Story 11.1). No voice can see its siblings today.
 
 ## Dev Agent Record
 
-_Not started — story recorded 2026-08-10._
+Implemented as specified. Notes worth keeping:
+
+- **Two ints, not one.** `group=` (membership) and `off_by=` (what it silences) are different roles,
+  and a region can carry both — the Salamander open hat ends up `group=1 off_by=1`, so a new open hat
+  replaces the ringing one while the closed hat cuts either. Folding them into a single "choke group"
+  id, as one suggestion had it, cannot express that.
+- **Sibling access**: the processor builds a flat `std::vector<SynthVoice*>` roster once in its
+  constructor and hands every voice a pointer to it. No synthesiser, no casts, no ownership — and
+  the loop in `startNote` is allocation- and lock-free.
+- **PERC needed its own path.** Its four tracks are `SamplePlayer`s, not synth voices, so a loop over
+  the voices misses them entirely — and PERC is how the demo preset plays drums. `chokeFrom()` does
+  the same check across the lanes.
+- **The fade reuses `gateOff`'s ramp** at 6 ms (`chokeOff`), so there is exactly one release
+  mechanism in the sampler.
+- **What a kit declares decides whether any of it is audible.** SamsSonor wires the hats
+  conventionally and works untouched. The Salamander Drumkit hangs its choke on a CC64 pedal JASS has
+  no equivalent for: as shipped, its closed hat silences nothing (documented in the README, with the
+  two-opcode fix for a local copy).

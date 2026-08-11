@@ -12,6 +12,18 @@ SynthyProcessor::SynthyProcessor()
         synth.addVoice(new SynthVoice());
     synth.addSound(new SynthSound());
 
+    // Choke groups (Story 12.7) need sibling access: a voice knows only its own note, so a closed
+    // hi-hat could never reach the open one ringing in another voice. Build the roster ONCE here —
+    // the voice list never changes afterwards — and hand every voice a pointer to it. The roster is
+    // read-only on the audio thread; the synthesiser stays the sole owner of the voices.
+    voiceRoster.clear();
+    voiceRoster.reserve((size_t) synth.getNumVoices());
+    for (int i = 0; i < synth.getNumVoices(); ++i)
+        if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
+            voiceRoster.push_back(v);
+    for (auto* v : voiceRoster)
+        v->setVoicePeers(&voiceRoster);
+
     // One-time rebrand of the app-data folder (%AppData%\Synthy -> JASS, *.synthy -> *.jass).
     // MUST run before anything touches jassFolder() (which would create JASS and suppress it).
     PresetIO::migrateLegacyAppData();
@@ -32,6 +44,17 @@ SynthyProcessor::SynthyProcessor()
         samplePreload.notify();   // wake it if it is idling
     };
     samplePreload.startThread (juce::Thread::Priority::background);
+
+    // STEP SEQ latch (15.5): saving a patch stores the note a running figure is latched to, loading
+    // one puts it back — so a sequencer patch plays itself the moment it is loaded. -1 on load means
+    // "no latch" and stops whatever the previous patch left running. Starting the latch also ends
+    // the auto-play drone, since the instrument is now playing.
+    PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
+    PresetIO::applySeqLatchRoot = [this] (int note)
+    {
+        if (note >= 0) startSeqLatch (note);
+        else           stopSeqLatch();
+    };
 
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
@@ -207,6 +230,8 @@ SynthyProcessor::~SynthyProcessor()
     // load cannot queue work into a dying thread. The abort is polled per zone, so this returns
     // in milliseconds even mid-piano.
     PresetIO::requestSamplerSet = nullptr;
+    PresetIO::seqLatchRoot      = nullptr;   // both capture `this` — drop them before it dies
+    PresetIO::applySeqLatchRoot = nullptr;
     samplePreload.stopThread (4000);
 
     keyboardState.removeListener(this);
@@ -935,15 +960,25 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (! seqRecordArmed.load())
                 for (int n = 0; n < 128 && root < 0; ++n)
                     if (keyboardState.isNoteOn(1, n)) root = n;
+
+            // LATCH (maintainer 2026-08-11): the first key takes the pattern over and it keeps
+            // running after the key is released — holding one down for a whole piece is not playing,
+            // it is standing still. What changes the root afterwards is a NEW key, or an octave
+            // shift, which the editor applies to this latched value (there is no held key left for
+            // it to move). Switching the module off clears the latch, so the transport is still the
+            // module's own switch.
             if (root >= 0)
-                stepSeq.setRoot(root);
+                seqLatchedRoot.store(root);
+            const int playRoot = seqLatchedRoot.load();
+            if (playRoot >= 0)
+                stepSeq.setRoot(playRoot);
 
             // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
             // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
             // running figure must not restart or delay anything, exactly as in 15.1.
-            if (root >= 0 && ! seqKeyWasHeld && perc.enabled)
+            if (playRoot >= 0 && ! seqKeyWasHeld && perc.enabled)
                 stepSeq.setStartDelay(perc.samplesToPatternStart());
-            seqKeyWasHeld = (root >= 0);
+            seqKeyWasHeld = (playRoot >= 0);
 
             // Drop the raw chord so only the pattern sounds; keep everything else.
             auto& kept = arpKeptScratch; kept.clear();
@@ -954,7 +989,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     continue;
                 kept.addEvent(m, meta.samplePosition);
             }
-            stepSeq.processBlock(buffer.getNumSamples(), kept, 1, root >= 0);
+            stepSeq.processBlock(buffer.getNumSamples(), kept, 1, playRoot >= 0);
             midiMessages.swapWith(kept);
         }
         else if (stepSeq.enabled)
@@ -962,6 +997,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             stepSeq.enabled = false;       // just switched off => release its note
             stepSeq.releaseAll(midiMessages, 1);
             stepSeq.reset();
+            seqLatchedRoot.store(-1);      // the switch is the transport: off forgets the root
+            seqKeyWasHeld = false;
         }
 
         if (arpOn)
@@ -1144,6 +1181,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         perc.processBlock(buffer, buffer.getNumSamples());
         percStepDisplay.store(percOn ? perc.currentStep() : -1);
     }
+
+    // Mirror the note the STEP SEQ is holding, so the on-screen keyboard can show what the pattern
+    // is playing (maintainer 2026-08-11). Display only: the sequencer's notes go straight into the
+    // MIDI buffer and must stay out of the keyboard STATE, or they would come back as held keys and
+    // the pattern would keep re-rooting itself.
+    seqNoteDisplay.store(stepSeq.enabled ? stepSeq.currentNote() : -1);
 
     if (droneJustTriggered)
         for (int i = 0; i < synth.getNumVoices(); ++i)

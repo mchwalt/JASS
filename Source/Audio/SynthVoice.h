@@ -57,6 +57,21 @@ public:
     MixMode& getMixMode() { return mixMode; }
     WavetableOscillator& getWavetable() { return wavetable; }
     SamplePlayer& getSampler() { return sampler; }   // Story 12.1
+
+    // ── Story 12.7: choke groups act ACROSS voices ───────────────────────────────────────────
+    // A voice knows only its own note (that is what keeps it RT-safe and simple, Story 11.1), so a
+    // closed hi-hat cannot reach the open one without help. The narrowest help that works: the
+    // processor hands every voice the same flat roster of its siblings — no synthesiser, no casts,
+    // no ownership. Set once after the voices are built; nullptr means "no siblings", which is
+    // simply the pre-12.7 behaviour.
+    void setVoicePeers (const std::vector<SynthVoice*>* peers) noexcept { voicePeers = peers; }
+    // Silence this voice's sampler if it is sounding a zone that belongs to `group`. Called by a
+    // SIBLING from its startNote, so it runs on the audio thread: no allocation, no lock.
+    void chokeSamplerInGroup (int group) noexcept
+    {
+        if (const auto* z = sampler.currentZone(); z != nullptr && group != 0 && z->group == group)
+            sampler.chokeOff();
+    }
     Oscillator& getSubOsc() { return subOsc; }
     int& getSubOctaveRef() { return subOctave; }
     bool& getAdsrOnRef() { return adsrOn; }
@@ -110,6 +125,7 @@ private:
     KarplusStrong karplus;
     WavetableOscillator wavetable;
     SamplePlayer sampler;   // Story 12.1: recordings as a generator (stereo via PanSamplerL/R)
+    const std::vector<SynthVoice*>* voicePeers = nullptr;   // 12.7 (see setVoicePeers)
 
     MixMode mixMode = MixMode::RingMod;   // only meaningful when mixModeOn; off => additive
     bool adsrOn = true;      // false => envelope bypassed (constant gain) — Story 2.4

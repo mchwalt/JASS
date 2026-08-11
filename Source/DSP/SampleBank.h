@@ -51,6 +51,10 @@ struct SampleZone
     float veltrack = 0.0f;        // 12.5 amp_veltrack as 0..1 — how much velocity scales the gain
     float gainLin  = 1.0f;        // 12.5 sfz volume= as a linear factor (layer balancing)
     double tuneRatio = 1.0;       // 12.5 sfz tune= as a rate factor 2^(cents/1200)
+    // 12.7 choke groups: `group` is the group this zone belongs to, `offBy` the group it silences
+    // when it starts. 0 = none on either side, which is every zone in the sets we ship except a
+    // drum kit's hi-hats. A closed hat carries both (group=1 off_by=1) — hats choke each other.
+    int group = 0, offBy = 0;
 
     bool   isStereo() const            { return ! data[1].empty(); }
     const float* getData (int ch) const { return data[isStereo() && ch != 0 ? 1 : 0].data(); }
@@ -236,6 +240,8 @@ public:
             z.veltrack  = juce::jlimit (0.0f, 100.0f, e.veltrack) / 100.0f;
             z.gainLin   = juce::Decibels::decibelsToGain (e.volumeDb);
             z.tuneRatio = std::pow (2.0, e.tuneCents / 1200.0);
+            z.group     = e.group;
+            z.offBy     = e.offBy;
             totalSeconds += (double) z.getLength() / z.fileSampleRate;
             if (totalSeconds > kMaxSetSeconds)
             {

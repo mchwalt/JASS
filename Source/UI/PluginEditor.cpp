@@ -849,6 +849,11 @@ void SynthyEditor::timerCallback()
         if (auditionTicks > 0 && --auditionTicks == 0)
             auditionStep (0, false);
 
+        // Show the running pattern on the keyboard (maintainer 2026-08-11): the sequencer's notes
+        // bypass the keyboard state on purpose, so the display is fed from the processor's atomic.
+        if (keyboard != nullptr)
+            keyboard->setPatternNote (processor.getSeqNote());
+
         // Recording a figure (15.4): parameters are written HERE, on the message thread, from the
         // note handleNoteOn parked — that callback runs on the audio thread for hardware MIDI.
         // Switching STEP SEQ off ends the recording, so an armed cursor can never outlive its module.
@@ -1006,6 +1011,9 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
                                                        // default COMPRESSOR).
     processor.markPresetClean();   // snapshot the SETTLED state AFTER layout enforcement, so a
                                    // freshly loaded preset reads as clean (not "Current State").
+
+    // The STEP SEQ latch is restored by PresetIO from the patch's own "StepSeq.LatchRoot" (15.5),
+    // so a sequencer patch starts on the note it was saved on — nothing to do here.
 
     if (res.migrated)
     {
@@ -1328,6 +1336,9 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         // just note-off/note-on on OUR remembered note — no bitmask can fall out of sync, and
         // releasing the key later still lands on whatever note it is currently sounding.
         retuneSoundingComputerKeys();
+        // A LATCHED step-sequencer figure has no held key left to retune, so the octave shift is
+        // handed to its root directly — the pattern moves with the arrows like everything else.
+        processor.transposeSeqLatch (dir * 12);
         return true;
     }
     // While a figure is being recorded (15.4) SPACE means "leave this step empty and move on".
@@ -1336,6 +1347,15 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     if (key == juce::KeyPress::spaceKey && seqCursor >= 0)
     {
         seqSkipStep();
+        return true;
+    }
+    // SPACE stops a LATCHED figure. Since the pattern outlives the key that started it, something
+    // has to end it — and the key that means "nothing" everywhere else is the obvious one. Ranked
+    // between writing (above: SPACE is a rest) and the Karplus pluck (below), so it only claims the
+    // key while there is actually a figure running.
+    if (key == juce::KeyPress::spaceKey && processor.isSeqLatched())
+    {
+        processor.stopSeqLatch();
         return true;
     }
     // Spacebar re-plucks the Karplus string. Trigger the actual PLUCK button so it
