@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.7] – 2026-08-12
+
 ### Added
 - **Choke groups: a closed hi-hat now silences the open one.** On a real kit an open hat cannot keep
   ringing once the pedal closes, and every drum kit says so in its `.sfz`: a region declares
