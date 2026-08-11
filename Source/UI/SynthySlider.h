@@ -8,7 +8,15 @@ namespace KnobSize
 {
     constexpr int Large  = 74;
     constexpr int Medium = 56;
-    constexpr int Small  = 46;  // the single standard size for all modules
+    constexpr int Small  = 46;
+    // THE size, the way kComboW is the one combo width: every rotary in the rack is 40 px, and a
+    // module's row height is derived from it rather than the other way round. 40 is not a taste,
+    // it is the measured ceiling — SAMPLER packs its row tightest and offers a 48 px cell, which
+    // hosts exactly 40 once drawRotarySlider has taken its 4 px per side. Anything larger would
+    // mean widening a module to keep the rack uniform.
+    constexpr int Standard = 40;
+    constexpr int Minimum  = 22;   // below this a rotary cannot be aimed; a cell that tight is a
+                                   // layout bug, so the knob stops shrinking and lets it show.
 }
 
 class SynthySlider : public juce::Slider
@@ -65,8 +73,14 @@ public:
 
         const double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
 
-        // Small discrete ranges (e.g. unison voices 1..7, octaves): exactly one interval per notch.
-        if (interval > 0.0 && range / interval <= 24.0)
+        // Discrete ranges (unison voices 1..7, octaves, a STEP SEQ step at ±24 semitones): exactly
+        // one interval per notch, and modifiers change nothing — there is nothing finer to reach.
+        // The bound was 24 positions until the sequencer arrived: at 49 positions a step knob fell
+        // through to the proportional branch below and moved TWO semitones per notch, which is not
+        // a pitch you can aim at (user 2026-08-10). A knob whose interval is a semitone is discrete
+        // however wide it is; only genuinely long integer ranges (SAMPLER ROOT, 24..96) still need
+        // the proportional feel, or crossing them would take a hundred notches.
+        if (interval > 0.0 && range / interval <= 48.0)
         {
             setValue(getValue() + dir * interval, juce::sendNotificationSync);
             return;

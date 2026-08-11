@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <vector>
 #include <algorithm>
+#include <map>
 
 // ── SAMPLER key-mapping import (Story 12.2) ──────────────────────────────────────────────────
 // JASS derives or imports multisample mappings, it never authors them (the 12.1 analysis: only
@@ -11,7 +12,9 @@
 //      ranges split halfway between neighbouring roots;
 //   2. a minimal .sfz subset — <group>/<region> headers and the opcodes sample / key / lokey /
 //      hikey / pitch_keycenter / lovel / hivel (velocity layers, 12.5) / offset / ampeg_release /
-//      amp_veltrack / volume / tune. EVERY other opcode is ignored, silently.
+//      amp_veltrack / volume / tune, plus `#define $NAME value` macro substitution. EVERY other
+//      opcode is ignored, silently, and a region whose sample is a generated source (`*silence`,
+//      `*sine`, …) is skipped rather than looked up as a file.
 // Note names resolve with C4 = MIDI 60 — the pitch-model convention used everywhere in JASS
 // (keyboard labelling, "FREQ knobs define the sound AT C4"). MESSAGE THREAD only.
 namespace SampleMapping
@@ -72,6 +75,8 @@ namespace SampleMapping
                                         //   entriesFromSfz defaults it to 100 (spec), folders to 0
         float volumeDb  = 0.0f;         // sfz volume= — per-zone gain in dB (12.5)
         int   tuneCents = 0;            // sfz tune= — per-zone pitch offset in cents (12.5)
+        int   group     = 0;            // sfz group=   — "I belong to choke group N" (12.7)
+        int   offBy     = 0;            // sfz off_by=  — "when I sound, silence group N"; 0 = none
     };
 
     // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
@@ -144,6 +149,8 @@ namespace SampleMapping
             float vt    = -1.0f;          // 12.5 amp_veltrack (percent); <0 ⇒ unset
             float vol   = kUnsetF;        // 12.5 volume (dB)
             int   tune  = kUnsetI;        // 12.5 tune (cents)
+            int   group = kUnsetI;        // 12.7 choke group membership
+            int   offBy = kUnsetI;        // 12.7 choke group this region silences
             bool bad = false;
         };
         Scope group, region;
@@ -167,6 +174,8 @@ namespace SampleMapping
             float vt  = region.vt    >= 0.0f ? region.vt  : group.vt;
             float vol = region.vol  != kUnsetF ? region.vol  : group.vol;
             int  tune = region.tune != kUnsetI ? region.tune : group.tune;
+            int  grp  = region.group != kUnsetI ? region.group : group.group;   // 12.7
+            int  offB = region.offBy != kUnsetI ? region.offBy : group.offBy;
             if (root  < 0) root  = 60;    // SFZ default: unchanged on middle C
             if (lo    < 0) lo    = 0;
             if (hi    < 0) hi    = 127;
@@ -176,7 +185,16 @@ namespace SampleMapping
             if (vt    < 0.0f) vt = 100.0f;   // D1 (12.5): .sfz sets track velocity per spec default
             if (vol  == kUnsetF) vol  = 0.0f;
             if (tune == kUnsetI) tune = 0;
-            if (! region.bad && ! group.bad && sample.isNotEmpty() && lo <= hi && loVel <= hiVel)
+            if (grp  == kUnsetI) grp  = 0;   // 12.7: 0 = belongs to no choke group / silences none
+            if (offB == kUnsetI) offB = 0;
+            // SFZ reserves sample values starting with '*' for generated sources — *silence and
+            // the built-in waveforms (*sine, *saw, *square, *noise). They are not filenames, and
+            // treating them as one made a whole kit fail to load ("*silence is missing"). Skip the
+            // region: we synthesise none of them, and *silence exists only to carry a choke group
+            // (Story 12.7), which contributes no sound of its own in any case.
+            const bool generated = sample.startsWithChar ('*');
+            if (! region.bad && ! group.bad && sample.isNotEmpty() && ! generated
+                && lo <= hi && loVel <= hiVel)
             {
                 Entry fresh;
                 fresh.file    = baseDir.getChildFile ((defaultPath + sample).replaceCharacter ('\\', '/'));
@@ -190,6 +208,8 @@ namespace SampleMapping
                 fresh.veltrack  = vt;
                 fresh.volumeDb  = vol;
                 fresh.tuneCents = tune;
+                fresh.group     = grp;
+                fresh.offBy     = offB;
                 // 12.5 dedupe: velocity is a zone dimension now. Drop a region only when an
                 // earlier one covers it in KEY *and* VELOCITY (true duplicate/subset — zoneFor
                 // is first-match, so it could never sound); distinct layers always survive.
@@ -206,10 +226,37 @@ namespace SampleMapping
 
         juce::StringArray lines;
         lines.addLines (sfzFile.loadFileAsString());
+
+        // SFZ preprocessor: `#define $NAME value` declares a macro and every later `$NAME` is
+        // replaced by its value. Libraries use it to name their drum map once instead of repeating
+        // note numbers (SamsSonor: `#define $KEY_KICK 36` … `key=$KEY_KICK`). Without this pass such
+        // a key= is an unparsable token, and since a bad key DROPS its region the kit would load as
+        // nothing at all — not degraded, empty. Collected up front so a macro works wherever it is
+        // declared; iterated LONGEST NAME FIRST (std::greater) so `$KEY_SN` cannot eat the prefix of
+        // `$KEY_SN_RH`. Not supported: #include — a second file needs path resolution and cycle
+        // protection, which is a different problem.
+        std::map<juce::String, juce::String, std::greater<juce::String>> macros;
+        for (const auto& raw : lines)
+        {
+            const auto def = raw.upToFirstOccurrenceOf ("//", false, false).trim();
+            if (! def.startsWithIgnoreCase ("#define"))
+                continue;
+            juce::StringArray t;
+            t.addTokens (def, " 	", "");
+            t.removeEmptyStrings();
+            if (t.size() >= 3 && t[1].startsWithChar ('$'))
+                macros[t[1]] = t[2];
+        }
+
         for (auto line : lines)
         {
             line = line.upToFirstOccurrenceOf ("//", false, false)
                        .replace (">", "> ");   // split headers glued to their first opcode
+            if (line.trim().startsWithChar ('#'))
+                continue;                      // #define read above; any other directive is ignored
+            for (const auto& m : macros)
+                if (line.contains (m.first))
+                    line = line.replace (m.first, m.second);
             juce::StringArray tokens;
             tokens.addTokens (line, " \t", "");
             tokens.removeEmptyStrings();
@@ -272,6 +319,14 @@ namespace SampleMapping
                     s.vol = juce::jlimit (-60.0f, 12.0f, value.getFloatValue());
                 else if (opcode == "tune")            // per-zone cents (12.5: stretch tuning)
                     s.tune = juce::jlimit (-1200, 1200, value.getIntValue());
+                // Choke groups (12.7): group= names the group a region BELONGS to, off_by= the group
+                // it SILENCES when it sounds. Every drum kit uses the pair for its hi-hats. 0 means
+                // "none", which is also what unparsable input lands on — the same silent tolerance
+                // the rest of this parser shows.
+                else if (opcode == "group")
+                    s.group = juce::jmax (0, value.getIntValue());
+                else if (opcode == "off_by" || opcode == "offby")
+                    s.offBy = juce::jmax (0, value.getIntValue());
                 // every other opcode: ignored by design (minimal subset)
             }
         }

@@ -8,6 +8,8 @@
 #include "DSP/BinauralRoom.h"
 #include "DSP/Compressor.h"
 #include "DSP/Arpeggiator.h"
+#include "DSP/StepSequencer.h"   // Story 15.1
+#include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
 #include <vector>
 #include <map>
 
@@ -46,6 +48,23 @@ public:
     juce::MidiKeyboardState& getKeyboardState() { return keyboardState; }
     WaveformCapture& getWaveformCapture() { return waveformCapture; }
 
+    // Channel the editor previews a STEP SEQ step on (Story 15.3). It cannot be channel 1: while
+    // the sequencer (or the ARP) runs, every channel-1 note in the buffer is dropped so that only
+    // the pattern sounds — which is exactly when the preview is wanted. 15 passes through
+    // untouched, the same trick the auto-play drone plays on 16.
+    static constexpr int kAuditionChannel = 15;
+    // The auto-play drone's own channel (see autoPlayEnabled). Public because the editor has to
+    // recognise it: a drone note is not a played key, so it must not be written into a STEP SEQ
+    // step while a figure is being recorded (Story 15.4).
+    static constexpr int kDroneChannel = 16;
+
+    // While the editor is recording a figure into STEP SEQ (Story 15.4), a played key WRITES a step
+    // instead of playing the pattern: the sequencer must not take it as its root, or every entered
+    // note would restart and transpose the figure under the writer's hands. Set from the message
+    // thread, read once per block — the editor clears it when it stops recording and in its
+    // destructor, so a closed window can never leave the sequencer rootless.
+    void setSeqRecordArmed (bool armed) { seqRecordArmed.store (armed); }
+
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
     // from the message thread).
@@ -69,6 +88,43 @@ public:
     // 1.0 when only the drone or nothing sounds. Used by the editor so the OSC
     // FREQ knobs can display the actually-played frequency.
     float getCurrentNoteRatio() const { return currentNoteRatio.load(); }
+
+    // Which step PERC is on, for the grid's playhead (Story 16.1). Plain atomic read.
+    int getPercStep() const { return percStepDisplay.load(); }
+    // MIDI note the STEP SEQ is sounding, or -1. For the on-screen keyboard only (see seqNoteDisplay).
+    int getSeqNote() const { return seqNoteDisplay.load(); }
+    // Step the STEP SEQ is on (0-based), or -1. Drives the module's playhead, like PERC's grid.
+    int getSeqStep() const { return seqStepDisplay.load(); }
+
+    // Move the LATCHED sequencer root (see seqLatchedRoot). The pattern keeps running after the key
+    // is released, so an octave shift has no held note left to move — the editor sends the ±12 here
+    // instead, and the figure follows the octave keys exactly as a held key would have.
+    void transposeSeqLatch (int semitones)
+    {
+        const int r = seqLatchedRoot.load();
+        if (r >= 0)
+            seqLatchedRoot.store (juce::jlimit (0, 127, r + semitones));
+    }
+    // Is a latched figure running? (SPACE stops it — the editor needs to know whether there is
+    // anything to stop before it falls through to the Karplus pluck.)
+    bool isSeqLatched() const { return seqLatchedRoot.load() >= 0; }
+    // Stop the latched figure. Clearing the root is enough: the next block sees nothing playing,
+    // releases the sounding note and re-arms the pattern at step 0, exactly as letting go of the
+    // key did before the latch existed.
+    void stopSeqLatch() { seqLatchedRoot.store (-1); }
+    // Start a latched figure without a key — used when a preset whose STEP SEQ is ON is loaded, so
+    // the patch plays itself the moment it arrives instead of waiting to be touched. It also ends
+    // the auto-play drone: the instrument IS playing now, and hearing a held C4 under a bass figure
+    // is exactly the confusion this is meant to remove.
+    void startSeqLatch (int midiNote)
+    {
+        seqLatchedRoot.store (juce::jlimit (0, 127, midiNote));
+        autoPlayEnabled.store (false);
+    }
+
+    // Sound one PERC lane once — the grid plays a step as it is placed. Message thread → audio
+    // thread through one atomic; the block consumes it.
+    void auditionPercLane (int lane) { percAuditionLane.store (lane); }
 
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
@@ -104,24 +160,35 @@ private:
         // "A preset wants this set." Jumps the queue: the loader finishes its current set, then
         // loads this one and selects it, before carrying on with the rest of the folder. Called
         // from the message thread (preset load), read by the loader — hence the lock.
-        void request (const juce::String& setName);
-        int  currentGeneration() const noexcept { return requestGeneration.load(); }
+        // `targetParamId` is the selector the set belongs in once it arrives (the SAMPLER's SET or
+        // PERC's KIT) — a patch can be waiting for one of each, so the request carries its own
+        // destination instead of the loader assuming the sampler.
+        void request (const juce::String& setName, const juce::String& targetParamId);
+        // Generation of the newest request for THAT selector. Per-selector, not global: a patch
+        // asking for an instrument and a kit issues two requests, and a single counter would let
+        // the second declare the first one stale.
+        int  currentGeneration (const juce::String& targetParamId) const;
 
     private:
-        juce::String takeRequest();
-        void loadRequested (const juce::String& setName);
+        struct Request { juce::String name, target; int gen = 0; };
+        Request takeRequest();
+        void loadRequested (const Request& r);
         SynthyProcessor& owner;
         juce::CriticalSection requestLock;
-        juce::String  requested;                // set name a preset is waiting for ("" = none)
-        std::atomic<int> requestGeneration { 0 };   // bumped per request; a stale result is dropped
+        std::vector<Request> queue;             // at most one entry per selector
+        int genSampler = 0, genPerc = 0;        // guarded by requestLock
     };
     SamplePreloadThread samplePreload { *this };
 
     // Select a sample set by index (message thread). Used by the loader once a requested set
     // has arrived; `generation` guards against a preset that was loaded in the meantime.
-    void selectSamplerSet (int index, int generation);
+    void selectSamplerSet (int index, int generation, const juce::String& targetParamId);
 
     juce::Synthesiser synth;
+    // Flat list of the synth's voices, built once in the constructor and handed to every voice so a
+    // note-on can reach its siblings (Story 12.7 choke groups). Non-owning — the synthesiser owns
+    // them — and never mutated afterwards, so reading it on the audio thread needs no lock.
+    std::vector<SynthVoice*> voiceRoster;
     juce::AudioProcessorValueTreeState apvts;
     juce::MidiKeyboardState keyboardState;
     // Snapshot length = the LONGEST scope window (100 ms) at the highest sample rate we
@@ -140,6 +207,23 @@ private:
     float prevMasterGain = 0.0f;   // last block's applied master gain — ramp target so LFO-modulated
                                    // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;
+    StepSequencer stepSeq;   // Story 15.1 — shares the ARP's note-replacement slot in processBlock
+    // Story 16.1: PERC is the one sound source that is NOT a voice. It renders into the summed mix
+    // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
+    // be dragged through the patch's filter and effects. See PercSequencer.h.
+    PercSequencer perc;
+    bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
+                                  // entry can be quantised to the drum pattern (16.1 AC6)
+    std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)
+    std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
+    std::atomic<int> seqNoteDisplay { -1 };   // note the STEP SEQ holds, for the on-screen keyboard
+    std::atomic<int> seqLatchedRoot { -1 };   // STEP SEQ latch: the root outlives the key (see below)
+    std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
+    std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
+    // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
+    // index still points at whatever set sits there, and playing a random one — a drum loop, a
+    // piano — is worse than playing nothing (maintainer heard exactly that, 2026-08-11).
+    std::atomic<bool> percKitPending { false };
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
     juce::MidiBuffer arpKeptScratch;       // RT-safety (11.1): reused per block instead of a fresh
     juce::MidiBuffer glideRebuiltScratch;  // MidiBuffer (arp filter + mono-glide rebuild)
@@ -157,8 +241,8 @@ private:
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON
     // when a sound generator is (re)activated. No user-facing parameter. The drone
-    // lives on its own MIDI channel so it never collides with played notes.
-    static constexpr int kDroneChannel = 16;
+    // lives on its own MIDI channel so it never collides with played notes
+    // (kDroneChannel is declared public above — the editor has to recognise it too).
     static constexpr int kDroneNote = 60;        // C4 → transpose ratio 1.0
     std::atomic<bool> autoPlayEnabled { true };
     unsigned prevSourcesMask = 0;                // for rising-edge "generator enabled" detection
@@ -195,8 +279,11 @@ public:
 private:
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
+    std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion
+    std::atomic<bool> pendingExclusiveIsSeq { false };// which of the two was just switched on
     std::atomic<int>  pendingCrossModCode { -1 };   // encodes which CROSS-MOD param changed (alloc-free)
     void applyCrossModCoupling(const juce::String& paramId);   // the message-thread coupling body
+    void applySeqArpExclusion();   // Story 15.1: ARP and STEP SEQ cannot both replace the chord
 
     // CROSS MOD enable coupling: keep the two operand OSCs enabled while CROSS MOD is on (auto-on
     // with memory), and switch CROSS MOD off when a used operand OSC is turned off. Mirrors the

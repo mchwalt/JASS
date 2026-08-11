@@ -10,6 +10,204 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.7] – 2026-08-12
+
+### Added
+- **Choke groups: a closed hi-hat now silences the open one.** On a real kit an open hat cannot keep
+  ringing once the pedal closes, and every drum kit says so in its `.sfz`: a region declares
+  `group=N` ("I belong to group N") and another `off_by=N` ("when I sound, silence group N"). JASS
+  read neither, so the two hats sounded over each other — it did not read as a groove, it read as a
+  mistake. Both opcodes are parsed now and the choke acts **across voices** and across PERC's four
+  tracks. It **fades** over a few milliseconds rather than cutting: through the very same release
+  ramp a note-off uses, because a hard stop clicks and that lesson was already paid for. A kit that
+  uses neither opcode — both grand pianos, every set shipped with JASS — behaves exactly as before.
+
+- **The STEP SEQ latches: the first key starts it, and it keeps running.** Holding a key down for a
+  whole piece is not playing, it is standing still. A new key moves the figure to that root, the
+  Up / Down octave keys shift it (there is no held key left for them to retune, so the latched root
+  takes the octave instead), **SPACE stops it**, and so does switching the module off — its switch
+  is still the transport. The on-screen keyboard **shows the note the pattern is playing**, in the
+  MODULATION colour so it reads apart from the key you are holding. Those notes deliberately never
+  enter the keyboard state: the sequencer looks there for its root, and it would have kept
+  re-rooting itself on its own output.
+- **STEP SEQ shows the step it is playing**, the way PERC's grid does: a lit dot on the step's own
+  number, beside its on/off box. It reads apart from the write cursor's ring on purpose — the two are
+  visible at once and mean opposite things, what is sounding versus what your next key will overwrite.
+- **A patch can be saved while its figure is running, and comes back running.** The new
+  `StepSeq.LatchRoot` field carries the note the pattern is latched to, so a sequencer preset plays
+  itself the moment you load it instead of waiting to be touched — `DAF Beat` starts on C3. A preset
+  without the field loads silent, exactly as every preset written before it, and clears whatever the
+  previous patch left playing.
+- **Write a STEP SEQ figure by playing it.** A step's value is a number of semitones, so authoring a
+  figure meant knowing the interval and then converting it into a number — the conversion is exactly
+  what a sequencer is supposed to do for you. The module's **Reset** button now empties the pattern
+  and starts writing at step 1: a ring marks the step waiting for a note, and every key you play —
+  computer keyboard, on-screen keyboard or a MIDI keyboard — is written there, switched on, sounded
+  once for confirmation, and the ring moves on. **SPACE** leaves a step silent, which is how a rest
+  is written, since every key already means a note. Writing stops by itself after LEN steps. A
+  **click on any step knob** puts the ring there, so a wrong note is corrected by clicking it and
+  playing again — and the correction runs on into its neighbours. While the ring shows, the keyboard
+  writes instead of starting the pattern: otherwise every note entered would restart and transpose
+  the figure under your hands. The reference pitch is the keyboard's current C, the same one the
+  step preview plays, so what you hear when turning a knob and what you get when playing a key agree.
+- **PERC — four percussion tracks on a 32-step grid**, with their own kit, their own clock and a
+  level per track, played **dry into the master bus**. It runs the moment you switch it on: no key,
+  no root, because it never becomes a note. **Left click sets a step and sounds it**, right click
+  clears one, and dragging carries on — a row of hi-hats is one gesture, and you hear what you
+  place. Each row of the grid is named after the instrument it plays; the NOTE knob names it too
+  (Kick, Snare, HH Closed) instead of showing a number, from the General MIDI drum map or the kit's
+  own sample names. Per track an AMP and a PAN, plus one AMP for the whole kit — balance and level
+  are different jobs, and the module's own AMP reaches +12 dB because a drum kit is mastered with
+  headroom while three oscillators with unison are not. While a preset's kit is still loading in
+  the background, PERC stays **silent** rather than play whatever set the stale index points at,
+  and its KIT list offers **only mapped sets** — a single recording would put the same file on all
+  four tracks at four pitches. Nothing is selected until you choose something. LEN 16 on 1/16 is the
+  classic one-bar drum grid, 32 leaves room for the fill in bar two. And the drums are the clock:
+  with PERC running, a STEP SEQ figure started from silence enters on the **next start of the drum
+  pattern** rather than wherever the key happened to fall.
+  It is deliberately **not** a second note sequencer. JASS is monotimbral — a voice starts every
+  enabled generator, and filter, distortion, delay and reverb all live inside the voice — so drums
+  sent as MIDI would come out through the bass's resonant lowpass. PERC renders after the synth and
+  before the compressor instead, which makes "dry" the construction rather than a setting. Under
+  the hood it is a second SAMPLER at processor level: sets, SFZ parsing, velocity layers and
+  background loading all come from the existing sampler, so what is a drum machine today can carry
+  any sampled instrument later.
+- **Demo preset `DAF Beat`** on F11 — the `DAF Bass` patch with the drums underneath it, and the
+  first preset that plays a whole piece by itself. The pattern is the one the record's drum
+  transcription shows, on the grid the measurement supports: SYNC 1/8, so a step is an eighth and
+  the 16-step loop is two bars, exactly as long as the bass figure. Kick on 1/5/9/13, snare on
+  3/7/11/15 plus a pickup at 16, hi-hat on every step. Needs the free SamsSonor kit in
+  `%AppData%\JASS\Samples`; the preset restores it **by name**, so it finds the right kit on any
+  machine rather than whatever set happens to sit at that index.
+- **A STEP SEQ step sounds while you edit it.** A step's value is a number of semitones, not a
+  note, so writing a figure meant guessing an interval and then holding a key to find out what you
+  had written. Turning a step's knob now plays it — re-triggered on every semitone, so a drag
+  scrubs the scale — and so does simply clicking one, which is the quickest way to ask what a step
+  holds without changing it. Switching a rest back on sounds it once, too. The reference pitch is the
+  computer keyboard's current C (C3 by default), so it moves with the Up / Down octave keys and the
+  preview is in the octave you are playing in. It rides its own MIDI channel: while the sequencer
+  runs, every played note on channel 1 is deliberately swallowed so that only the pattern sounds —
+  which is exactly when the preview is wanted.
+- **STEP SEQ — a 32-step note sequencer** (two rows of sixteen). Hold a key and an authored figure plays,
+  transposed by that key (the lowest held note is the root). Each step carries its own
+  semitone offset and a switch — off is a rest — while note length is one GATE for the whole
+  pattern, 1.0 holding each note into the next step;
+  step length is a note division on the same clock the LFOs and DELAY ride on, or a free
+  rate in steps per second. This is the thing the ARPEGGIATOR could never do: it can only
+  re-order the notes you are already holding, and it runs free in Hz rather than in time.
+  Both replace the held chord, so only one of the two can run — switching one on switches
+  the other off. Hidden by default (rack height is a budget); a preset that enables it
+  reveals it. Legato is the point of the gate design: at 1.0 the previous step's note-off
+  is emitted after the next note-on, so the notes overlap instead of leaving a hole.
+- **SFZ `#define` macros are understood.** A library that names its drum map once
+  (`#define $KEY_KICK 36` … `key=$KEY_KICK`) used to load as *nothing*: an unresolved
+  macro made every key unparsable, and an unparsable key drops its region. Kits like
+  SamsSonor now load straight from their own `.sfz`, with no curated copy in between.
+- **Generated SFZ sources no longer break a load.** SFZ reserves sample values starting
+  with `*` — `*silence` and the built-in waveforms — for sources it synthesises rather
+  than reads from disk. JASS looked them up as filenames, so one `*silence` region was
+  enough to fail an entire kit with “*silence is missing”. Those regions are skipped now.
+- **Free-running knobs grey out while tempo-synced.** With SYNC on a note division the
+  DSP ignores the LFO/STEP SEQ RATE and the DELAY TIME entirely, so those knobs now dim
+  the way any other inactive control does instead of sitting there looking live.
+- **Demo preset `Drum Pattern`** on F10 — the sequencer driving a drum map instead of a
+  melody: the step offsets pick the instrument (kick, snare, hats) rather than a pitch, and
+  two steps are switched off so the pattern has real gaps. Needs the free SamsSonor kit in
+  `%AppData%\JASS\Samples`; without it the SAMPLER simply finds no set.
+- **Demo preset `DAF Bass`** on F9 for fresh installs — the sequencer showing what it is for,
+  with the 16-step figure and the tone measured off the record it was built against: a
+  sawtooth through a resonant lowpass whose cutoff is swept once per step by a tempo-synced
+  LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
+
+### Changed
+- **`DAF Bass` (F9) and `Drum Pattern` (F10) are retired.** They introduced the STEP SEQ: a bass
+  figure measured off a 1981 record, and a drum map driven step by step because there was nothing
+  else to play drums with. `DAF Beat` on F11 does both better — the same bass with PERC underneath
+  it — and PERC replaced the drum-map workaround outright. F9 and F10 are free for your own patches
+  now; existing bank assignments are untouched. `DAF Beat` also drives its kit at **full AMP**.
+- **One knob size for the whole rack, and modules built around it.** The rack drew six different
+  rotary sizes — 34, 40, 44, 45, 46 and 53 px — none of them chosen: a knob simply took what its
+  cell happened to leave. Every rotary is now **40 px**, capped by its cell the way every combo box
+  is capped to one width. 40 is the measured ceiling, not a preference: SAMPLER packs its row
+  tightest and offers a 48 px cell, which holds exactly 40 once the rotary's own margin is taken —
+  anything larger would have meant widening a module. Module heights now follow **from** the knob
+  instead of the other way round. That needed a finer raster: a rack row was a whole 114 px, sized
+  for one content row *plus the header*, so a two-row module paid for the header twice and 238 px
+  was the only height it could have. The vertical unit is now a **quarter** of that (21 px), which
+  reproduces 114 and 238 exactly — every existing module stands where it stood — and makes the
+  steps between them sayable. **MOD MATRIX, STEP SEQ, PERC and ADSR are 207 px instead of 238**, all
+  captions and value boxes intact. And the dead strip along MOD MATRIX's right edge — the 16 px that
+  32 cells of 54 px leave over — is now spent as three narrow bands **between** its four routing
+  slots, in the same dim tone the inactive slots use, so the grouping reads as grouping.
+- **STEP SEQ and PERC start visible.** They were hidden until switched on, on the argument that rack
+  height is a budget. The budget got cheaper, and a sequencer you have to go looking for is a
+  sequencer you forget you have.
+- **A knob now fills the cell it sits in.** Its block was a constant 81 px — caption, a 46 px rotary
+  and a value box — which fits a one-row module exactly and leaves a two-row module's cell a fifth
+  empty. In MOD MATRIX that showed as a band of nothing between the two routing rows. The cause was
+  derived from the layout code twice and guessed wrong twice, so it was finally **measured**: the
+  cell there is 104 px tall but only 62 px wide, and since the rotary is capped by the narrower
+  side, the row's height simply went to waste. The diameter is therefore taken from the cell now —
+  bounded by the height left after caption and value box, by the cell width, and clamped so the old
+  46 px stays the **floor** and nothing in the rack gets smaller. MOD MATRIX's AMT additionally
+  claims a second body slot, which is what makes its cell wide enough: **46 → 65 px**, and the gap
+  between the rows falls from 26 px to 4. STEP SEQ and PERC reach 53 px, where the cell width is the
+  limit. No module changes its footprint, so the window, the height budget and the fit scale are
+  untouched.
+- **The mouse wheel counts in single steps on a discrete knob.** A knob whose interval is one
+  whole unit was only treated as discrete up to 24 positions; wider ones fell through to the
+  proportional feel, which on a STEP SEQ step (±24 semitones) meant **two semitones per notch** —
+  an interval you cannot aim at, and reachable only by holding Shift. Up to 48 positions the wheel
+  now moves exactly one unit, whatever the modifiers. Genuinely long integer ranges (SAMPLER ROOT,
+  24…96) keep the proportional feel, or crossing them would take a hundred notches.
+- **Builds target AVX** (`/arch:AVX`, `-mavx`) instead of the SSE2 default. Measured on
+  the HRIR convolution: 303 ns per sample at SSE2, 94 ns at AVX — and 94 ns at AVX2, which
+  buys nothing here, so the lower of two equally fast baselines was taken. It does raise
+  the floor: a CPU older than 2011 (Sandy Bridge / Bulldozer) will no longer run JASS.
+- **`Drum Pattern` plays at a sensible level.** The sequencer sends velocity 100 and an SFZ
+  without `amp_veltrack` tracks velocity per the spec default, which alone costs 4.2 dB; the
+  preset's SAMPLER level now compensates.
+
+### Fixed
+- **PERC's playhead marked the wrong step.** It showed the sequencer's step counter, which is
+  advanced to the *next* step the instant one fires — so the marker ran a whole cell ahead of the
+  beat you hear (125 ms on a 1/16 grid at 120 BPM). Both sequencers now remember which step is
+  actually sounding, and both mark that one.
+- **Hiding the scope or the spectrum actually gives their height back.** The panel's own advice
+  when the rack is over budget is "hide a module" — and for almost every module it did nothing:
+  the worst-case measurement counts a hidden module anyway if it is factory-visible, because a
+  preset enabling it would reveal it again and resize the window. Measured on the maintainer's
+  machine, hiding both VISUALIZATION modules moved the number by zero. They are now marked as
+  visual-only — the two modules in the rack that nothing can be heard from — so hiding them is
+  taken at face value and no preset reveals them behind your back. Measured again afterwards:
+  1732 px → **1446 px**, so the two of them were holding **286 px** of a 1929 px budget.
+  Deliberately narrow: applying the same rule to a module that makes sound would let a preset
+  load without part of its patch.
+- **The MODULES panel no longer disappears when you leave JASS.** `CallOutBox::launchAsynchronously`
+  runs a timer that dismisses the box as soon as the app is not the foreground process. That is
+  right for a menu and wrong for this panel: it carries the rack height budget, a number one reads
+  while doing something else in another window. It now closes on a click outside, on ESC, or on the
+  MODULES button — not on losing focus.
+- **The window fits the screen it is actually on.** The display-fit scale and the budget line both
+  asked for the *primary* display, which is the same thing only on a single-monitor desk. Both now
+  measure the display under the window, and dragging JASS onto a monitor of a different size or
+  scaling re-fits it instead of keeping the old one's scale.
+- **The budget line names the display it measured**, on a second row — usable area and scaling — so
+  a number that disagrees with what you see can be diagnosed instead of guessed at. The
+  over-budget warning moved there too — the panel is 300 px wide and the old one-line form ran off
+  the edge unseen.
+- **No more mojibake in the English budget line.** `juce::String(const char*)` takes plain ASCII, so
+  the raw `·` and `—` in the English literals came out as garbage while the German ones — already
+  declared UTF-8 — were fine.
+- **Kunstkopf stopped stumbling on busy patches.** Every voice pans all nine generators
+  every sample, whether or not their modules are on — a disabled generator just returns 0.
+  In Kunstkopf that zero still went through the full 128-tap HRIR convolution, which is not
+  free: one render costs ~1.3 % of a core, so nine generators across eight voices spent
+  ~94 % of a core filtering silence, and the audio callback started missing its deadline.
+  A single held note stayed clean, which is why it only showed up on the drum pattern. The
+  panner now skips a render once its history holds nothing but zeros — exact, not
+  approximate: measured 303 ns → 1.3 ns per silent sample with bit-identical output.
+
 ## [2026.08.6] – 2026-08-10
 
 ### Changed

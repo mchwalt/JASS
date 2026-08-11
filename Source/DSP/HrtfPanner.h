@@ -78,6 +78,26 @@ public:
     // per block via setPanForBlock) — kept for call-site symmetry with BinauralPanner.
     Out process (float x, float /*p*/ = 0.0f) noexcept
     {
+        // Silence short-circuit. SynthVoice pans EVERY generator every sample, whether or not its
+        // module is on — a disabled generator simply returns 0. Convolving that zero is exact but
+        // pointless work, and here it is not cheap: one 128-tap render costs ~1.3 % of a core (SSE2,
+        // measured 2026-08-10), so nine generators across eight voices spend ~94 % of a core
+        // filtering nothing. That is what made a busy patch stumble in Kunstkopf while a single held
+        // note stayed clean.
+        //
+        // Exact, not approximate: once kTaps consecutive zeros have been written the history holds
+        // nothing but zeros, so the output is provably zero. While skipping we neither write nor
+        // advance — an all-zero buffer has no meaningful write position — and the first non-zero
+        // sample resumes normally into a buffer that is genuinely clean.
+        if (x == 0.0f)
+        {
+            if (silentRun >= KemarHrir::kTaps)
+                return { 0.0f, 0.0f };
+            ++silentRun;
+        }
+        else
+            silentRun = 0;
+
         history[writePos] = x;
         float accL = 0.0f, accR = 0.0f;
         int idx = writePos;
@@ -95,6 +115,7 @@ public:
 private:
     static_assert ((KemarHrir::kTaps & (KemarHrir::kTaps - 1)) == 0, "kTaps must be a power of two for the ring mask");
 
+    int   silentRun = KemarHrir::kTaps;   // consecutive zero inputs; starts "drained"
     float history[KemarHrir::kTaps] = {};
     float coefL[KemarHrir::kTaps]   = {};
     float coefR[KemarHrir::kTaps]   = {};

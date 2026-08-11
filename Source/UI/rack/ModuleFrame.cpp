@@ -66,7 +66,8 @@ namespace rack
         // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
         // dynamic active state — an enable param, a derived predicate, dependent combos, or a
         // per-knob relevance predicate.
-        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty() || ! condKnobs.empty())
+        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty()
+            || ! condKnobs.empty() || ! markedKnobs.empty())
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -138,7 +139,8 @@ namespace rack
 
     void ModuleFrame::buildBody()
     {
-        const int knobD = sizeClassSpec (desc.sizeClass).knobDiameter;
+        // Seed only — resized() sets the real diameter per cell (one standard, capped by the cell).
+        const int knobD = KnobSize::Standard;
 
         for (auto& el : desc.body)
         {
@@ -189,10 +191,19 @@ namespace rack
                         apvts, k->paramId, *s));
                 }
 
+                // Named read-out (PERC NOTE: "Kick" instead of "36"). valueFromText has to be given
+                // too, or typing into the box would parse the name back as a number and land on 0.
+                if (k->textFromValue)
+                {
+                    s->textFromValueFunction = k->textFromValue;
+                    s->valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
+                    s->updateText();
+                }
+
                 if (k->modTarget != ModTarget::Off)
                     ringKnobs.push_back ({ s, k->modTarget });
 
-                cells.push_back ({ s, makeCaption (ownedCaptions, k->label), 1 });
+                cells.push_back ({ s, makeCaption (ownedCaptions, k->label), juce::jmax (1, k->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
 
                 // Mode-dependent knob (e.g. STEREO WIDTH/TIME outside Pseudo-Stereo): the timer
@@ -200,6 +211,75 @@ namespace rack
                 // here, so the initial state is set by the first poll.
                 if (k->activeWhen)
                     condKnobs.push_back ({ s, cells.back().caption, k->activeWhen });
+
+                // Highlight predicate (Story 15.4): the ring is drawn over the children, so the cell
+                // keeps its widget and only gains a mark.
+                // The cell index, not the toggle pointer: the step's on/off switch is created a few
+                // lines further down, so it does not exist yet — and the playhead dot is anchored
+                // to it at paint time.
+                if (k->highlightWhen)
+                    markedKnobs.push_back ({ s, cells.back().caption, k->highlightWhen, true, cells.size() - 1 });
+                if (k->playingWhen)
+                    markedKnobs.push_back ({ s, cells.back().caption, k->playingWhen, false, cells.size() - 1 });
+
+                // Per-knob ON/OFF switch (STEP SEQ steps): a checkbox in this cell's top-right,
+                // dimming the knob when off via the same condKnobs path as activeWhen. The
+                // predicate is built HERE from the parameter, so no editor injection is needed.
+                if (k->toggleParamId.isNotEmpty())
+                {
+                    auto* tb = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
+                    tb->setWantsKeyboardFocus (false);   // never steal focus from the on-screen keyboard
+                    addAndMakeVisible (*tb);
+                    buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+                        apvts, k->toggleParamId, *tb));
+                    cells.back().toggle = tb;
+                    if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
+                        condKnobs.push_back ({ s, cells.back().caption,
+                                               [v] { return v->load() > 0.5f; } });
+
+                    // Bringing a rest back sounds the step once (15.3), so you hear what you just
+                    // restored. The switch has no value of its own — it shares the knob's cell and
+                    // previews the knob's pitch. Nothing here releases the note: there is no
+                    // gesture to end, so the editor's safety cutoff closes it.
+                    if (k->audition)
+                        tb->onClick = [tb, s, aud = k->audition]
+                        {
+                            if (tb->getToggleState())
+                                aud ((int) s->getValue(), true);
+                        };
+                }
+
+                // Preview while editing (Story 15.3): re-trigger on every step of the knob so a
+                // drag scrubs the scale, and release when the drag ends. Chained ONTO whatever
+                // onValueChange already does — for a transform knob that is the write-back.
+                if (k->audition)
+                {
+                    // A CLICK sounds the step too, without changing it — the quickest way to ask
+                    // "what is on this step?". That is why the note is not released unconditionally
+                    // at the end of the gesture: a click and its release are milliseconds apart, so
+                    // a plain click has to ring on and be closed by the editor's timeout, while a
+                    // drag ends when the button does. The flag tells the two apart.
+                    auto moved = std::make_shared<bool> (false);
+                    s->onValueChange = [s, moved, aud = k->audition, prev = std::move (s->onValueChange)]
+                    {
+                        if (prev) prev();
+                        // Only a real gesture may sound. onValueChange also fires when a preset or
+                        // host automation moves the knob, and loading a preset must stay silent.
+                        // Dragging keeps the button captured even off the cell, while the wheel
+                        // never presses one — so either is enough to call it a gesture.
+                        if (s->isMouseButtonDown (true) || s->isMouseOver (true))
+                        {
+                            *moved = true;
+                            aud ((int) s->getValue(), true);
+                        }
+                    };
+                    s->onDragStart = [s, moved, aud = k->audition]
+                    {
+                        *moved = false;
+                        aud ((int) s->getValue(), true);
+                    };
+                    s->onDragEnd = [moved, aud = k->audition] { if (*moved) aud (0, false); };
+                }
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
@@ -212,23 +292,30 @@ namespace rack
                     dynCombos.push_back ({ c->paramId, box, *provider });   // re-pollable via refreshCombo
                 }
                 addAndMakeVisible (*box);
+                if (c->itemValues)
+                    comboValues.push_back ({ c->paramId, c->itemValues });
                 if (c->indexIsValue)
                 {
                     // Item INDEX == param value. Bypass ComboBoxParameterAttachment (its value is
                     // index/(numItems-1), which mismaps a variable item count against a fixed range —
                     // MOD MATRIX PARAM). Sync combo→param by index; param→combo via refreshCombo.
                     if (auto* raw = apvts.getRawParameterValue (c->paramId))
-                        box->setSelectedItemIndex ((int) raw->load(), juce::dontSendNotification);
+                        box->setSelectedItemIndex (comboPositionFor (c->paramId, (int) raw->load()),
+                                                   juce::dontSendNotification);
                     juce::ComboBox* boxPtr = box;
                     const juce::String pid = c->paramId;
                     const auto userHook = c->onUserSelect;   // user-gesture-only (see descriptor)
                     box->onChange = [this, boxPtr, pid, userHook]
                     {
-                        const int idx = juce::jmax (0, boxPtr->getSelectedItemIndex());
+                        const int pos = juce::jmax (0, boxPtr->getSelectedItemIndex());
+                        // With a value list the position is only where the item sits; the VALUE is
+                        // what the parameter has always meant.
+                        const auto vals = valuesFor (pid);
+                        const int value = juce::isPositiveAndBelow (pos, vals.size()) ? vals[pos] : pos;
                         if (auto* pp = apvts.getParameter (pid))
-                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) idx));
+                            pp->setValueNotifyingHost (pp->convertTo0to1 ((float) value));
                         if (userHook)
-                            userHook (idx);
+                            userHook (value);
                     };
                     indexValueCombos.push_back ({ c->paramId, box });   // timer resyncs it from the param
                 }
@@ -400,6 +487,25 @@ namespace rack
         const int cellW = body.getWidth()  / nCols;
         const int cellH = body.getHeight() / juce::jmax (1, nRows);
 
+        // Cells are a whole number of pixels wide, so nCols of them rarely fill the body exactly —
+        // in MOD MATRIX 32 × 54 px leave 16 px, which piled up at the RIGHT edge as a dead strip
+        // ("Trauerrand", maintainer 2026-08-11). A module that repeats a GROUP of controls
+        // (desc.slotActivity, a routing slot) can spend that remainder instead of hoarding it: the
+        // leftover is split into the gaps BETWEEN the groups, which both empties the right edge and
+        // separates the slots. paint() fills these gaps in the dim colour so the grouping reads as
+        // grouping rather than as a layout accident. Modules without groups are untouched.
+        groupGaps.clear();
+        int groupSpan = 0;
+        if (const int gs = desc.slotActivity.groupSize; gs > 0)
+            for (int i = 0; i < gs && i < (int) cells.size(); ++i)
+                groupSpan += juce::jlimit (1, nCols, cells[(size_t) i].slots);
+        const int groupsPerRow = (groupSpan > 0) ? nCols / groupSpan : 0;
+        const int leftover     = body.getWidth() - nCols * cellW;
+        const int groupGap     = (groupsPerRow > 1 && leftover > 0) ? leftover / (groupsPerRow - 1) : 0;
+        for (int gi = 1; gi < groupsPerRow && groupGap > 0; ++gi)
+            groupGaps.push_back ({ body.getX() + gi * groupSpan * cellW + (gi - 1) * groupGap,
+                                   body.getY(), groupGap, body.getHeight() });
+
         int col = 0, row = 0;
         for (auto& cell : cells)
         {
@@ -409,7 +515,8 @@ namespace rack
             // Never lay a (spanning) cell out below the body's bottom edge: bound the
             // row to the grid we sized for. (deferred 1.2 review item)
             const int placeRow = juce::jmin (row, nRows - 1);
-            juce::Rectangle<int> cellR (body.getX() + col * cellW,
+            const int gapShift = (groupGap > 0 && groupSpan > 0) ? (col / groupSpan) * groupGap : 0;
+            juce::Rectangle<int> cellR (body.getX() + col * cellW + gapShift,
                                         body.getY() + placeRow * cellH,
                                         cellW * span, cellH);
 
@@ -417,22 +524,49 @@ namespace rack
             {
                 auto cr = cellR.reduced (2);
                 const int capH = 13;   // fits the uniform 13pt caption font
-                const bool isKnob   = dynamic_cast<SynthySlider*> (cell.widget) != nullptr;
+                auto* knob = dynamic_cast<SynthySlider*> (cell.widget);
+                const bool isKnob   = knob != nullptr;
                 const bool isButton = dynamic_cast<juce::Button*> (cell.widget) != nullptr;
-                // A knob's widget height includes its value box (TextBoxBelow, 14px); a combo
-                // is just the short box. Name sits ABOVE, so the block is caption + widget.
-                const int wH = isKnob ? (KnobSize::Small + 8 + 14) : kComboH;
+
+                // ONE knob size for the whole rack (KnobSize::Standard), exactly as kComboW is one
+                // width for every combo — the cell no longer decides how big a knob is, it only
+                // decides whether the standard FITS. It is capped by
+                //   · height: what is left after caption + value box,
+                //   · width : the cell minus the 4 px per side drawRotarySlider reduces by,
+                // and never falls below Minimum. A module whose cell cannot host the standard is
+                // telling us its size class is wrong; that is a layout fix, not a knob fix. This is
+                // why the module HEIGHTS below are derived from the standard (a knob row is
+                // 13 caption + 40 + 8 + 14 value + 4 = 79 px) instead of the reverse.
+                const int kValueH = 14, kKnobPad = 8;
+                const int knobD = isKnob
+                    ? juce::jlimit (KnobSize::Minimum, KnobSize::Standard,
+                                    juce::jmin (cr.getHeight() - capH - kKnobPad - kValueH,
+                                                cr.getWidth() - kKnobPad))
+                    : KnobSize::Standard;
+                // A knob's widget takes the whole cell below its caption: the value box then always
+                // sits on the cell's bottom edge and the rotary — which the LookAndFeel caps at
+                // knobD — is centred in what is left. Sizing the widget to the diameter instead
+                // would let a WIDTH-limited knob (a narrow cell in SAMPLER or STEP SEQ) float in the
+                // middle of its cell with air under the value box. A combo is just the short box.
+                const int wH = isKnob ? juce::jmax (knobD + kKnobPad + kValueH, cr.getHeight() - capH)
+                                      : kComboH;
 
                 if (isKnob)
                 {
-                    // Knob block (NAME + rotary + value box) centred vertically in the cell.
-                    // ONE fixed knob size everywhere (AD-3), CENTRED horizontally; the slider
-                    // draws the rotary in its top square and the value box in the bottom 14 px.
+                    // Knob block (NAME + rotary + value box) centred vertically in the cell,
+                    // CENTRED horizontally; the slider draws the rotary in its top square and the
+                    // value box in the bottom 14 px. The LookAndFeel caps the rotary at the
+                    // slider's own knob diameter, so it is set here, per cell, not once per module.
+                    knob->setKnobDiameter (knobD);
                     const int blockH = capH + wH;
                     const int top = juce::jmax (cr.getY(), cr.getCentreY() - blockH / 2);
                     cell.caption->setBounds (cr.getX(), top, cr.getWidth(), capH);
-                    const int sw = juce::jmin (cr.getWidth(), 62);
+                    const int sw = juce::jmin (cr.getWidth(), knobD + kKnobPad);
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
+                    // The optional switch rides in the cell's top-right corner, on the caption's
+                    // line: it belongs to this knob, so it must not claim a cell of its own.
+                    if (cell.toggle != nullptr)
+                        cell.toggle->setBounds (cr.getRight() - 16, top - 1, 16, capH + 2);
                 }
                 else if (isButton)
                 {
@@ -472,6 +606,7 @@ namespace rack
             col += span;
             if (col >= nCols) { col = 0; ++row; }
         }
+
     }
 
     void ModuleFrame::paint (juce::Graphics& g)
@@ -502,10 +637,48 @@ namespace rack
             if (moduleEnabled()) { g.setColour (juce::Colour (0xff7bd88f)); g.fillEllipse (dot); }
             else                 { g.setColour (juce::Colours::white.withAlpha (0.28f)); g.drawEllipse (dot, 1.0f); }
         }
+
+        // Separators between repeated control groups (see resized/groupGaps): the pixels the cell
+        // grid could not use, spent between MOD MATRIX's routing slots instead of left over at the
+        // right edge. Same dim tone the inactive slots use, so it reads as "nothing here" rather
+        // than as a fifth column.
+        g.setColour (juce::Colour (0xff15181d).withAlpha (0.45f));
+        for (const auto& gap : groupGaps)
+            g.fillRect (gap);
     }
 
     void ModuleFrame::paintOverChildren (juce::Graphics& g)
     {
+        // Write cursor (Story 15.4): a ring around the ONE step the keyboard will write next. Drawn
+        // in the module's identity colour, brightened — the rack's other marks are a green dot
+        // (active) and a grey ring (off), so this cannot be mistaken for either. Painted before the
+        // dim overlay so a disabled module's cursor fades with everything else.
+        for (const auto& m : markedKnobs)
+        {
+            if (m.on != 1 || m.widget == nullptr) continue;
+            auto b = m.widget->getBounds();
+            if (m.caption != nullptr) b = b.getUnion (m.caption->getBounds());
+            if (m.ring)
+            {
+                g.setColour (typeColour (desc.type).brighter (0.7f));
+                g.drawRoundedRectangle (b.expanded (2).toFloat(), 4.0f, 2.0f);
+            }
+            else
+            {
+                // Playhead: the same lit dot the MOD MATRIX marks a live slot with. It rides the
+                // caption's line, BETWEEN the step number and its on/off box (maintainer 2026-08-11:
+                // at the cell's left edge it sat in front of the knob and read as belonging to the
+                // neighbour). Without a switch to anchor to it hugs the caption's right edge.
+                const float d  = 6.0f;
+                const auto& cell = cells[juce::jmin (m.cellIndex, cells.size() - 1)];
+                const auto  line = m.caption != nullptr ? m.caption->getBounds() : b;
+                const float right = cell.toggle != nullptr ? (float) cell.toggle->getX() - 2.0f
+                                                           : (float) line.getRight();
+                g.setColour (juce::Colour (0xff7bd88f));
+                g.fillEllipse (right - d, (float) line.getCentreY() - d * 0.5f, d, d);
+            }
+        }
+
         if (dimmed)
         {
             // dim the BODY only; the header stays lit (FR7)
@@ -607,10 +780,17 @@ namespace rack
             if (iv.second == nullptr) continue;
             if (auto* raw = apvts.getRawParameterValue (iv.first))
             {
-                const int want = (int) raw->load();
-                if (want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
+                const int want = comboPositionFor (iv.first, (int) raw->load());
+                if (want >= 0 && want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
                     iv.second->setSelectedItemIndex (want, juce::dontSendNotification);
             }
+        }
+
+        // Highlight predicates (STEP SEQ's write cursor): repaint only when a ring appears or goes.
+        for (auto& m : markedKnobs)
+        {
+            const char now = (m.predicate && m.predicate()) ? (char) 1 : (char) 0;
+            if (m.on != now) { m.on = now; repaint(); }
         }
 
         // Per-slot activity (MOD MATRIX): recompute each slot's active flag; repaint on any change so
@@ -700,6 +880,20 @@ namespace rack
         }
     }
 
+    juce::Array<int> ModuleFrame::valuesFor (const juce::String& paramId) const
+    {
+        for (const auto& cv : comboValues)
+            if (cv.first == paramId && cv.second)
+                return cv.second();
+        return {};
+    }
+
+    int ModuleFrame::comboPositionFor (const juce::String& paramId, int value) const
+    {
+        const auto vals = valuesFor (paramId);
+        return vals.isEmpty() ? value : vals.indexOf (value);
+    }
+
     void ModuleFrame::refreshCombo (const juce::String& paramId)
     {
         for (auto& dc : dynCombos)
@@ -712,8 +906,10 @@ namespace rack
 
             // Re-apply the param's current selection so the ComboBoxAttachment and the box
             // don't drift after we repopulated the items (clearing doesn't touch the param).
+            // Item ids are position+1, and with a value list the position has to be looked up.
             if (auto* raw = apvts.getRawParameterValue (paramId))
-                dc.box->setSelectedId ((int) raw->load() + 1, juce::dontSendNotification);
+                dc.box->setSelectedId (comboPositionFor (paramId, (int) raw->load()) + 1,
+                                       juce::dontSendNotification);
         }
     }
 

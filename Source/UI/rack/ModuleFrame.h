@@ -41,6 +41,10 @@ namespace rack
         // Enable param id ("" if the module has no on/off) — lets the Rack couple
         // visibility to enable (hide ⇒ disable, show ⇒ enable once; Story 4.2).
         const juce::String& enableParamId() const noexcept { return desc.enableParam; }
+
+        // A module that only DRAWS (scope, spectrum): hiding it changes nothing you can hear, so
+        // the rack may take it at its word — see ModuleDescriptor::visualOnly.
+        bool isVisualOnly() const noexcept { return desc.visualOnly; }
         // Visibly "press" this module's first Action button (shows the press animation AND
         // fires its onClick) — lets a keyboard shortcut mirror the on-screen button.
         void clickFirstAction();
@@ -84,6 +88,7 @@ namespace rack
             juce::Component* widget  = nullptr;   // the primary widget in this cell
             juce::Label*     caption = nullptr;   // optional caption below it (knob/combo)
             int              slots   = 1;         // grid slots this cell spans
+            juce::Button*    toggle  = nullptr;   // optional per-knob on/off (top-right corner)
         };
 
         juce::AudioProcessorValueTreeState& apvts;
@@ -119,6 +124,14 @@ namespace rack
         // which disables + dims just that knob (and its caption) when the predicate is false.
         // `active` caches the last applied state so we only touch the widgets on a real change.
         struct CondKnob { SynthySlider* slider; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
+        // Knobs carrying Knob::highlightWhen: polled by the timer, ringed by paintOverChildren while
+        // the predicate holds. `on` caches the last state so we only repaint on a real change.
+        // `ring` false => the mark is a lit dot (a sequencer playhead) instead of a ring (the write
+        // cursor). Both kinds share one list so the timer polls them in one pass.
+        struct MarkedKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate;
+                            bool ring = true; size_t cellIndex = 0; char on = -1; };
+        std::vector<MarkedKnob> markedKnobs;
+
         std::vector<RingKnob>  ringKnobs;
         std::vector<XformKnob> xformKnobs;
         std::vector<CondKnob>  condKnobs;
@@ -138,11 +151,26 @@ namespace rack
         // re-selects the item matching the param value.
         std::vector<std::pair<juce::String, juce::ComboBox*>> indexValueCombos;
 
+        // Optional value list per indexIsValue combo (Knob-free equivalent of a lookup table). When
+        // a combo declares one, the parameter stores values[position] instead of the position, so a
+        // FILTERED list cannot silently re-point the parameter. Empty => position is the value.
+        std::vector<std::pair<juce::String, std::function<juce::Array<int>()>>> comboValues;
+        // Position of `value` in that combo's value list; without a list the value IS the position.
+        // -1 when the current value is not in the (filtered) list — the box then shows nothing,
+        // which is the honest answer: what is selected is not among the things offered.
+        int comboPositionFor (const juce::String& paramId, int value) const;
+        juce::Array<int> valuesFor (const juce::String& paramId) const;
+
         std::vector<juce::Button*> actionButtons;   // Action-button widgets, in body order (for clickFirstAction)
 
         // Per-slot activity (MOD MATRIX, desc.slotActivity): cached active state per slot so the timer
         // only repaints on change; paintOverChildren dims inactive slots + draws the lit/hollow dots.
         std::vector<char> slotActiveCache;
+
+        // Vertical bands between repeated control GROUPS (MOD MATRIX's routing slots), computed in
+        // resized() from the pixels the cell grid cannot use and painted in the dim colour. Empty
+        // for every module that does not repeat a group.
+        std::vector<juce::Rectangle<int>> groupGaps;
 
         static constexpr int kHeaderH = 22;
         static constexpr int kComboH  = 22;   // combo box: short (half-height), wide, left-aligned
