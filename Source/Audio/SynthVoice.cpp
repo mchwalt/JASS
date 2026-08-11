@@ -76,6 +76,17 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     sampler.trigger(transposeRatio, midiNoteNumber,    // Story 12.1: (re)start the recording at the
                     (int) std::lround(velocity * 127.0f));   // note's rate; note picks the zone (12.2),
                                                              // velocity picks the layer (12.5)
+    // Choke groups (Story 12.7): if the zone that just started declares off_by=N, every OTHER voice
+    // sounding a zone with group=N is faded out — the closed hi-hat silencing the open one. Done
+    // HERE, at the sample-accurate note-on hook, rather than per block in the processor: quantising
+    // a choke to the block size is precisely the wrong place to be sloppy. A flat loop over the
+    // voice roster, no allocation, no lock. Never touches this voice, so a hat cannot choke itself.
+    if (voicePeers != nullptr)
+        if (const auto* z = sampler.currentZone(); z != nullptr && z->offBy != 0)
+            for (auto* peer : *voicePeers)
+                if (peer != this && peer != nullptr)
+                    peer->chokeSamplerInGroup (z->offBy);
+
     pitchEnv.trigger();   // (re)start the one-shot pitch sweep at note-on
     envelope.gateOn();
     samplerTailHold = false;   // 12.4: a retrigger ends any held tail state

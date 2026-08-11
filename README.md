@@ -75,14 +75,18 @@ info** so nothing is hidden and every control explains itself.
   amount, auto-enables its source + target module, and shows a live modulation ring.
 - **Poly glide** (mono/legato/poly), **arpeggiator** (up/down/up-down/random)
 - **STEP SEQ** — a 32-step sequencer (two rows of sixteen) that plays a figure you
-  write, transposed by the key you hold. Per-step semitone offset and an on/off
+  write, transposed by the key you play. Per-step semitone offset and an on/off
   switch (off = rest); one global GATE for note length, 1.0 holding each note into
   the next step. Locked to the tempo like the LFOs and DELAY, or free-running. It
   replaces the ARPEGGIATOR — both take over the held chord, so only one can run.
   Point it at a drum map and the offsets pick the *instrument* instead of a pitch.
-  Clicking or turning a step sounds it — over the keyboard's current C, so you can
-  write the figure by ear instead of playing the pattern back to find out what you
-  wrote.
+  **The first key starts it and it keeps running** — a new key moves it, the octave
+  keys shift it, SPACE stops it; a patch saved while it plays comes back playing.
+  **Write the figure by playing it**: Reset arms step entry, a ring shows which step
+  is waiting, every key you press is written there, SPACE leaves a rest. Clicking or
+  turning a step sounds it too — over the keyboard's current C, so the whole figure
+  can be written by ear. While it runs, a lit dot marks the step being played and the
+  on-screen keyboard shows the note.
 - **PERC** — four percussion tracks on a 32-step grid with their own kit, their own
   clock and a level per track, played **dry into the master bus**. It runs as soon as
   you switch it on, no key needed, and the drums are the clock: a STEP SEQ figure
@@ -116,11 +120,10 @@ info** so nothing is hidden and every control explains itself.
 - **Presets** in the `.jass` format + an auto-saved live state; demo presets
   (incl. **"Matrix Showcase"**, which exercises the whole mod matrix) and example
   wavetables ship embedded and seed on first run
-- **`DAF Bass`** (F9) and **`Drum Pattern`** (F10) demo the STEP SEQ: a bass figure
-  measured off a 1981 record, and a drum pattern with real gaps driving the SAMPLER.
-- **`DAF Beat`** (F11) puts the two together — the same bass with **PERC** playing the
-  record's drum pattern underneath it, the first preset that plays a whole piece by
-  itself. Needs the free SamsSonor kit (see below); it is restored by name.
+- **`DAF Beat`** (F11) demos the **STEP SEQ** and **PERC** together — a bass figure
+  measured off a 1981 record, with the record's drum pattern underneath it. The first
+  preset that plays a whole piece by itself. Needs the free SamsSonor kit (see below);
+  it is restored by name.
 - **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
   double-press assigns; assignments are global. **F8 = GrandPiano**: the
   Splendid set with nothing else in the signal path, for when you just want a
@@ -279,14 +282,22 @@ recordings, freely available without restrictions).
 
 ### Optional drum kit
 
-The `Drum Pattern` demo (F10) drives a drum map from the STEP SEQ: the step
-offsets pick the instrument, not a pitch. It expects
+The `DAF Beat` demo (F11) plays its drums through **PERC**, which needs a mapped
+drum kit. It expects
 [**SamsSonor**](https://github.com/sfzinstruments/SamsSonor) — Sam Greene's kit,
 mapped to SFZ by kinwie, **CC BY-SA 4.0**, ~35 MB. Nothing is redistributed here:
 download the repository yourself and drop it into `%AppData%\JASS\Samples\` as
 its own folder, so that `SamsSonor.sfz` sits next to its `Samples/` directory.
 JASS loads it straight from the upstream `.sfz` — no curated copy in between.
 
-One thing the kit does that JASS does not yet: **choke groups**. On a real kit a
-closed hi-hat silences the ringing open one (`group=` / `off_by=` in SFZ). JASS
-ignores those opcodes, so the two hats sound over each other.
+The kit's **choke groups** are honoured: on a real kit a closed hi-hat silences the
+ringing open one, and SFZ says so with `group=` / `off_by=`. JASS reads both and
+fades the choked hit out over a few milliseconds, across voices and across PERC's
+four tracks.
+
+Any other mapped `.sfz` kit works too — Alexander Holm's
+[**Salamander Drumkit**](https://archive.org/details/SalamanderDrumkit) (CC BY-SA
+3.0, ~370 MB) for instance. Note that its hi-hat choke is wired around a CC64
+pedal, which JASS has no equivalent for: as shipped, its closed hat silences
+nothing. Adding `off_by=1` to the closed-hat groups and `group=1` to the open ones
+in your copy of the `.sfz` is enough to get the usual behaviour.

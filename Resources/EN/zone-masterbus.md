@@ -5,5 +5,5 @@ The output stage — the summed mix passes through here last.
 
 **Group header controls**
 - **Enable** — bypasses/enables every visible module in this group at once.
-- **↺ Reset** — restores this group's *default module selection* (which modules are shown, their order and zone). It does not change any knob values.
-- **ⓘ Info** — this help.
+- **Reset** (circular arrow) — restores this group's *default module selection* (which modules are shown, their order and zone). It does not change any knob values.
+- **Info** (circled i) — this help.

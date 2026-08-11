@@ -66,7 +66,8 @@ namespace rack
         // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
         // dynamic active state — an enable param, a derived predicate, dependent combos, or a
         // per-knob relevance predicate.
-        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty() || ! condKnobs.empty())
+        if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty()
+            || ! condKnobs.empty() || ! markedKnobs.empty())
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -210,6 +211,16 @@ namespace rack
                 // here, so the initial state is set by the first poll.
                 if (k->activeWhen)
                     condKnobs.push_back ({ s, cells.back().caption, k->activeWhen });
+
+                // Highlight predicate (Story 15.4): the ring is drawn over the children, so the cell
+                // keeps its widget and only gains a mark.
+                // The cell index, not the toggle pointer: the step's on/off switch is created a few
+                // lines further down, so it does not exist yet — and the playhead dot is anchored
+                // to it at paint time.
+                if (k->highlightWhen)
+                    markedKnobs.push_back ({ s, cells.back().caption, k->highlightWhen, true, cells.size() - 1 });
+                if (k->playingWhen)
+                    markedKnobs.push_back ({ s, cells.back().caption, k->playingWhen, false, cells.size() - 1 });
 
                 // Per-knob ON/OFF switch (STEP SEQ steps): a checkbox in this cell's top-right,
                 // dimming the knob when off via the same condKnobs path as activeWhen. The
@@ -638,6 +649,36 @@ namespace rack
 
     void ModuleFrame::paintOverChildren (juce::Graphics& g)
     {
+        // Write cursor (Story 15.4): a ring around the ONE step the keyboard will write next. Drawn
+        // in the module's identity colour, brightened — the rack's other marks are a green dot
+        // (active) and a grey ring (off), so this cannot be mistaken for either. Painted before the
+        // dim overlay so a disabled module's cursor fades with everything else.
+        for (const auto& m : markedKnobs)
+        {
+            if (m.on != 1 || m.widget == nullptr) continue;
+            auto b = m.widget->getBounds();
+            if (m.caption != nullptr) b = b.getUnion (m.caption->getBounds());
+            if (m.ring)
+            {
+                g.setColour (typeColour (desc.type).brighter (0.7f));
+                g.drawRoundedRectangle (b.expanded (2).toFloat(), 4.0f, 2.0f);
+            }
+            else
+            {
+                // Playhead: the same lit dot the MOD MATRIX marks a live slot with. It rides the
+                // caption's line, BETWEEN the step number and its on/off box (maintainer 2026-08-11:
+                // at the cell's left edge it sat in front of the knob and read as belonging to the
+                // neighbour). Without a switch to anchor to it hugs the caption's right edge.
+                const float d  = 6.0f;
+                const auto& cell = cells[juce::jmin (m.cellIndex, cells.size() - 1)];
+                const auto  line = m.caption != nullptr ? m.caption->getBounds() : b;
+                const float right = cell.toggle != nullptr ? (float) cell.toggle->getX() - 2.0f
+                                                           : (float) line.getRight();
+                g.setColour (juce::Colour (0xff7bd88f));
+                g.fillEllipse (right - d, (float) line.getCentreY() - d * 0.5f, d, d);
+            }
+        }
+
         if (dimmed)
         {
             // dim the BODY only; the header stays lit (FR7)
@@ -743,6 +784,13 @@ namespace rack
                 if (want >= 0 && want != iv.second->getSelectedItemIndex() && want < iv.second->getNumItems())
                     iv.second->setSelectedItemIndex (want, juce::dontSendNotification);
             }
+        }
+
+        // Highlight predicates (STEP SEQ's write cursor): repaint only when a ring appears or goes.
+        for (auto& m : markedKnobs)
+        {
+            const char now = (m.predicate && m.predicate()) ? (char) 1 : (char) 0;
+            if (m.on != now) { m.on = now; repaint(); }
         }
 
         // Per-slot activity (MOD MATRIX): recompute each slot's active flag; repaint on any change so
