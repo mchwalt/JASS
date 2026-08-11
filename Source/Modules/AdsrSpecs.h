@@ -10,7 +10,7 @@ namespace Modules
         const juce::NormalisableRange<float> timeRange (0.001f, 5.0f, 0.001f, 0.4f);
         ModuleSpec m;
         m.id = "envelopeadsr"; m.title = "ENVELOPE - ADSR"; m.persistObject = "Adsr"; m.enableParamId = "adsrOn";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W4H2;
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W4U7;   // 207 px: one knob row plus the curve
         // Snappier defaults (user 2026-07-19): fast attack, short release so a released note
         // stops promptly instead of ringing ~1 s. (Longer values still available on the knobs.)
         m.params = {

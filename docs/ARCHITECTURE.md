@@ -551,8 +551,8 @@ The formal architecture spine lives at
 | AD | Decision |
 |---|---|
 | AD-1 | One generic `ModuleFrame` + declarative descriptor — a module is data, adding one is a data change |
-| AD-2 | The Rack owns all placement on a fixed proportional grid × rack units; a module declares only its size class |
-| AD-3 | One uniform knob size everywhere (provisional, cosmetic) |
+| AD-2 | The Rack owns all placement on a fixed proportional grid × rack units; a module declares only its size class. The vertical unit is a **quarter** row (21 px) since Story 7.4, and a size class states its grid height (`heightUnits`) separately from its content rows (`units`) |
+| AD-3 | **One knob size for the whole rack** — `KnobSize::Standard` = 40 px, capped by its cell exactly as `kComboW` caps a combo; module row heights are derived FROM it (79 px per knob row), not the reverse (Stories 7.5, 7.4) |
 | AD-4 | Fixed descriptor/control vocabulary (`Knob/Combo/Toggle/Action/FileAction/Caption/Display`), guarded display transforms, declarative combo refresh |
 | AD-5 | Graphic displays are ordinary `Display` body elements; disabled modules dim the whole body via a frame overlay |
 | AD-6 | The frame owns parameter binding — all APVTS attachments live in `ModuleFrame` |

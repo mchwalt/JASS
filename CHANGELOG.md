@@ -81,6 +81,35 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   LFO, plus a slow, shared pitch drift of about ±14 cents. Hold a low B and it plays.
 
 ### Changed
+- **One knob size for the whole rack, and modules built around it.** The rack drew six different
+  rotary sizes — 34, 40, 44, 45, 46 and 53 px — none of them chosen: a knob simply took what its
+  cell happened to leave. Every rotary is now **40 px**, capped by its cell the way every combo box
+  is capped to one width. 40 is the measured ceiling, not a preference: SAMPLER packs its row
+  tightest and offers a 48 px cell, which holds exactly 40 once the rotary's own margin is taken —
+  anything larger would have meant widening a module. Module heights now follow **from** the knob
+  instead of the other way round. That needed a finer raster: a rack row was a whole 114 px, sized
+  for one content row *plus the header*, so a two-row module paid for the header twice and 238 px
+  was the only height it could have. The vertical unit is now a **quarter** of that (21 px), which
+  reproduces 114 and 238 exactly — every existing module stands where it stood — and makes the
+  steps between them sayable. **MOD MATRIX, STEP SEQ, PERC and ADSR are 207 px instead of 238**, all
+  captions and value boxes intact. And the dead strip along MOD MATRIX's right edge — the 16 px that
+  32 cells of 54 px leave over — is now spent as three narrow bands **between** its four routing
+  slots, in the same dim tone the inactive slots use, so the grouping reads as grouping.
+- **STEP SEQ and PERC start visible.** They were hidden until switched on, on the argument that rack
+  height is a budget. The budget got cheaper, and a sequencer you have to go looking for is a
+  sequencer you forget you have.
+- **A knob now fills the cell it sits in.** Its block was a constant 81 px — caption, a 46 px rotary
+  and a value box — which fits a one-row module exactly and leaves a two-row module's cell a fifth
+  empty. In MOD MATRIX that showed as a band of nothing between the two routing rows. The cause was
+  derived from the layout code twice and guessed wrong twice, so it was finally **measured**: the
+  cell there is 104 px tall but only 62 px wide, and since the rotary is capped by the narrower
+  side, the row's height simply went to waste. The diameter is therefore taken from the cell now —
+  bounded by the height left after caption and value box, by the cell width, and clamped so the old
+  46 px stays the **floor** and nothing in the rack gets smaller. MOD MATRIX's AMT additionally
+  claims a second body slot, which is what makes its cell wide enough: **46 → 65 px**, and the gap
+  between the rows falls from 26 px to 4. STEP SEQ and PERC reach 53 px, where the cell width is the
+  limit. No module changes its footprint, so the window, the height budget and the fit scale are
+  untouched.
 - **The mouse wheel counts in single steps on a discrete knob.** A knob whose interval is one
   whole unit was only treated as discrete up to 24 positions; wider ones fell through to the
   proportional feel, which on a STEP SEQ step (±24 semitones) meant **two semitones per notch** —
