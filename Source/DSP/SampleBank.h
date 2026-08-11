@@ -38,6 +38,10 @@ inline constexpr size_t kMaxSampleStoreBytes = (size_t) 4 * 1024 * 1024 * 1024;
 
 struct SampleZone
 {
+    // What this zone is called — the source file's stem ("Kick", "SnareRim"). The mapping knew it
+    // all along (SampleMapping::Entry::file) and threw it away here; PERC's NOTE knob reads it out
+    // so a lane says "Kick" instead of "36" (Story 16.1). Empty for sets built without files.
+    juce::String name;
     std::vector<float> data[2];   // [0]=L (or mono), [1]=R (empty ⇒ mono); at the FILE's rate
     double fileSampleRate = 44100.0;
     int rootKey = 60;             // key that plays the file at original speed (mapped sets)
@@ -47,6 +51,10 @@ struct SampleZone
     float veltrack = 0.0f;        // 12.5 amp_veltrack as 0..1 — how much velocity scales the gain
     float gainLin  = 1.0f;        // 12.5 sfz volume= as a linear factor (layer balancing)
     double tuneRatio = 1.0;       // 12.5 sfz tune= as a rate factor 2^(cents/1200)
+    // 12.7 choke groups: `group` is the group this zone belongs to, `offBy` the group it silences
+    // when it starts. 0 = none on either side, which is every zone in the sets we ship except a
+    // drum kit's hi-hats. A closed hat carries both (group=1 off_by=1) — hats choke each other.
+    int group = 0, offBy = 0;
 
     bool   isStereo() const            { return ! data[1].empty(); }
     const float* getData (int ch) const { return data[isStereo() && ch != 0 ? 1 : 0].data(); }
@@ -222,6 +230,7 @@ public:
                 for (auto& chan : z.data)
                     if (! chan.empty())
                         chan.erase (chan.begin(), chan.begin() + e.offsetFrames);
+            z.name    = e.file.getFileNameWithoutExtension();   // 16.1: "Kick", for PERC's NOTE read-out
             z.rootKey = e.rootKey;
             z.loKey   = e.loKey;
             z.hiKey   = e.hiKey;
@@ -231,6 +240,8 @@ public:
             z.veltrack  = juce::jlimit (0.0f, 100.0f, e.veltrack) / 100.0f;
             z.gainLin   = juce::Decibels::decibelsToGain (e.volumeDb);
             z.tuneRatio = std::pow (2.0, e.tuneCents / 1200.0);
+            z.group     = e.group;
+            z.offBy     = e.offBy;
             totalSeconds += (double) z.getLength() / z.fileSampleRate;
             if (totalSeconds > kMaxSetSeconds)
             {

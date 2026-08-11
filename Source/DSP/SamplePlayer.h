@@ -227,6 +227,24 @@ public:
         relCoef  = (float) std::exp(-6.907755 / (std::max(sec, 0.005) * hostSampleRate));
     }
 
+    // ── Story 12.7: choke groups ─────────────────────────────────────────────────────────────
+    // The zone this player is sounding right now (nullptr when idle) — the caller needs it to read
+    // `group` / `off_by` without re-resolving anything. Audio-thread safe: zone pointers live in the
+    // never-freed store.
+    const SampleZone* currentZone() const noexcept { return active ? zone : nullptr; }
+
+    // Silence this player because something else in its choke group started: a closed hi-hat over a
+    // ringing open one. It FADES — a few milliseconds through the very same release ramp gateOff
+    // uses, because a hard stop clicks and that lesson is already paid for (12.4's retrigger
+    // declick). No second mechanism, and nothing here allocates or locks.
+    void chokeOff (double seconds = 0.006)
+    {
+        if (! active || zone == nullptr)
+            return;
+        released = true;
+        relCoef  = (float) std::exp (-6.907755 / (std::max (seconds, 0.002) * hostSampleRate));
+    }
+
     // Hard stop — also the first half of a VOICE STEAL (stopNote(false) + immediate restart).
     // Arm the retrigger declick HERE: by the time trigger() runs, active is already false, so
     // capturing at trigger alone missed exactly the stolen-voice case (user report 2026-08-04:

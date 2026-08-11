@@ -35,6 +35,21 @@ namespace EditorGeom
     {
         return (int) ((screenH - kChrome) / juce::jmax (0.01, scale)) - kBodyTop - kBodyBottom - 2 * kMargin;
     }
+
+    // The display a given on-screen rectangle sits on — NOT the primary one. Both the fit scale and
+    // the MODULES budget line asked for getPrimaryDisplay(), which is only the same thing on a
+    // single-monitor desk. On the maintainer's (JASS on a 5120x2160 at 150 %, a smaller primary
+    // elsewhere) the budget line reported a screen the window had never been on: 1732 px needed
+    // against 1020 px "available", while the window sat comfortably on a screen with room to spare.
+    // Falls back to the primary display before the editor has a peer (bounds still empty).
+    inline const juce::Displays::Display* displayFor (juce::Rectangle<int> screenArea)
+    {
+        const auto& displays = juce::Desktop::getInstance().getDisplays();
+        if (! screenArea.isEmpty())
+            if (auto* d = displays.getDisplayForRect (screenArea))
+                return d;
+        return displays.getPrimaryDisplay();
+    }
 }
 
 // --- Rack customization panel (Story 4.2) -----------------------------------
@@ -80,13 +95,16 @@ namespace
         // Story 7.3: rack height is a BUDGET, not something the fit scale can keep absorbing —
         // it already sits at its readable floor. Show what the current selection costs, so hiding
         // or revealing a module is a visible trade instead of type that silently gets smaller.
-        // Returns { text, overBudget }.
-        std::pair<juce::String, bool> budgetLine() const
+        // Returns { text, detail, overBudget } — the detail line names the DISPLAY the numbers were
+        // measured on. Without it the line is a riddle when it disagrees with what one sees, and it
+        // did disagree: it used to measure the primary display rather than this one.
+        struct Budget { juce::String text, detail; bool over = false; };
+        Budget budgetLine() const
         {
             using namespace EditorGeom;
-            auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay();
+            auto* disp = displayFor (getScreenBounds());
             if (disp == nullptr)
-                return { {}, false };
+                return {};
             const auto ua = disp->userBounds;
             const double minScale = juce::jlimit (0.5, 1.0, 1.0 / juce::jmax (1.0, (double) disp->scale));
             const int need   = rack.maxHeight (kDesignW - 2 * kMargin);
@@ -96,15 +114,26 @@ namespace
                                                 juce::jmin ((ua.getHeight() - kChrome) / worstH,
                                                             ua.getWidth() / (double) kDesignW));
             const bool over = need > budget;
+            // Both separators must be declared UTF-8. juce::String(const char*) takes plain ASCII,
+            // so the raw '·' and '—' in the English literals arrived as mojibake ("Ä") while the
+            // German ones, already wrapped, were fine (maintainer 2026-08-10: "Sonderzeichen!").
             juce::String t;
             t << "Rack " << need << " / " << budget << " px"
-              << (isDE ? juce::String (juce::CharPointer_UTF8 (" · Anzeige "))
-                       : juce::String (" · scale "))
+              << juce::String (juce::CharPointer_UTF8 (isDE ? " · Anzeige " : " · scale "))
               << juce::String (scale, 2);
             if (over)
-                t << (isDE ? juce::String (juce::CharPointer_UTF8 (" — zu hoch, ein Modul ausblenden"))
-                           : juce::String (" — over budget, hide a module"));
-            return { t, over };
+                t << juce::String (juce::CharPointer_UTF8 (isDE ? " — zu hoch!" : " — over budget!"));
+
+            // Second line: which screen this was measured on. The warning above had to shrink to
+            // fit the 300 px panel, so the advice moves down here where there is room for it.
+            juce::String d;
+            d << juce::roundToInt (ua.getWidth()) << juce::String (juce::CharPointer_UTF8 (" × "))
+              << juce::roundToInt (ua.getHeight())
+              << " @ " << juce::String (disp->scale * 100.0, 0) << " %";
+            if (over)
+                d << juce::String (juce::CharPointer_UTF8 (isDE ? " · Modul ausblenden"
+                                                                : " · hide a module"));
+            return { t, d, over };
         }
 
         void paint (juce::Graphics& g) override
@@ -154,10 +183,14 @@ namespace
                 auto band = juce::Rectangle<int> (0, listHeight(), getWidth(), kBudgetH);
                 g.setColour (juce::Colour (0xff11141a));
                 g.fillRect (band);
-                const auto [text, over] = budgetLine();
-                g.setColour (over ? juce::Colour (0xffe0b050) : juce::Colours::white.withAlpha (0.55f));
+                const auto b = budgetLine();
+                auto top = band.removeFromTop (kBudgetH / 2);
+                g.setColour (b.over ? juce::Colour (0xffe0b050) : juce::Colours::white.withAlpha (0.55f));
                 g.setFont (juce::FontOptions (12.0f));
-                g.drawText (text, band.reduced (8, 0), juce::Justification::centredLeft);
+                g.drawText (b.text, top.reduced (8, 0), juce::Justification::centredLeft);
+                g.setColour (juce::Colours::white.withAlpha (b.over ? 0.55f : 0.35f));
+                g.setFont (juce::FontOptions (11.0f));
+                g.drawText (b.detail, band.reduced (8, 0), juce::Justification::centredLeft);
             }
 
             paintToast (g);   // drag-to-reorder hint (fades in after a rest, then out)
@@ -355,7 +388,8 @@ namespace
         bool          mouseInside  = false;
 
         static constexpr int kW = 300, kRowH = 26, kBtnH = 30;   // +40 vs. before for the L/R align tags
-        static constexpr int kBudgetH = 20;   // Story 7.3: the rack-height budget line
+        static constexpr int kBudgetH = 34;   // Story 7.3: the rack-height budget line — two rows
+                                              // since the display it measured is named underneath
         static constexpr juce::uint32 kRestMs = 3000;   // rest time before the hint appears
         static constexpr juce::uint32 kFadeMs =  300;   // fade in / out duration
         static constexpr juce::uint32 kHoldMs = 4300;   // fully-visible hold (=> ~4.9 s total)
@@ -551,7 +585,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
                                            // ROOT default 60 = C4); JUCE's default label was C3.
     keyboard->clearKeyMappings();   // computer keys are handled by US (see buildComputerKeyMap)
     buildComputerKeyMap();
-    keyboard->setMidiChannelsToDisplay(1);   // only highlight played (ch.1) notes, not the ch.16 drone
+    // Highlight played (ch.1) notes and the STEP SEQ preview (15.3) — turning a step lights the key
+    // it will play — but never the ch.16 auto-play drone, which nobody played.
+    keyboard->setMidiChannelsToDisplay(1 | (1 << (SynthyProcessor::kAuditionChannel - 1)));
+    // Listen in on the same keyboard state (Story 15.4): while a STEP SEQ figure is being recorded,
+    // every played note — computer keys, on-screen keyboard, or the MIDI keyboard, which is the
+    // whole appeal — is written into the cursor's step instead of played.
+    processor.getKeyboardState().addListener(this);
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
     // Up / Down shift the octave; the keyboard must have focus — grabbed on launch/click).
     // The keyboard is added to the rack as a Display module (Input zone) in buildRack();
@@ -656,9 +696,15 @@ void SynthyEditor::refitHeight()
     // On a desktop at 150 % that is 1/1.5 = 0.667 — and 0.65 is exactly where the maintainer says
     // the rack stops being readable (2026-08-09). At 100 % it is 1.0, at 125 % it is 0.8. Below
     // this JASS would be smaller than an unscaled UI, which is not a trade worth making.
-    if (auto* disp = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay())
+    //
+    // Measured on the display the WINDOW IS ON, not the primary one — those are the same thing only
+    // on a single-monitor desk. On the maintainer's (JASS on a 5120x2160 at 150 %, primary elsewhere)
+    // the scale was being derived from a screen the window had never touched.
+    if (auto* disp = EditorGeom::displayFor(getScreenBounds()))
     {
         const auto ua = disp->userBounds;        // excludes the taskbar
+        lastFitDisplay = ua;                     // so the timer can spot a move to another screen
+        lastFitDisplayScale = disp->scale;
         const double minScale = juce::jlimit(0.5, 1.0, 1.0 / juce::jmax(1.0, (double) disp->scale));
         const int worstRackH = rackBody ? rackBody->maxHeight(rackW) : rackH;
         const int worstH = juce::jmax(1015, worstRackH + kBodyTop + kBodyBottom + 2 * kMargin);
@@ -680,11 +726,30 @@ void SynthyEditor::showModulesMenu()
     // The reorderable customization list (Story 4.2) in a call-out anchored to the button.
     // Parent = nullptr (desktop) so the editor's auto-fit transform doesn't skew mouse coords.
     auto panel = std::make_unique<RackCustomizePanel>(*rackBody, currentLang);
+
+    // NOT CallOutBox::launchAsynchronously: its private callback runs a 200 ms timer that dismisses
+    // the box as soon as JASS is no longer the foreground process (juce_CallOutBox.cpp ~line 78).
+    // For a menu that is fine; for this panel it is wrong — it carries the rack height BUDGET, a
+    // number one reads while doing something else, and it vanished the moment the user clicked into
+    // another window (maintainer 2026-08-10). Everything else is JUCE's own pattern: the modal
+    // callback owns both the panel and the box, and ModalComponentManager deletes it once the modal
+    // state ends — so clicking outside still closes it, and nothing leaks.
+    struct KeepOpenCallout final : juce::ModalComponentManager::Callback
+    {
+        KeepOpenCallout (std::unique_ptr<juce::Component> c, juce::Rectangle<int> area)
+            : content (std::move (c)), box (*content, area, nullptr)
+        {
+            box.setVisible (true);
+            box.enterModalState (true, this);
+        }
+        void modalStateFinished (int) override {}
+        std::unique_ptr<juce::Component> content;
+        juce::CallOutBox box;
+    };
+
     // Keep a SafePointer to the call-out so the destructor can dismiss it before rackBody dies
     // (the panel references *rackBody).
-    modulesCallout = &juce::CallOutBox::launchAsynchronously(std::move(panel),
-                                                             modulesBtn.getScreenBounds(),
-                                                             nullptr);
+    modulesCallout = &(new KeepOpenCallout (std::move (panel), modulesBtn.getScreenBounds()))->box;
 }
 
 void SynthyEditor::timerCallback()
@@ -692,6 +757,16 @@ void SynthyEditor::timerCallback()
     // RT-safety (11.1): run any auto-enable coupling deferred from the audio thread (host automation)
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
+
+    // Dragged onto another monitor? Re-fit. Moving a window changes no bounds we already watch, so
+    // without this the rack keeps the previous screen's scale — on a desk that mixes a 5120x2160 at
+    // 150 % with a smaller display, that is the difference between fitting and being cut off. The
+    // check itself is two comparisons; refitHeight (which re-measures the rack) runs only on a
+    // real change.
+    if (lastFitDisplayScale > 0.0)
+        if (auto* disp = EditorGeom::displayFor (getScreenBounds()))
+            if (disp->userBounds != lastFitDisplay || disp->scale != lastFitDisplayScale)
+                refitHeight();
 
     double ratio = processor.getCurrentNoteRatio();
 
@@ -769,6 +844,34 @@ void SynthyEditor::timerCallback()
         else
             releaseComputerKeys();
 
+        // Same idea for the STEP SEQ preview (15.3): a knob moved by the wheel or the value box
+        // never reports a drag end, so the note is closed on a timeout instead.
+        if (auditionTicks > 0 && --auditionTicks == 0)
+            auditionStep (0, false);
+
+        // Show the running pattern on the keyboard (maintainer 2026-08-11): the sequencer's notes
+        // bypass the keyboard state on purpose, so the display is fed from the processor's atomic.
+        if (keyboard != nullptr)
+            keyboard->setPatternNote (processor.getSeqNote());
+
+        // Recording a figure (15.4): parameters are written HERE, on the message thread, from the
+        // note handleNoteOn parked — that callback runs on the audio thread for hardware MIDI.
+        // Switching STEP SEQ off ends the recording, so an armed cursor can never outlive its module.
+        {
+            const bool seqOnNow = *apvts.getRawParameterValue (Parameters::ID::seqOn) >= 0.5f;
+            if (seqCursor >= 0)
+            {
+                // AC6 ends the recording when the module is SWITCHED off — the falling edge, not the
+                // state. Writing a figure into a silent sequencer is a perfectly sane way to work
+                // (and the only quiet one), so simply being off must not refuse the cursor.
+                if (seqOnLast && ! seqOnNow)
+                    seqSetCursor (-1);
+                else if (const int pending = seqPendingNote.exchange (-1); pending >= 0)
+                    seqWriteNote (pending);
+            }
+            seqOnLast = seqOnNow;
+        }
+
         // A modal popup (MODULES call-out, a combo dropdown, …) grabs the keyboard focus, so
         // computer-key playing pauses while it's open. When it closes, hand focus back to the
         // on-screen keyboard so playing resumes without an extra click — but NOT while the user
@@ -787,8 +890,17 @@ void SynthyEditor::timerCallback()
     {
         shownSampleSets = sets;
         if (rackBody)
+        {
             if (auto* f = rackBody->moduleById("sampler"))
                 f->refreshCombo(Parameters::ID::samplerSet);
+            // ...and PERC's KIT, for exactly the same reason. Without this its list stayed as it was
+            // built — at startup that is EMPTY apart from "(no kit)" — so the combo could not show
+            // the kit the patch was actually playing: the parameter pointed at a real set, the
+            // resync skipped an item index the list did not have yet, and the box kept reading
+            // "(no kit)" while the drums ran (maintainer 2026-08-11).
+            if (auto* f = rackBody->moduleById("perc"))
+                f->refreshCombo(Parameters::ID::percKit);
+        }
     }
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
@@ -900,6 +1012,9 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     processor.markPresetClean();   // snapshot the SETTLED state AFTER layout enforcement, so a
                                    // freshly loaded preset reads as clean (not "Current State").
 
+    // The STEP SEQ latch is restored by PresetIO from the patch's own "StepSeq.LatchRoot" (15.5),
+    // so a sequencer patch starts on the note it was saved on — nothing to do here.
+
     if (res.migrated)
     {
         // Surface the conversion (AC6): the user should know a format upgrade happened
@@ -990,8 +1105,8 @@ void SynthyEditor::assignPresetSlot(int slot)
 
 // Computer-key → note map for a German (QWERTZ) keyboard: HOME row = white keys, TOP row = black
 // keys, spanning the full width from 'a' up to the 'ä'/'#' keys (~2.5 octaves). Playing is detected
-// via KeyPress::isCurrentlyDown → VkKeyScan (Windows), which resolves each character to the physical
-// key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
+// via KeyPress::isKeyCurrentlyDown → VkKeyScan (Windows), which resolves each character to the
+// physical key for the ACTIVE layout, so the umlaut keys (ö/ä) register. Octave = Up/Down.
 void SynthyEditor::buildComputerKeyMap()
 {
     // Letters use CHARACTERS — JUCE resolves them to the active layout via VkKeyScan. The keys
@@ -1027,12 +1142,22 @@ void SynthyEditor::updateComputerKeys(bool allowNoteOn)
     if (keyboard == nullptr)
         return;
     const int ch = keyboard->getMidiChannel();
+    // A note key must NOT care about modifiers. KeyPress::isCurrentlyDown() also compares them
+    // against the KeyPress's own (none, here), so holding SHIFT made every note key read as
+    // released â and the sweep below then cut the sound. Which is exactly what SHIFT is for while
+    // playing: fine-dragging a knob (user report 2026-08-10, "damit hÃ¶rt abrupt das Spiel auf").
+    // The static form asks only about the physical key, with the same layout resolution.
+    //
+    // Typing into a value box must not play either: this handler hangs off the EDITOR, so key
+    // events bubble up to it even while a TextEditor has focus. Note-ONs are suppressed there â
+    // releases are not, or a note started before the click would hang.
+    const bool typing = dynamic_cast<juce::TextEditor*> (juce::Component::getCurrentlyFocusedComponent()) != nullptr;
     for (auto& k : computerKeys)
     {
-        const bool down = k.key.isCurrentlyDown();
+        const bool down = juce::KeyPress::isKeyCurrentlyDown (k.key.getKeyCode());
         if (down && k.sounding < 0)
         {
-            if (! allowNoteOn || ! keyboardPlayable)
+            if (! allowNoteOn || ! keyboardPlayable || typing)
                 continue;
             k.sounding = juce::jlimit(0, 127, 12 * kbBaseOctave + k.offsetFromC);
             processor.getKeyboardState().noteOn(ch, k.sounding, 1.0f);
@@ -1066,6 +1191,112 @@ void SynthyEditor::retuneSoundingComputerKeys()
         k.sounding = note;
     }
 }
+
+// Sound the step that is being edited (Story 15.3). A step's value is a number of SEMITONES, so it
+// needs a reference pitch: the computer keyboard's current C — MIDI 48 (C3) by default, moving with
+// the Up/Down octave keys, so the preview matches the octave you are playing in.
+//
+// It rides its own MIDI channel. Channel 1 would be swallowed: while STEP SEQ (or the ARP) runs the
+// processor drops every channel-1 note so that only the pattern sounds — precisely the moment a
+// preview is wanted. Velocity is the 100 the sequencer itself emits, or the preview would be louder
+// than the step it previews.
+void SynthyEditor::auditionStep(int semitones, bool sounding)
+{
+    auto& state = processor.getKeyboardState();
+    const int ch = SynthyProcessor::kAuditionChannel;
+    if (! sounding)
+    {
+        if (auditionNote >= 0)
+            state.noteOff(ch, auditionNote, 0.0f);
+        auditionNote  = -1;
+        auditionTicks = 0;
+        return;
+    }
+    const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + semitones);
+    if (note != auditionNote)
+    {
+        if (auditionNote >= 0)
+            state.noteOff(ch, auditionNote, 0.0f);   // re-trigger: a drag scrubs the scale
+        state.noteOn(ch, note, 100.0f / 127.0f);
+        auditionNote = note;
+    }
+    auditionTicks = 24;   // ~0.8 s at the editor's 30 Hz — the wheel and the value box have no
+                          // drag end, and a hanging note is worse than a short one
+}
+
+// --- Writing a figure by playing it (Story 15.4) -------------------------------------------------
+// The cursor is the step the next played note lands in. It is UI state only: no parameter, nothing
+// persisted (AC9). Setting it also arms the processor, which then stops looking for a root note —
+// otherwise every key entered would restart and transpose the figure while it is being written.
+void SynthyEditor::seqSetCursor(int step)
+{
+    if (step == seqCursor)
+        return;
+    seqCursor = step;
+    processor.setSeqRecordArmed(seqCursor >= 0);
+    if (seqCursor < 0)
+        seqPendingNote.store(-1);   // drop anything parked between the last note and the stop
+}
+
+// Write the played note into the cursor's step and move on. The value is the offset from the
+// computer keyboard's current C — the SAME reference auditionStep previews with (15.3), so what a
+// knob sounds and what a key writes agree, and both follow the Up/Down octave keys (AC2).
+void SynthyEditor::seqWriteNote(int midiNote)
+{
+    if (seqCursor < 0 || seqCursor >= StepSequencer::kMaxSteps)
+        return;
+    namespace P = Parameters::ID;
+    auto& apvts     = processor.getAPVTS();
+    const int step  = seqCursor + 1;                                       // params are 1-based
+    const int semis = juce::jlimit(-24, 24, midiNote - 12 * kbBaseOctave);
+
+    if (auto* p = apvts.getParameter(P::seqPitch(step)))
+        p->setValueNotifyingHost(p->convertTo0to1((float) semis));
+    // A written step is not a rest (AC3) — a figure entered by playing must sound without a
+    // second pass over 32 switches.
+    if (auto* on = apvts.getParameter(P::seqStep(step)))
+        on->setValueNotifyingHost(1.0f);
+
+    auditionStep(semis, true);   // hear what was just written, through 15.3's one preview path
+    seqAdvanceCursor();
+}
+
+// SPACE: this step stays silent. Skipping has to SWITCH THE STEP OFF, not merely step over it —
+// after ↺ every step is on at offset 0, so a step passed by without a word would play the root
+// rather than rest (maintainer 2026-08-11). The pitch is left alone, so switching the step back on
+// restores whatever was written there before.
+void SynthyEditor::seqSkipStep()
+{
+    if (seqCursor < 0)
+        return;
+    if (auto* on = processor.getAPVTS().getParameter(Parameters::ID::seqStep(seqCursor + 1)))
+        on->setValueNotifyingHost(0.0f);
+    seqAdvanceCursor();
+}
+
+// Next step — or stop, once the step after LEN would be reached (AC6).
+void SynthyEditor::seqAdvanceCursor()
+{
+    if (seqCursor < 0)
+        return;
+    const int len  = (int) *processor.getAPVTS().getRawParameterValue(Parameters::ID::seqLength);
+    const int next = seqCursor + 1;
+    seqSetCursor((next >= len || next >= StepSequencer::kMaxSteps) ? -1 : next);
+}
+
+// MidiKeyboardState calls this on the AUDIO thread for hardware MIDI (the state is pumped from
+// processBlock), so nothing is written here — the note is parked and the 30 Hz timer picks it up on
+// the message thread. Our own preview channel and the auto-play drone are not played notes.
+void SynthyEditor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNote, float)
+{
+    if (seqCursor < 0)
+        return;
+    if (midiChannel == SynthyProcessor::kAuditionChannel || midiChannel == SynthyProcessor::kDroneChannel)
+        return;
+    seqPendingNote.store(midiNote);
+}
+
+void SynthyEditor::handleNoteOff(juce::MidiKeyboardState*, int, int, float) {}
 
 // Note-off everything we started (KEYBOARD module switched off, focus lost, …). Only our own
 // notes — external MIDI hardware and the ch.16 auto-play drone are untouched.
@@ -1105,6 +1336,26 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         // just note-off/note-on on OUR remembered note — no bitmask can fall out of sync, and
         // releasing the key later still lands on whatever note it is currently sounding.
         retuneSoundingComputerKeys();
+        // A LATCHED step-sequencer figure has no held key left to retune, so the octave shift is
+        // handed to its root directly — the pattern moves with the arrows like everything else.
+        processor.transposeSeqLatch (dir * 12);
+        return true;
+    }
+    // While a figure is being recorded (15.4) SPACE means "leave this step empty and move on".
+    // It takes precedence over the Karplus pluck below: during recording the whole keyboard is a
+    // writing surface, and a rest is the one thing no note key can express.
+    if (key == juce::KeyPress::spaceKey && seqCursor >= 0)
+    {
+        seqSkipStep();
+        return true;
+    }
+    // SPACE stops a LATCHED figure. Since the pattern outlives the key that started it, something
+    // has to end it — and the key that means "nothing" everywhere else is the obvious one. Ranked
+    // between writing (above: SPACE is a rest) and the Karplus pluck (below), so it only claims the
+    // key while there is actually a figure running.
+    if (key == juce::KeyPress::spaceKey && processor.isSeqLatched())
+    {
+        processor.stopSeqLatch();
         return true;
     }
     // Spacebar re-plucks the Karplus string. Trigger the actual PLUCK button so it
@@ -1450,12 +1701,27 @@ void SynthyEditor::buildRack()
              { Knob k{ std::move(id), std::move(lbl) }; k.modTarget = mt; return k; };
     // (Kfreq — the FREQ display-transform helper — is now in OscSpecs.h via freqDisplay.)
 
+    // A free-running knob is meaningless while its module is tempo-synced: SYNC other than "Free"
+    // means the division decides and the DSP ignores the knob entirely. Grey it out instead of
+    // leaving it sitting there looking live (user 2026-08-10) - the same treatment STEREO's
+    // WIDTH/TIME get outside Pseudo-Stereo. Index 0 is "Free" (SyncDivision::kNames), so the knob
+    // is active exactly when the index is 0.
+    auto greyWhenSynced = [&apvts] (ModuleDescriptor& d, const juce::String& knobId,
+                                    const juce::String& syncParamId)
+    {
+        auto* sync = apvts.getRawParameterValue (syncParamId);
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob> (&el))
+                if (k->paramId == knobId)
+                    k->activeWhen = [sync] { return sync != nullptr && (int) sync->load() == 0; };
+    };
+
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
                    juce::String enableParam, std::vector<BodyElement> body,
-                   std::function<void()> onReset = {})
+                   std::function<void()> onReset = {}, bool visualOnly = false)
     {
         ModuleDescriptor d;
-        d.sizeClass = sc; d.type = type;
+        d.sizeClass = sc; d.type = type; d.visualOnly = visualOnly;
         // Stable slug from the title (e.g. "OSC 1" -> "osc1") — the RackLayout key for
         // show/hide + drag-drop (AD-10). Derived once here so every module gets one.
         d.id = title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
@@ -1700,14 +1966,111 @@ void SynthyEditor::buildRack()
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
     // curve), a Display body element (AD-5), owned by rackOwned so its lifetime is tied
     // to the editor.
-    add(Rack::Zone::Modulation, SizeClass::W4H2, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
+    add(Rack::Zone::Modulation, SizeClass::W4U7, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
         { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
           Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
     // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
     for (int i = 1; i <= kNumLFOs; ++i)
-        addRackModule(makeModuleDescriptor(Modules::lfo(i)));
+    {
+        auto d = makeModuleDescriptor(Modules::lfo(i));
+        greyWhenSynced(d, P::lfoRate(i), P::lfoSyncDiv(i));
+        addRackModule(std::move(d));
+    }
     addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
+    // STEP SEQ (Story 15.1) — spec-driven; the editor only adds the mutual exclusion with the ARP.
+    // Both REPLACE the held chord, so both running at once is not a thing; rather than a silent
+    // precedence rule that leaves a lit ARP doing nothing, switching one on switches the other off,
+    // so the rack always shows the truth. (The processor enforces the precedence as well, for the
+    // case where a preset arrives with both set.)
+    {
+        auto d = makeModuleDescriptor(Modules::stepSeq());
+        // Pin each step's on/off into the corner of its own pitch knob. The switch params are
+        // declared showInBody=false so they claim no grid cell; ModuleFrame draws them top-right
+        // and greys the knob when a step is off, through the same path as any inactive control.
+        // ... and let each step sound while it is being edited (Story 15.3): a semitone offset is
+        // a number, not a note, so writing a figure without hearing it is guesswork. The hook is
+        // injected here because only the editor knows the keyboard state and the current octave.
+        // ... and let the KEYBOARD write the figure (Story 15.4): each step knob knows its own index,
+        // so touching it moves the write cursor there (AC7) and the ring marks where the next played
+        // note will land. Both hooks are UI state the spec cannot express — only the editor owns the
+        // cursor, the keyboard state and the current octave.
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob>(&el))
+                if (k->paramId.startsWith("seqPitch"))
+                {
+                    const int step = k->paramId.substring(8).getIntValue();   // 1-based
+                    k->toggleParamId = "seqStep" + k->paramId.substring(8);
+                    k->audition = [this, step](int semis, bool sounding)
+                    {
+                        if (sounding) seqSetCursor(step - 1);   // a click selects, exactly as 15.3 sounds
+                        auditionStep(semis, sounding);
+                    };
+                    k->highlightWhen = [this, step] { return seqCursor == step - 1; };
+                    // …and mark the step the pattern is ON, the way PERC's grid marks its column
+                    // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
+                    k->playingWhen = [this, step] { return processor.getSeqStep() == step - 1; };
+                }
+        // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
+        // clears a figure is precisely the moment one wants to fill it again, so recording needs no
+        // control of its own. doReset() writes the defaults first and calls this after.
+        d.onReset = [this] { seqSetCursor(0); };
+        greyWhenSynced(d, P::seqRate, P::seqSync);
+        addRackModule(std::move(d));
+    }
+    // PERC (Story 16.1) — the drum grid next to the note sequencer. Two things the spec cannot
+    // declare: the step field is a painted component (128 switches would be six rack units at the
+    // grid's 62 px cell), and the KIT list is dynamic, exactly like the SAMPLER's SET.
+    {
+        auto d = makeModuleDescriptor(Modules::perc());
+        auto* grid = rackOwned.add(new PercGrid(apvts,
+                                                [this] { return processor.getPercStep(); },
+                                                [this](int lane) { processor.auditionPercLane(lane); }));
+        // The grid goes FIRST so it fills row 1 and the controls wrap into row 2 beneath it. Cells
+        // fill in body order, so this one insert is the whole layout.
+        d.body.insert(d.body.begin(), Display{ grid, 19 });
+        // Item 0 is "(no kit)", so the value is the store index PLUS ONE and a fresh PERC points at
+        // nothing instead of at whatever sample sits at index 0 — which on this machine was
+        // "Drums_110BPM", a one-shot loop offered as a drum kit (maintainer 2026-08-11).
+        // Only MAPPED sets are offered: a single WAV would put the same recording on all four lanes
+        // at four pitches, which is never what a drum track wants (maintainer 2026-08-11). The
+        // filtering is why the combo carries an explicit value list — its positions are no longer
+        // store indices, and a value that quietly follows the list is the oldest bug in this rack.
+        Combo kitCombo{ P::percKit, "KIT",
+                        std::function<juce::StringArray()>([]
+                        {
+                            juce::StringArray items { "(no kit)" };
+                            const auto& store = SampleBankStore::instance();
+                            for (int i = 0; i < store.getNumSets(); ++i)
+                                if (const auto* s = store.getSet(i); s != nullptr && s->isMapped())
+                                    items.add(s->getName());
+                            return items;
+                        }) };
+        kitCombo.itemValues = []
+        {
+            juce::Array<int> values { 0 };   // 0 = "(no kit)"
+            const auto& store = SampleBankStore::instance();
+            for (int i = 0; i < store.getNumSets(); ++i)
+                if (const auto* s = store.getSet(i); s != nullptr && s->isMapped())
+                    values.add(i + 1);       // the parameter stays store index + 1
+            return values;
+        };
+        kitCombo.indexIsValue = true;   // ... with itemValues supplying the value per position
+        d.body.insert(d.body.begin() + 1, kitCombo);
+        // NOTE reads out the instrument, not the number (decision B, 2026-08-10): the zone's own
+        // name if the kit brought one, else the General MIDI drum map, else the note name.
+        for (auto& el : d.body)
+            if (auto* k = std::get_if<Knob>(&el))
+                if (k->paramId.startsWith("percNote"))
+                    k->textFromValue = [this](double v)
+                    {
+                        const auto* kit = SampleBankStore::instance().getSet(
+                            static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
+                        return PercNames::forNote(kit, (int) v);
+                    };
+        greyWhenSynced(d, P::percRate, P::percSync);
+        addRackModule(std::move(d));
+    }
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
@@ -1737,7 +2100,10 @@ void SynthyEditor::buildRack()
         // the 8 slots were laid out for a 24-column rack and only gained whitespace at 30. The
         // zone height does not change either way — MOD MATRIX is the zone's last module and owns
         // its two rows regardless of how wide it is.
-        d.sizeClass = SizeClass::W28H2; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
+        // Height: 7 quarter units = 207 px instead of 238 (Story 7.4). Two rows at the standard knob
+        // size, captions and value boxes intact — the maintainer's call: "Beschriftungen werden NICHT
+        // geopfert". (176 px is reachable, but only by dropping the 32 repeated SRC/MOD/PARAM/AMT.)
+        d.sizeClass = SizeClass::W28U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 
@@ -1764,7 +2130,13 @@ void SynthyEditor::buildRack()
                 }) };
             paramCombo.indexIsValue = true;
             d.body.push_back (paramCombo);
-            d.body.push_back (K (P::modSlotAmount (n), "AMT"));
+            // AMT takes TWO slots (Story 7.5): a 1-slot cell here is 62 px wide but 100 px tall, and
+            // a knob is capped by the narrower side — so the row's height went to waste next to a
+            // small knob. Two slots make the cell 108 px and the knob reaches the 65 px the height
+            // offers. The module keeps its 28 columns; the combos give up 2 px of width for it.
+            Knob amt = K (P::modSlotAmount (n), "AMT");
+            amt.slots = 2;
+            d.body.push_back (amt);
             // MODULE changed → if PARAM is now beyond the new module's param count, snap it back to 0.
             d.comboDeps.push_back (ComboDependency { modId, parId,
                 [this, parId] (int newModule)
@@ -1795,7 +2167,12 @@ void SynthyEditor::buildRack()
     addRackModule(makeModuleDescriptor(Modules::bitcrush()));
     addRackModule(makeModuleDescriptor(Modules::phaser()));
     addRackModule(makeModuleDescriptor(Modules::chorus()));
-    addRackModule(makeModuleDescriptor(Modules::delay()));
+    {
+        // DELAY's free-running knob is TIME rather than RATE, but the relationship is identical.
+        auto d = makeModuleDescriptor(Modules::delay());
+        greyWhenSynced(d, P::delayTime, P::delaySyncDiv);
+        addRackModule(std::move(d));
+    }
     addRackModule(makeModuleDescriptor(Modules::reverb()));
     // Real visualizers (own instances, separate from the legacy ones behind the rack —
     // one-parent rule). setShowTitle(false): the module header already shows the title.
@@ -1805,9 +2182,15 @@ void SynthyEditor::buildRack()
     scope->setShowTitle(false);
     scope->setEnableSource(apvts.getRawParameterValue(P::scopeOn));   // scopeOn off => freeze+blank
     rackOwned.add(scope);
+    // visualOnly: the two VISUALIZATION modules are the only ones in the rack that nothing can be
+    // heard from, so hiding them frees their height for good (see ModuleDescriptor::visualOnly).
+    // Together they are one row of 2 units plus the zone header — measured at 286 px (1732 → 1446
+    // of a 1929 px budget), which is what makes room for another module of that size without
+    // touching the readability floor.
     add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "OSCILLOSCOPE", P::scopeOn,
         { Display{ scope, 12 } },
-        [scope] { scope->resetTimeRange(); });   // ↺ restores the 10 ms default time-base
+        [scope] { scope->resetTimeRange(); },   // ↺ restores the 10 ms default time-base
+        /*visualOnly*/ true);
     auto* spec = new SpectrumDisplay(processor.getWaveformCapture());
     spec->setShowTitle(false);
     spec->setEnableSource(apvts.getRawParameterValue(P::spectrumOn));   // spectrumOn off => freeze+blank
@@ -1816,7 +2199,8 @@ void SynthyEditor::buildRack()
     // for now) so every module carries the same header controls; wire real params here later.
     add(Rack::Zone::Visualization, SizeClass::W12H2, ModuleType::Processor, "SPECTRUM", P::spectrumOn,
         { Display{ spec, 12 } },
-        [] { });
+        [] { },
+        /*visualOnly*/ true);
 
     // The on-screen keyboard is itself a module (INPUT zone) so it can be hidden like any
     // other — e.g. when playing via an external MIDI keyboard. It wraps the existing keyboard

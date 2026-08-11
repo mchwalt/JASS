@@ -64,6 +64,18 @@ nested format on load.
 }
 ```
 
+### Fields that are not parameters
+
+Three fields sit next to the spec-driven ones because what they carry has no knob:
+
+| Field | Meaning |
+|---|---|
+| `Sampler.File` | Name of the selected sample **set**. `Sampler.Set` is a session-local index into whatever is installed, so the name is what actually survives a move to another machine; it is re-resolved on load, and fetched in the background if the set is not loaded yet. |
+| `Perc.File` | The same for PERC's drum **kit** (`Perc.Kit` is the index; 0 means "no kit"). A preset carrying only the index would point at whatever set happens to sit there — for a drum pattern, usually a piano. |
+| `StepSeq.LatchRoot` | MIDI note the STEP SEQ figure is **latched** to, or the field is absent. Since the latch outlives the key that started it, a patch can be saved while a figure is running — and this is what makes it come back running, on the same note. **Absent ⇒ the patch loads silent** *and* clears whatever the previous patch left running. |
+
+None of them is automatable, and none appears in RANDOM or the modulation matrix.
+
 ## Load semantics
 
 - **A preset is a complete snapshot.** On load, JASS first **factory‑resets every

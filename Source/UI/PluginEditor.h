@@ -7,6 +7,7 @@
 #include "rack/SynthyLookAndFeel.h"   // the single shared look (AD-7), moved into rack/
 #include "rack/Rack.h"
 #include "HelpPanel.h"                // movable per-module help panel (Story 6.1)
+#include "PercGrid.h"                 // PERC step field + instrument names (Story 16.1)
 
 // On-screen keyboard that always spreads its full note range across its own width, so
 // the keys fill the module with no blank gap on the right. Now that the KEYBOARD lives in
@@ -17,6 +18,19 @@ class FillWidthKeyboard : public juce::MidiKeyboardComponent
 {
 public:
     using juce::MidiKeyboardComponent::MidiKeyboardComponent;
+
+    // Show what the STEP SEQ is playing. Its notes never enter the MidiKeyboardState (they would
+    // come back as held keys and the pattern would re-root itself on its own output), so the
+    // component cannot know them: the editor pushes the note in from the processor's atomic instead.
+    // Purely a paint state — nothing here sounds, and -1 means "the pattern is between notes".
+    void setPatternNote (int midiNote)
+    {
+        if (midiNote == patternNote)
+            return;
+        patternNote = midiNote;
+        repaint();
+    }
+
     void resized() override
     {
         juce::MidiKeyboardComponent::resized();
@@ -26,6 +40,34 @@ public:
         if (whiteKeys > 0 && getWidth() > 0)
             setKeyWidth((float) getWidth() / (float) whiteKeys);
     }
+
+    // The pattern's note is drawn like a pressed key, in the MODULATION colour so it reads as
+    // "played by the machine" rather than "held by you" — the two happen at the same time, since
+    // the key you hold is the pattern's root.
+    void drawWhiteNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area,
+                        bool isDown, bool isOver, juce::Colour lineColour, juce::Colour textColour) override
+    {
+        juce::MidiKeyboardComponent::drawWhiteNote (midiNote, g, area, isDown, isOver, lineColour, textColour);
+        paintPatternNote (midiNote, g, area);
+    }
+
+    void drawBlackNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area,
+                        bool isDown, bool isOver, juce::Colour noteFillColour) override
+    {
+        juce::MidiKeyboardComponent::drawBlackNote (midiNote, g, area, isDown, isOver, noteFillColour);
+        paintPatternNote (midiNote, g, area);
+    }
+
+private:
+    void paintPatternNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) const
+    {
+        if (midiNote != patternNote)
+            return;
+        g.setColour (juce::Colour (0xff9384b6).withAlpha (0.75f));   // rack::typeColour(Modulator)
+        g.fillRect (area.reduced (1.0f));
+    }
+
+    int patternNote = -1;
 };
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
@@ -114,13 +156,19 @@ private:
 };
 
 class SynthyEditor : public juce::AudioProcessorEditor,
-                     private juce::Timer
+                     private juce::Timer,
+                     private juce::MidiKeyboardState::Listener   // notes played WHILE recording a
+                                                                 // STEP SEQ figure (Story 15.4)
 {
 public:
     explicit SynthyEditor(SynthyProcessor&);
     ~SynthyEditor() override
     {
         stopTimer();
+        processor.getKeyboardState().removeListener (this);
+        processor.setSeqRecordArmed (false);   // a closed window must never leave the sequencer
+                                               // rootless — it would look enabled and stay silent
+        auditionStep (0, false);   // the timer is gone — close a running STEP SEQ preview by hand
         // Dismiss the MODULES call-out NOW (before rackBody is destroyed): its RackCustomizePanel
         // holds a reference to *rackBody, so a callout left open when the editor closes would dangle.
         if (auto* co = modulesCallout.getComponent())
@@ -147,6 +195,11 @@ private:
     void showModulesMenu();
     void refitHeight();   // recompute window height from the rack's visible content (AD-12)
     double fitScale = 0.0;   // the ONE display-fit scale (0 = not computed yet); see refitHeight()
+    // The screen the current fit was measured on. Dragging the window to a monitor of a different
+    // size or scaling has to re-fit — nothing else triggers refitHeight() when only the position
+    // changes, and the window would keep the other screen's scale.
+    juce::Rectangle<float> lastFitDisplay;   // JUCE 9: userBounds is float
+    double lastFitDisplayScale = 0.0;
     // The help panel opts OUT of that scale so its text stays readable — these three keep the
     // sizing, the "cancel the transform" and the resulting on-screen size in one place.
     double helpScale = 1.0;   // magnification the panel is currently shown at (>= 1.0)
@@ -192,6 +245,31 @@ private:
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
+
+    // Preview of a STEP SEQ step while it is edited (Story 15.3). The step's value is an offset in
+    // semitones, so it is sounded against the computer keyboard's current C — C3 by default, and it
+    // follows the Up/Down octave keys, so the reference is the one you are playing on.
+    void auditionStep (int semitones, bool sounding);
+    int auditionNote  = -1;   // MIDI note currently previewing, or -1
+    int auditionTicks = 0;    // 30 Hz timer ticks until the safety release (a wheel or a typed
+                              // value has no drag end that could close the note)
+
+    // --- Writing a figure by playing it (Story 15.4) ------------------------------------------
+    // The write cursor is the ONE step the next played note goes into: 0-based, -1 = not recording.
+    // Pure UI state — nothing about it belongs in a preset (AC9). Reset (↺) arms it at step 0, a
+    // click on any step knob moves it there, and it clears itself past LEN or when STEP SEQ goes off.
+    int  seqCursor = -1;
+    void seqSetCursor (int step);            // -1 stops; also drives the processor's record flag
+    void seqWriteNote (int midiNote);        // write the cursor's step from a played note, advance
+    void seqAdvanceCursor();                 // next step, or stop past LEN
+    void seqSkipStep();                      // SPACE: switch this step OFF (a rest) and move on
+    // handleNoteOn runs on the AUDIO thread for hardware MIDI (MidiKeyboardState is pumped in
+    // processBlock), so it only parks the note here; the 30 Hz timer picks it up on the message
+    // thread and does the parameter write. -1 = nothing pending.
+    std::atomic<int> seqPendingNote { -1 };
+    bool seqOnLast = false;   // edge detect for "STEP SEQ was switched off" (ends a recording)
+    void handleNoteOn  (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override;
+    void handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override;
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked
     bool modalWasOpen = false;      // edge-detect: a modal popup (e.g. MODULES) closing => refocus keyboard
 
