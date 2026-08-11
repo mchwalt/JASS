@@ -2007,6 +2007,9 @@ void SynthyEditor::buildRack()
                         auditionStep(semis, sounding);
                     };
                     k->highlightWhen = [this, step] { return seqCursor == step - 1; };
+                    // …and mark the step the pattern is ON, the way PERC's grid marks its column
+                    // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
+                    k->playingWhen = [this, step] { return processor.getSeqStep() == step - 1; };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no

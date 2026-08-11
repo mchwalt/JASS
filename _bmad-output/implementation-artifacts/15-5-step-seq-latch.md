@@ -33,6 +33,13 @@ playing over one: a bass line that stops when you reach for a filter knob is not
 7. **A patch saved while a figure runs comes back running**, on the same note: new preset field
    `StepSeq.LatchRoot`. Absent ⇒ silent on load *and* clears whatever the previous patch was playing.
 8. No new parameter, no `FormatVersion` bump (the format is append-only, missing ⇒ default).
+9. **The module marks the step it is playing** (added on request once the rest was working): a lit
+   dot on the step's own number, beside its on/off box. Deliberately not the same mark as 15.4's
+   write cursor — both are visible at once and mean opposite things. It is anchored to the switch
+   rather than to a pixel offset, so it survives a cell-width change (one happened the same day).
+   Fixing this turned up that **PERC's grid had been marking the wrong step all along**: it drew the
+   step counter, which is advanced the instant a step fires, so the marker ran one cell ahead of the
+   beat. Both sequencers now track the sounding step separately from the counter.
 
 ## Dev Notes
 

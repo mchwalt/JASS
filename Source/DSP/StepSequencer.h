@@ -77,6 +77,7 @@ public:
             releaseAll (out, channel);
             sampleCounter = 0;
             stepIndex = 0;
+            litStep   = -1;   // nothing running => no playhead
             startDelay = 0;   // a new entry gets a fresh quantisation, not the last one's leftover
             return;
         }
@@ -108,6 +109,7 @@ public:
             if (sampleCounter == 0)
             {
                 const int s = stepIndex % steps;
+                litStep = s;   // the playhead: what is ON now, not the next one (see playingStep)
                 const double g = juce::jlimit (0.05, 1.0, gate);
                 if (on[(size_t) s])
                 {
@@ -144,6 +146,9 @@ public:
     }
 
     int currentStep() const noexcept { return stepIndex; }
+    // The step the pattern is ON right now, for the module's playhead — NOT `stepIndex`, which has
+    // already been advanced to the next one by the time anybody looks. -1 when nothing is running.
+    int playingStep() const noexcept { return litStep; }
     // The MIDI note the pattern is holding right now, or -1 between notes. The sequencer writes its
     // notes straight into the MIDI buffer and never touches the MidiKeyboardState — deliberately, or
     // its own notes would come back as held keys and the root search would follow the pattern around.
@@ -155,6 +160,7 @@ private:
     int    root = 60;
     int    sampleCounter = 0;
     int    stepIndex = 0;
+    int    litStep = -1;      // step currently sounding (playhead); stepIndex is already the next one
     int    soundingNote = -1;
     int    gateCountdown = -1;
     int    startDelay = 0;   // samples still to wait before the first step (quantised entry, 16.1)
