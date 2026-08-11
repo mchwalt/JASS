@@ -94,6 +94,12 @@ namespace rack
         // ModuleFrame owns the parameter and builds the predicate itself.
         juce::String toggleParamId;
 
+        // Optional read-out override for the value box: the knob shows what this returns instead of
+        // the number. PERC's NOTE knob uses it to say "Kick" rather than "36" (Story 16.1) — the
+        // stored value stays the note number, only its presentation changes. Injected by the editor
+        // (the name depends on the loaded kit, which a static spec cannot reach).
+        std::function<juce::String (double value)> textFromValue;
+
         // Optional preview hook (Story 15.3): a knob whose value IS a pitch can sound it while it
         // is being edited — STEP SEQ, where a step is a number of semitones and writing a figure
         // otherwise means guessing. Called with (value, true) on every user-driven change and

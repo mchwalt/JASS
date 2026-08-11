@@ -189,6 +189,15 @@ namespace rack
                         apvts, k->paramId, *s));
                 }
 
+                // Named read-out (PERC NOTE: "Kick" instead of "36"). valueFromText has to be given
+                // too, or typing into the box would parse the name back as a number and land on 0.
+                if (k->textFromValue)
+                {
+                    s->textFromValueFunction = k->textFromValue;
+                    s->valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
+                    s->updateText();
+                }
+
                 if (k->modTarget != ModTarget::Off)
                     ringKnobs.push_back ({ s, k->modTarget });
 
