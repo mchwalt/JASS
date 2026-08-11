@@ -588,6 +588,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // Highlight played (ch.1) notes and the STEP SEQ preview (15.3) — turning a step lights the key
     // it will play — but never the ch.16 auto-play drone, which nobody played.
     keyboard->setMidiChannelsToDisplay(1 | (1 << (SynthyProcessor::kAuditionChannel - 1)));
+    // Listen in on the same keyboard state (Story 15.4): while a STEP SEQ figure is being recorded,
+    // every played note — computer keys, on-screen keyboard, or the MIDI keyboard, which is the
+    // whole appeal — is written into the cursor's step instead of played.
+    processor.getKeyboardState().addListener(this);
     // Allow playing via the computer keyboard (a, w, s, e, d, ... map to notes;
     // Up / Down shift the octave; the keyboard must have focus — grabbed on launch/click).
     // The keyboard is added to the rack as a Display module (Input zone) in buildRack();
@@ -844,6 +848,24 @@ void SynthyEditor::timerCallback()
         // never reports a drag end, so the note is closed on a timeout instead.
         if (auditionTicks > 0 && --auditionTicks == 0)
             auditionStep (0, false);
+
+        // Recording a figure (15.4): parameters are written HERE, on the message thread, from the
+        // note handleNoteOn parked — that callback runs on the audio thread for hardware MIDI.
+        // Switching STEP SEQ off ends the recording, so an armed cursor can never outlive its module.
+        {
+            const bool seqOnNow = *apvts.getRawParameterValue (Parameters::ID::seqOn) >= 0.5f;
+            if (seqCursor >= 0)
+            {
+                // AC6 ends the recording when the module is SWITCHED off — the falling edge, not the
+                // state. Writing a figure into a silent sequencer is a perfectly sane way to work
+                // (and the only quiet one), so simply being off must not refuse the cursor.
+                if (seqOnLast && ! seqOnNow)
+                    seqSetCursor (-1);
+                else if (const int pending = seqPendingNote.exchange (-1); pending >= 0)
+                    seqWriteNote (pending);
+            }
+            seqOnLast = seqOnNow;
+        }
 
         // A modal popup (MODULES call-out, a combo dropdown, …) grabs the keyboard focus, so
         // computer-key playing pauses while it's open. When it closes, hand focus back to the
@@ -1194,6 +1216,80 @@ void SynthyEditor::auditionStep(int semitones, bool sounding)
                           // drag end, and a hanging note is worse than a short one
 }
 
+// --- Writing a figure by playing it (Story 15.4) -------------------------------------------------
+// The cursor is the step the next played note lands in. It is UI state only: no parameter, nothing
+// persisted (AC9). Setting it also arms the processor, which then stops looking for a root note —
+// otherwise every key entered would restart and transpose the figure while it is being written.
+void SynthyEditor::seqSetCursor(int step)
+{
+    if (step == seqCursor)
+        return;
+    seqCursor = step;
+    processor.setSeqRecordArmed(seqCursor >= 0);
+    if (seqCursor < 0)
+        seqPendingNote.store(-1);   // drop anything parked between the last note and the stop
+}
+
+// Write the played note into the cursor's step and move on. The value is the offset from the
+// computer keyboard's current C — the SAME reference auditionStep previews with (15.3), so what a
+// knob sounds and what a key writes agree, and both follow the Up/Down octave keys (AC2).
+void SynthyEditor::seqWriteNote(int midiNote)
+{
+    if (seqCursor < 0 || seqCursor >= StepSequencer::kMaxSteps)
+        return;
+    namespace P = Parameters::ID;
+    auto& apvts     = processor.getAPVTS();
+    const int step  = seqCursor + 1;                                       // params are 1-based
+    const int semis = juce::jlimit(-24, 24, midiNote - 12 * kbBaseOctave);
+
+    if (auto* p = apvts.getParameter(P::seqPitch(step)))
+        p->setValueNotifyingHost(p->convertTo0to1((float) semis));
+    // A written step is not a rest (AC3) — a figure entered by playing must sound without a
+    // second pass over 32 switches.
+    if (auto* on = apvts.getParameter(P::seqStep(step)))
+        on->setValueNotifyingHost(1.0f);
+
+    auditionStep(semis, true);   // hear what was just written, through 15.3's one preview path
+    seqAdvanceCursor();
+}
+
+// SPACE: this step stays silent. Skipping has to SWITCH THE STEP OFF, not merely step over it —
+// after ↺ every step is on at offset 0, so a step passed by without a word would play the root
+// rather than rest (maintainer 2026-08-11). The pitch is left alone, so switching the step back on
+// restores whatever was written there before.
+void SynthyEditor::seqSkipStep()
+{
+    if (seqCursor < 0)
+        return;
+    if (auto* on = processor.getAPVTS().getParameter(Parameters::ID::seqStep(seqCursor + 1)))
+        on->setValueNotifyingHost(0.0f);
+    seqAdvanceCursor();
+}
+
+// Next step — or stop, once the step after LEN would be reached (AC6).
+void SynthyEditor::seqAdvanceCursor()
+{
+    if (seqCursor < 0)
+        return;
+    const int len  = (int) *processor.getAPVTS().getRawParameterValue(Parameters::ID::seqLength);
+    const int next = seqCursor + 1;
+    seqSetCursor((next >= len || next >= StepSequencer::kMaxSteps) ? -1 : next);
+}
+
+// MidiKeyboardState calls this on the AUDIO thread for hardware MIDI (the state is pumped from
+// processBlock), so nothing is written here — the note is parked and the 30 Hz timer picks it up on
+// the message thread. Our own preview channel and the auto-play drone are not played notes.
+void SynthyEditor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int midiNote, float)
+{
+    if (seqCursor < 0)
+        return;
+    if (midiChannel == SynthyProcessor::kAuditionChannel || midiChannel == SynthyProcessor::kDroneChannel)
+        return;
+    seqPendingNote.store(midiNote);
+}
+
+void SynthyEditor::handleNoteOff(juce::MidiKeyboardState*, int, int, float) {}
+
 // Note-off everything we started (KEYBOARD module switched off, focus lost, …). Only our own
 // notes — external MIDI hardware and the ch.16 auto-play drone are untouched.
 void SynthyEditor::releaseComputerKeys()
@@ -1232,6 +1328,14 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         // just note-off/note-on on OUR remembered note — no bitmask can fall out of sync, and
         // releasing the key later still lands on whatever note it is currently sounding.
         retuneSoundingComputerKeys();
+        return true;
+    }
+    // While a figure is being recorded (15.4) SPACE means "leave this step empty and move on".
+    // It takes precedence over the Karplus pluck below: during recording the whole keyboard is a
+    // writing surface, and a rest is the one thing no note key can express.
+    if (key == juce::KeyPress::spaceKey && seqCursor >= 0)
+    {
+        seqSkipStep();
         return true;
     }
     // Spacebar re-plucks the Karplus string. Trigger the actual PLUCK button so it
@@ -1867,13 +1971,27 @@ void SynthyEditor::buildRack()
         // ... and let each step sound while it is being edited (Story 15.3): a semitone offset is
         // a number, not a note, so writing a figure without hearing it is guesswork. The hook is
         // injected here because only the editor knows the keyboard state and the current octave.
+        // ... and let the KEYBOARD write the figure (Story 15.4): each step knob knows its own index,
+        // so touching it moves the write cursor there (AC7) and the ring marks where the next played
+        // note will land. Both hooks are UI state the spec cannot express — only the editor owns the
+        // cursor, the keyboard state and the current octave.
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
                 if (k->paramId.startsWith("seqPitch"))
                 {
+                    const int step = k->paramId.substring(8).getIntValue();   // 1-based
                     k->toggleParamId = "seqStep" + k->paramId.substring(8);
-                    k->audition = [this](int semis, bool sounding) { auditionStep(semis, sounding); };
+                    k->audition = [this, step](int semis, bool sounding)
+                    {
+                        if (sounding) seqSetCursor(step - 1);   // a click selects, exactly as 15.3 sounds
+                        auditionStep(semis, sounding);
+                    };
+                    k->highlightWhen = [this, step] { return seqCursor == step - 1; };
                 }
+        // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
+        // clears a figure is precisely the moment one wants to fill it again, so recording needs no
+        // control of its own. doReset() writes the defaults first and calls this after.
+        d.onReset = [this] { seqSetCursor(0); };
         greyWhenSynced(d, P::seqRate, P::seqSync);
         addRackModule(std::move(d));
     }

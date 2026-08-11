@@ -1,7 +1,8 @@
 # Story 15.4: Write the figure by playing it
 
-Status: **draft** — raised by the maintainer 2026-08-11: "statt beim Programmieren der Note am Knopf
+Status: **done** — raised by the maintainer 2026-08-11: "statt beim Programmieren der Note am Knopf
 zu drehen, könnte man die Steps von Anfang an durchgehen und die Note per Keyboard einspielen."
+Implemented and accepted the same day ("es passt ansonsten alles").
 
 ## Story
 
@@ -63,6 +64,25 @@ play a note, it moves on. The conversion is what the machine is for.
 - Reuse `auditionStep` for every preview here; do not build a second sound path.
 - No unit-test rig: build, run, and the maintainer's ear.
 - Feature branch, **no push, no merge** — the maintainer decides.
+
+## Two corrections the build turned up
+
+- **AC5 says "advances the highlight without writing" — taken literally, that is wrong.** After a
+  reset every step is ON at offset 0, so a step merely stepped over plays the ROOT instead of
+  resting; the maintainer caught it on the first run ("Leertaste überspringt, lässt aber den zuletzt
+  eingespielten Ton stehen"). SPACE now switches the step OFF, which is what the criterion's own
+  first sentence says ("a rest is a step you skip"). The pitch is left untouched, so switching a
+  skipped step back on restores what was written there.
+- **AC6 says the recording ends when the module is switched off** — implemented as the falling EDGE,
+  not the state. Writing a figure into a silent sequencer is a reasonable way to work (and the only
+  quiet one), so simply being off must not refuse the cursor.
+
+## Fixed in passing
+
+The help text first said "↺ Reset". `IconButton.h` explains why that cannot work — the shipped font
+renders `↺` and `ⓘ` as tofu or "?", which is precisely why those icons are vector-drawn — and the
+maintainer read the result as the INFO button. Six zone help texts carried the same two glyphs in
+both languages: all twelve now name the buttons in words ("Reset (circular arrow)", "Info (circled i)").
 
 ## Follow-up, not this story
 

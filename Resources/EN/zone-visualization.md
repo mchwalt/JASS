@@ -5,5 +5,5 @@ The meters — see the sound, they never change it.
 
 **Group header controls**
 - **Enable** — freezes/enables every visible display in this group at once.
-- **↺ Reset** — restores this group's *default module selection* (which displays are shown, their order and zone). It does not change any knob values.
-- **ⓘ Info** — this help.
+- **Reset** (circular arrow) — restores this group's *default module selection* (which displays are shown, their order and zone). It does not change any knob values.
+- **Info** (circled i) — this help.

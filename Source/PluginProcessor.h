@@ -53,6 +53,17 @@ public:
     // the pattern sounds — which is exactly when the preview is wanted. 15 passes through
     // untouched, the same trick the auto-play drone plays on 16.
     static constexpr int kAuditionChannel = 15;
+    // The auto-play drone's own channel (see autoPlayEnabled). Public because the editor has to
+    // recognise it: a drone note is not a played key, so it must not be written into a STEP SEQ
+    // step while a figure is being recorded (Story 15.4).
+    static constexpr int kDroneChannel = 16;
+
+    // While the editor is recording a figure into STEP SEQ (Story 15.4), a played key WRITES a step
+    // instead of playing the pattern: the sequencer must not take it as its root, or every entered
+    // note would restart and transpose the figure under the writer's hands. Set from the message
+    // thread, read once per block — the editor clears it when it stops recording and in its
+    // destructor, so a closed window can never leave the sequencer rootless.
+    void setSeqRecordArmed (bool armed) { seqRecordArmed.store (armed); }
 
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
@@ -169,6 +180,7 @@ private:
     PercSequencer perc;
     bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
                                   // entry can be quantised to the drum pattern (16.1 AC6)
+    std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)
     std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
@@ -192,8 +204,8 @@ private:
 
     // Auto-play drone is automatic now: ON until the user plays a key, back ON
     // when a sound generator is (re)activated. No user-facing parameter. The drone
-    // lives on its own MIDI channel so it never collides with played notes.
-    static constexpr int kDroneChannel = 16;
+    // lives on its own MIDI channel so it never collides with played notes
+    // (kDroneChannel is declared public above — the editor has to recognise it too).
     static constexpr int kDroneNote = 60;        // C4 → transpose ratio 1.0
     std::atomic<bool> autoPlayEnabled { true };
     unsigned prevSourcesMask = 0;                // for rising-edge "generator enabled" detection
