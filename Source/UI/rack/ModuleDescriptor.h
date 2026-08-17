@@ -155,6 +155,11 @@ namespace rack
         // Lets a descriptor react to the gesture (SAMPLER SET → auto One-Shot for mapped sets)
         // without fighting preset restores. Supported for indexIsValue combos.
         std::function<void(int)> onUserSelect;
+        // Optional PER-COMBO relevance predicate — the combo counterpart of Knob::activeWhen
+        // (same contract, same condKnobs polling path): when set and false, this one combo is
+        // disabled and dimmed while the module stays live. MOD MATRIX QUANT uses it — the mask
+        // only acts on FREQ routings, so on any other target the combo reads as "not in play".
+        std::function<bool()> activeWhen;
     };
 
     struct Toggle
