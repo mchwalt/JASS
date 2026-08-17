@@ -2137,14 +2137,17 @@ void SynthyEditor::buildRack()
             // a knob is capped by the narrower side — so the row's height went to waste next to a
             // small knob. Two slots make the cell 108 px and the knob reaches the 65 px the height
             // offers. The module keeps its 28 columns; the combos give up 2 px of width for it.
-            Knob amt = K (P::modSlotAmount (n), "AMT");
-            amt.slots = 2;
-            d.body.push_back (amt);
             // QUANT: per-slot scale mask for pitch routings (Off/Chrom/Major/Minor/Penta) — a
             // stepped source (S&H, Chaos) on FREQ becomes a melody instead of detune. Items match
             // the spec's Choice strings (attachment maps by index; kept short to fit the cell).
+            // Placed BEFORE AMT: the knob stays the routing's LAST control, so the green activity
+            // dot keeps anchoring beside AMT (paintOverChildren anchors to the group's final cell)
+            // and the four combos read as one cluster.
             d.body.push_back (C (P::modSlotQuant (n), "QUANT",
                                  juce::StringArray { "Off", "Chrom", "Major", "Minor", "Penta" }));
+            Knob amt = K (P::modSlotAmount (n), "AMT");
+            amt.slots = 2;
+            d.body.push_back (amt);
             // MODULE changed → if PARAM is now beyond the new module's param count, snap it back to 0.
             d.comboDeps.push_back (ComboDependency { modId, parId,
                 [this, parId] (int newModule)
@@ -2156,8 +2159,10 @@ void SynthyEditor::buildRack()
                 } });
         }
         // Per-slot activity highlight: a slot is "active" when its MOD combo != Off (index 0). The
-        // frame dims inactive slots and draws a lit dot on active ones (groupSize 4 = SRC/MOD/PARAM/AMT).
-        d.slotActivity.groupSize = 4;
+        // frame dims inactive slots and draws a lit dot on active ones (groupSize 5 =
+        // SRC/MOD/PARAM/AMT/QUANT — the group ALSO drives the row layout's gap logic, so a stale
+        // count here shifts every fifth control and clips the row's right edge).
+        d.slotActivity.groupSize = 5;
         d.slotActivity.isActive  = [this] (int slot)
         {
             return (int) processor.getAPVTS().getRawParameterValue (P::modSlotModule (slot + 1))->load() != 0;
