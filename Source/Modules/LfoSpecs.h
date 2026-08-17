@@ -25,7 +25,7 @@ namespace Modules
         m.defaultVisible = (i <= 3);   // LFO 1..3 visible by default; LFO 4 hidden (show via MODULES)
         m.params = {
             { p + "On",      "Enabled",  "",       ParamSpec::Kind::Bool },
-            { p + "Wave",    "Waveform", "WAVE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Triangle", "Square", "Sawtooth" } },
+            { p + "Wave",    "Waveform", "WAVE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Triangle", "Square", "Sawtooth", "S&H", "One-Shot" } },   // append-only (index == LFOWaveform)
             // TARGET is now INTERNAL (no UI): the LFO is a pure MOD MATRIX source — route it there
             // instead. The param is kept (hidden) only to gate the LFO on/off and to migrate old
             // presets' built-in routings into matrix slots. See PresetIO::convertOldPresets.

@@ -10,6 +10,18 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **Two new LFO shapes: S&H and One-Shot.** Until now every LFO wave was smooth and periodic —
+  fine for vibrato and wah, useless for two other kinds of movement. **S&H** (sample & hold)
+  draws a new random level each cycle and holds it: stepped motion, the classic modular
+  step-randomizer, and with SYNC it steps in time. Every voice draws its own sequence — eight
+  voices stepping in lockstep would read as one mono effect, not as life. **One-Shot** runs a
+  single full-to-zero sweep per note and then holds, which makes modulation *event-based*
+  instead of cyclic: a per-note gesture (a pluck-style cutoff drop, a pitch fall-in) without
+  burning the pitch envelope. One honest limit: the little modulation rings — and master-bus
+  routings — are fed by a free-running display LFO that never sees a note-on, so a One-Shot
+  ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
+
 ## [2026.08.7] – 2026-08-12
 
 ### Added

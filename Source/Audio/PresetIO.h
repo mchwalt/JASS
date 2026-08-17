@@ -18,7 +18,7 @@ namespace PresetIO
     inline const juce::StringArray kMixSrc     { "OSC 1", "OSC 2", "OSC 3" };   // Epic 5
     inline const juce::StringArray kFilterType { "Off", "Lowpass", "Highpass" };
     inline const juce::StringArray kDistortion { "Off", "SoftClip", "HardClip", "Foldback" };
-    inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth" };
+    inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth", "SampleHold", "OneShot" };   // append-only
     // Persisted target names — generated from the single source (ModTargets.h). Index == LFOTarget.
     inline const juce::StringArray kLfoTarget = [] { juce::StringArray a;
         for (int i = 0; i < ModTargets::kCount; ++i) a.add (ModTargets::persist (i)); return a; }();
