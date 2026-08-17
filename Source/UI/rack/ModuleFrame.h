@@ -71,6 +71,11 @@ namespace rack
         // 12.6: the editor re-lists the SET combo while the background preload adds sets.
         void refreshCombo (const juce::String& paramId);
 
+        // Re-run every named read-out (Knob::textFromValue): a display can depend on EDITOR
+        // state the parameter never sees — STEP SEQ's note names follow the computer keyboard's
+        // octave, so the octave keys must re-text the boxes without any value changing.
+        void refreshNamedReadouts();
+
     private:
 
         // Enabled/lit = param-enable AND derived-predicate. A module may have EITHER (a real

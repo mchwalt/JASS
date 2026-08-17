@@ -42,6 +42,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
 
 ### Changed
+- **STEP SEQ shows notes, not offsets.** A step's value box used to read "+7" — a number you had
+  to resolve in your head while the preview already played the actual pitch. The box now shows
+  that pitch by name (E1, C3 …), resolved over the same reference the preview sounds: the
+  keyboard's current C, following the Up/Down octave keys live. Nothing about the figure changed —
+  the stored value is still the offset, and the pattern still transposes with the key you play.
+  The knob stays a knob (maintainer's condition), only its read-out grew up.
 - **RANDOM draws from the new material too.** A random patch can now pick the S&H/One-Shot
   waves, route Chaos X/Y (which auto-enables CHAOS, so the routing is actually heard), and land
   on a QUANT scale — S&H → FREQ → Major is exactly the kind of happy accident the button is for.

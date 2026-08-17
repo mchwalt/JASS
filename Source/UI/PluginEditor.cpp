@@ -1341,6 +1341,10 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         // A LATCHED step-sequencer figure has no held key left to retune, so the octave shift is
         // handed to its root directly — the pattern moves with the arrows like everything else.
         processor.transposeSeqLatch (dir * 12);
+        // STEP SEQ's note read-outs are relative to this octave — re-text them (no value changed,
+        // so nothing else would).
+        if (rackBody != nullptr)
+            rackBody->refreshNamedReadouts();
         return true;
     }
     // While a figure is being recorded (15.4) SPACE means "leave this step empty and move on".
@@ -2012,6 +2016,16 @@ void SynthyEditor::buildRack()
                     // …and mark the step the pattern is ON, the way PERC's grid marks its column
                     // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
                     k->playingWhen = [this, step] { return processor.getSeqStep() == step - 1; };
+                    // …and read out the NOTE, not the raw semitone count (maintainer 2026-08-18):
+                    // the value stays the offset from the keyboard's current C, the display simply
+                    // resolves it through the SAME reference audition sounds it with — box, preview
+                    // and played figure always agree, and the octave keys re-text the boxes
+                    // (keyPressed → rackBody->refreshNamedReadouts). 60 = C4, as everywhere in JASS.
+                    k->textFromValue = [this](double v)
+                    {
+                        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
+                        return juce::MidiMessage::getMidiNoteName(note, true, true, 4);
+                    };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
