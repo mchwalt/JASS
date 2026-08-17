@@ -10,6 +10,7 @@
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"   // Story 15.1
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
+#include "DSP/ChaosLorenz.h"     // LFO expansion — global Lorenz mod source (Chaos X/Y)
 #include <vector>
 #include <map>
 
@@ -204,6 +205,11 @@ private:
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
     std::atomic<float> lfoDisplayValues[kNumLFOs] {};
+    // CHAOS: ONE global Lorenz attractor (all voices move together — correlated, musical, cheap).
+    // Advanced once per block; voices, master-bus targets and rings all read the same snapshot,
+    // so display == audio by construction. Free-running: never reset (see DSP/ChaosLorenz.h).
+    ChaosLorenz chaos;
+    std::atomic<float> chaosDisplay[2] {};   // [0]=X, [1]=Y — published each block (0 when off)
     float prevMasterGain = 0.0f;   // last block's applied master gain — ramp target so LFO-modulated
                                    // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;

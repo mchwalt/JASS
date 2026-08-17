@@ -2073,6 +2073,7 @@ void SynthyEditor::buildRack()
     }
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
+    addRackModule(makeModuleDescriptor(Modules::chaos()));   // LFO expansion — Lorenz mod source
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
     // which a static spec can't capture). Lit = mixModeOn AND both SELECTED operand OSCs enabled.
     {

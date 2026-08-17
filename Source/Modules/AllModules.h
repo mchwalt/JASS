@@ -33,6 +33,7 @@
 #include "SamplerSpecs.h"
 #include "StepSeqSpecs.h"
 #include "PercSpecs.h"
+#include "ChaosSpecs.h"
 
 namespace Modules
 {
@@ -48,6 +49,7 @@ namespace Modules
             sampler(),      // Story 12.1 — appended after presetBank for the same reason
             stepSeq(),      // Story 15.1 — appended last, same append-only reason
             perc(),         // Story 16.1 — ditto (140 params; append-only keeps old presets valid)
+            chaos(),        // LFO expansion — ditto (Lorenz mod source)
         };
     }
 }

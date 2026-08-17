@@ -196,6 +196,10 @@ namespace Parameters
         JASS_INDEXED_ID (lfoTarget,  kNumLFOs, "lfo", "Target")
         JASS_INDEXED_ID (lfoSyncDiv, kNumLFOs, "lfo", "SyncDiv")
 
+        // CHAOS — Lorenz attractor mod source (LFO expansion)
+        constexpr const char* chaosOn   = "chaosOn";
+        constexpr const char* chaosRate = "chaosRate";
+
         // Reverb
         constexpr const char* reverbOn   = "reverbOn";
         constexpr const char* reverbRoom = "reverbRoom";
