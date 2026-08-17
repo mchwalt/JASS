@@ -52,8 +52,13 @@ SynthyProcessor::SynthyProcessor()
     PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
     PresetIO::applySeqLatchRoot = [this] (int note)
     {
-        if (note >= 0) startSeqLatch (note);
-        else           stopSeqLatch();
+        if (note >= 0)
+        {
+            startSeqLatch (note);
+            seqRequantize.store (true);   // a loaded latch always re-enters on the drums' downbeat
+        }
+        else
+            stopSeqLatch();
     };
 
     // Listen for keypresses so the auto-play drone can step aside when played.
@@ -961,6 +966,23 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // STEP SEQ (15.1) and the ARP both REPLACE the held chord, so they cannot both run. The
         // sequencer wins: it is the more specific instrument. The editor also switches the other
         // module off when one is enabled, so the rack never shows a lit module doing nothing.
+        // PERC transport, resolved BEFORE the STEP SEQ block: the quantised entry below reads
+        // perc.enabled and perc.samplesToPatternStart(), and both used to be refreshed only in
+        // the render section further down — so the first block after a preset load saw the
+        // PREVIOUS patch's drum state and skipped the quantisation (bass permanently off the
+        // beat). Kit, levels and rendering stay below; only the clock moves up here.
+        {
+            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
+            if (! percOn && perc.enabled)
+                perc.reset();      // switched off ⇒ the next start is a downbeat, not where it stopped
+            perc.enabled = percOn;
+            perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);
+            const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);
+            perc.stepSeconds = SyncDivision::isSynced(pdiv)
+                                   ? SyncDivision::delaySeconds(syncBpm, pdiv)
+                                   : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
+        }
+
         const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
         bool arpOn = ! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
         if (seqOn)
@@ -1003,6 +1025,19 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (playRoot >= 0)
                 stepSeq.setRoot(playRoot);
 
+            // Preset-load latch (15.5): a stored latch must ALWAYS enter on the drums' downbeat.
+            // The rising-edge logic below cannot see this case — a latch loaded over a still-
+            // running one keeps playRoot high, so there is no edge. applySeqLatchRoot sets the
+            // flag; restart the figure at step 0, quantised against the drum clock resolved above.
+            if (seqRequantize.exchange(false) && playRoot >= 0)
+            {
+                stepSeq.releaseAll(midiMessages, 1);
+                stepSeq.reset();
+                if (perc.enabled)
+                    stepSeq.setStartDelay(perc.samplesToPatternStart());
+                seqKeyWasHeld = true;   // edge consumed — the check below must not fire again
+            }
+
             // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
             // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
             // running figure must not restart or delay anything, exactly as in 15.1.
@@ -1029,6 +1064,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             stepSeq.reset();
             seqLatchedRoot.store(-1);      // the switch is the transport: off forgets the root
             seqKeyWasHeld = false;
+            seqRequantize.store(false);    // a stray flag must not fire on a later re-enable
         }
 
         if (arpOn)
@@ -1175,10 +1211,9 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // compressor so the master glue and the MASTER level still apply — and nothing else does.
     {
         using namespace Parameters;
-        const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
-        if (! percOn && perc.enabled)
-            perc.reset();          // switched off ⇒ the next start is a downbeat, not where it stopped
-        perc.enabled = percOn;
+        // Transport (enabled + falling-edge reset + length + stepSeconds) is resolved ABOVE the
+        // STEP SEQ block, where the quantised entry needs it fresh — see the comment there.
+        const bool percOn = perc.enabled;
 
         // Its OWN kit, independent of the SAMPLER's set — a sampled instrument and a drum kit have
         // to coexist, which is the case this module exists for. While a preset's kit is still being
@@ -1188,11 +1223,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         perc.setSource(percKitPending.load() ? nullptr
                                              : SampleBankStore::instance().getSet(kitIdx));
         perc.amp    = *apvts.getRawParameterValue(ID::percAmp);
-        perc.length = (int) *apvts.getRawParameterValue(ID::percLength);
-        const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);
-        perc.stepSeconds = SyncDivision::isSynced(pdiv)
-                               ? SyncDivision::delaySeconds(syncBpm, pdiv)
-                               : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
         for (int l = 0; l < PercSequencer::kLanes; ++l)
         {
             perc.note [(size_t) l] = (int) *apvts.getRawParameterValue(ID::percNote (l + 1));
