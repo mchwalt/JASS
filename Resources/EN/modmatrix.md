@@ -9,6 +9,7 @@ The LFOs have no built-in target of their own — they are *purely* matrix sourc
 - **LFO 1–4** — cyclic movement (vibrato / wah). Each needs its own **LFO** module on (LFO 2–4 are hidden by default — show them via MODULES).
 - **Envelope** — the ADSR contour. Needs the **ENVELOPE** module on and a sounding note. Great as a filter envelope: Envelope → FILTER · CUTOFF.
 - **Velocity** — how hard you play (constant per note). Belongs to no module — just play with varying strength.
+- **Chaos X / Chaos Y** — the CHAOS module's Lorenz orbit: never repeating, never random. X and Y ride the same orbit, so two routings drift together but not alike. Needs **CHAOS** on; free-running, so its rings move even at idle.
 
 ## Destination — MOD then PARAM
 

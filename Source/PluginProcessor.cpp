@@ -317,6 +317,8 @@ namespace
             case ModSource::LFO2:     return ID::lfoOn (2);
             case ModSource::LFO3:     return ID::lfoOn (3);
             case ModSource::LFO4:     return ID::lfoOn (4);
+            case ModSource::ChaosX:
+            case ModSource::ChaosY:   return ID::chaosOn;
         }
         return {};
     }
@@ -360,7 +362,8 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      // MASTER/STEREO default ON, so routing never actually toggles them
                                      // (auto-disable only undoes an enable WE made) — safe to list.
                                      ID::noiseOn, ID::karplusOn, ID::pitchEnvOn,
-                                     ID::compOn, ID::stereoOn, ID::masterOn };
+                                     ID::compOn, ID::stereoOn, ID::masterOn,
+                                     ID::chaosOn };   // LFO expansion: Chaos X/Y source
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);
@@ -684,6 +687,8 @@ void SynthyProcessor::randomize()
             case ModSource::LFO4: set(ID::lfoOn(4), 1.0f); break;
             case ModSource::Envelope: set(ID::adsrOn, 1.0f); break;
             case ModSource::Velocity: break;
+            case ModSource::ChaosX:
+            case ModSource::ChaosY: set(ID::chaosOn, 1.0f); break;
         }
     }
 
@@ -839,7 +844,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // STEREO / MASTER / COMPRESSOR run on the SUMMED mix (further below), not per voice, so their
     // MOD MATRIX routings are applied HERE at block rate. Source values are the GLOBAL uiLfo values
     // from the PREVIOUS block (lfoDisplayValues, advanced after the render) — a one-block lag that is
-    // inaudible. Only LFO sources drive global targets (Velocity/Envelope have no single global
+    // inaudible. LFO and Chaos sources drive global targets (Velocity/Envelope have no single global
     // value), which matches the editor's ring feed exactly, so ring == audio.
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
     {
@@ -856,6 +861,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 const float amt = *apvts.getRawParameterValue(ID::modSlotAmount(n));
                 float sv = 0.0f;
                 for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = lfoDisplayValues[i].load();
+                if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
+                if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
                 const int tgt = (int) ModDest::targetOf(mod, par);
                 if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
             }
@@ -930,6 +937,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
+        {
+            voice->setChaosValues(chaosDisplay[0].load(), chaosDisplay[1].load());   // one orbit, all voices
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                                      voice->getLFOs(), voice->getNoise(),
@@ -944,6 +953,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getModSlots(), voice->getModMatrixOnRef(),
                                      voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
                                      lfoRateHz, delayTimeSec);
+        }
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {

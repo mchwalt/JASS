@@ -778,10 +778,10 @@ void SynthyEditor::timerCallback()
     namespace P = Parameters::ID;
     auto& apvts = processor.getAPVTS();
 
-    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only PERIODIC (LFO)
-    // sources animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
-    // lfoSrcVal[src] holds each LFO's display value at its ModSource slot; non-LFO sources
-    // stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
+    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only FREE-RUNNING sources
+    // (LFOs, Chaos) animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
+    // lfoSrcVal[src] holds each such source's display value at its ModSource slot; note-bound
+    // sources stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
     static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                      (int) ModSource::LFO3, (int) ModSource::LFO4 };
     std::array<float, ModMatrixConfig::kNumSources> lfoSrcVal {};
@@ -790,6 +790,8 @@ void SynthyEditor::timerCallback()
     // at its ModSource slot; the matrix loop below lights the rings for LFO-sourced routings.
     for (int i = 0; i < kNumLFOs; ++i)
         lfoSrcVal[(size_t) kLfoSourceIdx[i]] = processor.getLfoDisplayValue(i);
+    lfoSrcVal[(size_t) ModSource::ChaosX] = processor.getChaosDisplayValue(0);   // same snapshot the
+    lfoSrcVal[(size_t) ModSource::ChaosY] = processor.getChaosDisplayValue(1);   // voices modulate with
     {
         const bool matrixOn = *apvts.getRawParameterValue(P::modMatrixOn) > 0.5f;
         if (matrixOn)
@@ -2108,7 +2110,7 @@ void SynthyEditor::buildRack()
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 
-        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
+        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
         juce::StringArray modItems;
         for (int i = 0; i < ModDest::kNumModules; ++i) modItems.add (ModDest::moduleLabel (i));   // == ModDest order
 

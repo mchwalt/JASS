@@ -11,6 +11,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **CHAOS — a Lorenz attractor as a modulation source.** Deterministic chaos instead of
+  randomness: the orbit never repeats, but it is not noise — it wanders with intent, which is
+  exactly what a periodic LFO cannot do and a random generator overdoes. The module exposes
+  **two** matrix sources, **Chaos X** and **Chaos Y**, and that is the point: both ride the same
+  orbit, so two routings (say X → FILTER CUTOFF, Y → WT POS) drift *together but not alike* —
+  one gesture in two colours, something two independent random sources can never produce. One
+  global attractor drives all voices (correlated movement reads as intent; per-voice chaos would
+  just read as blur), it free-runs — notes do not restart it — and the rings show the very same
+  values the voices modulate with. RATE sets how fast the orbit turns.
 - **Two new LFO shapes: S&H and One-Shot.** Until now every LFO wave was smooth and periodic —
   fine for vibrato and wah, useless for two other kinds of movement. **S&H** (sample & hold)
   draws a new random level each cycle and holds it: stepped motion, the classic modular
