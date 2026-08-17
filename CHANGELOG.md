@@ -41,7 +41,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   routings — are fed by a free-running display LFO that never sees a note-on, so a One-Shot
   ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
 
+- **DELETE — presets can finally be deleted from the app.** SAVE and LOAD existed; removing a
+  preset meant leaving the app for the file explorer. The new DELETE button next to them opens
+  the same chooser, asks once, and moves the file to the **recycle bin** — never a hard delete.
+  Any F-key still pointing at the deleted preset is cleared along with it.
+
 ### Fixed
+- **A dead F-key assignment now clears itself.** Renaming or deleting a preset file on disk left
+  its F-key erroring on every press, forever. The error message now says what happened — and then
+  removes the assignment, so the second press does nothing instead of failing again.
 - **A loaded sequencer patch now always enters on the drums' downbeat.** Loading a preset with a
   stored STEP SEQ latch sometimes played the bass permanently off the PERC beat. Two causes, one
   fix: the quantised entry read the drum transport state *before* that block had refreshed it

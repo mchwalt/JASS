@@ -514,6 +514,61 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         });
     };
 
+    // DELETE removes a preset FILE — the counterpart the SAVE/LOAD pair was missing (maintainer
+    // 2026-08-18: "keine Möglichkeit, Presets über die GUI zu löschen"). Same chooser as LOAD,
+    // restricted to the Presets folder; the file goes to the RECYCLE BIN (moveToTrash), never
+    // hard-deleted, after an explicit confirmation. Any F-key assignment of the deleted preset
+    // is cleared along with it — a dead slot that errors on every press helps nobody.
+    addAndMakeVisible(deleteBtn);
+    deleteBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff334155));
+    deleteBtn.onClick = [this]
+    {
+        presetChooser = std::make_unique<juce::FileChooser>(
+            currentLang == "DE" ? "Preset l\xc3\xb6schen" : "Delete preset",
+            PresetIO::presetsFolder(), "*.jass");
+        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        juce::Component::SafePointer<SynthyEditor> self (this);
+        presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
+        {
+            if (self == nullptr) return;
+            auto f = fc.getResult();
+            if (f == juce::File{}) return;
+            if (f.getParentDirectory() != PresetIO::presetsFolder())
+            {
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::InfoIcon,
+                    self->currentLang == "DE" ? "Ordner" : "Folder",
+                    (self->currentLang == "DE"
+                        ? juce::String("Bitte ein Preset aus dem Presets-Ordner w\xc3\xa4hlen.")
+                        : juce::String("Please choose a preset from the Presets folder.")));
+                return;
+            }
+            const auto name = f.getFileNameWithoutExtension();
+            juce::NativeMessageBox::showOkCancelBox(
+                juce::MessageBoxIconType::WarningIcon,
+                self->currentLang == "DE" ? "Preset l\xc3\xb6schen" : "Delete preset",
+                (self->currentLang == "DE"
+                    ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c in den Papierkorb verschieben?"
+                    : "Move \"" + name + "\" to the recycle bin?"),
+                nullptr,
+                juce::ModalCallbackFunction::create([self, f, name](int result)
+                {
+                    if (self == nullptr || result == 0) return;   // 0 = cancel
+                    if (! f.moveToTrash())
+                    {
+                        juce::NativeMessageBox::showMessageBoxAsync(
+                            juce::MessageBoxIconType::WarningIcon,
+                            self->currentLang == "DE" ? "L\xc3\xb6schen fehlgeschlagen" : "Delete failed",
+                            (self->currentLang == "DE"
+                                ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c konnte nicht gel\xc3\xb6scht werden."
+                                : "\"" + name + "\" could not be deleted."));
+                        return;
+                    }
+                    self->clearBankSlotsFor(name);   // no F-key may keep pointing at a gone file
+                }));
+        });
+    };
+
     addAndMakeVisible(randomBtn);
     randomBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff6d28d9));
     randomBtn.onClick = [this] { processor.randomize(); setPresetName("Random");
@@ -1034,13 +1089,46 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     }
 }
 
+// Remove every F-key assignment of this preset name — the bank stores names and re-resolves them
+// at trigger time, so a renamed or deleted file leaves a slot that can only ever error. Called by
+// the DELETE flow and by triggerPresetSlot when the resolve fails (maintainer 2026-08-18).
+void SynthyEditor::clearBankSlotsFor(const juce::String& name)
+{
+    bool changed = false;
+    for (size_t i = 0; i < presetSlots.size(); ++i)
+        if (presetSlots[i] == name)
+        {
+            presetSlots[i] = {};
+            if (presetBank) presetBank->setAssignment((int) i, {});
+            changed = true;
+        }
+    if (changed)
+        PresetIO::savePresetBanks(presetSlots);
+}
+
 // Preset quick-access bank: load the preset assigned to a slot (F-key tap / single click).
 void SynthyEditor::triggerPresetSlot(int slot)
 {
     if (slot < 0 || slot >= (int) presetSlots.size()) return;
     const auto name = presetSlots[(size_t) slot];
     if (name.isEmpty()) return;   // empty slot => nothing to load
-    loadPresetFile(PresetIO::presetsFolder().getChildFile(name + ".jass"));
+    const auto f = PresetIO::presetsFolder().getChildFile(name + ".jass");
+    if (! f.existsAsFile())
+    {
+        // The file behind this slot is gone (renamed or deleted on disk). Say so, then CLEAR the
+        // assignment — pressing the key again must not repeat the error (maintainer 2026-08-18).
+        juce::NativeMessageBox::showMessageBoxAsync(
+            juce::MessageBoxIconType::InfoIcon,
+            currentLang == "DE" ? "Preset fehlt" : "Preset missing",
+            (currentLang == "DE"
+                ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c gibt es nicht mehr \xe2\x80\x94 die Belegung von F"
+                      + juce::String(slot + 1) + " wird entfernt."
+                : "\"" + name + "\" no longer exists \xe2\x80\x94 clearing the F"
+                      + juce::String(slot + 1) + " assignment."));
+        clearBankSlotsFor(name);
+        return;
+    }
+    loadPresetFile(f);
 }
 
 // Preset quick-access bank: restore the FACTORY default (the four demo presets on F1..F4, rest
@@ -2267,14 +2355,15 @@ void SynthyEditor::resized()
     modulesBtn.setBounds(headerRow.removeFromRight(120).reduced(8, 17));
     // Help-language selector sits just left of the MODULES button (Story 6.1).
     langBox.setBounds(headerRow.removeFromRight(66).reduced(4, 20));
-    // Left cluster: the Save/Load/Random/Reset buttons AND the current-preset name belong
-    // together (the preset name is about what was loaded/saved). Buttons in a 2x2 block
-    // with "Current State" beside them.
-    auto leftGroup = headerRow.removeFromLeft(340);
-    auto leftBtns = leftGroup.removeFromLeft(150);
+    // Left cluster: the file buttons (SAVE/LOAD/DELETE on top, RANDOM/RESET below) AND the
+    // current-preset name belong together (the preset name is about what was loaded/saved).
+    // Three columns since DELETE joined; the block widened so no button got smaller.
+    auto leftGroup = headerRow.removeFromLeft(415);
+    auto leftBtns = leftGroup.removeFromLeft(225);
     auto row1 = leftBtns.removeFromTop(30);
-    saveBtn.setBounds(row1.removeFromLeft(row1.getWidth() / 2).reduced(3, 2));
-    loadBtn.setBounds(row1.reduced(3, 2));
+    saveBtn.setBounds(row1.removeFromLeft(75).reduced(3, 2));
+    loadBtn.setBounds(row1.removeFromLeft(75).reduced(3, 2));
+    deleteBtn.setBounds(row1.reduced(3, 2));
     auto row2 = leftBtns.removeFromTop(30);
     randomBtn.setBounds(row2.removeFromLeft(row2.getWidth() / 2).reduced(3, 2));
     resetBtn.setBounds(row2.reduced(3, 2));
