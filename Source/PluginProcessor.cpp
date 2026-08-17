@@ -1028,15 +1028,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // Preset-load latch (15.5): a stored latch must ALWAYS enter on the drums' downbeat.
             // The rising-edge logic below cannot see this case — a latch loaded over a still-
             // running one keeps playRoot high, so there is no edge. applySeqLatchRoot sets the
-            // flag; restart the figure at step 0, quantised against the drum clock resolved above.
-            if (seqRequantize.exchange(false) && playRoot >= 0)
-            {
-                stepSeq.releaseAll(midiMessages, 1);
-                stepSeq.reset();
-                if (perc.enabled)
-                    stepSeq.setStartDelay(perc.samplesToPatternStart());
+            // flag; the restart itself happens AFTER the chord filter below, because its note-off
+            // must land in `kept`: everything channel-1 in the RAW buffer is dropped there, and a
+            // swallowed note-off is a bass note that hangs forever (maintainer found it in
+            // minutes: "irgendwas wird nicht richtig abgeschaltet").
+            const bool requantize = seqRequantize.exchange(false) && playRoot >= 0;
+            if (requantize)
                 seqKeyWasHeld = true;   // edge consumed — the check below must not fire again
-            }
 
             // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
             // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
@@ -1053,6 +1051,15 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 if ((m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
                     continue;
                 kept.addEvent(m, meta.samplePosition);
+            }
+            if (requantize)
+            {
+                // Restart at step 0, quantised to the drum clock resolved above. The release goes
+                // into `kept` — the buffer the synth actually receives (see the comment up top).
+                stepSeq.releaseAll(kept, 1);
+                stepSeq.reset();
+                if (perc.enabled)
+                    stepSeq.setStartDelay(perc.samplesToPatternStart());
             }
             stepSeq.processBlock(buffer.getNumSamples(), kept, 1, playRoot >= 0);
             midiMessages.swapWith(kept);
