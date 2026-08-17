@@ -27,6 +27,7 @@ Essentially every continuous knob on every module is a target. Highlights:
 Choosing a MODULE (other than "Alle OSC") auto-enables it — and a per-OSC routing switches that oscillator on — so the routing is actually heard; clearing the row (MOD = Off) undoes an enable JASS made itself.
 
 - **AMT** — amount, bipolar: right adds, left inverts, centre (0) does nothing.
+- **QUANT** — snaps this row's pitch push to a scale (Chrom / Major / Minor / Penta). Off = smooth octaves (vibrato, drift). With S&H or Chaos on a FREQ target it turns steps into melodies. Acts only when the row targets FREQ; per row, so a smooth vibrato can run next to a quantized melody.
 
 Note: stepped parameters (VOICES, BITCRUSH BITS/RATE) modulate in whole steps, so they change audibly in stages rather than gliding.
 

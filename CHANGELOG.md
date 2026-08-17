@@ -11,6 +11,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **QUANT — a per-row scale mask in the MOD MATRIX.** Pitch modulation had one failure mode this
+  synth already paid to learn (story 14.1): continuous detune across notes reads as *out of tune*,
+  not as analog. Quantized jumps are a different animal — they are not detune, they are **notes**.
+  QUANT snaps a row's pitch contribution to a scale (Chromatic / Major / Minor / Pentatonic), so
+  S&H or Chaos on FREQ stops being random wobble and becomes a random-but-in-key melody over the
+  held note — the modular classic S&H → quantizer → VCO. It sits on the ROW, not on the target,
+  and snaps each row *before* the rows sum: a smooth vibrato row keeps gliding right next to a
+  quantized melody row. Off by default; existing presets are untouched. The MOD MATRIX takes the
+  full rack width for the extra combo — the whitespace the 30-column grid once "only gained" is
+  exactly what the fifth control now spends.
 - **CHAOS — a Lorenz attractor as a modulation source.** Deterministic chaos instead of
   randomness: the orbit never repeats, but it is not noise — it wanders with intent, which is
   exactly what a periodic LFO cannot do and a random generator overdoes. The module exposes
@@ -30,6 +40,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   burning the pitch envelope. One honest limit: the little modulation rings — and master-bus
   routings — are fed by a free-running display LFO that never sees a note-on, so a One-Shot
   ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
+
+### Changed
+- **RANDOM draws from the new material too.** A random patch can now pick the S&H/One-Shot
+  waves, route Chaos X/Y (which auto-enables CHAOS, so the routing is actually heard), and land
+  on a QUANT scale — S&H → FREQ → Major is exactly the kind of happy accident the button is for.
+  Random patches will *feel* different than before; that is the feature working, not a bug.
 
 ## [2026.08.7] – 2026-08-12
 

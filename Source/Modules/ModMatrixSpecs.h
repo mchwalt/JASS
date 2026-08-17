@@ -17,11 +17,10 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
-        // 28 of the 30 columns (Story 7.3). NOT full width - at 30 the module only gained
-        // whitespace - but not narrower either: its 8 slots make 56 content slots over 2 rows,
-        // i.e. 28 cells, and a cell must reach 62 px or ModuleFrame caps the knob to the cell.
-        // W24 gave 53 px cells and visibly undersized AMT knobs. The zone height is unchanged
-        // at any of these widths - MOD MATRIX is its zone's last module and owns its two rows.
+        // Size here is nominal — the editor hand-builds the MOD MATRIX body and its descriptor
+        // (PluginEditor.cpp) uses W30U7: full width since QUANT made it five controls per slot
+        // (24 cells per row; at W28 the combos would drop below ~52 px). The zone height is
+        // unchanged either way — MOD MATRIX is its zone's last module and owns its two rows.
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28H2;
 
         const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
@@ -46,6 +45,14 @@ namespace Modules
             // only the read-out gains a decimal.
             m.params.push_back ({ s + "Amount", k + "Amount", "AMT",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.5f });   // default +0.5: a freshly-routed slot modulates audibly (0 == off)
         }
+        // QUANT (LFO expansion) — appended AFTER the slot loop on purpose: within a spec, new
+        // params go at the END so the global APVTS param order stays append-only (old DAW state
+        // maps by index). Per slot, so one routing can be a quantized melody while another stays
+        // a smooth vibrato. Only pitch (FREQ) routings read it; default Off = behavior unchanged.
+        const juce::StringArray quant { "Off", "Chrom", "Major", "Minor", "Penta" };
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+            m.params.push_back ({ "modSlot" + juce::String (n) + "Quant", "Slot" + juce::String (n) + "Quant",
+                                  "QUANT", ParamSpec::Kind::Choice, {}, 0.0f, quant });
         return m;
     }
 }
