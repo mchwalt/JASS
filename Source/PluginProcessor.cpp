@@ -760,6 +760,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     compressor.prepare(sampleRate);
     prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
     for (auto& l : uiLfos) l.setSampleRate(sampleRate);
+    chaos.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     stepSeq.prepare(sampleRate);
     perc.prepare(sampleRate);   // 16.1: four SamplePlayers, configured once (their stretch engine allocates)
@@ -814,6 +815,25 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (auto pos = ph->getPosition())
             if (auto hostBpm = pos->getBpm())
                 syncBpm = *hostBpm;
+
+    // CHAOS: advance the one global attractor and publish this block's snapshot. Published as 0
+    // when the module is off (a routed-but-silent source, same rule as the LFOs). Advanced BEFORE
+    // the global offsets below so bus targets read the current block, not the previous one.
+    {
+        using namespace Parameters;
+        if (*apvts.getRawParameterValue(ID::chaosOn) > 0.5f)
+        {
+            chaos.setRate(*apvts.getRawParameterValue(ID::chaosRate));
+            chaos.advance(buffer.getNumSamples());
+            chaosDisplay[0].store(chaos.outX());
+            chaosDisplay[1].store(chaos.outY());
+        }
+        else
+        {
+            chaosDisplay[0].store(0.0f);
+            chaosDisplay[1].store(0.0f);
+        }
+    }
 
     // ── Global (master-bus) modulation offsets ──────────────────────────────────────────────
     // STEREO / MASTER / COMPRESSOR run on the SUMMED mix (further below), not per voice, so their
