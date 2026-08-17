@@ -9,6 +9,7 @@ Die LFOs haben kein eigenes eingebautes Ziel — sie sind *reine* Matrix-Quellen
 - **LFO 1–4** — zyklische Bewegung (Vibrato / Wah). Jeder braucht sein eigenes **LFO**-Modul an (LFO 2–4 sind standardmäßig ausgeblendet — über MODULES einblenden).
 - **Envelope** — die ADSR-Kontur. Braucht das **ENVELOPE**-Modul an und eine klingende Note. Ideal als Filter-Hüllkurve: Envelope → FILTER · CUTOFF.
 - **Velocity** — wie fest du spielst (fest pro Note). Gehört keinem Modul — einfach unterschiedlich stark spielen.
+- **Chaos X / Chaos Y** — die Lorenz-Bahn des CHAOS-Moduls: nie wiederholend, nie zufällig. X und Y reiten dieselbe Bahn — zwei Routings driften gemeinsam, aber nicht gleich. Braucht **CHAOS** an; läuft frei, seine Ringe bewegen sich also auch ohne Note.
 
 ## Ziel — erst MOD, dann PARAM
 

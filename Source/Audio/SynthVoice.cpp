@@ -361,6 +361,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         srcVals[(size_t) ModSource::Envelope] = envSource;
         srcVals[(size_t) ModSource::Velocity] = noteVelocity;
         for (int i = 0; i < kNumLFOs; ++i) srcVals[(size_t) kLfoSourceIdx[i]] = lfoVals[i];
+        srcVals[(size_t) ModSource::ChaosX] = chaosSrc[0];   // global attractor, block-constant
+        srcVals[(size_t) ModSource::ChaosY] = chaosSrc[1];   // (0 when CHAOS is off)
 
         // Sum the explicit matrix slots into the per-target offset + the per-OSC offsets
         // (LFOs are just sources now).

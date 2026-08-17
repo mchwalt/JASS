@@ -131,6 +131,7 @@ public:
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
     float getLfoDisplayValue(int i) const { return lfoDisplayValues[i].load(); }   // per-LFO (for the rings)
+    float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
     // persisted into the LiveState file so it survives a restart. Touched only

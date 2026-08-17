@@ -24,7 +24,7 @@ namespace Modules
         // at any of these widths - MOD MATRIX is its zone's last module and owns its two rows.
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28H2;
 
-        const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
+        const juce::StringArray src { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
         juce::StringArray mod;   // MOD labels — generated from the single source (ModMatrixCatalog.h)
         for (int i = 0; i < ModDest::kNumModules; ++i) mod.add (ModDest::moduleLabel (i));
 

@@ -13,7 +13,7 @@
 // Both enums are APPEND-ONLY: their integer indices are persisted in the .synthy preset
 // and in DAW state, so new entries go at the END and existing ones never move.
 
-enum class ModSource { LFO1, Envelope, Velocity, LFO2, LFO3, LFO4 };   // append-only (Macros, Voice-Random … later)
+enum class ModSource { LFO1, Envelope, Velocity, LFO2, LFO3, LFO4, ChaosX, ChaosY };   // append-only (Macros, Voice-Random … later)
 
 // One routing slot as read per block from the APVTS params into each voice.
 // target is an LFOTarget index (0 = Off = slot inactive); source is a ModSource index.
@@ -25,7 +25,7 @@ struct ModSlot { int source = 0; int target = 0; int oscIndex = -1; float amount
 namespace ModMatrixConfig
 {
     inline constexpr int kNumSlots   = 8;   // fixed routing slots (append-only; grow here)
-    inline constexpr int kNumSources = 6;   // ModSource count (LFO1, Envelope, Velocity, LFO2, LFO3, LFO4)
+    inline constexpr int kNumSources = 8;   // ModSource count (LFO1, Envelope, Velocity, LFO2..4, ChaosX, ChaosY)
     inline constexpr int kNumTargets = ModTargets::kCount;   // single source: ModTargets.h (incl. Off at 0)
 }
 
