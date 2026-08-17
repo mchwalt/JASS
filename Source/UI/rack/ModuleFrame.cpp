@@ -825,6 +825,15 @@ namespace rack
         if (off != dimmed) { dimmed = off; repaint(); }
     }
 
+    void ModuleFrame::refreshNamedReadouts()
+    {
+        // Only sliders that carry a textFromValue read-out; everyone else keeps JUCE's own text.
+        for (auto& cell : cells)
+            if (auto* s = dynamic_cast<SynthySlider*> (cell.widget))
+                if (s->textFromValueFunction)
+                    s->updateText();
+    }
+
     void ModuleFrame::updateCondKnobs()
     {
         // A knob that does not apply in the current mode is switched off rather than hidden: the
