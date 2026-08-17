@@ -326,6 +326,11 @@ namespace rack
                 // default; descriptors may widen (SAMPLER SET shows user-named sets in full).
                 cells.push_back ({ box, makeCaption (ownedCaptions, c->label), juce::jmax (1, c->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
+
+                // Mode-dependent combo (MOD MATRIX QUANT outside FREQ routings): same polling
+                // path as the mode-dependent knobs — disabled + dimmed, layout untouched.
+                if (c->activeWhen)
+                    condKnobs.push_back ({ box, cells.back().caption, c->activeWhen });
             }
             else if (auto* t = std::get_if<Toggle> (&el))
             {
@@ -832,10 +837,10 @@ namespace rack
             if (ck.active == want) continue;
             ck.active = want;
             const bool on = (want == 1);
-            if (ck.slider != nullptr)
+            if (ck.widget != nullptr)
             {
-                ck.slider->setEnabled (on);
-                ck.slider->setAlpha (on ? 1.0f : 0.35f);
+                ck.widget->setEnabled (on);
+                ck.widget->setAlpha (on ? 1.0f : 0.35f);
             }
             if (ck.caption != nullptr)
                 ck.caption->setAlpha (on ? 1.0f : 0.35f);

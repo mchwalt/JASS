@@ -2142,9 +2142,17 @@ void SynthyEditor::buildRack()
             // the spec's Choice strings (attachment maps by index; kept short to fit the cell).
             // Placed BEFORE AMT: the knob stays the routing's LAST control, so the green activity
             // dot keeps anchoring beside AMT (paintOverChildren anchors to the group's final cell)
-            // and the four combos read as one cluster.
-            d.body.push_back (C (P::modSlotQuant (n), "QUANT",
-                                 juce::StringArray { "Off", "Chrom", "Major", "Minor", "Penta" }));
+            // and the four combos read as one cluster. The mask only acts on FREQ routings, so on
+            // any other target the combo is greyed via activeWhen (maintainer, 2026-08-18).
+            Combo quantCombo = C (P::modSlotQuant (n), "QUANT",
+                                  juce::StringArray { "Off", "Chrom", "Major", "Minor", "Penta" });
+            auto* qMod = apvts.getRawParameterValue (modId);
+            auto* qPar = apvts.getRawParameterValue (parId);
+            quantCombo.activeWhen = [qMod, qPar]
+            {
+                return ModDest::targetOf ((int) qMod->load(), (int) qPar->load()) == LFOTarget::Frequency;
+            };
+            d.body.push_back (quantCombo);
             Knob amt = K (P::modSlotAmount (n), "AMT");
             amt.slots = 2;
             d.body.push_back (amt);
