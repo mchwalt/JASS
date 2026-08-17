@@ -41,6 +41,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   routings — are fed by a free-running display LFO that never sees a note-on, so a One-Shot
   ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
 
+### Fixed
+- **A loaded sequencer patch now always enters on the drums' downbeat.** Loading a preset with a
+  stored STEP SEQ latch sometimes played the bass permanently off the PERC beat. Two causes, one
+  fix: the quantised entry read the drum transport state *before* that block had refreshed it
+  (first block after a load saw the previous patch's drums), and a latch loaded over a
+  still-running one produced no silence-to-figure edge at all, so nothing re-quantised. The drum
+  clock is now resolved before the sequencer block, and a loaded latch explicitly restarts the
+  figure at step 0, quantised to the pattern's next bar — the drums are the clock; the bass joins
+  them, not the other way round.
+
 ### Changed
 - **STEP SEQ shows notes, not offsets.** A step's value box used to read "+7" — a number you had
   to resolve in your head while the preview already played the actual pitch. The box now shows
