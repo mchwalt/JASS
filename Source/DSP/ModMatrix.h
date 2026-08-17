@@ -2,6 +2,7 @@
 #include "LFO.h"          // targets ARE LFOTarget values (0 = Off .. 7); reused as the vocabulary
 #include <array>
 #include <algorithm>
+#include <cmath>          // quantizeSemis: floor/round/abs
 
 // ── Modulation Matrix (Story 8.1 / Epic 8) ──────────────────────────────────
 // Decouples modulation SOURCES from TARGETS. Old modulation was hard-wired: one LFO
@@ -19,8 +20,10 @@ enum class ModSource { LFO1, Envelope, Velocity, LFO2, LFO3, LFO4, ChaosX, Chaos
 // target is an LFOTarget index (0 = Off = slot inactive); source is a ModSource index.
 // oscIndex selects a single oscillator (0..2) for the per-oscillator targets
 // (FREQ/AMP/DETUNE); -1 = global / not osc-scoped ("Alle OSC" and every non-OSC target).
-// Plain ints/floats only — filled per block, read per sample on the audio thread (RT-safe).
-struct ModSlot { int source = 0; int target = 0; int oscIndex = -1; float amount = 0.0f; };
+// quant is the per-slot QUANT choice (0 = Off, then Chrom/Major/Minor/Penta) — only pitch
+// (Frequency) routings read it. Plain ints/floats only — filled per block, read per sample
+// on the audio thread (RT-safe).
+struct ModSlot { int source = 0; int target = 0; int oscIndex = -1; float amount = 0.0f; int quant = 0; };
 
 namespace ModMatrixConfig
 {
@@ -49,6 +52,29 @@ struct OscModOffsets
     void clear() noexcept { for (int i = 0; i < 3; ++i) { pitch[i] = amp[i] = detune[i] = feedback[i] = voices[i] = pan[i] = 0.0; } }
 };
 
+// QUANT scale masks: snap a semitone value to the nearest degree of the chosen scale.
+// quant: 1 = Chromatic (nearest semitone), 2 = Major, 3 = Minor, 4 = Pentatonic (minor).
+// Pure and allocation-free; negative values decompose correctly via floor. The octave-wrapped
+// first degree competes too, so 11.6 semitones snaps to 12, not down to 11.
+inline double quantizeSemis (double semis, int quant) noexcept
+{
+    if (quant == 1)
+        return std::round (semis);
+    static constexpr int kMajor[] = { 0, 2, 4, 5, 7, 9, 11 };
+    static constexpr int kMinor[] = { 0, 2, 3, 5, 7, 8, 10 };
+    static constexpr int kPenta[] = { 0, 3, 5, 7, 10 };
+    const int* deg = kMajor; int n = 7;
+    if (quant == 3)      { deg = kMinor; n = 7; }
+    else if (quant == 4) { deg = kPenta; n = 5; }
+    const double oct = std::floor (semis / 12.0);
+    const double r   = semis - oct * 12.0;   // 0..12
+    double best = (double) deg[0], bestDist = std::abs (r - best);
+    for (int i = 1; i < n; ++i)
+        if (const double d = std::abs (r - (double) deg[i]); d < bestDist) { best = (double) deg[i]; bestDist = d; }
+    if (std::abs (r - (12.0 + (double) deg[0])) < bestDist) best = 12.0 + (double) deg[0];
+    return oct * 12.0 + best;
+}
+
 inline void modMatrixAccumulate (const ModSlot* slots, bool matrixOn,
                                  const std::array<float, ModMatrixConfig::kNumSources>& sourceVals,
                                  std::array<double, ModMatrixConfig::kNumTargets>& offsetOut,
@@ -64,7 +90,15 @@ inline void modMatrixAccumulate (const ModSlot* slots, bool matrixOn,
             if (sl.target > 0 && sl.target < ModMatrixConfig::kNumTargets && sl.amount != 0.0f)
             {
                 const int src = std::clamp (sl.source, 0, ModMatrixConfig::kNumSources - 1);
-                const double v = (double) sl.amount * (double) sourceVals[(size_t) src];
+                double v = (double) sl.amount * (double) sourceVals[(size_t) src];
+
+                // QUANT: pitch routings snap to scale degrees — a stepped source (S&H, Chaos)
+                // becomes a melody instead of continuous detune. FREQ contributions are in
+                // OCTAVES (AMT 1 = 1 octave), so semitone space is simply v*12. Snapped HERE,
+                // per slot BEFORE the sum: two stacked quantized slots stay honest, and an
+                // un-quantized vibrato slot on the same target keeps gliding untouched.
+                if (sl.quant > 0 && sl.target == (int) LFOTarget::Frequency)
+                    v = quantizeSemis (v * 12.0, sl.quant) / 12.0;
 
                 if (sl.oscIndex >= 0 && sl.oscIndex < 3)   // per-oscillator: only this OSC moves
                 {

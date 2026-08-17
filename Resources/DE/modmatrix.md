@@ -27,6 +27,7 @@ Praktisch jeder kontinuierliche Knopf jedes Moduls ist ein Ziel. Highlights:
 Ein gewähltes MODUL (außer „Alle OSC") wird automatisch aktiviert — und ein per-OSC-Routing schaltet genau diesen Oszillator an — damit das Routing hörbar ist; die Zeile löschen (MOD = Off) nimmt ein von JASS selbst gesetztes Aktivieren wieder zurück.
 
 - **AMT** — Stärke, bipolar: rechts addiert, links invertiert, Mitte (0) bewirkt nichts.
+- **QUANT** — rastet den Pitch-Anteil dieser Zeile auf eine Skala (Chrom / Major / Minor / Penta). Off = gleitende Oktaven (Vibrato, Drift). Mit S&H oder Chaos auf einem FREQ-Ziel werden aus Stufen Melodien. Wirkt nur, wenn die Zeile FREQ trifft; pro Zeile — ein glattes Vibrato kann neben einer gerasterten Melodie laufen.
 
 Hinweis: gestufte Parameter (VOICES, BITCRUSH BITS/RATE) modulieren in ganzen Schritten — sie ändern sich hörbar stufenweise statt gleitend.
 

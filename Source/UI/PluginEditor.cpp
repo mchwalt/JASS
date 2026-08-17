@@ -2099,14 +2099,14 @@ void SynthyEditor::buildRack()
     // ComboDependency (clamp PARAM if out of range, then re-list) where apvts is available.
     {
         ModuleDescriptor d;
-        // 24 of the 30 columns (Story 7.3, user 2026-08-09: "könnte ein Fünftel schmaler sein"):
-        // the 8 slots were laid out for a 24-column rack and only gained whitespace at 30. The
-        // zone height does not change either way — MOD MATRIX is the zone's last module and owns
-        // its two rows regardless of how wide it is.
+        // Full rack width since QUANT: a fifth control per slot makes 24 cells per row, and the
+        // two columns W28 saved would push the combos below ~52 px. W30 keeps them at ~55 —
+        // still below the 62 px knob guideline, but the only knob (AMT) spans 2 cells and is
+        // capped by the row height anyway, so only combo text pays (the popup shows full names).
         // Height: 7 quarter units = 207 px instead of 238 (Story 7.4). Two rows at the standard knob
         // size, captions and value boxes intact — the maintainer's call: "Beschriftungen werden NICHT
-        // geopfert". (176 px is reachable, but only by dropping the 32 repeated SRC/MOD/PARAM/AMT.)
-        d.sizeClass = SizeClass::W28U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
+        // geopfert". (176 px is reachable, but only by dropping the repeated captions.)
+        d.sizeClass = SizeClass::W30U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 
@@ -2140,6 +2140,11 @@ void SynthyEditor::buildRack()
             Knob amt = K (P::modSlotAmount (n), "AMT");
             amt.slots = 2;
             d.body.push_back (amt);
+            // QUANT: per-slot scale mask for pitch routings (Off/Chrom/Major/Minor/Penta) — a
+            // stepped source (S&H, Chaos) on FREQ becomes a melody instead of detune. Items match
+            // the spec's Choice strings (attachment maps by index; kept short to fit the cell).
+            d.body.push_back (C (P::modSlotQuant (n), "QUANT",
+                                 juce::StringArray { "Off", "Chrom", "Major", "Minor", "Penta" }));
             // MODULE changed → if PARAM is now beyond the new module's param count, snap it back to 0.
             d.comboDeps.push_back (ComboDependency { modId, parId,
                 [this, parId] (int newModule)
