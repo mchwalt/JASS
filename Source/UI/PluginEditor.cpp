@@ -2037,6 +2037,17 @@ void SynthyEditor::buildRack()
                 static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::samplerSet)));
             return s == nullptr || ! s->isMapped();
         };
+        // ROOT is a key, so it reads as one: the box says "C4", the hover adds the MIDI number
+        // ("C4 · 60") — same convention as STEP SEQ and PERC NOTE (maintainer 2026-08-18).
+        // The stored value stays the note number; typing a number into the box still works.
+        rootKnob.textFromValue = [](double v)
+        { return juce::MidiMessage::getMidiNoteName(juce::roundToInt(v), true, true, 4); };
+        rootKnob.tooltipFromValue = [](double v)
+        {
+            const int note = juce::roundToInt(v);
+            return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
+                 + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape (BOM-less file + MSVC = mojibake)
+        };
         d.body = {
             setCombo,
             FileAction{ "LOAD", importSource,
@@ -2117,6 +2128,14 @@ void SynthyEditor::buildRack()
                         const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4);
                     };
+                    // Hover adds the MIDI number the box has no room for ("E1 · 40") — for
+                    // transcribing from templates that count in numbers (maintainer 2026-08-18).
+                    k->tooltipFromValue = [this](double v)
+                    {
+                        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
+                        return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
+                             + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape
+                    };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
@@ -2164,8 +2183,9 @@ void SynthyEditor::buildRack()
         };
         kitCombo.indexIsValue = true;   // ... with itemValues supplying the value per position
         d.body.insert(d.body.begin() + 1, kitCombo);
-        // NOTE reads out the instrument, not the number (decision B, 2026-08-10): the zone's own
-        // name if the kit brought one, else the General MIDI drum map, else the note name.
+        // NOTE reads out the instrument (decision B, 2026-08-10): the zone's own name if the kit
+        // brought one, else the General MIDI drum map, else the note name. The MIDI number rides
+        // along ("Kick · 36", 2026-08-18) so a GM drum-map template transfers without guessing.
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
                 if (k->paramId.startsWith("percNote"))
@@ -2173,7 +2193,7 @@ void SynthyEditor::buildRack()
                     {
                         const auto* kit = SampleBankStore::instance().getSet(
                             static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
-                        return PercNames::forNote(kit, (int) v);
+                        return PercNames::forNote(kit, (int) v) + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String((int) v);   // "·" as UTF-8 escape
                     };
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));
