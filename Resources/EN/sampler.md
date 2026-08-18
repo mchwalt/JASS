@@ -13,7 +13,7 @@ filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
   a soft hit picks the soft recording, a hard hit the hard one (the piano packs ship four
   layers per key), and inside each layer the gain follows your touch (`amp_veltrack`, on by
   default for .sfz sets). Folder and single-sample sets stay velocity-neutral — route
-  Velocity → LEVEL in the mod matrix if you want them dynamic.
+  Velocity → AMP in the mod matrix if you want them dynamic.
 - **ROOT** — the key at which a **single** recording plays at its original speed; every other key
   transposes it, tape-style (formants shift with pitch: usable range is roughly ±1 octave — the
   nature of single-sample playback, not a defect). For multisample sets each zone brings its own
