@@ -22,7 +22,7 @@ public:
     // 0 = pure waveform; rising values morph a sine toward a saw and, near the top,
     // into inharmonic/chaotic timbres. See Oscillator::nextSample.
     void setFeedback(double fb) { feedbackAmount = std::clamp(fb, 0.0, 1.0); }
-    void reset() { phases.fill(0.0); lastRaw = 0.0; }
+    void reset() { phases.fill(0.0); lastRaw = 0.0; prevRaw = 0.0; }
 
     bool isEnabled() const { return enabled; }
     double getFrequency() const { return frequency; }
@@ -47,4 +47,5 @@ private:
     WaveformType waveform = WaveformType::Sine;
     double feedbackAmount = 0.0;   // Self-FM depth (0..1); 0 = off
     double lastRaw = 0.0;          // previous pre-gain output, fed back into the phase
+    double prevRaw = 0.0;          // output before that — averaged with lastRaw (DX-style damping)
 };

@@ -18,7 +18,7 @@
 
 namespace ModDest
 {
-    inline constexpr int kMaxParams = 6;   // most params any one module exposes (OSC: FREQ/AMP/DETUNE/FB/VOICES/PAN)
+    inline constexpr int kMaxParams = 7;   // most params any one module exposes (WAVETABLE: AMP/DETUNE/FREQ/POS/VOICES/PAN/FB)
 
     struct Param  { const char* label; LFOTarget target; };
     struct Module
@@ -51,9 +51,9 @@ namespace ModDest
         { "OSC 3",      "osc3On",        2, { { "AMP",    LFOTarget::Amplitude }, { "DETUNE", LFOTarget::OscDetune }, { "FB", LFOTarget::OscFeedback }, { "FREQ", LFOTarget::Frequency }, { "VOICES", LFOTarget::OscVoices }, { "PAN", LFOTarget::OscPan } }, 6 },
         { "PHASER",     "phaserOn",     -1, { { "DEPTH",  LFOTarget::PhaserDepth }, { "FB", LFOTarget::PhaserFeedback }, { "MIX", LFOTarget::PhaserMix }, { "RATE", LFOTarget::PhaserRate } }, 4 },
         { "REVERB",     "reverbOn",     -1, { { "DAMP",   LFOTarget::ReverbDamp }, { "MIX", LFOTarget::ReverbMix }, { "ROOM", LFOTarget::ReverbRoom } }, 3 },
-        { "SUB",        "subOn",        -1, { { "LEVEL",  LFOTarget::SubLevel }, { "PAN", LFOTarget::SubPan } }, 2 },
+        { "SUB",        "subOn",        -1, { { "LEVEL",  LFOTarget::SubLevel }, { "PAN", LFOTarget::SubPan }, { "FB", LFOTarget::SubFeedback } }, 3 },
         { "WAVEFOLD",   "wavefoldOn",   -1, { { "DRIVE",  LFOTarget::WavefolderDrive }, { "MIX", LFOTarget::WavefolderMix }, { "SYM", LFOTarget::WavefolderSym } }, 3 },
-        { "WAVETABLE",  "wavetableOn",  -1, { { "AMP",    LFOTarget::WavetableAmp }, { "DETUNE", LFOTarget::WavetableDetune }, { "FREQ", LFOTarget::WavetableFreq }, { "POS", LFOTarget::WavetablePosition }, { "VOICES", LFOTarget::WavetableVoices }, { "PAN", LFOTarget::WavetablePan } }, 6 },
+        { "WAVETABLE",  "wavetableOn",  -1, { { "AMP",    LFOTarget::WavetableAmp }, { "DETUNE", LFOTarget::WavetableDetune }, { "FREQ", LFOTarget::WavetableFreq }, { "POS", LFOTarget::WavetablePosition }, { "VOICES", LFOTarget::WavetableVoices }, { "PAN", LFOTarget::WavetablePan }, { "FB", LFOTarget::WavetableFeedback } }, 7 },
         // APPENDED (2026-07-26): previously-missing modules. They go at the END so the persisted MOD
         // combo index of every module above is unchanged (no preset/DAW migration). The combo is thus
         // no longer strictly A→Z for these six — the append-only contract wins over display ordering.

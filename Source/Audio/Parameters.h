@@ -173,6 +173,7 @@ namespace Parameters
         constexpr const char* subOctave = "subOctave";
         constexpr const char* subLevel  = "subLevel";
         constexpr const char* subPan    = "subPan";         // Epic 10: stereo placement
+        constexpr const char* subFeedback = "subFeedback";  // Self-FM depth (append-only)
 
         // Delay
         constexpr const char* delayOn       = "delayOn";
@@ -229,6 +230,7 @@ namespace Parameters
         constexpr const char* wavetableUniVoices = "wavetableUniVoices";
         constexpr const char* wavetableUniDetune = "wavetableUniDetune";
         constexpr const char* wavetablePan       = "wavetablePan";   // Epic 10: stereo placement
+        constexpr const char* wavetableFeedback  = "wavetableFeedback";   // Self-FM depth (append-only)
 
         // Master
         constexpr const char* masterVol = "masterVol";
@@ -507,11 +509,13 @@ namespace Parameters
         wavetable.setAmplitude(*apvts.getRawParameterValue(ID::wavetableAmp));
         wavetable.setUnisonCount(static_cast<int>(*apvts.getRawParameterValue(ID::wavetableUniVoices)));
         wavetable.setDetuneAmount(*apvts.getRawParameterValue(ID::wavetableUniDetune) * 100.0);
+        wavetable.setFeedback(*apvts.getRawParameterValue(ID::wavetableFeedback));
 
         subOsc.setEnabled(*apvts.getRawParameterValue(ID::subOn) > 0.5f);
         subOsc.setWaveform(static_cast<int>(*apvts.getRawParameterValue(ID::subWave)) == 0
                                ? WaveformType::Sine : WaveformType::Square);
         subOsc.setAmplitude(*apvts.getRawParameterValue(ID::subLevel));
+        subOsc.setFeedback(*apvts.getRawParameterValue(ID::subFeedback));
         // Choice 0 -> -1 octave, 1 -> -2 octaves
         subOctave = -(static_cast<int>(*apvts.getRawParameterValue(ID::subOctave)) + 1);
     }
