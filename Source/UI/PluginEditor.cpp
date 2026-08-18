@@ -2046,7 +2046,7 @@ void SynthyEditor::buildRack()
         {
             const int note = juce::roundToInt(v);
             return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
-                 + juce::String(" · ") + juce::String(note);
+                 + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape (BOM-less file + MSVC = mojibake)
         };
         d.body = {
             setCombo,
@@ -2134,7 +2134,7 @@ void SynthyEditor::buildRack()
                     {
                         const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
-                             + juce::String(" · ") + juce::String(note);
+                             + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape
                     };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
@@ -2193,7 +2193,7 @@ void SynthyEditor::buildRack()
                     {
                         const auto* kit = SampleBankStore::instance().getSet(
                             static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
-                        return PercNames::forNote(kit, (int) v) + juce::String(" · ") + juce::String((int) v);
+                        return PercNames::forNote(kit, (int) v) + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String((int) v);   // "·" as UTF-8 escape
                     };
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));

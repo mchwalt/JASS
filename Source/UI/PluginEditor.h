@@ -79,8 +79,10 @@ public:
         juce::MidiKeyboardComponent::paint (g);
         if (hoverNote < 0)
             return;
+        // Separator as an explicit UTF-8 escape: a bare "·" literal is non-ASCII, and MSVC
+        // reads a BOM-less file as ANSI — the two UTF-8 bytes then render as mojibake.
         const auto text = juce::MidiMessage::getMidiNoteName (hoverNote, true, true, 4)   // 60 = C4, as everywhere in JASS
-                        + juce::String (" · ") + juce::String (hoverNote);
+                        + juce::String::fromUTF8 (" \xc2\xb7 ") + juce::String (hoverNote);
         const auto box = getLocalBounds().toFloat().removeFromTop (26.0f).removeFromRight (130.0f).reduced (2.0f);
         g.setColour (juce::Colours::black.withAlpha (0.75f));
         g.fillRoundedRectangle (box, 4.0f);
