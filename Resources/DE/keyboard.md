@@ -1,5 +1,7 @@
 Die Bildschirm-Klaviatur zum Spielen von Noten per Maus oder Computer-Tastatur.
 
+**88 Tasten, A0–C8** — der volle Klavierumfang, gleiches Schema wie ein Flügel oder ein 88er-Digitalpiano. MIDI-Eingang ist davon nicht begrenzt: Noten außerhalb des sichtbaren Bereichs klingen trotzdem.
+
 Blende dieses Modul aus (über das **MODULES**-Menü oder das Customization-Panel), wenn du über eine externe MIDI-Tastatur spielst — es beeinflusst nie den Klang, nur die Anzeige.
 
 **Computer-Tastatur**
