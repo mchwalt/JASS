@@ -32,7 +32,7 @@
     "Enabled": false,
     "Waveform": "Sine",
     "Octave": "-1 Oct",
-    "Level": 0.5,
+    "Amp": 0.5,
     "Pan": 0.0
   },
   "Noise": {
@@ -256,7 +256,7 @@
     "Start": 0.0,
     "End": 1.0,
     "Mode": "Loop",
-    "Level": 0.5,
+    "Amp": 0.5,
     "Pan": 0.350000023841858,
     "Speed": 1.0,
     "File": "CH_01"

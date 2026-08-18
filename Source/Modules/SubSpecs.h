@@ -20,11 +20,12 @@ namespace Modules
             { "subOn",     "Enabled",  "",      ParamSpec::Kind::Bool },
             { "subWave",   "Waveform", "WAVE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Square" } },
             { "subOctave", "Octave",   "",      ParamSpec::Kind::Choice, {}, 0.0f, { "-1 Oct", "-2 Oct" } },
-            { "subLevel",  "Level",    "LEVEL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::SubLevel },
-            { "subPan",    "Pan",      "PAN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::SubPan },   // Epic 10: stereo placement + auto-pan target
             { "subFeedback","Feedback","FB",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f, {}, {}, LFOTarget::SubFeedback },   // Self-FM depth, same scale as the OSC FB knob
+            { "subLevel",  "Amp",      "AMP",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::SubLevel },   // renamed from Level/LEVEL (generator standard); APVTS id stays subLevel
+            { "subPan",    "Pan",      "PAN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::SubPan },   // Epic 10: stereo placement + auto-pan target. AMP·PAN grouped last (rack-wide convention)
         };
         m.params[2].showInBody = false;   // subOctave: APVTS param without a rack control (as today)
+        m.params[4].legacyPersistKey = "Level";   // subLevel: pre-2026-08 presets store Sub.Level; still read
         return m;
     }
 }
