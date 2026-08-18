@@ -2164,8 +2164,9 @@ void SynthyEditor::buildRack()
         };
         kitCombo.indexIsValue = true;   // ... with itemValues supplying the value per position
         d.body.insert(d.body.begin() + 1, kitCombo);
-        // NOTE reads out the instrument, not the number (decision B, 2026-08-10): the zone's own
-        // name if the kit brought one, else the General MIDI drum map, else the note name.
+        // NOTE reads out the instrument (decision B, 2026-08-10): the zone's own name if the kit
+        // brought one, else the General MIDI drum map, else the note name. The MIDI number rides
+        // along ("Kick · 36", 2026-08-18) so a GM drum-map template transfers without guessing.
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
                 if (k->paramId.startsWith("percNote"))
@@ -2173,7 +2174,7 @@ void SynthyEditor::buildRack()
                     {
                         const auto* kit = SampleBankStore::instance().getSet(
                             static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
-                        return PercNames::forNote(kit, (int) v);
+                        return PercNames::forNote(kit, (int) v) + juce::String(" · ") + juce::String((int) v);
                     };
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));

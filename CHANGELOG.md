@@ -70,6 +70,17 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   figure at step 0, quantised to the pattern's next bar — the drums are the clock; the bass joins
   them, not the other way round.
 
+### Added
+- **The keyboard names the key under the mouse.** A fixed readout in the keyboard's top-right
+  corner shows the hovered key as name and MIDI number ("A3 · 57") — a fixed place to look,
+  deliberately not a tooltip chasing the cursor. It exists for transcribing: sheet music names
+  notes, GM drum tables and SAMPLER ROOT count numbers, and until now only the C keys carried
+  a label, so everything in between was counted off by eye.
+- **PERC's NOTE knob shows the MIDI number beside the instrument** ("Kick · 36"). Drum
+  transcriptions and the GM map speak in numbers; the knob said only "Kick", so transferring
+  a template meant guessing which name was which number. The stored value is unchanged —
+  the number was always there, now it is visible.
+
 ### Changed
 - **AMP and PAN sit together now, at the end of every generator.** OSC 1–3, WAVETABLE, SUB
   and KARPLUS scattered the two across the row (OSC read WAVE·FREQ·AMP·…·PAN); SAMPLER,
