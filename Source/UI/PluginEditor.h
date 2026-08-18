@@ -81,11 +81,11 @@ public:
             return;
         const auto text = juce::MidiMessage::getMidiNoteName (hoverNote, true, true, 4)   // 60 = C4, as everywhere in JASS
                         + juce::String (" · ") + juce::String (hoverNote);
-        const auto box = getLocalBounds().toFloat().removeFromTop (16.0f).removeFromRight (74.0f).reduced (2.0f);
-        g.setColour (juce::Colours::black.withAlpha (0.65f));
-        g.fillRoundedRectangle (box, 3.0f);
+        const auto box = getLocalBounds().toFloat().removeFromTop (26.0f).removeFromRight (130.0f).reduced (2.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.75f));
+        g.fillRoundedRectangle (box, 4.0f);
         g.setColour (juce::Colours::white);
-        g.setFont (juce::FontOptions (11.0f));
+        g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
         g.drawText (text, box, juce::Justification::centred);
     }
 
@@ -286,6 +286,10 @@ private:
     void releaseComputerKeys();                    // note-off everything we started
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
+
+    // Without a TooltipWindow instance JUCE shows NO tooltips at all — every setTooltip in the
+    // rack (module reset/info buttons, the full-text knob read-outs) was silent until this line.
+    juce::TooltipWindow tooltipWindow { this, 400 };
     int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
 
     // Preview of a STEP SEQ step while it is edited (Story 15.3). The step's value is an offset in

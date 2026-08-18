@@ -2037,6 +2037,17 @@ void SynthyEditor::buildRack()
                 static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::samplerSet)));
             return s == nullptr || ! s->isMapped();
         };
+        // ROOT is a key, so it reads as one: the box says "C4", the hover adds the MIDI number
+        // ("C4 · 60") — same convention as STEP SEQ and PERC NOTE (maintainer 2026-08-18).
+        // The stored value stays the note number; typing a number into the box still works.
+        rootKnob.textFromValue = [](double v)
+        { return juce::MidiMessage::getMidiNoteName(juce::roundToInt(v), true, true, 4); };
+        rootKnob.tooltipFromValue = [](double v)
+        {
+            const int note = juce::roundToInt(v);
+            return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
+                 + juce::String(" · ") + juce::String(note);
+        };
         d.body = {
             setCombo,
             FileAction{ "LOAD", importSource,
@@ -2116,6 +2127,14 @@ void SynthyEditor::buildRack()
                     {
                         const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4);
+                    };
+                    // Hover adds the MIDI number the box has no room for ("E1 · 40") — for
+                    // transcribing from templates that count in numbers (maintainer 2026-08-18).
+                    k->tooltipFromValue = [this](double v)
+                    {
+                        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
+                        return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
+                             + juce::String(" · ") + juce::String(note);
                     };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that

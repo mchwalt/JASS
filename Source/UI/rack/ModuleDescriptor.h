@@ -126,6 +126,13 @@ namespace rack
         // goes to waste. MOD MATRIX's AMT claims 2 so its cell is wide enough for the knob to reach
         // the height its row actually offers (measured: 46 px → 65 px, Story 7.5).
         int slots = 1;
+
+        // Optional hover text override. Default (unset): a knob with textFromValue shows that same
+        // text as its tooltip — the cure for a value box narrower than its name (PERC NOTE). Set it
+        // when the hover should say MORE than the box: STEP SEQ boxes read "E1", the tooltip adds
+        // the MIDI number ("E1 · 40") for transcribing from templates. Editor-injected, like
+        // textFromValue. Appended last so existing aggregate initializers stay valid.
+        std::function<juce::String (double value)> tooltipFromValue;
     };
 
     struct Combo
