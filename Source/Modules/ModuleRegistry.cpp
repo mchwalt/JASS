@@ -49,7 +49,9 @@ namespace Modules
             if (! obj.isObject()) continue;
             for (const auto& p : m.params)
             {
-                const juce::var val = obj[juce::Identifier (p.persistKey)];
+                juce::var val = obj[juce::Identifier (p.persistKey)];
+                if (val.isVoid() && p.legacyPersistKey.isNotEmpty())
+                    val = obj[juce::Identifier (p.legacyPersistKey)];   // renamed key: old presets still load
                 if (val.isVoid()) continue;   // missing field => keep factory default
                 auto* param = apvts.getParameter (p.id);
                 if (param == nullptr) continue;

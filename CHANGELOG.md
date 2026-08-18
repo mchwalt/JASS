@@ -67,6 +67,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   them, not the other way round.
 
 ### Changed
+- **Every level knob is called AMP now — on the knob, in the matrix, and in the preset.**
+  Most generators already said AMP (OSC 1–3, WAVETABLE, NOISE, KARPLUS, PERC's own knobs),
+  but SUB and SAMPLER said LEVEL, so the rack taught two words for one thing. Both knobs
+  and their MOD-MATRIX param labels read AMP now, and the preset fields follow (`Sub.Amp`,
+  `Sampler.Amp`, `Perc.Amp1..4` — PERC's knobs were renamed on the panel back in August but
+  the file still said Level), because a format that says one thing while the knob says
+  another is the same confusion moved into a file. Old presets keep loading: the reader
+  falls back to the old key (a new `legacyPersistKey` mechanism, available for any future
+  rename), and the shipped demo presets are rewritten. Mod-matrix routings keep their
+  slots — nothing saved changes its meaning.
 - **STEP SEQ shows notes, not offsets.** A step's value box used to read "+7" — a number you had
   to resolve in your head while the preview already played the actual pitch. The box now shows
   that pitch by name (E1, C3 …), resolved over the same reference the preview sounds: the

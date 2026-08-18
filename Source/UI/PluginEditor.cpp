@@ -2052,7 +2052,7 @@ void SynthyEditor::buildRack()
             rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
             K(P::samplerSpeed, "SPEED"),
             relKnob,
-            Kmod(P::samplerLevel, "LEVEL", ModTarget::SamplerLevel),
+            Kmod(P::samplerLevel, "AMP", ModTarget::SamplerLevel),   // renamed from LEVEL (generator standard)
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));
     }
