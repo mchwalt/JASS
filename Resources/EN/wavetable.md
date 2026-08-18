@@ -6,3 +6,4 @@ Wavetable (a set of waveforms you sweep through) oscillator that scans through a
 - **AMP** (loudness) — level.
 - **VOICES** (stacked detuned copies, fatter) — adds detuned unison copies.
 - **DETUNE** (slight pitch offset) — spreads them for width.
+- **FB** (self-FM) — the wave modulates its own phase: adds bite, high values growl. Reacts differently per table and POS.

@@ -27,7 +27,10 @@ float Oscillator::nextSample(double fmOffset)
     // Self-FM: offset the read phase by the previous (pre-gain) output. Using the
     // pre-gain value keeps the feedback character independent of the AMP knob. Scaled
     // to ±0.5 cycles at full depth — enough to reach the sine→saw morph and beyond.
-    const double fbOffset = feedbackAmount * lastRaw * 0.5;
+    // The two-sample average is the classic DX-style damping: a raw one-sample loop
+    // flips sign at the loop's Nyquist and explodes into broadband chaos early; the
+    // average zeroes that alternating component, so high FB stays a playable growl.
+    const double fbOffset = feedbackAmount * 0.5 * (lastRaw + prevRaw) * 0.5;
 
     double sum = 0.0;
 
@@ -57,6 +60,7 @@ float Oscillator::nextSample(double fmOffset)
     }
 
     sum /= unisonCount;
+    prevRaw = lastRaw;
     lastRaw = sum;   // pre-gain average, feeds next sample's self-FM
     return static_cast<float>(sum * amplitude);
 }

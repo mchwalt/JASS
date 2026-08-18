@@ -20,13 +20,18 @@ public:
     void setUnisonCount(int c) { unisonCount = std::clamp(c, 1, maxUnison); }
     void setDetuneAmount(double cents) { detuneCents = cents; }
     void setBank(const WavetableBank* b) { bank = b; }
+    // Self-FM (feedback), same design as Oscillator: the previous pre-gain output offsets the
+    // read phase, damped DX-style by averaging the last two samples. On a wavetable the result
+    // depends on the frame's own spectrum, so the same knob reads differently per bank/position.
+    void setFeedback(double fb) { feedbackAmount = std::clamp(fb, 0.0, 1.0); }
     double getFrequency() const { return frequency; }
     double getAmplitude() const { return amplitude; }
     double getPosition() const { return position; }
     int getUnisonCount() const { return unisonCount; }
     double getDetuneAmount() const { return detuneCents; }
+    double getFeedback() const { return feedbackAmount; }
 
-    void reset() { phases.fill(0.0); }
+    void reset() { phases.fill(0.0); lastRaw = 0.0; prevRaw = 0.0; }
 
     float nextSample()
     {
@@ -34,6 +39,9 @@ public:
         // Oscillator fix), so a tremolo'd wavetable drifted in pitch. Output is ~0 here anyway.
         if (!enabled || bank == nullptr)
             return 0.0f;
+
+        // Self-FM read-phase offset (see Oscillator::nextSample for the scaling/damping notes).
+        const double fbOffset = feedbackAmount * 0.5 * (lastRaw + prevRaw) * 0.5;
 
         double sum = 0.0;
         for (int i = 0; i < unisonCount; ++i)
@@ -46,7 +54,9 @@ public:
             }
             double freq = frequency * std::pow(2.0, detuneOffset / 1200.0);
 
-            sum += bank->getSample(phases[(size_t) i], position);
+            double readPhase = phases[(size_t) i] + fbOffset;
+            readPhase -= std::floor(readPhase);   // getSample expects [0,1)
+            sum += bank->getSample(readPhase, position);
 
             phases[(size_t) i] += freq / sampleRate;
             if (phases[(size_t) i] >= 1.0)
@@ -54,6 +64,8 @@ public:
         }
 
         sum /= unisonCount;
+        prevRaw = lastRaw;
+        lastRaw = sum;   // pre-gain average, feeds next sample's self-FM
         return static_cast<float>(sum * amplitude);
     }
 
@@ -67,4 +79,7 @@ private:
     double sampleRate = 44100.0;
     double detuneCents = 25.0;
     int unisonCount = 1;
+    double feedbackAmount = 0.0;   // Self-FM depth (0..1); 0 = off
+    double lastRaw = 0.0;          // previous pre-gain output, fed back into the phase
+    double prevRaw = 0.0;          // output before that — averaged with lastRaw (DX-style damping)
 };
