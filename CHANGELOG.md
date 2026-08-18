@@ -67,6 +67,11 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   them, not the other way round.
 
 ### Changed
+- **AMP and PAN sit together now, at the end of every generator.** OSC 1–3, WAVETABLE, SUB
+  and KARPLUS scattered the two across the row (OSC read WAVE·FREQ·AMP·…·PAN); SAMPLER,
+  NOISE and PERC already kept them paired. Level and placement are one decision — where the
+  generator sits in the mix — so the knobs stand side by side as the module's output stage,
+  after the sound-shaping controls. Layout only: no parameter, preset or routing changes.
 - **Every level knob is called AMP now — on the knob, in the matrix, and in the preset.**
   Most generators already said AMP (OSC 1–3, WAVETABLE, NOISE, KARPLUS, PERC's own knobs),
   but SUB and SAMPLER said LEVEL, so the rack taught two words for one thing. Both knobs

@@ -1892,8 +1892,9 @@ void SynthyEditor::buildRack()
     addRackModule(makeModuleDescriptor(Modules::noise()));
     add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,   // W8: PLUCK + 5 knobs incl. PAN
         { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
-          K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
+          K(P::karplusFreq, "FREQ"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
+          K(P::karplusAmp, "AMP"),   // AMP·PAN grouped last as the output stage (rack-wide convention)
           Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) });   // Epic 10: stereo placement + auto-pan target
     add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+7 knobs incl. FB+PAN (9 slots of 10)
         { Combo{ P::wavetableBank, "BANK",
@@ -1908,9 +1909,10 @@ void SynthyEditor::buildRack()
                       },
                       { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
                       PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
-          Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq), Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),
+          Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq),
           Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
-          Kmod(P::wavetableFeedback, "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, PAN)
+          Kmod(P::wavetableFeedback, "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, AMP, PAN)
+          Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),   // AMP·PAN grouped last as the output stage (rack-wide convention)
           Kmod(P::wavetablePan, "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
         [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
     // SAMPLER (Story 12.1) — recordings as a generator: dynamic SET combo over the session's
