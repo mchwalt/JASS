@@ -58,7 +58,46 @@ public:
         paintPatternNote (midiNote, g, area);
     }
 
+    // Hover readout: name + MIDI number of the key under the mouse ("A3 · 57"), pinned to the
+    // top-right corner — a fixed place to look, not a tooltip chasing the cursor. Exists for
+    // transcribing from templates: sheet or GM tables name notes, SAMPLER ROOT / PERC NOTE
+    // count numbers, and this shows both before the key is pressed.
+    void mouseMove (const juce::MouseEvent& e) override
+    {
+        setHoverNote (getNoteAndVelocityAtPosition (e.position).note);
+        juce::MidiKeyboardComponent::mouseMove (e);
+    }
+
+    void mouseExit (const juce::MouseEvent& e) override
+    {
+        setHoverNote (-1);
+        juce::MidiKeyboardComponent::mouseExit (e);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        juce::MidiKeyboardComponent::paint (g);
+        if (hoverNote < 0)
+            return;
+        const auto text = juce::MidiMessage::getMidiNoteName (hoverNote, true, true, 4)   // 60 = C4, as everywhere in JASS
+                        + juce::String (" · ") + juce::String (hoverNote);
+        const auto box = getLocalBounds().toFloat().removeFromTop (16.0f).removeFromRight (74.0f).reduced (2.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.65f));
+        g.fillRoundedRectangle (box, 3.0f);
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions (11.0f));
+        g.drawText (text, box, juce::Justification::centred);
+    }
+
 private:
+    void setHoverNote (int midiNote)
+    {
+        if (midiNote == hoverNote)
+            return;
+        hoverNote = midiNote;
+        repaint();
+    }
+
     void paintPatternNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) const
     {
         if (midiNote != patternNote)
@@ -68,6 +107,7 @@ private:
     }
 
     int patternNote = -1;
+    int hoverNote = -1;
 };
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
