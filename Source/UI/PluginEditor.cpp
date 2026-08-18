@@ -1896,9 +1896,15 @@ void SynthyEditor::buildRack()
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
           K(P::karplusAmp, "AMP"),   // AMP·PAN grouped last as the output stage (rack-wide convention)
           Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) });   // Epic 10: stereo placement + auto-pan target
+    // BANK: item index == store index == param value, so the combo must bypass the
+    // ComboBoxAttachment (indexIsValue). With the attachment, 6 items were spread over the
+    // full 0..63 range: "Digital" wrote 13, "Vocal" 38 … and getBank() clamped every one of
+    // them to the LAST bank — all built-ins except Basic played Spectral (user-heard 2026-08-18).
+    Combo bankCombo{ P::wavetableBank, "BANK",
+                     std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) };
+    bankCombo.indexIsValue = true;
     add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+7 knobs incl. FB+PAN (9 slots of 10)
-        { Combo{ P::wavetableBank, "BANK",
-                 std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
+        { bankCombo,
           FileAction{ "LOAD WAV",
                       [this] (juce::File f)
                       {
