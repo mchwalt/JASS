@@ -58,7 +58,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   default to 0.
 
 ### Fixed
-- **A dead F-key assignment now clears itself.** Renaming or deleting a preset file on disk left
+- **The WAVETABLE BANK picker actually picks the bank now.** Choosing any built-in except
+  Basic played *Spectral*: the combo's stock attachment spreads its six items across the
+  parameter's full 0–63 range ("Digital" wrote 13, "Vocal" 38 …), and the bank lookup
+  clamped every one of those onto the last bank. The display mirrored the same error
+  backwards, so it *looked* right while sounding wrong. The SET combo had this exact bug
+  and its fix (item index == value) — BANK was simply missed; found by ear when the
+  new FB knob was auditioned per bank and every bank growled identically. Renaming or deleting a preset file on disk left
   its F-key erroring on every press, forever. The error message now says what happened — and then
   removes the assignment, so the second press does nothing instead of failing again.
 - **A loaded sequencer patch now always enters on the drums' downbeat.** Loading a preset with a
