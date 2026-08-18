@@ -1895,7 +1895,7 @@ void SynthyEditor::buildRack()
           K(P::karplusFreq, "FREQ"), K(P::karplusAmp, "AMP"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
           Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) });   // Epic 10: stereo placement + auto-pan target
-    add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+6 knobs incl. PAN
+    add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+7 knobs incl. FB+PAN (9 slots of 10)
         { Combo{ P::wavetableBank, "BANK",
                  std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) },
           FileAction{ "LOAD WAV",
@@ -1910,6 +1910,7 @@ void SynthyEditor::buildRack()
                       PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
           Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq), Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),
           Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
+          Kmod(P::wavetableFeedback, "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, PAN)
           Kmod(P::wavetablePan, "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
         [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
     // SAMPLER (Story 12.1) — recordings as a generator: dynamic SET combo over the session's
