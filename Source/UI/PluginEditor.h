@@ -189,8 +189,9 @@ private:
     SynthyProcessor& processor;
     SynthyLookAndFeel lnf;
 
-    // Preset save/load (shared .synthy JSON format) + randomize + reset
+    // Preset save/load (shared .synthy JSON format) + delete + randomize + reset
     juce::TextButton saveBtn { "SAVE" }, loadBtn { "LOAD" }, randomBtn { "RANDOM" }, resetBtn { "RESET" };
+    juce::TextButton deleteBtn { "DELETE" };   // delete a preset FILE (to the recycle bin, confirmed)
     juce::TextButton modulesBtn { "MODULES" };   // show/hide menu (Story 4.2)
     void showModulesMenu();
     void refitHeight();   // recompute window height from the rack's visible content (AD-12)
@@ -219,6 +220,7 @@ private:
     std::array<juce::String, 12> presetSlots;          // slot -> preset name (mirrors the panel + the file)
     void triggerPresetSlot(int slot);                  // load the preset assigned to a slot (no-op if empty)
     void assignPresetSlot(int slot);                   // open the assign dialog for a slot
+    void clearBankSlotsFor(const juce::String& name);  // remove every F-key assignment of this preset name
     void resetPresetBank();                            // restore factory bank (demos on F1..F4) — RESET button
     void pollPresetHotkeys();                          // F1..F12 edge detection (keyStateChanged + timer fallback)
     // F1..F12 (preset bank) — handled in keyStateChanged (event-driven): the on-screen keyboard

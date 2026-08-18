@@ -9,6 +9,7 @@ The LFOs have no built-in target of their own — they are *purely* matrix sourc
 - **LFO 1–4** — cyclic movement (vibrato / wah). Each needs its own **LFO** module on (LFO 2–4 are hidden by default — show them via MODULES).
 - **Envelope** — the ADSR contour. Needs the **ENVELOPE** module on and a sounding note. Great as a filter envelope: Envelope → FILTER · CUTOFF.
 - **Velocity** — how hard you play (constant per note). Belongs to no module — just play with varying strength.
+- **Chaos X / Chaos Y** — the CHAOS module's Lorenz orbit: never repeating, never random. X and Y ride the same orbit, so two routings drift together but not alike. Needs **CHAOS** on; free-running, so its rings move even at idle.
 
 ## Destination — MOD then PARAM
 
@@ -26,6 +27,7 @@ Essentially every continuous knob on every module is a target. Highlights:
 Choosing a MODULE (other than "Alle OSC") auto-enables it — and a per-OSC routing switches that oscillator on — so the routing is actually heard; clearing the row (MOD = Off) undoes an enable JASS made itself.
 
 - **AMT** — amount, bipolar: right adds, left inverts, centre (0) does nothing.
+- **QUANT** — snaps this row's pitch push to a scale (Chrom / Major / Minor / Penta). Off = smooth octaves (vibrato, drift). With S&H or Chaos on a FREQ target it turns steps into melodies. Acts only when the row targets FREQ; per row, so a smooth vibrato can run next to a quantized melody.
 
 Note: stepped parameters (VOICES, BITCRUSH BITS/RATE) modulate in whole steps, so they change audibly in stages rather than gliding.
 

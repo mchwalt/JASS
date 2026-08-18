@@ -10,6 +10,67 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **QUANT — a per-row scale mask in the MOD MATRIX.** Pitch modulation had one failure mode this
+  synth already paid to learn (story 14.1): continuous detune across notes reads as *out of tune*,
+  not as analog. Quantized jumps are a different animal — they are not detune, they are **notes**.
+  QUANT snaps a row's pitch contribution to a scale (Chromatic / Major / Minor / Pentatonic), so
+  S&H or Chaos on FREQ stops being random wobble and becomes a random-but-in-key melody over the
+  held note — the modular classic S&H → quantizer → VCO. It sits on the ROW, not on the target,
+  and snaps each row *before* the rows sum: a smooth vibrato row keeps gliding right next to a
+  quantized melody row. Off by default; existing presets are untouched. The MOD MATRIX takes the
+  full rack width for the extra combo — the whitespace the 30-column grid once "only gained" is
+  exactly what the fifth control now spends.
+- **CHAOS — a Lorenz attractor as a modulation source.** Deterministic chaos instead of
+  randomness: the orbit never repeats, but it is not noise — it wanders with intent, which is
+  exactly what a periodic LFO cannot do and a random generator overdoes. The module exposes
+  **two** matrix sources, **Chaos X** and **Chaos Y**, and that is the point: both ride the same
+  orbit, so two routings (say X → FILTER CUTOFF, Y → WT POS) drift *together but not alike* —
+  one gesture in two colours, something two independent random sources can never produce. One
+  global attractor drives all voices (correlated movement reads as intent; per-voice chaos would
+  just read as blur), it free-runs — notes do not restart it — and the rings show the very same
+  values the voices modulate with. RATE sets how fast the orbit turns.
+- **Two new LFO shapes: S&H and One-Shot.** Until now every LFO wave was smooth and periodic —
+  fine for vibrato and wah, useless for two other kinds of movement. **S&H** (sample & hold)
+  draws a new random level each cycle and holds it: stepped motion, the classic modular
+  step-randomizer, and with SYNC it steps in time. Every voice draws its own sequence — eight
+  voices stepping in lockstep would read as one mono effect, not as life. **One-Shot** runs a
+  single full-to-zero sweep per note and then holds, which makes modulation *event-based*
+  instead of cyclic: a per-note gesture (a pluck-style cutoff drop, a pitch fall-in) without
+  burning the pitch envelope. One honest limit: the little modulation rings — and master-bus
+  routings — are fed by a free-running display LFO that never sees a note-on, so a One-Shot
+  ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
+
+- **DELETE — presets can finally be deleted from the app.** SAVE and LOAD existed; removing a
+  preset meant leaving the app for the file explorer. The new DELETE button next to them opens
+  the same chooser, asks once, and moves the file to the **recycle bin** — never a hard delete.
+  Any F-key still pointing at the deleted preset is cleared along with it.
+
+### Fixed
+- **A dead F-key assignment now clears itself.** Renaming or deleting a preset file on disk left
+  its F-key erroring on every press, forever. The error message now says what happened — and then
+  removes the assignment, so the second press does nothing instead of failing again.
+- **A loaded sequencer patch now always enters on the drums' downbeat.** Loading a preset with a
+  stored STEP SEQ latch sometimes played the bass permanently off the PERC beat. Two causes, one
+  fix: the quantised entry read the drum transport state *before* that block had refreshed it
+  (first block after a load saw the previous patch's drums), and a latch loaded over a
+  still-running one produced no silence-to-figure edge at all, so nothing re-quantised. The drum
+  clock is now resolved before the sequencer block, and a loaded latch explicitly restarts the
+  figure at step 0, quantised to the pattern's next bar — the drums are the clock; the bass joins
+  them, not the other way round.
+
+### Changed
+- **STEP SEQ shows notes, not offsets.** A step's value box used to read "+7" — a number you had
+  to resolve in your head while the preview already played the actual pitch. The box now shows
+  that pitch by name (E1, C3 …), resolved over the same reference the preview sounds: the
+  keyboard's current C, following the Up/Down octave keys live. Nothing about the figure changed —
+  the stored value is still the offset, and the pattern still transposes with the key you play.
+  The knob stays a knob (maintainer's condition), only its read-out grew up.
+- **RANDOM draws from the new material too.** A random patch can now pick the S&H/One-Shot
+  waves, route Chaos X/Y (which auto-enables CHAOS, so the routing is actually heard), and land
+  on a QUANT scale — S&H → FREQ → Major is exactly the kind of happy accident the button is for.
+  Random patches will *feel* different than before; that is the feature working, not a bug.
+
 ## [2026.08.7] – 2026-08-12
 
 ### Added

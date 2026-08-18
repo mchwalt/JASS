@@ -1,0 +1,109 @@
+{
+  "FormatVersion": 6,
+  "Name": "Chaos Melody",
+  "Modified": false,
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 120.0
+  },
+  "Osc1": {
+    "Enabled": true,
+    "Waveform": "Sawtooth",
+    "Frequency": 262.0,
+    "Amplitude": 0.5,
+    "UnisonVoices": 1.0,
+    "UnisonDetune": 0.0,
+    "Feedback": 0.0
+  },
+  "Osc2": {
+    "Enabled": false
+  },
+  "Osc3": {
+    "Enabled": false
+  },
+  "Adsr": {
+    "Enabled": true,
+    "Attack": 0.005,
+    "Decay": 0.15,
+    "Sustain": 0.6,
+    "Release": 0.3
+  },
+  "Filter": {
+    "Enabled": true,
+    "Type": "Lowpass",
+    "Cutoff": 700.0,
+    "Resonance": 1.2
+  },
+  "Wavefold": {
+    "Enabled": true,
+    "Drive": 0.15,
+    "Symmetry": 0.0,
+    "Mix": 1.0
+  },
+  "Reverb": {
+    "Enabled": true,
+    "RoomSize": 0.45,
+    "Damping": 0.4,
+    "Mix": 0.22
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "S&H",
+    "Target": "Frequency",
+    "SyncDiv": "1/8",
+    "Rate": 3.0,
+    "Depth": 1.0
+  },
+  "Lfo2": {
+    "Enabled": true,
+    "Waveform": "One-Shot",
+    "Target": "Frequency",
+    "SyncDiv": "Free",
+    "Rate": 1.5,
+    "Depth": 1.0
+  },
+  "Chaos": {
+    "Enabled": true,
+    "Rate": 1.0
+  },
+  "ModMatrix": {
+    "On": true,
+    "Slot1Source": "LFO 1",
+    "Slot1Module": "Alle OSC",
+    "Slot1Param": 3.0,
+    "Slot1Amount": 1.0,
+    "Slot1Quant": "Penta",
+    "Slot2Source": "Chaos X",
+    "Slot2Module": "FILTER",
+    "Slot2Param": 0.0,
+    "Slot2Amount": 0.45,
+    "Slot2Quant": "Off",
+    "Slot3Source": "Chaos Y",
+    "Slot3Module": "WAVEFOLD",
+    "Slot3Param": 0.0,
+    "Slot3Amount": 0.35,
+    "Slot3Quant": "Off",
+    "Slot4Source": "LFO 2",
+    "Slot4Module": "FILTER",
+    "Slot4Param": 0.0,
+    "Slot4Amount": 0.5,
+    "Slot4Quant": "Off",
+    "Slot5Source": "LFO 1",
+    "Slot5Module": "Off",
+    "Slot5Param": 0.0,
+    "Slot5Amount": 0.0,
+    "Slot6Source": "LFO 1",
+    "Slot6Module": "Off",
+    "Slot6Param": 0.0,
+    "Slot6Amount": 0.0,
+    "Slot7Source": "LFO 1",
+    "Slot7Module": "Off",
+    "Slot7Param": 0.0,
+    "Slot7Amount": 0.0,
+    "Slot8Source": "LFO 1",
+    "Slot8Module": "Off",
+    "Slot8Param": 0.0,
+    "Slot8Amount": 0.0
+  }
+}

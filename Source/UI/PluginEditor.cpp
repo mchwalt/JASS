@@ -514,6 +514,61 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         });
     };
 
+    // DELETE removes a preset FILE — the counterpart the SAVE/LOAD pair was missing (maintainer
+    // 2026-08-18: "keine Möglichkeit, Presets über die GUI zu löschen"). Same chooser as LOAD,
+    // restricted to the Presets folder; the file goes to the RECYCLE BIN (moveToTrash), never
+    // hard-deleted, after an explicit confirmation. Any F-key assignment of the deleted preset
+    // is cleared along with it — a dead slot that errors on every press helps nobody.
+    addAndMakeVisible(deleteBtn);
+    deleteBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff334155));
+    deleteBtn.onClick = [this]
+    {
+        presetChooser = std::make_unique<juce::FileChooser>(
+            currentLang == "DE" ? "Preset l\xc3\xb6schen" : "Delete preset",
+            PresetIO::presetsFolder(), "*.jass");
+        auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+        juce::Component::SafePointer<SynthyEditor> self (this);
+        presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
+        {
+            if (self == nullptr) return;
+            auto f = fc.getResult();
+            if (f == juce::File{}) return;
+            if (f.getParentDirectory() != PresetIO::presetsFolder())
+            {
+                juce::NativeMessageBox::showMessageBoxAsync(
+                    juce::MessageBoxIconType::InfoIcon,
+                    self->currentLang == "DE" ? "Ordner" : "Folder",
+                    (self->currentLang == "DE"
+                        ? juce::String("Bitte ein Preset aus dem Presets-Ordner w\xc3\xa4hlen.")
+                        : juce::String("Please choose a preset from the Presets folder.")));
+                return;
+            }
+            const auto name = f.getFileNameWithoutExtension();
+            juce::NativeMessageBox::showOkCancelBox(
+                juce::MessageBoxIconType::WarningIcon,
+                self->currentLang == "DE" ? "Preset l\xc3\xb6schen" : "Delete preset",
+                (self->currentLang == "DE"
+                    ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c in den Papierkorb verschieben?"
+                    : "Move \"" + name + "\" to the recycle bin?"),
+                nullptr,
+                juce::ModalCallbackFunction::create([self, f, name](int result)
+                {
+                    if (self == nullptr || result == 0) return;   // 0 = cancel
+                    if (! f.moveToTrash())
+                    {
+                        juce::NativeMessageBox::showMessageBoxAsync(
+                            juce::MessageBoxIconType::WarningIcon,
+                            self->currentLang == "DE" ? "L\xc3\xb6schen fehlgeschlagen" : "Delete failed",
+                            (self->currentLang == "DE"
+                                ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c konnte nicht gel\xc3\xb6scht werden."
+                                : "\"" + name + "\" could not be deleted."));
+                        return;
+                    }
+                    self->clearBankSlotsFor(name);   // no F-key may keep pointing at a gone file
+                }));
+        });
+    };
+
     addAndMakeVisible(randomBtn);
     randomBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff6d28d9));
     randomBtn.onClick = [this] { processor.randomize(); setPresetName("Random");
@@ -778,10 +833,10 @@ void SynthyEditor::timerCallback()
     namespace P = Parameters::ID;
     auto& apvts = processor.getAPVTS();
 
-    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only PERIODIC (LFO)
-    // sources animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
-    // lfoSrcVal[src] holds each LFO's display value at its ModSource slot; non-LFO sources
-    // stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
+    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only FREE-RUNNING sources
+    // (LFOs, Chaos) animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
+    // lfoSrcVal[src] holds each such source's display value at its ModSource slot; note-bound
+    // sources stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
     static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                      (int) ModSource::LFO3, (int) ModSource::LFO4 };
     std::array<float, ModMatrixConfig::kNumSources> lfoSrcVal {};
@@ -790,6 +845,8 @@ void SynthyEditor::timerCallback()
     // at its ModSource slot; the matrix loop below lights the rings for LFO-sourced routings.
     for (int i = 0; i < kNumLFOs; ++i)
         lfoSrcVal[(size_t) kLfoSourceIdx[i]] = processor.getLfoDisplayValue(i);
+    lfoSrcVal[(size_t) ModSource::ChaosX] = processor.getChaosDisplayValue(0);   // same snapshot the
+    lfoSrcVal[(size_t) ModSource::ChaosY] = processor.getChaosDisplayValue(1);   // voices modulate with
     {
         const bool matrixOn = *apvts.getRawParameterValue(P::modMatrixOn) > 0.5f;
         if (matrixOn)
@@ -1032,13 +1089,46 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     }
 }
 
+// Remove every F-key assignment of this preset name — the bank stores names and re-resolves them
+// at trigger time, so a renamed or deleted file leaves a slot that can only ever error. Called by
+// the DELETE flow and by triggerPresetSlot when the resolve fails (maintainer 2026-08-18).
+void SynthyEditor::clearBankSlotsFor(const juce::String& name)
+{
+    bool changed = false;
+    for (size_t i = 0; i < presetSlots.size(); ++i)
+        if (presetSlots[i] == name)
+        {
+            presetSlots[i] = {};
+            if (presetBank) presetBank->setAssignment((int) i, {});
+            changed = true;
+        }
+    if (changed)
+        PresetIO::savePresetBanks(presetSlots);
+}
+
 // Preset quick-access bank: load the preset assigned to a slot (F-key tap / single click).
 void SynthyEditor::triggerPresetSlot(int slot)
 {
     if (slot < 0 || slot >= (int) presetSlots.size()) return;
     const auto name = presetSlots[(size_t) slot];
     if (name.isEmpty()) return;   // empty slot => nothing to load
-    loadPresetFile(PresetIO::presetsFolder().getChildFile(name + ".jass"));
+    const auto f = PresetIO::presetsFolder().getChildFile(name + ".jass");
+    if (! f.existsAsFile())
+    {
+        // The file behind this slot is gone (renamed or deleted on disk). Say so, then CLEAR the
+        // assignment — pressing the key again must not repeat the error (maintainer 2026-08-18).
+        juce::NativeMessageBox::showMessageBoxAsync(
+            juce::MessageBoxIconType::InfoIcon,
+            currentLang == "DE" ? "Preset fehlt" : "Preset missing",
+            (currentLang == "DE"
+                ? "\xe2\x80\x9e" + name + "\xe2\x80\x9c gibt es nicht mehr \xe2\x80\x94 die Belegung von F"
+                      + juce::String(slot + 1) + " wird entfernt."
+                : "\"" + name + "\" no longer exists \xe2\x80\x94 clearing the F"
+                      + juce::String(slot + 1) + " assignment."));
+        clearBankSlotsFor(name);
+        return;
+    }
+    loadPresetFile(f);
 }
 
 // Preset quick-access bank: restore the FACTORY default (the four demo presets on F1..F4, rest
@@ -1339,6 +1429,10 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         // A LATCHED step-sequencer figure has no held key left to retune, so the octave shift is
         // handed to its root directly — the pattern moves with the arrows like everything else.
         processor.transposeSeqLatch (dir * 12);
+        // STEP SEQ's note read-outs are relative to this octave — re-text them (no value changed,
+        // so nothing else would).
+        if (rackBody != nullptr)
+            rackBody->refreshNamedReadouts();
         return true;
     }
     // While a figure is being recorded (15.4) SPACE means "leave this step empty and move on".
@@ -2010,6 +2104,16 @@ void SynthyEditor::buildRack()
                     // …and mark the step the pattern is ON, the way PERC's grid marks its column
                     // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
                     k->playingWhen = [this, step] { return processor.getSeqStep() == step - 1; };
+                    // …and read out the NOTE, not the raw semitone count (maintainer 2026-08-18):
+                    // the value stays the offset from the keyboard's current C, the display simply
+                    // resolves it through the SAME reference audition sounds it with — box, preview
+                    // and played figure always agree, and the octave keys re-text the boxes
+                    // (keyPressed → rackBody->refreshNamedReadouts). 60 = C4, as everywhere in JASS.
+                    k->textFromValue = [this](double v)
+                    {
+                        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
+                        return juce::MidiMessage::getMidiNoteName(note, true, true, 4);
+                    };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
@@ -2073,6 +2177,7 @@ void SynthyEditor::buildRack()
     }
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
+    addRackModule(makeModuleDescriptor(Modules::chaos()));   // LFO expansion — Lorenz mod source
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
     // which a static spec can't capture). Lit = mixModeOn AND both SELECTED operand OSCs enabled.
     {
@@ -2096,18 +2201,18 @@ void SynthyEditor::buildRack()
     // ComboDependency (clamp PARAM if out of range, then re-list) where apvts is available.
     {
         ModuleDescriptor d;
-        // 24 of the 30 columns (Story 7.3, user 2026-08-09: "könnte ein Fünftel schmaler sein"):
-        // the 8 slots were laid out for a 24-column rack and only gained whitespace at 30. The
-        // zone height does not change either way — MOD MATRIX is the zone's last module and owns
-        // its two rows regardless of how wide it is.
+        // Full rack width since QUANT: a fifth control per slot makes 24 cells per row, and the
+        // two columns W28 saved would push the combos below ~52 px. W30 keeps them at ~55 —
+        // still below the 62 px knob guideline, but the only knob (AMT) spans 2 cells and is
+        // capped by the row height anyway, so only combo text pays (the popup shows full names).
         // Height: 7 quarter units = 207 px instead of 238 (Story 7.4). Two rows at the standard knob
         // size, captions and value boxes intact — the maintainer's call: "Beschriftungen werden NICHT
-        // geopfert". (176 px is reachable, but only by dropping the 32 repeated SRC/MOD/PARAM/AMT.)
-        d.sizeClass = SizeClass::W28U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
+        // geopfert". (176 px is reachable, but only by dropping the repeated captions.)
+        d.sizeClass = SizeClass::W30U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
 
-        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4" };   // == ModSource
+        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
         juce::StringArray modItems;
         for (int i = 0; i < ModDest::kNumModules; ++i) modItems.add (ModDest::moduleLabel (i));   // == ModDest order
 
@@ -2134,6 +2239,22 @@ void SynthyEditor::buildRack()
             // a knob is capped by the narrower side — so the row's height went to waste next to a
             // small knob. Two slots make the cell 108 px and the knob reaches the 65 px the height
             // offers. The module keeps its 28 columns; the combos give up 2 px of width for it.
+            // QUANT: per-slot scale mask for pitch routings (Off/Chrom/Major/Minor/Penta) — a
+            // stepped source (S&H, Chaos) on FREQ becomes a melody instead of detune. Items match
+            // the spec's Choice strings (attachment maps by index; kept short to fit the cell).
+            // Placed BEFORE AMT: the knob stays the routing's LAST control, so the green activity
+            // dot keeps anchoring beside AMT (paintOverChildren anchors to the group's final cell)
+            // and the four combos read as one cluster. The mask only acts on FREQ routings, so on
+            // any other target the combo is greyed via activeWhen (maintainer, 2026-08-18).
+            Combo quantCombo = C (P::modSlotQuant (n), "QUANT",
+                                  juce::StringArray { "Off", "Chrom", "Major", "Minor", "Penta" });
+            auto* qMod = apvts.getRawParameterValue (modId);
+            auto* qPar = apvts.getRawParameterValue (parId);
+            quantCombo.activeWhen = [qMod, qPar]
+            {
+                return ModDest::targetOf ((int) qMod->load(), (int) qPar->load()) == LFOTarget::Frequency;
+            };
+            d.body.push_back (quantCombo);
             Knob amt = K (P::modSlotAmount (n), "AMT");
             amt.slots = 2;
             d.body.push_back (amt);
@@ -2148,8 +2269,10 @@ void SynthyEditor::buildRack()
                 } });
         }
         // Per-slot activity highlight: a slot is "active" when its MOD combo != Off (index 0). The
-        // frame dims inactive slots and draws a lit dot on active ones (groupSize 4 = SRC/MOD/PARAM/AMT).
-        d.slotActivity.groupSize = 4;
+        // frame dims inactive slots and draws a lit dot on active ones (groupSize 5 =
+        // SRC/MOD/PARAM/AMT/QUANT — the group ALSO drives the row layout's gap logic, so a stale
+        // count here shifts every fifth control and clips the row's right edge).
+        d.slotActivity.groupSize = 5;
         d.slotActivity.isActive  = [this] (int slot)
         {
             return (int) processor.getAPVTS().getRawParameterValue (P::modSlotModule (slot + 1))->load() != 0;
@@ -2232,14 +2355,15 @@ void SynthyEditor::resized()
     modulesBtn.setBounds(headerRow.removeFromRight(120).reduced(8, 17));
     // Help-language selector sits just left of the MODULES button (Story 6.1).
     langBox.setBounds(headerRow.removeFromRight(66).reduced(4, 20));
-    // Left cluster: the Save/Load/Random/Reset buttons AND the current-preset name belong
-    // together (the preset name is about what was loaded/saved). Buttons in a 2x2 block
-    // with "Current State" beside them.
-    auto leftGroup = headerRow.removeFromLeft(340);
-    auto leftBtns = leftGroup.removeFromLeft(150);
+    // Left cluster: the file buttons (SAVE/LOAD/DELETE on top, RANDOM/RESET below) AND the
+    // current-preset name belong together (the preset name is about what was loaded/saved).
+    // Three columns since DELETE joined; the block widened so no button got smaller.
+    auto leftGroup = headerRow.removeFromLeft(415);
+    auto leftBtns = leftGroup.removeFromLeft(225);
     auto row1 = leftBtns.removeFromTop(30);
-    saveBtn.setBounds(row1.removeFromLeft(row1.getWidth() / 2).reduced(3, 2));
-    loadBtn.setBounds(row1.reduced(3, 2));
+    saveBtn.setBounds(row1.removeFromLeft(75).reduced(3, 2));
+    loadBtn.setBounds(row1.removeFromLeft(75).reduced(3, 2));
+    deleteBtn.setBounds(row1.reduced(3, 2));
     auto row2 = leftBtns.removeFromTop(30);
     randomBtn.setBounds(row2.removeFromLeft(row2.getWidth() / 2).reduced(3, 2));
     resetBtn.setBounds(row2.reduced(3, 2));

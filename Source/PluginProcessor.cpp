@@ -52,8 +52,13 @@ SynthyProcessor::SynthyProcessor()
     PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
     PresetIO::applySeqLatchRoot = [this] (int note)
     {
-        if (note >= 0) startSeqLatch (note);
-        else           stopSeqLatch();
+        if (note >= 0)
+        {
+            startSeqLatch (note);
+            seqRequantize.store (true);   // a loaded latch always re-enters on the drums' downbeat
+        }
+        else
+            stopSeqLatch();
     };
 
     // Listen for keypresses so the auto-play drone can step aside when played.
@@ -317,6 +322,8 @@ namespace
             case ModSource::LFO2:     return ID::lfoOn (2);
             case ModSource::LFO3:     return ID::lfoOn (3);
             case ModSource::LFO4:     return ID::lfoOn (4);
+            case ModSource::ChaosX:
+            case ModSource::ChaosY:   return ID::chaosOn;
         }
         return {};
     }
@@ -360,7 +367,8 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      // MASTER/STEREO default ON, so routing never actually toggles them
                                      // (auto-disable only undoes an enable WE made) — safe to list.
                                      ID::noiseOn, ID::karplusOn, ID::pitchEnvOn,
-                                     ID::compOn, ID::stereoOn, ID::masterOn };
+                                     ID::compOn, ID::stereoOn, ID::masterOn,
+                                     ID::chaosOn };   // LFO expansion: Chaos X/Y source
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);
@@ -684,6 +692,8 @@ void SynthyProcessor::randomize()
             case ModSource::LFO4: set(ID::lfoOn(4), 1.0f); break;
             case ModSource::Envelope: set(ID::adsrOn, 1.0f); break;
             case ModSource::Velocity: break;
+            case ModSource::ChaosX:
+            case ModSource::ChaosY: set(ID::chaosOn, 1.0f); break;
         }
     }
 
@@ -760,6 +770,7 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     compressor.prepare(sampleRate);
     prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
     for (auto& l : uiLfos) l.setSampleRate(sampleRate);
+    chaos.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     stepSeq.prepare(sampleRate);
     perc.prepare(sampleRate);   // 16.1: four SamplePlayers, configured once (their stretch engine allocates)
@@ -815,11 +826,30 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (auto hostBpm = pos->getBpm())
                 syncBpm = *hostBpm;
 
+    // CHAOS: advance the one global attractor and publish this block's snapshot. Published as 0
+    // when the module is off (a routed-but-silent source, same rule as the LFOs). Advanced BEFORE
+    // the global offsets below so bus targets read the current block, not the previous one.
+    {
+        using namespace Parameters;
+        if (*apvts.getRawParameterValue(ID::chaosOn) > 0.5f)
+        {
+            chaos.setRate(*apvts.getRawParameterValue(ID::chaosRate));
+            chaos.advance(buffer.getNumSamples());
+            chaosDisplay[0].store(chaos.outX());
+            chaosDisplay[1].store(chaos.outY());
+        }
+        else
+        {
+            chaosDisplay[0].store(0.0f);
+            chaosDisplay[1].store(0.0f);
+        }
+    }
+
     // ── Global (master-bus) modulation offsets ──────────────────────────────────────────────
     // STEREO / MASTER / COMPRESSOR run on the SUMMED mix (further below), not per voice, so their
     // MOD MATRIX routings are applied HERE at block rate. Source values are the GLOBAL uiLfo values
     // from the PREVIOUS block (lfoDisplayValues, advanced after the render) — a one-block lag that is
-    // inaudible. Only LFO sources drive global targets (Velocity/Envelope have no single global
+    // inaudible. LFO and Chaos sources drive global targets (Velocity/Envelope have no single global
     // value), which matches the editor's ring feed exactly, so ring == audio.
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
     {
@@ -836,6 +866,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 const float amt = *apvts.getRawParameterValue(ID::modSlotAmount(n));
                 float sv = 0.0f;
                 for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = lfoDisplayValues[i].load();
+                if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
+                if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
                 const int tgt = (int) ModDest::targetOf(mod, par);
                 if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
             }
@@ -910,6 +942,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Update all voice parameters
     for (int i = 0; i < synth.getNumVoices(); ++i)
         if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
+        {
+            voice->setChaosValues(chaosDisplay[0].load(), chaosDisplay[1].load());   // one orbit, all voices
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                                      voice->getLFOs(), voice->getNoise(),
@@ -924,6 +958,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getModSlots(), voice->getModMatrixOnRef(),
                                      voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
                                      lfoRateHz, delayTimeSec);
+        }
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {
@@ -931,6 +966,23 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // STEP SEQ (15.1) and the ARP both REPLACE the held chord, so they cannot both run. The
         // sequencer wins: it is the more specific instrument. The editor also switches the other
         // module off when one is enabled, so the rack never shows a lit module doing nothing.
+        // PERC transport, resolved BEFORE the STEP SEQ block: the quantised entry below reads
+        // perc.enabled and perc.samplesToPatternStart(), and both used to be refreshed only in
+        // the render section further down — so the first block after a preset load saw the
+        // PREVIOUS patch's drum state and skipped the quantisation (bass permanently off the
+        // beat). Kit, levels and rendering stay below; only the clock moves up here.
+        {
+            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
+            if (! percOn && perc.enabled)
+                perc.reset();      // switched off ⇒ the next start is a downbeat, not where it stopped
+            perc.enabled = percOn;
+            perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);
+            const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);
+            perc.stepSeconds = SyncDivision::isSynced(pdiv)
+                                   ? SyncDivision::delaySeconds(syncBpm, pdiv)
+                                   : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
+        }
+
         const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
         bool arpOn = ! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
         if (seqOn)
@@ -973,6 +1025,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (playRoot >= 0)
                 stepSeq.setRoot(playRoot);
 
+            // Preset-load latch (15.5): a stored latch must ALWAYS enter on the drums' downbeat.
+            // The rising-edge logic below cannot see this case — a latch loaded over a still-
+            // running one keeps playRoot high, so there is no edge. applySeqLatchRoot sets the
+            // flag; the restart itself happens AFTER the chord filter below, because its note-off
+            // must land in `kept`: everything channel-1 in the RAW buffer is dropped there, and a
+            // swallowed note-off is a bass note that hangs forever (maintainer found it in
+            // minutes: "irgendwas wird nicht richtig abgeschaltet").
+            const bool requantize = seqRequantize.exchange(false) && playRoot >= 0;
+            if (requantize)
+                seqKeyWasHeld = true;   // edge consumed — the check below must not fire again
+
             // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
             // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
             // running figure must not restart or delay anything, exactly as in 15.1.
@@ -989,6 +1052,15 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     continue;
                 kept.addEvent(m, meta.samplePosition);
             }
+            if (requantize)
+            {
+                // Restart at step 0, quantised to the drum clock resolved above. The release goes
+                // into `kept` — the buffer the synth actually receives (see the comment up top).
+                stepSeq.releaseAll(kept, 1);
+                stepSeq.reset();
+                if (perc.enabled)
+                    stepSeq.setStartDelay(perc.samplesToPatternStart());
+            }
             stepSeq.processBlock(buffer.getNumSamples(), kept, 1, playRoot >= 0);
             midiMessages.swapWith(kept);
         }
@@ -999,6 +1071,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             stepSeq.reset();
             seqLatchedRoot.store(-1);      // the switch is the transport: off forgets the root
             seqKeyWasHeld = false;
+            seqRequantize.store(false);    // a stray flag must not fire on a later re-enable
         }
 
         if (arpOn)
@@ -1145,10 +1218,9 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // compressor so the master glue and the MASTER level still apply — and nothing else does.
     {
         using namespace Parameters;
-        const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
-        if (! percOn && perc.enabled)
-            perc.reset();          // switched off ⇒ the next start is a downbeat, not where it stopped
-        perc.enabled = percOn;
+        // Transport (enabled + falling-edge reset + length + stepSeconds) is resolved ABOVE the
+        // STEP SEQ block, where the quantised entry needs it fresh — see the comment there.
+        const bool percOn = perc.enabled;
 
         // Its OWN kit, independent of the SAMPLER's set — a sampled instrument and a drum kit have
         // to coexist, which is the case this module exists for. While a preset's kit is still being
@@ -1158,11 +1230,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         perc.setSource(percKitPending.load() ? nullptr
                                              : SampleBankStore::instance().getSet(kitIdx));
         perc.amp    = *apvts.getRawParameterValue(ID::percAmp);
-        perc.length = (int) *apvts.getRawParameterValue(ID::percLength);
-        const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);
-        perc.stepSeconds = SyncDivision::isSynced(pdiv)
-                               ? SyncDivision::delaySeconds(syncBpm, pdiv)
-                               : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
         for (int l = 0; l < PercSequencer::kLanes; ++l)
         {
             perc.note [(size_t) l] = (int) *apvts.getRawParameterValue(ID::percNote (l + 1));

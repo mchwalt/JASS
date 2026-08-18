@@ -196,6 +196,10 @@ namespace Parameters
         JASS_INDEXED_ID (lfoTarget,  kNumLFOs, "lfo", "Target")
         JASS_INDEXED_ID (lfoSyncDiv, kNumLFOs, "lfo", "SyncDiv")
 
+        // CHAOS — Lorenz attractor mod source (LFO expansion)
+        constexpr const char* chaosOn   = "chaosOn";
+        constexpr const char* chaosRate = "chaosRate";
+
         // Reverb
         constexpr const char* reverbOn   = "reverbOn";
         constexpr const char* reverbRoom = "reverbRoom";
@@ -276,6 +280,7 @@ namespace Parameters
         JASS_INDEXED_ID (modSlotParam,        ModMatrixConfig::kNumSlots, "modSlot", "Param")
         JASS_INDEXED_ID (modSlotAmount,       ModMatrixConfig::kNumSlots, "modSlot", "Amount")
         JASS_INDEXED_ID (modSlotTargetLegacy, ModMatrixConfig::kNumSlots, "modSlot", "Target")   // v4 and older
+        JASS_INDEXED_ID (modSlotQuant,        ModMatrixConfig::kNumSlots, "modSlot", "Quant")    // LFO expansion: per-slot scale mask
         constexpr const char* modMatrixOn = "modMatrixOn";
 
         #undef JASS_INDEXED_ID
@@ -291,7 +296,7 @@ namespace Parameters
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
             for (int i = 1; i <= 32; ++i)       { percStep1(i); percStep2(i); percStep3(i); percStep4(i); }
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-                { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); }
+                { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); modSlotQuant(n); }
         }
     }
 
@@ -331,6 +336,7 @@ namespace Parameters
             modSlots[n].target   = (int) ModDest::targetOf(mod, par);   // (module,param) → LFOTarget
             modSlots[n].oscIndex = ModDest::oscIndexOf(mod);            // 0..2 per-OSC; -1 global
             modSlots[n].amount   = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
+            modSlots[n].quant    = (int) *apvts.getRawParameterValue(ID::modSlotQuant(n + 1));   // scale mask (0 = Off)
         }
 
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
