@@ -80,6 +80,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   transcriptions and the GM map speak in numbers; the knob said only "Kick", so transferring
   a template meant guessing which name was which number. The stored value is unchanged —
   the number was always there, now it is visible.
+- **Hovering a named read-out shows its full text — and tooltips work at all now.** The rack
+  had `setTooltip` calls for years, but no `TooltipWindow`; JUCE shows nothing without one, so
+  every tooltip was silent. With the window in place: a value box narrower than its name
+  (PERC NOTE "HH Closed · 42") shows the full text on hover, STEP SEQ boxes add the MIDI
+  number to their note name ("E1 · 40"), and the module ↺/ⓘ button hints finally appear.
+- **SAMPLER ROOT reads as a key, not a number.** The box says "C4" instead of "60" — a root
+  is a key, and everything else in JASS already names keys — and the hover adds the MIDI
+  number ("C4 · 60"). The stored value is unchanged; typing a number still works.
 
 ### Changed
 - **AMP and PAN sit together now, at the end of every generator.** OSC 1–3, WAVETABLE, SUB

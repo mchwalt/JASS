@@ -198,6 +198,18 @@ namespace rack
                     s->textFromValueFunction = k->textFromValue;
                     s->valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
                     s->updateText();
+                    // The value box can be narrower than the name (PERC NOTE: "HH Closed · 42"):
+                    // hovering the knob shows the full read-out as a tooltip, kept in sync below
+                    // and in refreshNamedReadouts. tooltipFromValue may say MORE than the box
+                    // (STEP SEQ: box "E1", hover "E1 · 40"); default is the box text. Chained like
+                    // the audition hook — a transform knob has already claimed onValueChange.
+                    s->tooltipFromValue = k->tooltipFromValue ? k->tooltipFromValue : k->textFromValue;
+                    s->refreshTooltip();
+                    s->onValueChange = [s, prev = std::move (s->onValueChange)]
+                    {
+                        if (prev) prev();
+                        s->refreshTooltip();
+                    };
                 }
 
                 if (k->modTarget != ModTarget::Off)
@@ -831,7 +843,10 @@ namespace rack
         for (auto& cell : cells)
             if (auto* s = dynamic_cast<SynthySlider*> (cell.widget))
                 if (s->textFromValueFunction)
+                {
                     s->updateText();
+                    s->refreshTooltip();   // full text on hover, same reference as the box
+                }
     }
 
     void ModuleFrame::updateCondKnobs()
