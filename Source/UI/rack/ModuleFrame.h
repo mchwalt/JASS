@@ -71,6 +71,11 @@ namespace rack
         // 12.6: the editor re-lists the SET combo while the background preload adds sets.
         void refreshCombo (const juce::String& paramId);
 
+        // Re-run every named read-out (Knob::textFromValue): a display can depend on EDITOR
+        // state the parameter never sees — STEP SEQ's note names follow the computer keyboard's
+        // octave, so the octave keys must re-text the boxes without any value changing.
+        void refreshNamedReadouts();
+
     private:
 
         // Enabled/lit = param-enable AND derived-predicate. A module may have EITHER (a real
@@ -120,10 +125,11 @@ namespace rack
         // they show toDisplay(base, ratio) and write fromDisplay(shown, ratio) back.
         struct XformKnob { SynthySlider* slider; juce::String paramId;
                            std::function<double(double,double)> toDisplay, fromDisplay; };
-        // Knobs carrying a per-knob relevance predicate (Knob::activeWhen): polled by the timer,
-        // which disables + dims just that knob (and its caption) when the predicate is false.
+        // Controls carrying a relevance predicate (Knob::activeWhen / Combo::activeWhen): polled
+        // by the timer, which disables + dims just that control (and its caption) when the
+        // predicate is false. Component-level (setEnabled/setAlpha), so knobs and combos share it.
         // `active` caches the last applied state so we only touch the widgets on a real change.
-        struct CondKnob { SynthySlider* slider; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
+        struct CondKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
         // Knobs carrying Knob::highlightWhen: polled by the timer, ringed by paintOverChildren while
         // the predicate holds. `on` caches the last state so we only repaint on a real change.
         // `ring` false => the mark is a lit dot (a sequencer playhead) instead of a ring (the write
