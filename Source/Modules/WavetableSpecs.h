@@ -20,6 +20,7 @@ namespace Modules
             { "wavetableUniVoices", "UnisonVoices", "VOICES", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (1.0f, 7.0f, 1.0f), 1.0f },
             { "wavetableUniDetune", "UnisonDetune", "DETUNE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.2f },
             { "wavetablePan",       "Pan",          "PAN",    ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f },   // Epic 10: stereo placement (knob added to the hand-built body in the editor)
+            { "wavetableFeedback",  "Feedback",     "FB",     ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f, {}, {}, LFOTarget::WavetableFeedback },   // Self-FM depth, same scale as the OSC FB knob
         };
         return m;
     }

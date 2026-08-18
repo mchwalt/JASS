@@ -45,6 +45,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   preset meant leaving the app for the file explorer. The new DELETE button next to them opens
   the same chooser, asks once, and moves the file to the **recycle bin** — never a hard delete.
   Any F-key still pointing at the deleted preset is cleared along with it.
+- **Self-FM (FB) reaches the WAVETABLE and SUB generators.** The FB knob has lived on OSC 1–3
+  since July, but the two generators where it pays off most went without: on a wavetable the
+  same feedback depth sounds different on every table and POS (the feedback works on the frame's
+  own spectrum), and on the SUB it morphs the clean sine toward a brighter, saw-like bass without
+  needing a second oscillator. Both knobs are mod-matrix targets (`WT FB`, `Sub FB`), so an
+  S&H or envelope can now drive the growl. Existing presets are untouched — the new knobs
+  default to 0.
 
 ### Fixed
 - **A dead F-key assignment now clears itself.** Renaming or deleting a preset file on disk left
@@ -70,6 +77,11 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   waves, route Chaos X/Y (which auto-enables CHAOS, so the routing is actually heard), and land
   on a QUANT scale — S&H → FREQ → Major is exactly the kind of happy accident the button is for.
   Random patches will *feel* different than before; that is the feature working, not a bug.
+- **Self-FM is damped DX-style (all oscillators).** The feedback loop now averages the last two
+  samples instead of feeding back the raw previous one. The raw one-sample loop flips sign at the
+  loop's own Nyquist and erupts into broadband noise well before the knob's end — the classic FM
+  synths average two samples precisely to cancel that alternating component. High FB values now
+  stay a playable growl instead of a hiss; low and mid settings are essentially unchanged.
 
 ## [2026.08.7] – 2026-08-12
 
