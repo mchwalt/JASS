@@ -5,5 +5,5 @@ Wavetable (a set of waveforms you sweep through) oscillator that scans through a
 - **FREQ** (how high or low) — pitch.
 - **VOICES** (stacked detuned copies, fatter) — adds detuned unison copies.
 - **DETUNE** (slight pitch offset) — spreads them for width.
-- **FB** (self-FM) — the wave modulates its own phase: adds bite, high values growl. Reacts differently per table and POS.
+- **FB** (self-FM) — the wave modulates its own phase: adds bite, high values growl. Reacts differently per table and POS: on harmonically dense tables (Harmonic, Vocal, PWM, Spectral) keep it low — high values break up.
 - **AMP** (loudness) — level.
