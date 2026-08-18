@@ -11,6 +11,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **The KEYBOARD help names the range.** 88 keys, A0–C8 — the full piano layout, matching a
+  grand or an 88-key digital piano — and the note that MIDI input is not limited by the
+  visible range. It was nowhere to read; now it is where a player would look, on the
+  module's own help page.
 - **QUANT — a per-row scale mask in the MOD MATRIX.** Pitch modulation had one failure mode this
   synth already paid to learn (story 14.1): continuous detune across notes reads as *out of tune*,
   not as analog. Quantized jumps are a different animal — they are not detune, they are **notes**.
