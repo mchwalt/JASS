@@ -22,7 +22,7 @@ namespace Modules
             { "samplerStart", "Start",   "START", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 0.0f },
             { "samplerEnd",   "End",     "END",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f },
             { "samplerMode",  "Mode",    "MODE",  ParamSpec::Kind::Choice, {}, 1.0f, { "One-Shot", "Loop", "Reverse", "Rev-Loop" } },   // default Loop (user pick)
-            { "samplerLevel", "Level",   "LEVEL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::SamplerLevel },
+            { "samplerLevel", "Amp",     "AMP",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::SamplerLevel },   // renamed from Level/LEVEL (generator standard); APVTS id stays samplerLevel
             { "samplerPan",   "Pan",     "PAN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::SamplerPan },
             // Playback-speed multiplier on top of the key transposition (tape-style: pitch moves
             // with it). Log-skewed so 1.0 sits centred. Append-only (added after first build).
@@ -38,6 +38,7 @@ namespace Modules
             // (missing ⇒ default). Append-only (added after first build).
             { "samplerRelease", "Release", "REL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 8.0f, 0.01f, 0.5f), 0.0f },
         };
+        m.params[6].legacyPersistKey = "Level";   // pre-2026-08 presets store Sampler.Level; still read
         return m;
     }
 }

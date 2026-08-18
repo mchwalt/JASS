@@ -32,7 +32,7 @@
     "Enabled": false,
     "Waveform": "Sine",
     "Octave": "-1 Oct",
-    "Level": 0.5,
+    "Amp": 0.5,
     "Pan": 0.0
   },
   "Noise": {
@@ -257,7 +257,7 @@
     "End": 1.0,
     "Mode": "One-Shot",
     "Stretch": false,
-    "Level": 0.5,
+    "Amp": 0.5,
     "Pan": 0.0,
     "Speed": 1.0,
     "Release": 2.160000085830688,
