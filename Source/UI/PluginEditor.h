@@ -58,7 +58,48 @@ public:
         paintPatternNote (midiNote, g, area);
     }
 
+    // Hover readout: name + MIDI number of the key under the mouse ("A3 · 57"), pinned to the
+    // top-right corner — a fixed place to look, not a tooltip chasing the cursor. Exists for
+    // transcribing from templates: sheet or GM tables name notes, SAMPLER ROOT / PERC NOTE
+    // count numbers, and this shows both before the key is pressed.
+    void mouseMove (const juce::MouseEvent& e) override
+    {
+        setHoverNote (getNoteAndVelocityAtPosition (e.position).note);
+        juce::MidiKeyboardComponent::mouseMove (e);
+    }
+
+    void mouseExit (const juce::MouseEvent& e) override
+    {
+        setHoverNote (-1);
+        juce::MidiKeyboardComponent::mouseExit (e);
+    }
+
+    void paint (juce::Graphics& g) override
+    {
+        juce::MidiKeyboardComponent::paint (g);
+        if (hoverNote < 0)
+            return;
+        // Separator as an explicit UTF-8 escape: a bare "·" literal is non-ASCII, and MSVC
+        // reads a BOM-less file as ANSI — the two UTF-8 bytes then render as mojibake.
+        const auto text = juce::MidiMessage::getMidiNoteName (hoverNote, true, true, 4)   // 60 = C4, as everywhere in JASS
+                        + juce::String::fromUTF8 (" \xc2\xb7 ") + juce::String (hoverNote);
+        const auto box = getLocalBounds().toFloat().removeFromTop (26.0f).removeFromRight (130.0f).reduced (2.0f);
+        g.setColour (juce::Colours::black.withAlpha (0.75f));
+        g.fillRoundedRectangle (box, 4.0f);
+        g.setColour (juce::Colours::white);
+        g.setFont (juce::FontOptions (17.0f, juce::Font::bold));
+        g.drawText (text, box, juce::Justification::centred);
+    }
+
 private:
+    void setHoverNote (int midiNote)
+    {
+        if (midiNote == hoverNote)
+            return;
+        hoverNote = midiNote;
+        repaint();
+    }
+
     void paintPatternNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) const
     {
         if (midiNote != patternNote)
@@ -68,6 +109,7 @@ private:
     }
 
     int patternNote = -1;
+    int hoverNote = -1;
 };
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
@@ -246,6 +288,10 @@ private:
     void releaseComputerKeys();                    // note-off everything we started
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
+
+    // Without a TooltipWindow instance JUCE shows NO tooltips at all — every setTooltip in the
+    // rack (module reset/info buttons, the full-text knob read-outs) was silent until this line.
+    juce::TooltipWindow tooltipWindow { this, 400 };
     int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
 
     // Preview of a STEP SEQ step while it is edited (Story 15.3). The step's value is an offset in

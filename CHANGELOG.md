@@ -70,6 +70,25 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   figure at step 0, quantised to the pattern's next bar — the drums are the clock; the bass joins
   them, not the other way round.
 
+### Added
+- **The keyboard names the key under the mouse.** A fixed readout in the keyboard's top-right
+  corner shows the hovered key as name and MIDI number ("A3 · 57") — a fixed place to look,
+  deliberately not a tooltip chasing the cursor. It exists for transcribing: sheet music names
+  notes, GM drum tables and SAMPLER ROOT count numbers, and until now only the C keys carried
+  a label, so everything in between was counted off by eye.
+- **PERC's NOTE knob shows the MIDI number beside the instrument** ("Kick · 36"). Drum
+  transcriptions and the GM map speak in numbers; the knob said only "Kick", so transferring
+  a template meant guessing which name was which number. The stored value is unchanged —
+  the number was always there, now it is visible.
+- **Hovering a named read-out shows its full text — and tooltips work at all now.** The rack
+  had `setTooltip` calls for years, but no `TooltipWindow`; JUCE shows nothing without one, so
+  every tooltip was silent. With the window in place: a value box narrower than its name
+  (PERC NOTE "HH Closed · 42") shows the full text on hover, STEP SEQ boxes add the MIDI
+  number to their note name ("E1 · 40"), and the module ↺/ⓘ button hints finally appear.
+- **SAMPLER ROOT reads as a key, not a number.** The box says "C4" instead of "60" — a root
+  is a key, and everything else in JASS already names keys — and the hover adds the MIDI
+  number ("C4 · 60"). The stored value is unchanged; typing a number still works.
+
 ### Changed
 - **AMP and PAN sit together now, at the end of every generator.** OSC 1–3, WAVETABLE, SUB
   and KARPLUS scattered the two across the row (OSC read WAVE·FREQ·AMP·…·PAN); SAMPLER,
