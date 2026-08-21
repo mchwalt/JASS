@@ -253,10 +253,15 @@ namespace rack
                     // restored. The switch has no value of its own — it shares the knob's cell and
                     // previews the knob's pitch. Nothing here releases the note: there is no
                     // gesture to end, so the editor's safety cutoff closes it.
+                    // Guarded like the knob below: the ButtonAttachment replays a loaded preset
+                    // through setToggleState(sendNotificationSync), so onClick also fires for every
+                    // step the preset switches on — and previewing arms the write cursor (15.4).
+                    // Only a click with the mouse actually on the switch is a gesture.
                     if (k->audition)
                         tb->onClick = [tb, s, aud = k->audition]
                         {
-                            if (tb->getToggleState())
+                            if (tb->getToggleState()
+                                && (tb->isMouseButtonDown (true) || tb->isMouseOver (true)))
                                 aud ((int) s->getValue(), true);
                         };
                 }
