@@ -68,6 +68,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   default to 0.
 
 ### Fixed
+- **Saved presets write clean numbers again.** Parameters live as 32-bit floats; casting one
+  straight to double dragged its binary error into the JSON — a knob set to 0.6 was saved as
+  0.599999964237213, which made presets unreadable and diffs noisy. The writer now emits the
+  SHORTEST decimal that parses back to the very same float ("0.6"), so the file is cosmetic-
+  clean while every value stays bit-identical. Deliberately NOT blanket rounding: two fixed
+  decimal places would have silently doubled a 5 ms attack to 0.01.
 - **Figure-writing mode now has real exits: ESC ends it, and loading a preset clears it.**
   Entry into writing mode is deliberately cheap (15.4: touching any step knob moves the write
   cursor there), but the only exits were writing past the pattern's end or switching the module
