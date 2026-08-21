@@ -11,6 +11,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **New demo preset "Los Ninos" (F12).** Liaisons Dangereuses' "Los Niños del Parque" (1981,
+  MS-20 + SQ-10) as a sibling to DAF Beat — same school, different trick: where Mussolini
+  hammers straight 8ths, this figure is a **24-step (6-beat) loop running polymetrically over
+  the 4/4 drums**, so bass and beat realign only every three bars. Measured from the record
+  (54 folded cycles): 114 BPM, Bb1 pedal with the beat-3 note displaced onto the 16th after
+  the beat, Db3/Ab2 accents, and the Db3→Eb3 pickup into the cycle's downbeat; saw through a
+  dark resonant lowpass (≈330-420 Hz, Q 2.6 — the MS-20 squelch), swept per 8th by the same
+  LFO→cutoff trick DAF Beat uses. Figure refined against two ear-played covers and the
+  maintainer's ear — the analysis alone misread one position (Gb1's 3rd harmonic sits exactly
+  on Db3's fundamental; the ear broke the tie).
 - **The KEYBOARD help names the range.** 88 keys, A0–C8 — the full piano layout, matching a
   grand or an 88-key digital piano — and the note that MIDI input is not limited by the
   visible range. It was nowhere to read; now it is where a player would look, on the

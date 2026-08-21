@@ -134,6 +134,7 @@ namespace PresetIO
         // bass figure with PERC underneath it, which is the better demonstration of either, and a
         // drum map driven through the STEP SEQ was the workaround PERC replaced.
         slots[10] = "DAF Beat";         // 16.1: the bass figure with PERC underneath it
+        slots[11] = "Los Ninos";        // Liaisons Dangereuses: 24-step polymetric bass over 4/4 PERC
         return slots;
     }
 
