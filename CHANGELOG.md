@@ -58,6 +58,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   default to 0.
 
 ### Fixed
+- **Loading a preset no longer arms the STEP SEQ write cursor.** Every preset with an active
+  step left the sequencer in figure-writing mode (ring on a step, keys overwriting the
+  pattern instead of playing it). The step ON/OFF switch previews its step on click — but the
+  preset loader replays every switch through the same notification path, so "the preset
+  switched a step on" was indistinguishable from "the player clicked it", and previewing is
+  what arms the cursor. The knob had learned this lesson in 15.3 (only a gesture with the
+  mouse on the control may sound); the switch now carries the same guard.
 - **The WAVETABLE BANK picker actually picks the bank now.** Choosing any built-in except
   Basic played *Spectral*: the combo's stock attachment spreads its six items across the
   parameter's full 0–63 range ("Digital" wrote 13, "Vocal" 38 …), and the bank lookup
