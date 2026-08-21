@@ -68,6 +68,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   default to 0.
 
 ### Fixed
+- **Figure-writing mode now has real exits: ESC ends it, and loading a preset clears it.**
+  Entry into writing mode is deliberately cheap (15.4: touching any step knob moves the write
+  cursor there), but the only exits were writing past the pattern's end or switching the module
+  off — so tuning one step by ear left the sequencer armed indefinitely, with every played key
+  overwriting the figure, and a freshly loaded preset inherited that armed cursor from the
+  previous patch. ESC now stops writing (matching its "stop editing" meaning everywhere), and
+  the shared preset-load path drops the cursor — a loaded figure is exactly what the next
+  played key would have overwritten.
 - **Loading a preset no longer arms the STEP SEQ write cursor.** Every preset with an active
   step left the sequencer in figure-writing mode (ring on a step, keys overwriting the
   pattern instead of playing it). The step ON/OFF switch previews its step on click — but the

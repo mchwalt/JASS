@@ -1072,6 +1072,11 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     // The STEP SEQ latch is restored by PresetIO from the patch's own "StepSeq.LatchRoot" (15.5),
     // so a sequencer patch starts on the note it was saved on — nothing to do here.
 
+    // A loaded preset must never sit in figure-writing mode: the cursor is state about the PREVIOUS
+    // patch (armed by touching a step knob, 15.4 AC7), and the freshly loaded figure is exactly what
+    // the next played key would overwrite.
+    seqSetCursor(-1);
+
     if (res.migrated)
     {
         // Surface the conversion (AC6): the user should know a format upgrade happened
@@ -1409,6 +1414,15 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     if (key == juce::KeyPress::escapeKey && helpPanel && helpPanel->isVisible())
     {
         helpPanel->setVisible(false);
+        return true;
+    }
+    // ESC ends figure-writing (15.4). Entry is cheap by design — every touch of a step knob moves
+    // the cursor there (AC7) — but until now the only exits were writing past the pattern's end or
+    // switching the module off. Tuning a step by ear left the sequencer armed indefinitely, with
+    // every played key overwriting the figure. ESC is the universal "stop editing" key.
+    if (key == juce::KeyPress::escapeKey && seqCursor >= 0)
+    {
+        seqSetCursor(-1);
         return true;
     }
     // Up / Down arrows shift the computer-keyboard octave. (Moved off z/x — those are now note keys,
