@@ -17,7 +17,7 @@ namespace Modules
     // "0.6" and 0.599999964237213 are the identical parameter value after the round trip.
     static double shortestRoundTrip (float v)
     {
-        for (int places = 1; places <= 9; ++places)
+        for (int places = 1; places <= 12; ++places)
         {
             const double d = juce::String ((double) v, places).getDoubleValue();
             if ((float) d == v)
