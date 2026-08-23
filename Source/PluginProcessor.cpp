@@ -805,7 +805,18 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // processing is the very sound being removed. allNotesOff walks the voices directly —
     // RT-safe, and immune to the chord filter since no buffer event is involved.
     if (killVoicesRequested.exchange (false))
+    {
         synth.allNotesOff (0, false);
+        // The drone's voice just died with the rest — reset its bookkeeping too, or a patch that
+        // WANTS the drone (no latch, nothing held) would stay silent: autoNoteOn would still say
+        // "sounding" and nothing would ever re-trigger it. The noteOff clears the keyboard state;
+        // the drone logic below then re-triggers it within this very block if it is wanted.
+        if (autoNoteOn)
+        {
+            keyboardState.noteOff (kDroneChannel, kDroneNote, 0.0f);
+            autoNoteOn = false;
+        }
+    }
 
     // Which sound generators are currently enabled (one bit each).
     unsigned mask = 0;
