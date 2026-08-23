@@ -32,7 +32,8 @@ by accident.
 | Idea | What it does | Effort | Coolness |
 |---|---|---|---|
 | **Per-step accent row (story 15.2)** | A second row in the STEP SEQ: each step plays plain or accented, and the accent drives level, note length and/or a filter bump — the Korg SQ-10 / TB-303 mechanism. The Los Niños MIDI transcription (2026-08) proved the original plays **all 24 steps in two accent classes** (long/loud vs. short/quiet); our rests are the approximation. The missing feature for this whole preset class — it is also what parked the Kraftwerk "Roboter" attempt. | ★★★ | ★★★★★ |
-| **STEP SEQ ⇄ MIDI import/export** | Standard MIDI files are the lingua franca for patterns: load a figure straight from a `.mid` (velocity maps naturally onto the accent row), export a figure to the DAW or MuseScore. Pairs with a preset-format rework that stores each step as its own object — MIDI note number plus the spelled name (`"C#2"`) for readability. | ★★★ | ★★★★ |
+| **STEP SEQ ⇄ MIDI import/export** | Standard MIDI files are the lingua franca for patterns: load a figure straight from a `.mid` (velocity maps naturally onto the accent row), export a figure to the DAW or MuseScore. Pairs with a preset-format rework that stores each step as its own object — MIDI note number plus the spelled name (`"C#2"`) for readability. Import/export conventions are worked out in [`Sequencer_Market_Analysis.md`](Sequencer_Market_Analysis.md). | ★★★ | ★★★★ |
+| **Euclid fill for PERC** | Three parameters — steps, pulses, rotate — spread hits Euclidean-evenly over a track's grid (E(3,8) = tresillo, E(4,16) = four-on-the-floor) as a starting point the player then edits per step; the Torso T-1's entry model. The maintainer places this on **PERC**, not the melodic STEP SEQ (2026-08-23): density-first entry shines for hi-hat and percussion lanes, while a bass figure lives on *which note where*. | ★★ | ★★★ |
 
 ## Effects
 
