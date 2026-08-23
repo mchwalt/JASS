@@ -90,6 +90,11 @@ public:
     // slow chaotic source (~94 Hz update at 512-sample blocks).
     void setChaosValues (float x, float y) noexcept { chaosSrc[0] = x; chaosSrc[1] = y; }
 
+    // ACCENT depth (15.2), pushed per block by the processor from STEP SEQ's knob: how much a
+    // note's velocity above/below the sequencer's plain 100 moves the note's gain and cutoff.
+    // 0 = velocity changes nothing — the pre-15.2 behaviour and the sound of every old preset.
+    void setAccentDepth (float d) noexcept { accentDepth = d; }
+
     // Spatialization (Epic 10): the processor writes the output mode + the per-generator pans each
     // block (applyToVoice); the voice turns them into per-channel gains at the top of renderNextBlock.
     int& getOutputModeRef() { return outputMode; }
@@ -155,6 +160,7 @@ private:
     bool    modMatrixOn = true;    // false => explicit slots ignored (implicit LFO routing still applies)
     float   noteVelocity = 1.0f;   // MIDI velocity 0..1 (Velocity mod source)
     float   chaosSrc[2] {};        // ChaosX/Y sources — global attractor snapshot (setChaosValues)
+    float   accentDepth = 0.0f;    // 15.2: velocity → gain/cutoff amount (STEP SEQ's ACCENT knob)
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

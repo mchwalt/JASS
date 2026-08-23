@@ -25,6 +25,69 @@ namespace rack
             return { (double) r.start, (double) r.end, (double) r.interval,
                      (double) r.skew, r.symmetricSkew };
         }
+
+        // Three-state step switch (15.2): a click cycles OFF (rest) → ON → ACCENTED → OFF — the
+        // TR-909's second-press gesture — over TWO bool parameters (the step's on/off and its
+        // accent). ParameterAttachments keep it repainting on preset/host changes WITHOUT firing
+        // the cycle: only a real mouse click advances the state (the #56 lesson — a loader replay
+        // must never read as a gesture). Drawn by hand so the third state fits the checkbox look:
+        // empty = rest, tick = on, filled + tick = accented.
+        class StepSwitch : public juce::Button
+        {
+        public:
+            StepSwitch (juce::AudioProcessorValueTreeState& state,
+                        const juce::String& onId, const juce::String& accId)
+                : juce::Button ({}),
+                  onValue  (state.getRawParameterValue (onId)),
+                  accValue (state.getRawParameterValue (accId)),
+                  onAtt  (*state.getParameter (onId),  [this] (float) { repaint(); }),
+                  accAtt (*state.getParameter (accId), [this] (float) { repaint(); })
+            {
+            }
+
+            bool isOn()       const { return onValue  != nullptr && onValue->load()  > 0.5f; }
+            bool isAccented() const { return accValue != nullptr && accValue->load() > 0.5f; }
+
+            void clicked() override
+            {
+                // Complete gestures, so a host records single automation events. The accent is
+                // written FIRST on the way up (on+accent land as one audible state change) and
+                // cleared first on the way out.
+                const bool on = isOn(), acc = isAccented();
+                if (! on)       { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (1.0f); }
+                else if (! acc) { accAtt.setValueAsCompleteGesture (1.0f); }
+                else            { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (0.0f); }
+            }
+
+            void paintButton (juce::Graphics& g, bool over, bool down) override
+            {
+                auto r = getLocalBounds().toFloat().reduced (3.0f);
+                const auto tick = findColour (juce::ToggleButton::tickColourId);
+                const auto box  = findColour (juce::ToggleButton::tickDisabledColourId);
+                if (isAccented())
+                {
+                    g.setColour (tick.withAlpha (0.45f));   // the "hot" fill behind the tick
+                    g.fillRoundedRectangle (r, 3.0f);
+                }
+                g.setColour (over || down ? box.brighter (0.4f) : box);
+                g.drawRoundedRectangle (r, 3.0f, 1.0f);
+                if (isOn())
+                {
+                    g.setColour (tick);
+                    auto t = r.reduced (2.5f);
+                    juce::Path p;
+                    p.startNewSubPath (t.getX(), t.getCentreY());
+                    p.lineTo (t.getX() + t.getWidth() * 0.35f, t.getBottom() - 1.0f);
+                    p.lineTo (t.getRight(), t.getY());
+                    g.strokePath (p, juce::PathStrokeType (1.6f));
+                }
+            }
+
+        private:
+            std::atomic<float>* onValue;
+            std::atomic<float>* accValue;
+            juce::ParameterAttachment onAtt, accAtt;
+        };
     }
 
     ModuleFrame::ModuleFrame (juce::AudioProcessorValueTreeState& a, ModuleDescriptor d)
@@ -239,11 +302,22 @@ namespace rack
                 // predicate is built HERE from the parameter, so no editor injection is needed.
                 if (k->toggleParamId.isNotEmpty())
                 {
-                    auto* tb = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
+                    juce::Button* tb;
+                    if (k->accentParamId.isNotEmpty())
+                    {
+                        // Three-state switch (15.2): off → on → accented, one gesture per click.
+                        tb = static_cast<juce::Button*> (ownedWidgets.add (
+                                 new StepSwitch (apvts, k->toggleParamId, k->accentParamId)));
+                    }
+                    else
+                    {
+                        auto* plain = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
+                        buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+                            apvts, k->toggleParamId, *plain));
+                        tb = plain;
+                    }
                     tb->setWantsKeyboardFocus (false);   // never steal focus from the on-screen keyboard
                     addAndMakeVisible (*tb);
-                    buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
-                        apvts, k->toggleParamId, *tb));
                     cells.back().toggle = tb;
                     if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
                         condKnobs.push_back ({ s, cells.back().caption,
@@ -256,14 +330,20 @@ namespace rack
                     // Guarded like the knob below: the ButtonAttachment replays a loaded preset
                     // through setToggleState(sendNotificationSync), so onClick also fires for every
                     // step the preset switches on — and previewing arms the write cursor (15.4).
-                    // Only a click with the mouse actually on the switch is a gesture.
+                    // Only a click with the mouse actually on the switch is a gesture. (The
+                    // three-state StepSwitch only ever changes state from a real click, but the
+                    // mouse guard stays — one rule for both kinds.) The ON test reads the PARAM,
+                    // not getToggleState — the StepSwitch never sets its Button toggle state.
                     if (k->audition)
-                        tb->onClick = [tb, s, aud = k->audition]
+                    {
+                        auto* onRaw = apvts.getRawParameterValue (k->toggleParamId);
+                        tb->onClick = [tb, s, onRaw, aud = k->audition]
                         {
-                            if (tb->getToggleState()
+                            if (onRaw != nullptr && onRaw->load() > 0.5f
                                 && (tb->isMouseButtonDown (true) || tb->isMouseOver (true)))
                                 aud ((int) s->getValue(), true);
                         };
+                    }
                 }
 
                 // Preview while editing (Story 15.3): re-trigger on every step of the knob so a

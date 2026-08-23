@@ -1,10 +1,11 @@
 Spielt eine 32-Schritt-Figur, die du selbst schreibst, transponiert durch die gespielte Taste. **Die erste Taste startet sie, und sie läuft weiter** — du musst nichts gedrückt halten. Eine neue Taste setzt die Figur auf diesen Grundton, Hoch / Runter verschieben sie um eine Oktave, und die **Leertaste stoppt** sie. Das Ausschalten des Moduls ebenfalls.
 
-- **1 … 32** — die Note des Schritts. Die Box zeigt die echte Tonhöhe (E1, C3 …), die der Schritt in der aktuellen Oktave der Klaviatur spielt — die Figur transponiert weiterhin mit der gespielten Taste. Der Schalter in der Ecke eines Knopfes schaltet den Schritt aus: eine Pause.
+- **1 … 32** — die Note des Schritts. Die Box zeigt die echte Tonhöhe (E1, C3 …), die der Schritt in der aktuellen Oktave der Klaviatur spielt — die Figur transponiert weiterhin mit der gespielten Taste. Der Schalter in der Ecke eines Knopfes schaltet den Schritt weiter: **an → akzentuiert (gefüllt: spielt härter, Filter öffnet) → aus (eine Pause)**.
 - **SYNC** — Schrittlänge als Notenwert. Auf *Free* stellen, um stattdessen RATE zu benutzen.
 - **RATE** — Schritte pro Sekunde, wenn SYNC auf *Free* steht.
 - **LEN** — nach wie vielen Schritten das Muster wiederholt.
 - **GATE** — Notenlänge. **1 = Legato**: jeder Ton wird in den nächsten Schritt gehalten, ohne Lücke. Kleinere Werte kürzen alle Töne.
+- **ACCENT** — was ein akzentuierter Schritt tut: wie viel lauter er spielt und wie weit der Filter öffnet. Bei 0 ändern Akzente nichts.
 
 Beim Klicken oder Drehen erklingt der Schritt, du kannst die Figur also nach Gehör schreiben. Vorschau, Eingabe und Notennamen folgen dem Grundton, auf dem die Figur klingt: der gelatchten Taste, solange eine läuft, sonst dem aktuellen C der Klaviatur (Hoch / Runter verschiebt es).
 

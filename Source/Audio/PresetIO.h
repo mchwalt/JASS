@@ -36,7 +36,8 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 6;   // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
+    constexpr int kFormatVersion = 7;   // v7 = StepSeq steps as an ARRAY of note objects + accent (15.2).
+                                        // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
                                         // v5 = MOD MATRIX DEST split into MODULE + PARAM (per-OSC targets).
                                         // v4 = LFO built-in target folded into matrix slots.
                                         // v3 = nested-per-module. v<3 = flat (legacy).
@@ -507,6 +508,37 @@ namespace PresetIO
                 if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
                     mod->setProperty("LatchRoot", n);
 
+        // STEP SEQ steps as an ARRAY of note objects (FormatVersion 7, story 15.2) — a figure in
+        // the file reads as music instead of as a knob dump. Replaces the flat Pitch1/Step1/…
+        // keys the spec pass wrote above. Per step: "On", "Note" — the ABSOLUTE MIDI note,
+        // canonical (maintainer's design 2026-08-24; the key name was reserved when the Comment
+        // field landed) — "Name", its spelled form, generated purely for the reader's eyes (the
+        // loader ignores it, so number and name can never diverge), and "Accent" (15.2, omitted
+        // when plain so the common case stays terse). Absolute pitch is resolved against the
+        // latch root written just above — or C3 (48), the keyboard's default C, for a patch saved
+        // without a running figure. applyVar reverses the same rule, so offsets round-trip
+        // exactly and the figure still transposes with the played key.
+        if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
+        {
+            const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
+            juce::Array<juce::var> steps;
+            for (int s = 1; s <= 32; ++s)   // 32 = StepSequencer::kMaxSteps (= the JASS_INDEXED_ID cap)
+            {
+                auto* st = new juce::DynamicObject();
+                const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
+                st->setProperty("On",   *a.getRawParameterValue(ID::seqStep(s)) > 0.5f);
+                st->setProperty("Note", note);
+                st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
+                if (*a.getRawParameterValue(ID::seqAcc(s)) > 0.5f)
+                    st->setProperty("Accent", true);
+                steps.add(juce::var(st));
+                mod->removeProperty("Pitch"  + juce::String(s));
+                mod->removeProperty("Step"   + juce::String(s));
+                mod->removeProperty("Accent" + juce::String(s));
+            }
+            mod->setProperty("Steps", juce::var(steps));
+        }
+
         return juce::var(root);
     }
 
@@ -731,6 +763,31 @@ namespace PresetIO
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
 
         Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
+
+        // STEP SEQ steps from the v7 ARRAY (see toVar) — decoded AFTER the spec pass, which read
+        // the flat v6 Pitch1/Step1… keys if the file still carries them (a v7 file does not, so
+        // the spec pass left the factory defaults standing). The absolute "Note" minus the file's
+        // latch root (C3 = 48 when none) restores the engine's offset; "Name" is readability only
+        // and deliberately ignored — the number is canonical.
+        if (auto* seq = v["StepSeq"].getDynamicObject())
+            if (auto* steps = seq->getProperty("Steps").getArray())
+            {
+                const int ref = seq->hasProperty("LatchRoot")
+                                    ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
+                auto setRaw = [&a](const juce::String& id, float raw)
+                {
+                    if (auto* p = a.getParameter(id))
+                        p->setValueNotifyingHost(p->convertTo0to1(raw));
+                };
+                for (int s = 0; s < juce::jmin(32, steps->size()); ++s)
+                {
+                    const auto& st = steps->getReference(s);
+                    if (! st.isObject()) continue;
+                    setRaw(ID::seqStep (s + 1), (bool) st["On"] ? 1.0f : 0.0f);
+                    setRaw(ID::seqPitch(s + 1), (float) juce::jlimit(-24, 24, (int) st["Note"] - ref));
+                    setRaw(ID::seqAcc  (s + 1), (bool) st["Accent"] ? 1.0f : 0.0f);
+                }
+            }
 
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);

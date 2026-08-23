@@ -51,14 +51,15 @@ once a step is an object, accent is one added field, and so is everything after 
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Design decisions with the maintainer — **hard gate before code**
-  - [ ] Step-object shape: `"Steps"` array vs numbered keys; absolute MIDI vs offset
-  - [ ] Accent carrier: recommendation **velocity** (accented ⇒ higher note-on velocity, the
-        ACCENT knob scales how much velocity moves amp + cutoff) — it round-trips through
-        MIDI naturally (v98/v80!) and story D inherits it for free. Requires checking how
-        velocity reaches SynthVoice today (sampler has layers; the synth path may ignore it)
-  - [ ] Should writing-by-playing capture accent from played velocity (MIDI keyboard), with
-        a threshold? Nice-to-have; decide now, build maybe later
+- [x] Task 1: Design decisions — **maintainer decided 2026-08-24:**
+  - [x] Step-object shape: **`"Steps"` array** of 32 objects
+  - [x] **Absolute MIDI note** in the file (spelled name generated alongside); the engine keeps
+        root-relative offsets internally — conversion against the stored latch root, falling
+        back to C3 (48, the keyboard's default C) when no latch was saved
+  - [x] Accent carrier: **velocity** — accented steps emit a higher note-on velocity; the
+        ACCENT knob scales how much velocity moves amp + cutoff
+  - [ ] Write-by-playing capturing accent from played velocity: deferred, revisit after the
+        core ships
 - [ ] Task 2: Format v7 (`Source/Audio/PresetIO.h`, `docs/JASS_Preset_Format.md`)
   - [ ] Writer emits step objects; reader reads v7 objects AND v6 flat keys (legacy path)
   - [ ] `kFormatVersion` → 7; startup migration re-saves user presets (existing mechanism);
@@ -138,8 +139,42 @@ once a step is an object, accent is one added field, and so is everything after 
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Fable 5.
 
-### Completion Notes List
+### Completion Notes List (2026-08-24, build-verified — maintainer's ear still pending)
+
+- **Format v7 shipped** exactly as decided: `toVar` post-processes the spec-written StepSeq
+  object — flat `Pitch/Step/Accent` keys removed, `"Steps"` array of
+  `{On, Note (absolute, canonical), Name (generated, ignored on load), Accent (omitted when
+  plain)}` added; reference = `LatchRoot`, fallback C3 (48). `applyVar` decodes the array after
+  the spec pass (which still reads flat v6 keys). `kFormatVersion` = 7; the existing startup
+  migration + LOAD-dialog path handle old files with backups, unchanged.
+- **Accent chain:** per-step `seqAcc1..32` (Bool, spec-driven, `showInBody=false`) + `seqAccent`
+  depth knob (0..1, default 0.5, fills row 2's empty trailing cell — footprint unchanged).
+  `StepSequencer` emits accented steps at velocity 127 vs plain 100. `SynthVoice` maps velocity
+  around the plain reference (100/127): cutoff ±1 octave at full depth (baked into `baseCutoff`,
+  pushed through the strips' existing cutoff apply via `tActive`), gain ±4 dB (one multiply at
+  the output write). Depth 0 = bit-exact pre-15.2 behaviour. Side effect by design: a MIDI
+  keyboard plays touch-sensitively as far as ACCENT is up.
+- **UI:** new `StepSwitch` (3-state, hand-painted checkbox: empty/tick/filled+tick) in
+  `ModuleFrame`, driven by two `ParameterAttachment`s so preset/host changes repaint without
+  firing the cycle (the #56 lesson); `ModuleDescriptor::Knob::accentParamId` opts a knob in.
+  Audition previews accented steps hot (127) and re-triggers on accent change.
+- **Still open (Task 5):** Los Niños update to the authentic 24-step two-class figure — needs
+  the per-step velocity classes extracted from `D:\downloads\los_ninos.mid` plus the
+  maintainer's ear for the ACCENT depth; demo presets not yet re-saved as v7 files in the repo.
+  DAF Beat accents = maintainer's call after hearing.
+- RANDOM now also rolls accents/depth (they are ordinary params) — treated as a feature of the
+  button, same as random figures.
 
 ### File List
+
+- `Source/Audio/Parameters.h` (seqAcc1..32, seqAccent, warm loop)
+- `Source/Modules/StepSeqSpecs.h` (accent params, ACCENT knob, layout comment)
+- `Source/DSP/StepSequencer.h` (accent array, hot velocity)
+- `Source/Audio/SynthVoice.{h,cpp}` (accentDepth, cutoff/gain mapping)
+- `Source/PluginProcessor.cpp` (accent copy, depth push per voice)
+- `Source/UI/rack/ModuleDescriptor.h` (accentParamId), `Source/UI/rack/ModuleFrame.cpp` (StepSwitch)
+- `Source/UI/PluginEditor.{h,cpp}` (wiring, accented audition)
+- `Source/Audio/PresetIO.h` (FormatVersion 7, Steps array writer/reader)
+- `Resources/{EN,DE}/stepseq.md`, `docs/JASS_Preset_Format.md`, `CHANGELOG.md`
