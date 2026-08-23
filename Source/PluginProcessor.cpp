@@ -49,6 +49,10 @@ SynthyProcessor::SynthyProcessor()
     // one puts it back — so a sequencer patch plays itself the moment it is loaded. -1 on load means
     // "no latch" and stops whatever the previous patch left running. Starting the latch also ends
     // the auto-play drone, since the instrument is now playing.
+    // A preset is a post-coupling snapshot: while one is applied, the parameter couplings stay
+    // silent and their auto-enable memories are dropped (see setPresetLoading in the header).
+    PresetIO::setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
+
     PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
     PresetIO::applySeqLatchRoot = [this] (int note)
     {
@@ -235,8 +239,9 @@ SynthyProcessor::~SynthyProcessor()
     // load cannot queue work into a dying thread. The abort is polled per zone, so this returns
     // in milliseconds even mid-piano.
     PresetIO::requestSamplerSet = nullptr;
-    PresetIO::seqLatchRoot      = nullptr;   // both capture `this` — drop them before it dies
+    PresetIO::seqLatchRoot      = nullptr;   // these capture `this` — drop them before it dies
     PresetIO::applySeqLatchRoot = nullptr;
+    PresetIO::setPresetLoading  = nullptr;
     samplePreload.stopThread (4000);
 
     keyboardState.removeListener(this);
@@ -474,6 +479,13 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     // Off the message thread we do NO allocation / setValueNotifyingHost: just flag the needed
     // reconciliation (atomic) and let reconcileParamCouplingsIfDirty() run it on the message thread.
     const bool onMsgThread = juce::MessageManager::existsAndIsCurrentThread();
+
+    // A preset being applied is a post-coupling snapshot — apply it verbatim, run no couplings
+    // (see setPresetLoading). Without this guard the load itself triggered them against
+    // half-applied states, and the auto-enable memories made the outcome depend on the patch
+    // loaded BEFORE — presets sometimes needed two or three loads to arrive intact.
+    if (presetLoading.load())
+        return;
 
     if (paramId.startsWith("modSlot"))   // startsWith(const char*) is alloc-free
     {

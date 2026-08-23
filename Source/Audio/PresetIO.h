@@ -346,6 +346,14 @@ namespace PresetIO
     inline std::function<int()>     seqLatchRoot;
     inline std::function<void(int)> applySeqLatchRoot;
 
+    // Preset-load bracket. A saved preset is a snapshot taken AFTER every parameter coupling
+    // already ran, so applyVar must land it VERBATIM: the processor silences its couplings
+    // (matrix auto-enable, ARP/SEQ exclusion, CROSS-MOD) while this reports true and drops their
+    // auto-enable memories — carried across a load, those made the result depend on the PREVIOUS
+    // patch (presets needed two or three loads to arrive intact, maintainer 2026-08-23).
+    // Unset (plugin build without the hook, tests): loads behave as before.
+    inline std::function<void(bool)> setPresetLoading;
+
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
     inline void preloadSamples(std::function<bool()> shouldAbort = {})
@@ -528,6 +536,8 @@ namespace PresetIO
         const int fileVersion = jint(v, "FormatVersion", 1);
         juce::ignoreUnused(fileVersion);
 
+        if (setPresetLoading) setPresetLoading(true);   // couplings off — same bracket as applyVar
+
         // FACTORY RESET before reading (a preset is a COMPLETE snapshot): reset every parameter
         // to its default AND clear the rack layout to factory. Any field the file omits then
         // falls back to factory instead of inheriting the previously loaded patch. (Per-field
@@ -702,6 +712,8 @@ namespace PresetIO
         // it via Rack::reloadLayoutFromState() after a load.
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
+
+        if (setPresetLoading) setPresetLoading(false);
     }
 
     // ── Import (nested v3 — the live reader) ──
@@ -709,6 +721,9 @@ namespace PresetIO
     {
         if (! v.isObject())
             return;
+        // Couplings off while the snapshot lands (see setPresetLoading) — the writes below would
+        // otherwise fire them hundreds of times against half-applied intermediate states.
+        if (setPresetLoading) setPresetLoading(true);
         // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
         // file's values on top (missing field => factory default). Clear the rack-layout baseline.
         for (auto* p : a.processor.getParameters())
@@ -780,6 +795,8 @@ namespace PresetIO
                     latch = (int) seq->getProperty ("LatchRoot");
             applySeqLatchRoot (latch);
         }
+
+        if (setPresetLoading) setPresetLoading(false);   // couplings live again — for GESTURES
     }
 
     // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,
