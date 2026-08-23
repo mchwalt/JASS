@@ -23,6 +23,14 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   every coupling already ran, so it is now applied verbatim: the couplings stay silent during the
   load and their memories are cleared with the outgoing patch. Hand gestures behave exactly as
   before.
+- **Loading a preset silences the previous patch's voices.** Nothing ever did: a note held (or
+  still ringing) across the switch kept its voice alive and playing through the NEW patch's
+  parameters — and when the new patch runs the STEP SEQ, the sequencer's chord filter swallows
+  the key's later note-off, so the leftover voice hung forever. Switching from GrandPiano to
+  DAF Beat left a saw drone running under the beat; the rack looked exactly like the preset,
+  because it *was* the preset — the dirt was a voice from the patch before. Every load now
+  requests a hard all-voices stop, executed at the top of the next audio block, before the new
+  patch plays a note.
 
 ## [2026.08.8] – 2026-08-23
 
