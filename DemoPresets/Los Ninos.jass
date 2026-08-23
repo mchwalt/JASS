@@ -1,6 +1,7 @@
 {
   "FormatVersion": 6,
   "Name": "Los Ninos",
+  "Comment": "Verified against a MIDI transcription of the original: the original jumps up an octave to Bb2 on step 13; this preset deliberately leaves that out (a matter of taste - to restore it, set step 13 to Bb2). The original also plays all 24 steps using two accent classes (long/loud vs. short/quiet, the Korg SQ-10 accent row); the rests here are an approximation until per-step accents exist.",
   "Modified": false,
   "Filter": {
     "Enabled": true,
