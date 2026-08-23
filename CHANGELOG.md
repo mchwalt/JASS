@@ -10,6 +10,156 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.8] – 2026-08-23
+
+### Added
+- **New demo preset "Los Ninos" (F12).** Liaisons Dangereuses' "Los Niños del Parque" (1981,
+  MS-20 + SQ-10) as a sibling to DAF Beat — same school, different trick: where Mussolini
+  hammers straight 8ths, this figure is a **24-step (6-beat) loop running polymetrically over
+  the 4/4 drums**, so bass and beat realign only every three bars. Measured from the record
+  (54 folded cycles): 114 BPM, Bb1 pedal with the beat-3 note displaced onto the 16th after
+  the beat, Db3/Ab2 accents, and the Db3→Eb3 pickup into the cycle's downbeat; saw through a
+  dark resonant lowpass (≈330-420 Hz, Q 2.6 — the MS-20 squelch), swept per 8th by the same
+  LFO→cutoff trick DAF Beat uses. Figure refined against two ear-played covers and the
+  maintainer's ear — the analysis alone misread one position (Gb1's 3rd harmonic sits exactly
+  on Db3's fundamental; the ear broke the tie).
+- **The KEYBOARD help names the range.** 88 keys, A0–C8 — the full piano layout, matching a
+  grand or an 88-key digital piano — and the note that MIDI input is not limited by the
+  visible range. It was nowhere to read; now it is where a player would look, on the
+  module's own help page.
+- **QUANT — a per-row scale mask in the MOD MATRIX.** Pitch modulation had one failure mode this
+  synth already paid to learn (story 14.1): continuous detune across notes reads as *out of tune*,
+  not as analog. Quantized jumps are a different animal — they are not detune, they are **notes**.
+  QUANT snaps a row's pitch contribution to a scale (Chromatic / Major / Minor / Pentatonic), so
+  S&H or Chaos on FREQ stops being random wobble and becomes a random-but-in-key melody over the
+  held note — the modular classic S&H → quantizer → VCO. It sits on the ROW, not on the target,
+  and snaps each row *before* the rows sum: a smooth vibrato row keeps gliding right next to a
+  quantized melody row. Off by default; existing presets are untouched. The MOD MATRIX takes the
+  full rack width for the extra combo — the whitespace the 30-column grid once "only gained" is
+  exactly what the fifth control now spends.
+- **CHAOS — a Lorenz attractor as a modulation source.** Deterministic chaos instead of
+  randomness: the orbit never repeats, but it is not noise — it wanders with intent, which is
+  exactly what a periodic LFO cannot do and a random generator overdoes. The module exposes
+  **two** matrix sources, **Chaos X** and **Chaos Y**, and that is the point: both ride the same
+  orbit, so two routings (say X → FILTER CUTOFF, Y → WT POS) drift *together but not alike* —
+  one gesture in two colours, something two independent random sources can never produce. One
+  global attractor drives all voices (correlated movement reads as intent; per-voice chaos would
+  just read as blur), it free-runs — notes do not restart it — and the rings show the very same
+  values the voices modulate with. RATE sets how fast the orbit turns.
+- **Two new LFO shapes: S&H and One-Shot.** Until now every LFO wave was smooth and periodic —
+  fine for vibrato and wah, useless for two other kinds of movement. **S&H** (sample & hold)
+  draws a new random level each cycle and holds it: stepped motion, the classic modular
+  step-randomizer, and with SYNC it steps in time. Every voice draws its own sequence — eight
+  voices stepping in lockstep would read as one mono effect, not as life. **One-Shot** runs a
+  single full-to-zero sweep per note and then holds, which makes modulation *event-based*
+  instead of cyclic: a per-note gesture (a pluck-style cutoff drop, a pitch fall-in) without
+  burning the pitch envelope. One honest limit: the little modulation rings — and master-bus
+  routings — are fed by a free-running display LFO that never sees a note-on, so a One-Shot
+  ring parks dark at idle. One-Shot is a per-note concept; the master bus has no notes.
+
+- **DELETE — presets can finally be deleted from the app.** SAVE and LOAD existed; removing a
+  preset meant leaving the app for the file explorer. The new DELETE button next to them opens
+  the same chooser, asks once, and moves the file to the **recycle bin** — never a hard delete.
+  Any F-key still pointing at the deleted preset is cleared along with it.
+- **Self-FM (FB) reaches the WAVETABLE and SUB generators.** The FB knob has lived on OSC 1–3
+  since July, but the two generators where it pays off most went without: on a wavetable the
+  same feedback depth sounds different on every table and POS (the feedback works on the frame's
+  own spectrum), and on the SUB it morphs the clean sine toward a brighter, saw-like bass without
+  needing a second oscillator. Both knobs are mod-matrix targets (`WT FB`, `Sub FB`), so an
+  S&H or envelope can now drive the growl. Existing presets are untouched — the new knobs
+  default to 0.
+
+### Fixed
+- **Saved presets write clean numbers again.** Parameters live as 32-bit floats; casting one
+  straight to double dragged its binary error into the JSON — a knob set to 0.6 was saved as
+  0.599999964237213, which made presets unreadable and diffs noisy. The writer now emits the
+  SHORTEST decimal that parses back to the very same float ("0.6"), so the file is cosmetic-
+  clean while every value stays bit-identical. Deliberately NOT blanket rounding: two fixed
+  decimal places would have silently doubled a 5 ms attack to 0.01.
+- **Figure-writing mode now has real exits: ESC ends it, and loading a preset clears it.**
+  Entry into writing mode is deliberately cheap (15.4: touching any step knob moves the write
+  cursor there), but the only exits were writing past the pattern's end or switching the module
+  off — so tuning one step by ear left the sequencer armed indefinitely, with every played key
+  overwriting the figure, and a freshly loaded preset inherited that armed cursor from the
+  previous patch. ESC now stops writing (matching its "stop editing" meaning everywhere), and
+  the shared preset-load path drops the cursor — a loaded figure is exactly what the next
+  played key would have overwritten.
+- **Loading a preset no longer arms the STEP SEQ write cursor.** Every preset with an active
+  step left the sequencer in figure-writing mode (ring on a step, keys overwriting the
+  pattern instead of playing it). The step ON/OFF switch previews its step on click — but the
+  preset loader replays every switch through the same notification path, so "the preset
+  switched a step on" was indistinguishable from "the player clicked it", and previewing is
+  what arms the cursor. The knob had learned this lesson in 15.3 (only a gesture with the
+  mouse on the control may sound); the switch now carries the same guard.
+- **The WAVETABLE BANK picker actually picks the bank now.** Choosing any built-in except
+  Basic played *Spectral*: the combo's stock attachment spreads its six items across the
+  parameter's full 0–63 range ("Digital" wrote 13, "Vocal" 38 …), and the bank lookup
+  clamped every one of those onto the last bank. The display mirrored the same error
+  backwards, so it *looked* right while sounding wrong. The SET combo had this exact bug
+  and its fix (item index == value) — BANK was simply missed; found by ear when the
+  new FB knob was auditioned per bank and every bank growled identically. Renaming or deleting a preset file on disk left
+  its F-key erroring on every press, forever. The error message now says what happened — and then
+  removes the assignment, so the second press does nothing instead of failing again.
+- **A loaded sequencer patch now always enters on the drums' downbeat.** Loading a preset with a
+  stored STEP SEQ latch sometimes played the bass permanently off the PERC beat. Two causes, one
+  fix: the quantised entry read the drum transport state *before* that block had refreshed it
+  (first block after a load saw the previous patch's drums), and a latch loaded over a
+  still-running one produced no silence-to-figure edge at all, so nothing re-quantised. The drum
+  clock is now resolved before the sequencer block, and a loaded latch explicitly restarts the
+  figure at step 0, quantised to the pattern's next bar — the drums are the clock; the bass joins
+  them, not the other way round.
+
+### Added
+- **The keyboard names the key under the mouse.** A fixed readout in the keyboard's top-right
+  corner shows the hovered key as name and MIDI number ("A3 · 57") — a fixed place to look,
+  deliberately not a tooltip chasing the cursor. It exists for transcribing: sheet music names
+  notes, GM drum tables and SAMPLER ROOT count numbers, and until now only the C keys carried
+  a label, so everything in between was counted off by eye.
+- **PERC's NOTE knob shows the MIDI number beside the instrument** ("Kick · 36"). Drum
+  transcriptions and the GM map speak in numbers; the knob said only "Kick", so transferring
+  a template meant guessing which name was which number. The stored value is unchanged —
+  the number was always there, now it is visible.
+- **Hovering a named read-out shows its full text — and tooltips work at all now.** The rack
+  had `setTooltip` calls for years, but no `TooltipWindow`; JUCE shows nothing without one, so
+  every tooltip was silent. With the window in place: a value box narrower than its name
+  (PERC NOTE "HH Closed · 42") shows the full text on hover, STEP SEQ boxes add the MIDI
+  number to their note name ("E1 · 40"), and the module ↺/ⓘ button hints finally appear.
+- **SAMPLER ROOT reads as a key, not a number.** The box says "C4" instead of "60" — a root
+  is a key, and everything else in JASS already names keys — and the hover adds the MIDI
+  number ("C4 · 60"). The stored value is unchanged; typing a number still works.
+
+### Changed
+- **AMP and PAN sit together now, at the end of every generator.** OSC 1–3, WAVETABLE, SUB
+  and KARPLUS scattered the two across the row (OSC read WAVE·FREQ·AMP·…·PAN); SAMPLER,
+  NOISE and PERC already kept them paired. Level and placement are one decision — where the
+  generator sits in the mix — so the knobs stand side by side as the module's output stage,
+  after the sound-shaping controls. Layout only: no parameter, preset or routing changes.
+- **Every level knob is called AMP now — on the knob, in the matrix, and in the preset.**
+  Most generators already said AMP (OSC 1–3, WAVETABLE, NOISE, KARPLUS, PERC's own knobs),
+  but SUB and SAMPLER said LEVEL, so the rack taught two words for one thing. Both knobs
+  and their MOD-MATRIX param labels read AMP now, and the preset fields follow (`Sub.Amp`,
+  `Sampler.Amp`, `Perc.Amp1..4` — PERC's knobs were renamed on the panel back in August but
+  the file still said Level), because a format that says one thing while the knob says
+  another is the same confusion moved into a file. Old presets keep loading: the reader
+  falls back to the old key (a new `legacyPersistKey` mechanism, available for any future
+  rename), and the shipped demo presets are rewritten. Mod-matrix routings keep their
+  slots — nothing saved changes its meaning.
+- **STEP SEQ shows notes, not offsets.** A step's value box used to read "+7" — a number you had
+  to resolve in your head while the preview already played the actual pitch. The box now shows
+  that pitch by name (E1, C3 …), resolved over the same reference the preview sounds: the
+  keyboard's current C, following the Up/Down octave keys live. Nothing about the figure changed —
+  the stored value is still the offset, and the pattern still transposes with the key you play.
+  The knob stays a knob (maintainer's condition), only its read-out grew up.
+- **RANDOM draws from the new material too.** A random patch can now pick the S&H/One-Shot
+  waves, route Chaos X/Y (which auto-enables CHAOS, so the routing is actually heard), and land
+  on a QUANT scale — S&H → FREQ → Major is exactly the kind of happy accident the button is for.
+  Random patches will *feel* different than before; that is the feature working, not a bug.
+- **Self-FM is damped DX-style (all oscillators).** The feedback loop now averages the last two
+  samples instead of feeding back the raw previous one. The raw one-sample loop flips sign at the
+  loop's own Nyquist and erupts into broadband noise well before the knob's end — the classic FM
+  synths average two samples precisely to cancel that alternating component. High FB values now
+  stay a playable growl instead of a hiss; low and mid settings are essentially unchanged.
+
 ## [2026.08.7] – 2026-08-12
 
 ### Added

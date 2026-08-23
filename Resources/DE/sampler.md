@@ -15,7 +15,7 @@ Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
   harter die harte (die Piano-Pakete bringen vier Schichten pro Taste mit), und innerhalb
   jeder Schicht folgt die Lautstärke dem Anschlag (`amp_veltrack`, bei .sfz-Sets standardmäßig
   an). Ordner- und Einzel-Sample-Sets bleiben anschlagsneutral — wer sie dynamisch will,
-  routet in der Mod-Matrix Velocity → LEVEL.
+  routet in der Mod-Matrix Velocity → AMP.
 - **ROOT** — die Taste, bei der eine **einzelne** Aufnahme in Originalgeschwindigkeit läuft; jede
   andere Taste transponiert sie bandmaschinen-artig (Formanten wandern mit: nutzbar sind grob
   ±1 Oktave — die Natur von Einzel-Samples, kein Defekt). Bei Multisample-Sets bringt jede Zone

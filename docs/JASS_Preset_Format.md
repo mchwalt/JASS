@@ -50,7 +50,7 @@ nested format on load.
   "Compressor": { "Enabled": false, "Threshold": -18.0, "Ratio": 2.0, "Attack": 10.0, "Release": 120.0, "Makeup": 0.0 },
   "Stereo":     { "Enabled": true,  "Width": 0.5, "Time": 12.0 },
   "Master":     { "On": true, "Volume": 0.5, "Tempo": 130.0 },
-  "Sub":        { "Enabled": false, "Waveform": "Sine", "Octave": "-1 Oct", "Level": 0.5 },
+  "Sub":        { "Enabled": false, "Waveform": "Sine", "Octave": "-1 Oct", "Amp": 0.5 },   // "Amp" was "Level" until 2026-08; the old key is still read (legacyPersistKey fallback)
   "Noise":      { "Enabled": false, "Type": "White", "Amount": 0.5 },
   "Formant":    { "Enabled": false, "Vowel": 0.0, "Resonance": 0.5, "Mix": 1.0 },
   "Distortion": { "Enabled": false, "Type": "SoftClip", "Drive": 0.5, "Mix": 1.0 },
@@ -63,6 +63,11 @@ nested format on load.
   "RackLayout": { /* nested, human-readable module positions/visibility */ }
 }
 ```
+
+Field renames never break old files: a `ParamSpec` may carry a `legacyPersistKey`, and the
+reader falls back to it when the current key is missing. Writes always use the current key.
+So far (all 2026-08): `Sub.Level` → `Sub.Amp`, `Sampler.Level` → `Sampler.Amp`,
+`Perc.Level1..4` → `Perc.Amp1..4`.
 
 ### Fields that are not parameters
 

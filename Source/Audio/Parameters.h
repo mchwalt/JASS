@@ -173,6 +173,7 @@ namespace Parameters
         constexpr const char* subOctave = "subOctave";
         constexpr const char* subLevel  = "subLevel";
         constexpr const char* subPan    = "subPan";         // Epic 10: stereo placement
+        constexpr const char* subFeedback = "subFeedback";  // Self-FM depth (append-only)
 
         // Delay
         constexpr const char* delayOn       = "delayOn";
@@ -195,6 +196,10 @@ namespace Parameters
         JASS_INDEXED_ID (lfoDepth,   kNumLFOs, "lfo", "Depth")
         JASS_INDEXED_ID (lfoTarget,  kNumLFOs, "lfo", "Target")
         JASS_INDEXED_ID (lfoSyncDiv, kNumLFOs, "lfo", "SyncDiv")
+
+        // CHAOS — Lorenz attractor mod source (LFO expansion)
+        constexpr const char* chaosOn   = "chaosOn";
+        constexpr const char* chaosRate = "chaosRate";
 
         // Reverb
         constexpr const char* reverbOn   = "reverbOn";
@@ -225,6 +230,7 @@ namespace Parameters
         constexpr const char* wavetableUniVoices = "wavetableUniVoices";
         constexpr const char* wavetableUniDetune = "wavetableUniDetune";
         constexpr const char* wavetablePan       = "wavetablePan";   // Epic 10: stereo placement
+        constexpr const char* wavetableFeedback  = "wavetableFeedback";   // Self-FM depth (append-only)
 
         // Master
         constexpr const char* masterVol = "masterVol";
@@ -276,6 +282,7 @@ namespace Parameters
         JASS_INDEXED_ID (modSlotParam,        ModMatrixConfig::kNumSlots, "modSlot", "Param")
         JASS_INDEXED_ID (modSlotAmount,       ModMatrixConfig::kNumSlots, "modSlot", "Amount")
         JASS_INDEXED_ID (modSlotTargetLegacy, ModMatrixConfig::kNumSlots, "modSlot", "Target")   // v4 and older
+        JASS_INDEXED_ID (modSlotQuant,        ModMatrixConfig::kNumSlots, "modSlot", "Quant")    // LFO expansion: per-slot scale mask
         constexpr const char* modMatrixOn = "modMatrixOn";
 
         #undef JASS_INDEXED_ID
@@ -291,7 +298,7 @@ namespace Parameters
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
             for (int i = 1; i <= 32; ++i)       { percStep1(i); percStep2(i); percStep3(i); percStep4(i); }
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-                { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); }
+                { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); modSlotQuant(n); }
         }
     }
 
@@ -331,6 +338,7 @@ namespace Parameters
             modSlots[n].target   = (int) ModDest::targetOf(mod, par);   // (module,param) → LFOTarget
             modSlots[n].oscIndex = ModDest::oscIndexOf(mod);            // 0..2 per-OSC; -1 global
             modSlots[n].amount   = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
+            modSlots[n].quant    = (int) *apvts.getRawParameterValue(ID::modSlotQuant(n + 1));   // scale mask (0 = Off)
         }
 
         mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
@@ -501,11 +509,13 @@ namespace Parameters
         wavetable.setAmplitude(*apvts.getRawParameterValue(ID::wavetableAmp));
         wavetable.setUnisonCount(static_cast<int>(*apvts.getRawParameterValue(ID::wavetableUniVoices)));
         wavetable.setDetuneAmount(*apvts.getRawParameterValue(ID::wavetableUniDetune) * 100.0);
+        wavetable.setFeedback(*apvts.getRawParameterValue(ID::wavetableFeedback));
 
         subOsc.setEnabled(*apvts.getRawParameterValue(ID::subOn) > 0.5f);
         subOsc.setWaveform(static_cast<int>(*apvts.getRawParameterValue(ID::subWave)) == 0
                                ? WaveformType::Sine : WaveformType::Square);
         subOsc.setAmplitude(*apvts.getRawParameterValue(ID::subLevel));
+        subOsc.setFeedback(*apvts.getRawParameterValue(ID::subFeedback));
         // Choice 0 -> -1 octave, 1 -> -2 octaves
         subOctave = -(static_cast<int>(*apvts.getRawParameterValue(ID::subOctave)) + 1);
     }

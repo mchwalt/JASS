@@ -18,7 +18,7 @@ namespace PresetIO
     inline const juce::StringArray kMixSrc     { "OSC 1", "OSC 2", "OSC 3" };   // Epic 5
     inline const juce::StringArray kFilterType { "Off", "Lowpass", "Highpass" };
     inline const juce::StringArray kDistortion { "Off", "SoftClip", "HardClip", "Foldback" };
-    inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth" };
+    inline const juce::StringArray kLfoWave    { "Sine", "Triangle", "Square", "Sawtooth", "SampleHold", "OneShot" };   // append-only
     // Persisted target names — generated from the single source (ModTargets.h). Index == LFOTarget.
     inline const juce::StringArray kLfoTarget = [] { juce::StringArray a;
         for (int i = 0; i < ModTargets::kCount; ++i) a.add (ModTargets::persist (i)); return a; }();
@@ -27,7 +27,7 @@ namespace PresetIO
     inline const juce::StringArray kArpMode     { "Up", "Down", "UpDown", "Random" };
     inline const juce::StringArray kPhaserType  { "Phaser", "Flanger" };   // Feature 2 (append-only; C# ignores)
     inline const juce::StringArray kGlideMode   { "Mono", "Poly" };        // Feature 4 (append-only; C# ignores)
-    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2", "LFO3", "LFO4" };   // Epic 8 (append-only)
+    inline const juce::StringArray kModSource   { "LFO1", "Envelope", "Velocity", "LFO2", "LFO3", "LFO4", "ChaosX", "ChaosY" };   // Epic 8 (append-only)
     // Mod-matrix MODULE names — generated from the single source (ModMatrixCatalog.h). Index == ModDest.
     inline const juce::StringArray kModModule = [] { juce::StringArray a;
         for (int i = 0; i < ModDest::kNumModules; ++i) a.add (ModDest::moduleLabel (i)); return a; }();
@@ -134,6 +134,7 @@ namespace PresetIO
         // bass figure with PERC underneath it, which is the better demonstration of either, and a
         // drum map driven through the STEP SEQ was the workaround PERC replaced.
         slots[10] = "DAF Beat";         // 16.1: the bass figure with PERC underneath it
+        slots[11] = "Los Ninos";        // Liaisons Dangereuses: 24-step polymetric bass over 4/4 PERC
         return slots;
     }
 
@@ -503,7 +504,10 @@ namespace PresetIO
 
     inline bool saveToFile(APVTS& a, const juce::File& file, const juce::String& name, bool modified = false)
     {
-        return file.replaceWithText(juce::JSON::toString(toVar(a, name, modified), false));
+        // 12 decimal places, NOT the default 15: toVar stores every float as its shortest
+        // round-trip decimal (≤ 12 places), but JUCE's serialiseDouble re-expands a double to
+        // 15+ places unless capped — the cap makes it print the short form and trim the zeros.
+        return file.replaceWithText(juce::JSON::toString(toVar(a, name, modified), false, 12));
     }
 
     // ── Import (LEGACY FLAT reader, v<3) ──

@@ -90,7 +90,11 @@
     X(WavetablePan,      "WavetablePan",     "WT Pan",       "wavetableOn")                       \
     /* SAMPLER (Story 12.1): per-voice level + pan (pan offsets BOTH stereo sub-sources). */      \
     X(SamplerLevel,      "SamplerLevel",     "Sampler Level","samplerOn")                         \
-    X(SamplerPan,        "SamplerPan",       "Sampler Pan",  "samplerOn")
+    X(SamplerPan,        "SamplerPan",       "Sampler Pan",  "samplerOn")                         \
+    /* Feedback-FM completion: self-FM depth on the WAVETABLE and SUB generators, matching the    \
+       per-oscillator OscFeedback target that shipped with the OSC FB knob. */                    \
+    X(WavetableFeedback, "WavetableFeedback","WT FB",        "wavetableOn")                       \
+    X(SubFeedback,       "SubFeedback",      "Sub FB",       "subOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget

@@ -11,6 +11,21 @@ namespace Modules
             appendModuleParameters (m.params, m.title, out);
     }
 
+    // Parameters live as float32; casting one straight to double drags its binary error into the
+    // JSON ("0.6" becomes 0.599999964237213). Writing the SHORTEST decimal that parses back to the
+    // very same float32 keeps the file human-readable and diff-friendly without losing a bit —
+    // "0.6" and 0.599999964237213 are the identical parameter value after the round trip.
+    static double shortestRoundTrip (float v)
+    {
+        for (int places = 1; places <= 12; ++places)
+        {
+            const double d = juce::String ((double) v, places).getDoubleValue();
+            if ((float) d == v)
+                return d;
+        }
+        return (double) v;
+    }
+
     void writeState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root)
     {
         for (const auto& m : all())
@@ -33,7 +48,7 @@ namespace Modules
                         break;
                     }
                     default:   // Float / Int
-                        obj->setProperty (p.persistKey, (double) v);
+                        obj->setProperty (p.persistKey, shortestRoundTrip (v));
                         break;
                 }
             }
@@ -49,7 +64,9 @@ namespace Modules
             if (! obj.isObject()) continue;
             for (const auto& p : m.params)
             {
-                const juce::var val = obj[juce::Identifier (p.persistKey)];
+                juce::var val = obj[juce::Identifier (p.persistKey)];
+                if (val.isVoid() && p.legacyPersistKey.isNotEmpty())
+                    val = obj[juce::Identifier (p.legacyPersistKey)];   // renamed key: old presets still load
                 if (val.isVoid()) continue;   // missing field => keep factory default
                 auto* param = apvts.getParameter (p.id);
                 if (param == nullptr) continue;

@@ -1,168 +1,85 @@
-# Synthy – Feature Ideas & Roadmap
+# JASS — Feature Ideas
 
-Stand: 2026-06-04. Legende: Aufwand ★ (wenig) … ★★★★★ (viel) · Coolness ★ … ★★★★★
+Last groomed: 2026-08-18. Legend: effort ★ (small) … ★★★★★ (large) · coolness ★ … ★★★★★
 
-> **Fokus:** Es wird nur noch die **C++ (JUCE)** App weiterentwickelt; die C# App ist eingefroren.
-> Das gemeinsame `.synthy`-Preset-Format wird weiter gepflegt.
-
----
-
-## ✅ Neu in C++ (seit C#-Einfrieren)
-
-| Feature | Was es macht |
-|---|---|
-| **Sub-Oszillator** | Sine/Square, −1/−2 Oktav, folgt OSC-1-Tonhöhe → fetter Bass |
-| **Bitcrusher** | Lo-Fi: Bit-Tiefe (BITS) + Samplerate (RATE) reduzieren, Mix |
-| **On-Screen-Klaviatur** | spielbar per Maus & Computertasten (z/x = Oktave); löst ADSR pro Note aus |
-| **Tonhöhen-Transponierung** | gespielte Note transponiert alle Erzeuger relativ zu C4 (FREQ-Knöpfe = Grundklang) |
-| **FREQ-Regler-Anzeige** | aktive OSC-FREQ-Regler zeigen beim Spielen die gespielte Frequenz, danach zurück zur Basis |
-| **Auto-Play automatisch** | Drone (eigener MIDI-Kanal) beim Aktivieren einer Quelle; verstummt beim Spielen, kehrt beim erneuten Aktivieren zurück |
+This file carries **open ideas only**. Everything shipped lives in
+[`CHANGELOG.md`](../../CHANGELOG.md); the roadmap thread is in
+[`JASS_Ideen_Merge.md`](../JASS_Ideen_Merge.md). Ideas that were tried or evaluated
+and dropped are recorded at the bottom — with the reason — so they don't come back
+by accident.
 
 ---
 
-## ✅ Bereits umgesetzt (in C# **und** C++)
+## Sound generation
 
-| Feature | Was es macht |
-|---|---|
-| **Triangle-Wellenform** | 4. Grundwellenform |
-| **Unison/Detune** | per-Oszillator, 1–7 Stimmen → fetter Sound |
-| **Mix-Modi** | Additive · **Ring-Modulation** · **FM** (OSC1→OSC2) |
-| **Wavetable-Synthese** | 6 Built-in Banks + Position-Morph + **WAV-Import** |
-| **Noise Generator** | White + Pink (Voss-McCartney) + **Brown + Blue** (2026-07-14, `5bdd73d`) |
-| **Karplus-Strong** | gezupfte Saite (Physical Modeling), Damping/Stretch |
-| **Distortion** | SoftClip / HardClip / **Foldback**, Drive, Mix |
-| **Wavefolding** | West-Coast Sinus-Wavefolder (pre-filter), Drive / Symmetry / Mix |
-| **Spectrum Analyzer** | FFT-Anzeige neben dem Oszilloskop |
-| **ADSR · LFO · Biquad-Filter** | Standard-Modulation & Filterung |
-| **Delay · Chorus · Reverb** | Effekt-Kette |
-| **Randomize-Button** | würfelt einen zufälligen, hörbaren Patch (mit Sanity-Guards) |
-| **Gemeinsames Preset-Format** | `.synthy` JSON + geteilter LiveState (App-übergreifend) |
-
----
-
-## 🎯 Als Nächstes empfohlen
-
-1. **Tempo-Sync** – LFO & Delay an BPM koppeln (★★ / ★★★★)
-2. ~~Live-Modulations-Ringe~~ – ✅ umgesetzt (C++): dezenter cyan-Bogen um die LFO-Ziel-Knöpfe
-3. ~~Arpeggiator~~ – ✅ umgesetzt (C++): Up/Down/UpDown/Random, Rate/Octaves/Gate, spielt gehaltene Akkorde
-
----
-
-## 🔊 Neue Klang-Engines
-
-| Feature | Was es macht | Aufwand | Coolness |
+| Idea | What it does | Effort | Coolness |
 |---|---|---|---|
-| ~~Wavefolding~~ | ✅ umgesetzt (beide Apps) – Sinus-Folder, Drive/Symmetry/Mix, pre-filter | – | – |
-| **Granular-Synthese** | Sample in Körner zerlegen, streuen/pitchen → Clouds, Texturen | ★★★★ | ★★★★★ |
-| **Formant-/Vokal-Filter** | morpht A-E-I-O-U → „sprechender" Synth (Helm/Odin haben das) | ★★★ | ★★★★★ |
-| **Modal-Synthese** | Karplus-Erweiterung für Glocken/Mallets (Resonatoren) | ★★★ | ★★★★ |
-| ~~Sub-Oszillator~~ | ✅ umgesetzt (C++) – Sine/Square, −1/−2 Oktav | – | – |
+| **Granular synthesis** | Split a sample into grains, scatter/pitch them → clouds and textures. The Epic-12 sampler already holds the raw material (zones, samples in RAM). Design notes worth keeping: model it as **three separate dimensions** — grain *position* (where in the sample), *length* (5 ms reads as metallic crush, 300 ms as a psychedelic echo), *pitch* (how far transposed) — each a matrix target, with the matrix as the control layer on top (ChatGPT, 2026-08). **Per-grain pitch quantized to a scale** relative to the played note turns randomness into music instead of dirt (Gemini, 2026-08) — the QUANT mask shipped 2026-08 is the very mechanism. First patch to try: **Chaos X → grain position** — not a random cloud but a deterministic-chaotic journey through the sample. | ★★★★ | ★★★★★ |
+| **Modal synthesis** | Resonator banks for bells and mallets — the Karplus-Strong extension. | ★★★ | ★★★★ |
+| **Sympathetic string resonance** | A bank of tuned waveguide resonators on the master bus (where PERC already sits), keyed by the held notes, fed a little of the piano's output — the strings of a real piano ringing along. Honest caveat: the effect shines with a sustain pedal, and there is none on this desk (CC64 is dropped for good) — only currently held notes would resonate, audible with chords but far less spectacular. | ★★★ | ★★ |
+| **Wavetable morphing A→B→C** | Morph across up to three banks instead of one bank's position axis. Roadmap candidate. | ★★★ | ★★★★ |
+| **SFZ `#include` / `#define`** | Parser support for the two preprocessor opcodes larger SFZ libraries use. | ★★ | ★★ |
 
-## 🎛️ Neue Effekte
+## Engine
 
-| Feature | Was es macht | Aufwand | Coolness |
+| Idea | What it does | Effort | Coolness |
 |---|---|---|---|
-| **Phaser / Flanger** | Allpass-Kette / modulierter Comb → Sweep-Sounds | ★★ | ★★★★ |
-| ~~Bitcrusher~~ | ✅ umgesetzt (C++) – BITS + RATE + MIX | – | – |
-| ~~**Kompressor**~~ | ✅ umgesetzt (C++, 2026-07-14, `87d6483`) – Master-Bus-Glue (THRESH/RATIO/ATK/REL/GAIN), läuft auf der Summe | – | – |
-| **Convolution-Reverb** | echte Impulsantworten laden (Kathedrale, Platte) | ★★★★ | ★★★★ |
-| ~~Stereo-Width / Pseudo-Stereo~~ | ✅ umgesetzt (C++) – Master-Stufe WIDTH+TIME, mono-kompatibel (Lauridsen-Comb). Siehe „Echtes Stereo" unten | – | – |
-| **EQ (3-Band)** | Bass/Mid/Treble | ★★ | ★★★ |
+| **Gain-staging concept per module** | One deliberate **input → processing → output gain** rule for every module, instead of each new sound stage solving its own level problem ad hoc (ChatGPT, 2026-08). Self-FM, the wavefolder, cross-mod and a future granular engine all move the level massively; today the only guards are hard-coded scalars and the final clamp. Not glamorous, but it decides whether the engine stays controllable as it grows. | ★★★ | ★★ |
+| **Filter keytracking** | The cutoff follows the played pitch (a TRACK knob, 0–100 %), so the timbre stays the same across the keyboard — without it, low notes read dull and high notes get choked by a fixed cutoff. Standard on the classics (Minimoog & Co.). Surfaced by the Los Niños work, 2026-08: a resonant lowpass bassline only speaks evenly over two octaves with tracking. | ★★ | ★★★ |
 
-## ✨ Workflow & UX
+## Sequencer
 
-| Feature | Was es macht | Aufwand | Coolness |
+| Idea | What it does | Effort | Coolness |
 |---|---|---|---|
-| ~~Randomize-Button~~ | ✅ umgesetzt (beide Apps) | – | – |
-| **Macro-Knöpfe + Preset-Morph** | ein Knopf steuert viele Parameter; A/B überblenden | ★★★ | ★★★★★ |
-| **Live-Modulations-Anzeige** | animierte Ringe zeigen LFO/Env-Bewegung | ★★★ | ★★★★★ |
-| **Tempo-Sync** | LFO & Delay an BPM koppeln (1/4, 1/8, Triolen) | ★★ | ★★★★ |
-| **Step-Sequencer** | eigenes Pattern-Modul | ★★★ | ★★★★ |
-| **Rack-Customization (Show/Hide + Drag&Drop)** | Module/Zonen wegklappen; Module per Drag&Drop zwischen Zonen bewegen; visuell innerhalb einer Zone umsortieren (siehe Detail unten) | ★★★★ | ★★★★★ |
-| ~~Arpeggiator~~ | ✅ umgesetzt (C++) – Up/Down/UpDown/Random, Rate/Octaves/Gate | – | – |
-| **WAV-Export / Recording** | aufnehmen, was man spielt | ★★ | ★★★ |
-| **MIDI-Learn** | Knöpfe an Hardware-Controller binden | ★★★ | ★★★★ |
+| **Per-step accent row (story 15.2)** | A second row in the STEP SEQ: each step plays plain or accented, and the accent drives level, note length and/or a filter bump — the Korg SQ-10 / TB-303 mechanism. The Los Niños MIDI transcription (2026-08) proved the original plays **all 24 steps in two accent classes** (long/loud vs. short/quiet); our rests are the approximation. The missing feature for this whole preset class — it is also what parked the Kraftwerk "Roboter" attempt. | ★★★ | ★★★★★ |
+| **STEP SEQ ⇄ MIDI import/export** | Standard MIDI files are the lingua franca for patterns: load a figure straight from a `.mid` (velocity maps naturally onto the accent row), export a figure to the DAW or MuseScore. Pairs with a preset-format rework that stores each step as its own object — MIDI note number plus the spelled name (`"C#2"`) for readability. | ★★★ | ★★★★ |
+
+## Effects
+
+| Idea | What it does | Effort | Coolness |
+|---|---|---|---|
+| **Shimmer reverb** | Pitch-shifted feedback path in the reverb → octave-up halo. Roadmap candidate. | ★★★ | ★★★★ |
+| **Convolution reverb** | Load real impulse responses (cathedral, plate). The Kunstkopf mode already does HRIR convolution, so part of the machinery exists. | ★★★★ | ★★★★ |
+| **EQ (3-band)** | Bass/Mid/Treble on the master bus. | ★★ | ★★★ |
+
+## Workflow & UX
+
+| Idea | What it does | Effort | Coolness |
+|---|---|---|---|
+| **Sound-design pass with the existing blocks** | Before building the next engine feature, deliberately author 10–20 "impossible" sounds from what is already there — wavetable + wavefolder + cross-FM + self-FM + chaos + S&H + QUANT (ChatGPT, 2026-08). Where the attempts hit a wall tells reliably which feature JASS actually needs next; the keepers become demo presets. | ★★ | ★★★ |
+| **WAV export / recording** | Record what you play. | ★★ | ★★★ |
+| **MIDI learn** | Bind knobs to a hardware controller. | ★★★ | ★★★★ |
+| **Rack drag & drop** | Move modules between zones, reorder within a zone. Show/hide shipped long ago (MODULES panel), and the redesign delivered the enablers (stable module ids, explicit zone per `ModuleSpec`) — what's left is the layout-as-data model and the drag UI. | ★★★★ | ★★★ |
+| **Macro knobs + preset morph** | One knob drives many parameters; blend A/B. **Deferred by the maintainer (2026-08)** — don't re-pitch unprompted. | ★★★ | ★★★★★ |
+| **Evolution module** | Slowly mutating patches. Only worth pursuing if it targets **timbre**, not pitch (the story-14.1 lesson). | ★★★★ | ★★★ |
 
 ---
 
-## 🎧 Echtes Stereo (Schritt B – größerer Umbau, ★★★★)
+## Declined — tried or evaluated, and dropped
 
-**Ausgangslage (Stand heute):** Die ganze Synth-Engine ist **mono**. Jede `SynthVoice`
-rechnet einen einzigen `mixedSample` (`SynthVoice.cpp` `renderNextBlock`) und schreibt ihn
-identisch in alle Ausgangskanäle (`outputBuffer.addSample(channel, …, mixedSample)`). Der
-Processor summiert alle 8 Voices zu einem mono-identischen L/R-Buffer. **Schritt A**
-(Pseudo-Stereo, ✅ umgesetzt) erzeugt Breite *am Ende* der Kette über eine Master-Stufe
-(`DSP/StereoWidth.h`, aufgerufen in `processBlock` nach `renderNextBlock`) – ohne die Engine
-anzufassen. Das deckt ~80 % des wahrnehmbaren Effekts für ~20 % Aufwand.
+- **Per-voice humanize/drift (story 14.1).** Built, heard, rejected: the audible window is
+  narrow (±8 ct inaudible, ±25 ct dirty), and detune between voices only sounds "analog"
+  on the *same* note — which is what UNISON DETUNE is for. Across chord notes it reads as
+  dirt. The code is preserved in the tag `parked/voice-humanize-drift`. If ever revisited:
+  per-voice timbre/level variation, never pitch.
+- **Sustain pedal (CC64).** No pedal on this desk, and JUCE's standalone holds note-offs
+  itself. Dropped for good — do not bring it back.
+- **"Wave-scraping" — sampler output as audio-rate phase modulator of the wavetable**
+  (Gemini, 2026-08). Architecturally local (both generators live in the voice, an FM path
+  exists), but uncontrollable in practice: every sample breaks differently, nothing about
+  it is preset-able.
+- **Audio-rate formant FM** (Gemini, 2026-08). The formant filter itself shipped 2026-07;
+  modulating the formant frequencies at audio rate would need a direct engine path (the
+  matrix runs at block rate) — engine surgery for a niche growl sound.
+- **"Vektor-Mischkreuz" as a stereo stepping stone** (Gemini, 2026-08). Recommended
+  building a vector-mixing crossfade that JASS never had planned, to solve a stereo
+  problem Epic 10 already solved differently (per-generator PAN, five output modes,
+  Kunstkopf HRTF).
 
-**Was „echtes" Stereo (Pan pro Oszillator, Unison-Spread) erfordern würde:**
-- Sobald ein Erzeuger **nicht** mittig sitzt, sind L und R **unterschiedliche Signale** →
-  ab diesem Punkt muss die **gesamte Signalkette pro Kanal doppelt** laufen.
-- `mixedSample` (Skalar) müsste zu **`float[2]` (L/R)** werden.
-- **Jeder stateful per-Voice-Effekt braucht Zustand pro Kanal**, sonst Phasen-/Knackser-Bugs:
-  `BiquadFilter` (z1/z2), `ChorusEffect`, `DelayEffect`, `ReverbEffect`,
-  `BitcrusherEffect` (held/counter). → praktisch alle DSP-Klassen anfassen.
-- **Rechenlast ~×2** pro Voice (× 8 Voices). Für ein Lernprojekt vertretbar, aber kein Trivial-Edit.
-- Neue Params: Pan pro OSC (−1..+1), Unison-Stereo-Spread (verteilt Detune-Voices übers Panorama).
-- **Aufwand realistisch ★★★★** (nicht ★★ wie Pseudo-Stereo). Eigenes größeres Vorhaben;
-  Schritt A bleibt danach als globaler WIDTH-Regler nützlich.
-- Der separate Eintrag **„Stereo-Panning – pro Oszillator L/R"** unten = genau dieser Schritt B.
+## Shipped since the last groom (removed above)
 
----
-
-## 🧩 Rack-Customization: Show/Hide + Drag&Drop (Post-Rack-Umbau, ★★★★)
-
-Sammel-Vorhaben (2026-07-01), am besten als eigenes **„Epic 4: Rack-Customization"** *nach* dem
-laufenden Rack-Umbau (Epics 1–3) — es baut genau auf dem Rack-Layout-Modell (AD-2) auf.
-
-**Teil 1 — Module & Zonen ein-/ausblenden.** Selten genutzte Module und ganze Zonen
-(GEN/MOD/PROC/MASTER BUS) wegklappen → Rack entrümpeln, Platz sparen. Damit entfällt auch das
-Platz-Argument gegen zusätzliche Zonen (z.B. eine VISUALIZATION-Zone für Scope/Spectrum).
-Architektonisch billig: `visible`-Flag pro Modul + „im Layout überspringen".
-
-**Teil 2 — Drag&Drop + Verschieben.** Module per Drag&Drop **zwischen** Zonen bewegen **und**
-visuell **innerhalb** einer Zone umsortieren. Voraussetzung dafür sind Enabler, die man schon
-**während der Migration billig mit-einbaut** (später teuer nachzurüsten — siehe Spine „Deferred"):
-- **Stabile Modul-ID** je Deskriptor → gespeichertes Custom-Layout wieder zuordenbar.
-- **Explizite (Default-)Zone/Gruppe am Modul** (heute nur am Call-Site `Rack::addModule(zone,…)`),
-  **getrennt** von `typeTag` (Identität/Farbe) — Reverb nach GENERATORS ziehen macht es *nicht*
-  zum Generator.
-- **Rack-Layout als geordnetes Daten-Modell** (`id → {zone, position}`) statt Einfüge-Reihenfolge;
-  Verschieben = Edit an diesem Modell.
-
-**Wie persistieren/schalten (User-Präferenz, gilt für Show/Hide *und* Layout):**
-1. **Bevorzugt: über Standard-Synthy-Parameter** (APVTS je Modul). Nutzt bestehende Infrastruktur
-   (Attachment, Persistenz, `.synthy`). **Interop-safe**, da rückwärtskompatibel (fehlende Felder =
-   Defaults, siehe Cross-Projekt), append-only, kein `kFormatVersion`-Bump. Nachteil: View-/Layout-
-   State erscheint als automatisierbare DAW-Parameter → in eigene Param-Gruppe, klar getrennt vom Klang.
-2. **Fallback: separate Rack-Config** (eigene UI-Prefs-Datei / Host-State-Blob, **nicht** `.synthy`),
-   wenn man View-/Layout-State bewusst aus dem Klang-Preset heraushalten will.
-
-**Offene Design-Fragen:** (a) Fenster fix + Rack packt nach, oder Fenster schrumpft beim Ausblenden?
-(b) Sichtbarkeit/Layout pro Preset oder global? (c) Affordance: Collapse-Button am Zonen-Header,
-Hide-Toggle + Drag-Handle pro Modul.
-
----
-
-## 📋 Klassiker noch offen
-
-- ~~**Portamento/Glide**~~ – ✅ umgesetzt (C++, Mono+Poly)
-- ~~**Pitch-Envelope**~~ – ✅ umgesetzt (C++, 2026-07-14, `d779225`): einmaliger Pitch-Sweep pro Note (Kicks/Laser/Zaps), Modul PITCH ENV (AMOUNT ±48 HT, TIME)
-- **Stereo-Panning** – pro Oszillator L/R platzieren (★★ / ★★★)
-- **Modulation Matrix** – beliebige Quelle → beliebiges Ziel (★★★ / ★★★★★)
-- **Voller Sampler** – WAV als Klangquelle (Wavetable-Import deckt schon Teile ab) (★★★★ / ★★★★)
-
----
-
-## 🔗 Cross-Projekt
-
-- ✅ **Gemeinsames Preset-Format** – `.synthy` + LiveState, wird in C++ weiter gepflegt
-- **C# ist eingefroren** – Entwicklung läuft nur noch in C++ (kein Spiegeln mehr). Format bleibt rückwärtskompatibel (fehlende Felder = Defaults).
-
----
-
-## 🔜 Backlog (2026-07-11)
-
-- **Feedback-FM / Self-FM** (★★★ / ★★★★) – ein Oszillator moduliert seine eigene Frequenz (DX-Style, hellere/sägezahnartige Timbres). Braucht einen **eigenen Feedback-Amount-Regler** (nicht als A==B-Nebeneffekt von MIX MODE, wegen Stabilität/Lautheit). **Kein ähnliches Modul vorhanden** (die bestehenden „feedback"-Stellen sind Delay/Reverb/Chorus + Karplus-Loop). MIX MODE koppelt bewusst nur zwei *verschiedene* OSCs.
-- **Online-Hilfe pro Modul** (★★ / ★★★) → **BMAD Epic 6 / Story 6.1 (`ready-for-dev`, 2026-07-11).** Design 2026-07-11 überarbeitet: **kein** Hover-Auto-Popup mehr. Stattdessen ein **Info-Icon („i" im Kreis) im Modul-Header**; nur Klick öffnet ein **verschiebbares** Panel mit Kurzbeschreibung, das ausschließlich über **„✕" oben rechts oder ESC** geschlossen wird. Pro Modul ein optionaler Hilfetext (`ModuleDescriptor::help`, sprachkodiert). **Mehrsprachig (Start EN + DE)**, Umschaltung per Combobox im JASS-Header. Details: `_bmad-output/implementation-artifacts/6-1-per-module-online-help.md`.
-- **Modul-Größen Feintuning** (★★ / ★★★) → **BMAD Epic 7 / Story 7.1 (`ready-for-dev`, 2026-07-12)**: Größenklassen pro Modul straffen. Erst-Vorschlag SUB/NOISE S→XS, FILTER/DISTORTION M→S (je in App prüfen, bei Enge zurücknehmen), OSC bleibt M. AD-3-Rotary-Min + Combo-Breite + „XXS nur 1-Control" beachten. Details: `_bmad-output/implementation-artifacts/7-1-module-size-tuning.md`.
+- **LFO shapes S&H + One-Shot**, **Chaos mod source (Lorenz)** and the **QUANT scale
+  mask** — the "LFO expansion" story, merged 2026-08-18 (PR #48).
+- **Feedback-FM / Self-FM** — turned out to be already shipped (per-OSC FB knob since
+  July); the gap was WAVETABLE/SUB coverage and taming the chaos region, closed 2026-08-18
+  (PR #49: FB on both generators, DX-style two-sample damping in every self-FM path).

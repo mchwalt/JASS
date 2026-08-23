@@ -184,6 +184,9 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const double baseSamplerLevel = sampler.getLevel();   // Story 12.1
     const double baseWtVoices     = (double) wavetable.getUnisonCount();
     const double baseWtDetune     = wavetable.getDetuneAmount();
+    // Feedback-FM completion: self-FM depth on WAVETABLE/SUB (same 0.5 scale as OscFeedback).
+    const double baseWtFb         = wavetable.getFeedback();
+    const double baseSubFb        = subOsc.getFeedback();
     const double baseFormantReso  = formant.resonance;
     const double baseFormantMix   = formant.mix;
     const double baseWavefoldSym  = wavefolder.symmetry;
@@ -361,6 +364,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         srcVals[(size_t) ModSource::Envelope] = envSource;
         srcVals[(size_t) ModSource::Velocity] = noteVelocity;
         for (int i = 0; i < kNumLFOs; ++i) srcVals[(size_t) kLfoSourceIdx[i]] = lfoVals[i];
+        srcVals[(size_t) ModSource::ChaosX] = chaosSrc[0];   // global attractor, block-constant
+        srcVals[(size_t) ModSource::ChaosY] = chaosSrc[1];   // (0 when CHAOS is off)
 
         // Sum the explicit matrix slots into the per-target offset + the per-OSC offsets
         // (LFOs are just sources now).
@@ -413,6 +418,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             wavetable.setUnisonCount(juce::roundToInt(std::clamp(baseWtVoices + modOffset[(size_t) LFOTarget::WavetableVoices] * 3.0, 1.0, 7.0)));
         if (tActive[(size_t) LFOTarget::WavetableDetune])
             wavetable.setDetuneAmount(std::clamp(baseWtDetune + modOffset[(size_t) LFOTarget::WavetableDetune] * 50.0, 0.0, 100.0));
+        if (tActive[(size_t) LFOTarget::WavetableFeedback])
+            wavetable.setFeedback(std::clamp(baseWtFb + modOffset[(size_t) LFOTarget::WavetableFeedback] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::SubFeedback])
+            subOsc.setFeedback(std::clamp(baseSubFb + modOffset[(size_t) LFOTarget::SubFeedback] * 0.5, 0.0, 1.0));
 
         // Detune: base + GLOBAL ("Alle OSC") offset + this OSC's OWN offset. Only re-applied when a
         // detune routing exists (else the base set by applyToVoice stands — no per-sample writes).
