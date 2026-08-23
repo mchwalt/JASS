@@ -1425,6 +1425,31 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         seqSetCursor(-1);
         return true;
     }
+    // ← / → move the write cursor without touching the figure (15.6): step back to fix a slip,
+    // step forward to leave steps as they are. Like SPACE, the keys are only claimed while a
+    // figure is being written — outside of that they keep whatever meaning they have elsewhere.
+    if ((key == juce::KeyPress::leftKey || key == juce::KeyPress::rightKey) && seqCursor >= 0)
+    {
+        const int len  = (int) *processor.getAPVTS().getRawParameterValue(Parameters::ID::seqLength);
+        const int last = juce::jmin(len, (int) StepSequencer::kMaxSteps) - 1;
+        const int dir  = (key == juce::KeyPress::rightKey) ? 1 : -1;
+        seqSetCursor(juce::jlimit(0, last, seqCursor + dir));
+        return true;
+    }
+    // Backspace takes back the last entry: cursor back one step AND that step switched off. The
+    // pitch survives (the SPACE rule), so re-writing or re-enabling the step restores it. On the
+    // first step there is nothing to take back — the key is consumed, nothing changes.
+    if (key == juce::KeyPress::backspaceKey && seqCursor >= 0)
+    {
+        if (seqCursor > 0)
+        {
+            const int prev = seqCursor - 1;
+            seqSetCursor(prev);
+            if (auto* on = processor.getAPVTS().getParameter(Parameters::ID::seqStep(prev + 1)))
+                on->setValueNotifyingHost(0.0f);
+        }
+        return true;
+    }
     // Up / Down arrows shift the computer-keyboard octave. (Moved off z/x — those are now note keys,
     // so the whole letter area from 'a' to the 'ä'/'#' keys is free for playing.)
     if (key == juce::KeyPress::upKey || key == juce::KeyPress::downKey)
