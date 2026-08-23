@@ -164,7 +164,7 @@ Mapping the market findings onto the module as shipped (15.1–15.5 + the #56 fi
 
 | # | Item | Effort | Depends on | Note |
 |---|---|---|---|---|
-| A | **Step-back in write mode** (Backspace = cursor back one step, second press clears that step) | ★ | nothing | the one true quick win; completes the typewriter grammar |
+| A | **Write-cursor navigation** — maintainer's design (2026-08-23): **← = cursor back, → = cursor forward** (navigation only, steps untouched), **Backspace = back + clear the step landed on** (delete-last-entry, Ableton's Left-arrow semantics). All three claim their keys only while writing mode is active (`seqCursor >= 0`), like SPACE. ←/→ are unclaimed today (octave sits on ↑/↓ — verified in `PluginEditor.cpp keyPressed`) | ★ | nothing | the one true quick win; completes the typewriter grammar |
 | B | **Format v7 step objects + accent row (= story 15.2)** — 909 gesture: second click on the corner toggle cycles off → on → accented (ring dim/bright); one global ACCENT depth knob driving level + filter bump | ★★★ | format v7 | unblocks Los Niños authenticity and the parked Roboter preset |
 | C | **Per-step gate → TIE → SLIDE continuum** (BSP model) + tie gesture in write mode (advance while holding) | ★★★ | B (container) | brings 303 slides nearly free |
 | D | **STEP SEQ ⇄ MIDI import/export** — import: cluster velocities → accent classes, duration rules → gate/tie/slide; export: inverse | ★★★ | B (accent), C helps | maintainer already wants this; conventions in the analysis doc |
