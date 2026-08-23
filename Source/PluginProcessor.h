@@ -304,12 +304,15 @@ public:
             matrixEnablesDirty.store (false);   // nothing deferred may fire into the new patch
             crossModDirty.store (false);
             seqArpDirty.store (false);
-            killVoicesRequested.store (true);   // …and no voice of the outgoing patch survives:
-                                                // its note-off may never arrive (the chord filter
-                                                // drops channel 1 while a sequencer runs), and a
-                                                // held voice through new parameters is the
-                                                // "something dirty runs along" report (2026-08-24)
         }
+        // No voice survives a load — kill on BOTH edges. On entry: the outgoing patch's voices,
+        // whose note-off may never arrive (the chord filter drops channel 1 while a sequencer
+        // runs) — a held voice through new parameters was the "something dirty runs along"
+        // report (2026-08-24). On exit: anything that started DURING the load — audio blocks run
+        // concurrently with the ~700 parameter writes, and a half-applied state can rising-edge
+        // the auto-play drone into a fresh voice. A latched figure is safe either way: its first
+        // note enters quantised to the drums' next bar, after this flag is consumed.
+        killVoicesRequested.store (true);
     }
 private:
     std::atomic<bool> presetLoading { false };
