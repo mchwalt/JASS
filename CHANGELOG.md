@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.8] – 2026-08-23
+
 ### Added
 - **New demo preset "Los Ninos" (F12).** Liaisons Dangereuses' "Los Niños del Parque" (1981,
   MS-20 + SQ-10) as a sibling to DAF Beat — same school, different trick: where Mussolini
