@@ -48,19 +48,19 @@ evidence what makes programming figures easier.
 
 ## Tasks / Subtasks
 
-- [ ] Task 1: Market analysis (AC1)
-  - [ ] Web research per device class; manuals and demo videos beat marketing pages
-  - [ ] Write `docs/notes/Sequencer_Market_Analysis.md` — one section per device, one
+- [x] Task 1: Market analysis (AC1) — done 2026-08-23
+  - [x] Web research per device class; manuals and demo videos beat marketing pages
+  - [x] Write `docs/notes/Sequencer_Market_Analysis.md` — one section per device, one
         comparison table at the end (entry / rests / ties / accent / length / live-edit)
-  - [ ] Flag every mechanism that presupposes a feature JASS lacks (accent row, ties/slides,
+  - [x] Flag every mechanism that presupposes a feature JASS lacks (accent row, ties/slides,
         parameter locks) — these feed AC3's story-sized list
-- [ ] Task 2: Gap analysis (AC2)
-  - [ ] Re-read the dev records of 15-1, 15-4, 15-5 (decisions already made and why)
-  - [ ] Walk the current module: `Source/Modules/StepSeqSpecs.h`, `Source/DSP/StepSequencer.h`,
+- [x] Task 2: Gap analysis (AC2) — done 2026-08-23, see Dev Agent Record
+  - [x] Re-read the dev records of 15-1, 15-4, 15-5 (decisions already made and why)
+  - [x] Walk the current module: `Source/Modules/StepSeqSpecs.h`, `Source/DSP/StepSequencer.h`,
         the write-mode rules in `Source/UI/PluginEditor.cpp`
-  - [ ] Score each market mechanism: have it / have it differently / missing
+  - [x] Score each market mechanism: have it / have it differently / missing
 - [ ] Task 3: Proposal and scope decision (AC3)
-  - [ ] Prioritized list with effort stars, quick wins first
+  - [x] Prioritized list with effort stars, quick wins first (see Dev Agent Record)
   - [ ] Maintainer review — in conversation, German; the documents stay English
   - [ ] Record the decision in this file under Dev Agent Record
 - [ ] Task 4: Implement the agreed quick wins (AC4)
@@ -122,8 +122,70 @@ evidence what makes programming figures easier.
 
 ### Agent Model Used
 
-### Debug Log References
+Claude Fable 5 (four parallel research subagents for Task 1; synthesis and gap
+analysis in the main session).
+
+### Task 2 — Gap analysis (2026-08-23)
+
+Mapping the market findings onto the module as shipped (15.1–15.5 + the #56 fixes):
+
+**JASS already has, and the market confirms as right:**
+- *Value-per-step surface* (knob per step + corner toggle, audition on touch) — the
+  SQ-10 archetype, with quantized display names on top (better than the original).
+- *Typewriter recording* (15.4) with the universal grammar's core: play = write +
+  advance, SPACE = rest, ESC = exit. Matches KeyStep/Live/Digitakt conventions.
+- *Editing against the running loop*, audible — the property that divides beloved
+  from infamous workflows. JASS is on the right side.
+- *Polymeter against the drums* (independent LENGTH vs PERC) — several devices sell
+  this as a feature (Digitakt per-track, BSP polyrhythm mode).
+- *Latch/transpose with the played key* — the 303's pattern-transpose idea, live.
+
+**Missing or divergent, ordered by market weight:**
+1. **Accent** — no per-step dynamics at all; rests currently fake the SQ-10 accent
+   row (Los Niños, Roboter both blocked on this). Every surveyed acid/drum device
+   has it. = reserved story 15.2.
+2. **Per-step gate / tie / slide** — JASS has one global GATE; the market's elegant
+   model is BSP's per-step gate 1–99 % → TIE → SLIDE continuum.
+3. **No step-back in write mode** — 303/TD-3 have BACK, Live has Left-arrow-deletes-
+   last; JASS's cursor only moves forward.
+4. **No tie gesture in write mode** — the grammar's third verb (advance while
+   holding); needs per-step gate storage first.
+5. **No skipped steps** (third step state: removed from time) — volca ACTIVE STEP /
+   Metropolix SKIP; JASS's off = silent but time-consuming only.
+6. **No ratchets / probability / micro-shift** — cheap once a per-step container
+   exists, not before.
+7. **No MIDI import/export** — the maintainer independently asked for this
+   (2026-08-23); conventions documented in the analysis.
+8. **No live overdub recording** — the fourth archetype; questionable value on a
+   synth panel whose keyboard already plays the transposed figure live.
+9. **No fill/Euclid generator** — T-1's entry accelerator; nice-to-have.
+
+### Task 3 — Prioritized proposal (awaiting maintainer decision)
+
+| # | Item | Effort | Depends on | Note |
+|---|---|---|---|---|
+| A | **Step-back in write mode** (Backspace = cursor back one step, second press clears that step) | ★ | nothing | the one true quick win; completes the typewriter grammar |
+| B | **Format v7 step objects + accent row (= story 15.2)** — 909 gesture: second click on the corner toggle cycles off → on → accented (ring dim/bright); one global ACCENT depth knob driving level + filter bump | ★★★ | format v7 | unblocks Los Niños authenticity and the parked Roboter preset |
+| C | **Per-step gate → TIE → SLIDE continuum** (BSP model) + tie gesture in write mode (advance while holding) | ★★★ | B (container) | brings 303 slides nearly free |
+| D | **STEP SEQ ⇄ MIDI import/export** — import: cluster velocities → accent classes, duration rules → gate/tie/slide; export: inverse | ★★★ | B (accent), C helps | maintainer already wants this; conventions in the analysis doc |
+| E | Euclid fill (steps/pulses/rotate pre-populates the grid) | ★★ | nothing | optional sugar |
+
+Explicitly **not** proposed: parameter locks / MOD lanes (JASS's mod matrix already
+covers global modulation; a maximal 15.2 can revisit), live overdub recording,
+skipped steps (LENGTH covers most uses).
+
+Suggested split: **A** stays in this story (Task 4). **B, C, D** become their own
+stories (B = the reserved 15.2; C, D new), sequenced B → C → D because both C and D
+build on the v7 per-step container. E only on demand.
 
 ### Completion Notes List
 
+- Task 1 delivered as `docs/notes/Sequencer_Market_Analysis.md` (research: four
+  parallel agents over official manuals; SMF round-trip section feeds story D).
+- Tasks 2 + 3 drafted above; hard gate holds — no implementation until the
+  maintainer picks the scope.
+
 ### File List
+
+- `docs/notes/Sequencer_Market_Analysis.md` (new)
+- `_bmad-output/implementation-artifacts/15-6-step-seq-programming-usability.md` (this file)
