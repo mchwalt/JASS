@@ -23,7 +23,7 @@ namespace rack
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
     // A name ending in U{n} states the GRID HEIGHT in quarter units instead of content rows — the
     // two are separate since Story 7.4 (W28U6 = 28 columns, 2 content rows, 6 quarters = 176 px).
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2, W28U6, W28U7, W20U7, W4U7 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2, W28U6, W28U7, W20U7, W4U7, W30U7 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
@@ -126,6 +126,13 @@ namespace rack
         // goes to waste. MOD MATRIX's AMT claims 2 so its cell is wide enough for the knob to reach
         // the height its row actually offers (measured: 46 px → 65 px, Story 7.5).
         int slots = 1;
+
+        // Optional hover text override. Default (unset): a knob with textFromValue shows that same
+        // text as its tooltip — the cure for a value box narrower than its name (PERC NOTE). Set it
+        // when the hover should say MORE than the box: STEP SEQ boxes read "E1", the tooltip adds
+        // the MIDI number ("E1 · 40") for transcribing from templates. Editor-injected, like
+        // textFromValue. Appended last so existing aggregate initializers stay valid.
+        std::function<juce::String (double value)> tooltipFromValue;
     };
 
     struct Combo
@@ -155,6 +162,11 @@ namespace rack
         // Lets a descriptor react to the gesture (SAMPLER SET → auto One-Shot for mapped sets)
         // without fighting preset restores. Supported for indexIsValue combos.
         std::function<void(int)> onUserSelect;
+        // Optional PER-COMBO relevance predicate — the combo counterpart of Knob::activeWhen
+        // (same contract, same condKnobs polling path): when set and false, this one combo is
+        // disabled and dimmed while the module stays live. MOD MATRIX QUANT uses it — the mask
+        // only acts on FREQ routings, so on any other target the combo reads as "not in play".
+        std::function<bool()> activeWhen;
     };
 
     struct Toggle
@@ -344,7 +356,11 @@ namespace rack
             // in whole 114 px rows. W28U6 (176 px) is the same module WITHOUT its repeated captions;
             // kept because the maintainer may still want that trade, not used today.
             case SizeClass::W28U6: return { 28, 2,  6, 64, KnobSize::Small };
-            case SizeClass::W28U7: return { 28, 2,  7, 64, KnobSize::Small };   // MOD MATRIX
+            case SizeClass::W28U7: return { 28, 2,  7, 64, KnobSize::Small };   // MOD MATRIX before QUANT (kept: the maintainer may want the trade back)
+            // MOD MATRIX since QUANT: a fifth control per slot makes 24 cells per row — full rack
+            // width is what keeps the cell above ~55 px. The AMT knob is unaffected (2 cells wide,
+            // capped by the row height anyway); only the combos give up a few px each.
+            case SizeClass::W30U7: return { 30, 2,  7, 72, KnobSize::Small };
             case SizeClass::W20U7: return { 20, 2,  7, 40, KnobSize::Small };   // STEP SEQ, PERC
             case SizeClass::W4U7:  return {  4, 2,  7, 12, KnobSize::Small };   // ADSR (knobs + curve)
             // STEP SEQ: 32 steps as 2 x 16 plus five globals = 19 cells per row; 20 columns is

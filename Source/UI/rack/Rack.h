@@ -166,6 +166,10 @@ namespace rack
                                                   // header controls (>= widest label at 15pt bold)
         static constexpr int kPad         = 8;    // inner padding around the grid
 
+        // Fan ModuleFrame::refreshNamedReadouts out to every frame: value boxes that depend on
+        // EDITOR state (STEP SEQ note names follow the keyboard octave) re-text in one call.
+        void refreshNamedReadouts() { for (auto* f : frames) f->refreshNamedReadouts(); }
+
     private:
         struct Placed
         {

@@ -22,4 +22,6 @@ Es öffnet sich ein Datei-Dialog im Presets-Ordner — wähle das `.jass`-Preset
 
 Die Belegungen sind eine **globale** Einstellung (in `PresetBanks.json` gespeichert), unabhängig vom geladenen Preset — sie bleiben beim Preset-Wechsel erhalten und überstehen einen Neustart.
 
+Wurde die Preset-Datei eines Platzes umbenannt oder gelöscht, meldet die Taste das einmal und räumt den Platz. Der **DELETE**-Knopf in der Kopfzeile löscht eine Preset-Datei ganz (in den Papierkorb) und räumt ihre Taste gleich mit.
+
 Ab Werk sind **F1–F4 mit den vier Demo-Presets vorbelegt** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). Der **RESET**-Knopf in der Kopfzeile stellt diese Werksbelegung wieder her.

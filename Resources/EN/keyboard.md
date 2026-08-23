@@ -1,5 +1,7 @@
 The on-screen keyboard for playing notes with the mouse or the computer keyboard.
 
+**88 keys, A0–C8** — the full piano range, the same layout as a grand or an 88-key digital piano. MIDI input is not limited by it: notes outside the visible range still sound.
+
 Hide this module (via the **MODULES** menu or the customization panel) when you play through an external MIDI keyboard — it never affects the sound, only the display.
 
 **Computer keyboard**

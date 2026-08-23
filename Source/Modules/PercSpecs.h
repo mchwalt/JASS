@@ -85,9 +85,10 @@ namespace Modules
             // Balance only, 0..1 — the boost lives on the module's own AMP above. A per-lane knob
             // that could also amplify would mean two ways to do the same thing, and no way to tell
             // from the panel which of them is holding the level.
-            m.params.push_back ({ "percLevel" + juce::String (l), "Level" + juce::String (l),
+            m.params.push_back ({ "percLevel" + juce::String (l), "Amp" + juce::String (l),
                                   "AMP " + juce::String (l),
                                   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.8f });
+            m.params.back().legacyPersistKey = "Level" + juce::String (l);   // pre-2026-08 presets; still read
             // Placement per lane. PERC writes straight to the bus, so this is its own constant-power
             // pan — it never passes the STEREO stage the voices go through. Default centred: a
             // default that spreads the kit would rewrite every preset that omits the parameter.

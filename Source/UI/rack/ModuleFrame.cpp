@@ -198,6 +198,18 @@ namespace rack
                     s->textFromValueFunction = k->textFromValue;
                     s->valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
                     s->updateText();
+                    // The value box can be narrower than the name (PERC NOTE: "HH Closed · 42"):
+                    // hovering the knob shows the full read-out as a tooltip, kept in sync below
+                    // and in refreshNamedReadouts. tooltipFromValue may say MORE than the box
+                    // (STEP SEQ: box "E1", hover "E1 · 40"); default is the box text. Chained like
+                    // the audition hook — a transform knob has already claimed onValueChange.
+                    s->tooltipFromValue = k->tooltipFromValue ? k->tooltipFromValue : k->textFromValue;
+                    s->refreshTooltip();
+                    s->onValueChange = [s, prev = std::move (s->onValueChange)]
+                    {
+                        if (prev) prev();
+                        s->refreshTooltip();
+                    };
                 }
 
                 if (k->modTarget != ModTarget::Off)
@@ -241,10 +253,15 @@ namespace rack
                     // restored. The switch has no value of its own — it shares the knob's cell and
                     // previews the knob's pitch. Nothing here releases the note: there is no
                     // gesture to end, so the editor's safety cutoff closes it.
+                    // Guarded like the knob below: the ButtonAttachment replays a loaded preset
+                    // through setToggleState(sendNotificationSync), so onClick also fires for every
+                    // step the preset switches on — and previewing arms the write cursor (15.4).
+                    // Only a click with the mouse actually on the switch is a gesture.
                     if (k->audition)
                         tb->onClick = [tb, s, aud = k->audition]
                         {
-                            if (tb->getToggleState())
+                            if (tb->getToggleState()
+                                && (tb->isMouseButtonDown (true) || tb->isMouseOver (true)))
                                 aud ((int) s->getValue(), true);
                         };
                 }
@@ -326,6 +343,11 @@ namespace rack
                 // default; descriptors may widen (SAMPLER SET shows user-named sets in full).
                 cells.push_back ({ box, makeCaption (ownedCaptions, c->label), juce::jmax (1, c->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
+
+                // Mode-dependent combo (MOD MATRIX QUANT outside FREQ routings): same polling
+                // path as the mode-dependent knobs — disabled + dimmed, layout untouched.
+                if (c->activeWhen)
+                    condKnobs.push_back ({ box, cells.back().caption, c->activeWhen });
             }
             else if (auto* t = std::get_if<Toggle> (&el))
             {
@@ -820,6 +842,18 @@ namespace rack
         if (off != dimmed) { dimmed = off; repaint(); }
     }
 
+    void ModuleFrame::refreshNamedReadouts()
+    {
+        // Only sliders that carry a textFromValue read-out; everyone else keeps JUCE's own text.
+        for (auto& cell : cells)
+            if (auto* s = dynamic_cast<SynthySlider*> (cell.widget))
+                if (s->textFromValueFunction)
+                {
+                    s->updateText();
+                    s->refreshTooltip();   // full text on hover, same reference as the box
+                }
+    }
+
     void ModuleFrame::updateCondKnobs()
     {
         // A knob that does not apply in the current mode is switched off rather than hidden: the
@@ -832,10 +866,10 @@ namespace rack
             if (ck.active == want) continue;
             ck.active = want;
             const bool on = (want == 1);
-            if (ck.slider != nullptr)
+            if (ck.widget != nullptr)
             {
-                ck.slider->setEnabled (on);
-                ck.slider->setAlpha (on ? 1.0f : 0.35f);
+                ck.widget->setEnabled (on);
+                ck.widget->setAlpha (on ? 1.0f : 0.35f);
             }
             if (ck.caption != nullptr)
                 ck.caption->setAlpha (on ? 1.0f : 0.35f);

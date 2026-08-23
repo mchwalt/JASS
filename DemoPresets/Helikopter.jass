@@ -30,7 +30,7 @@
     "Enabled": false,
     "Waveform": "Sine",
     "Octave": "-1 Oct",
-    "Level": 0.5
+    "Amp": 0.5
   },
   "Noise": {
     "Enabled": true,

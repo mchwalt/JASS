@@ -10,6 +10,7 @@
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"   // Story 15.1
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
+#include "DSP/ChaosLorenz.h"     // LFO expansion — global Lorenz mod source (Chaos X/Y)
 #include <vector>
 #include <map>
 
@@ -130,6 +131,7 @@ public:
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
     float getLfoDisplayValue(int i) const { return lfoDisplayValues[i].load(); }   // per-LFO (for the rings)
+    float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
     // persisted into the LiveState file so it survives a restart. Touched only
@@ -204,6 +206,11 @@ private:
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
     std::atomic<float> lfoDisplayValues[kNumLFOs] {};
+    // CHAOS: ONE global Lorenz attractor (all voices move together — correlated, musical, cheap).
+    // Advanced once per block; voices, master-bus targets and rings all read the same snapshot,
+    // so display == audio by construction. Free-running: never reset (see DSP/ChaosLorenz.h).
+    ChaosLorenz chaos;
+    std::atomic<float> chaosDisplay[2] {};   // [0]=X, [1]=Y — published each block (0 when off)
     float prevMasterGain = 0.0f;   // last block's applied master gain — ramp target so LFO-modulated
                                    // MASTER · VOL doesn't zipper (block-rate global modulation)
     Arpeggiator arp;
@@ -218,6 +225,9 @@ private:
     std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
     std::atomic<int> seqNoteDisplay { -1 };   // note the STEP SEQ holds, for the on-screen keyboard
     std::atomic<int> seqLatchedRoot { -1 };   // STEP SEQ latch: the root outlives the key (see below)
+    std::atomic<bool> seqRequantize { false };// preset-load latch: force a fresh quantised entry —
+                                              // the rising-edge logic cannot see a latch that
+                                              // replaced a still-running one (no edge to rise on)
     std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT

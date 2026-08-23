@@ -35,6 +35,15 @@ public:
     void setKnobDiameter(int d) { knobDiameter = d; }
     int  getKnobDiameter() const { return knobDiameter; }
 
+    // Hover text for knobs with a named read-out (Knob::tooltipFromValue, else textFromValue).
+    // Owned here so refreshNamedReadouts can re-derive it without reaching back to the descriptor.
+    std::function<juce::String (double value)> tooltipFromValue;
+    void refreshTooltip()
+    {
+        if (tooltipFromValue)
+            setTooltip (tooltipFromValue (getValue()));
+    }
+
     // Live modulation amount (-1..+1) for the animated ring the LookAndFeel draws
     // around the knob (Vital-style). 0 = no ring. Set by the editor's timer from
     // the current LFO value; repaints only on a meaningful change.
