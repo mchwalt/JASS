@@ -1314,7 +1314,7 @@ int SynthyEditor::seqPitchReference() const
 // processor drops every channel-1 note so that only the pattern sounds — precisely the moment a
 // preview is wanted. Velocity is the 100 the sequencer itself emits, or the preview would be louder
 // than the step it previews.
-void SynthyEditor::auditionStep(int semitones, bool sounding)
+void SynthyEditor::auditionStep(int semitones, bool sounding, bool accented)
 {
     auto& state = processor.getKeyboardState();
     const int ch = SynthyProcessor::kAuditionChannel;
@@ -1327,12 +1327,15 @@ void SynthyEditor::auditionStep(int semitones, bool sounding)
         return;
     }
     const int note = juce::jlimit(0, 127, seqPitchReference() + semitones);
-    if (note != auditionNote)
+    if (note != auditionNote || accented != auditionAccented)   // accent change re-triggers too (15.2)
     {
         if (auditionNote >= 0)
             state.noteOff(ch, auditionNote, 0.0f);   // re-trigger: a drag scrubs the scale
-        state.noteOn(ch, note, 100.0f / 127.0f);
+        // 100 is what the sequencer emits for a plain step; an ACCENTED one plays hot (127),
+        // so the preview sounds exactly like the figure will (15.2).
+        state.noteOn(ch, note, accented ? 1.0f : 100.0f / 127.0f);
         auditionNote = note;
+        auditionAccented = accented;
     }
     auditionTicks = 24;   // ~0.8 s at the editor's 30 Hz — the wheel and the value box have no
                           // drag end, and a hanging note is worse than a short one
@@ -2174,10 +2177,14 @@ void SynthyEditor::buildRack()
                 {
                     const int step = k->paramId.substring(8).getIntValue();   // 1-based
                     k->toggleParamId = "seqStep" + k->paramId.substring(8);
+                    k->accentParamId = "seqAcc"  + k->paramId.substring(8);   // 15.2: third switch state
                     k->audition = [this, step](int semis, bool sounding)
                     {
                         if (sounding) seqSetCursor(step - 1);   // a click selects, exactly as 15.3 sounds
-                        auditionStep(semis, sounding);
+                        // An accented step previews HOT (15.2) — the same velocity the figure plays.
+                        const bool acc = *processor.getAPVTS().getRawParameterValue(
+                                             Parameters::ID::seqAcc(step)) > 0.5f;
+                        auditionStep(semis, sounding, acc);
                     };
                     k->highlightWhen = [this, step] { return seqCursor == step - 1; };
                     // …and mark the step the pattern is ON, the way PERC's grid marks its column

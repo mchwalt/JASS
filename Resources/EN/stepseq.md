@@ -1,10 +1,11 @@
 Plays a 32-step figure you write yourself, transposed by the key you play. **The first key starts it and it keeps running** — you do not have to hold anything. A new key moves the figure to that root, the Up / Down octave keys shift it by an octave, and **SPACE stops it**. Switching the module off stops it too.
 
-- **1 … 32** — each step's note. The box shows the real pitch (E1, C3 …) the step sounds at the keyboard's current octave — the figure still transposes with the key you play. The switch in a knob's corner turns that step off: a rest.
+- **1 … 32** — each step's note. The box shows the real pitch (E1, C3 …) the step sounds at the keyboard's current octave — the figure still transposes with the key you play. The switch in a knob's corner cycles the step: **on → accented (filled: plays harder, filter opens) → off (a rest)**.
 - **SYNC** — step length as a note division. Set it to *Free* to use RATE instead.
 - **RATE** — steps per second when SYNC is *Free*.
 - **LEN** — how many steps before the pattern repeats.
 - **GATE** — note length. **1 = legato**: each note is held into the next step, no gap. Lower values shorten every note.
+- **ACCENT** — what an accented step does: how much louder it plays and how far the filter opens. At 0, accents change nothing.
 
 Clicking or turning a step's knob sounds it, so you can write the figure by ear. Preview, entry and the note names all follow the root the figure sounds at: the latched key while one is running, otherwise the keyboard's current C (Up / Down shifts it).
 

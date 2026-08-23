@@ -11,6 +11,23 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **STEP SEQ has an accent row (story 15.2).** The corner switch of every step now cycles
+  off → on → **accented** — the TR-909's "press the same button again" gesture, so 32 accents
+  cost no rack space — and the new ACCENT knob sets what an accent does: the step plays louder
+  and the filter opens for it (the TB-303/SQ-10 recipe; at 0, accents change nothing). Under the
+  hood an accented step is simply emitted **hot** (MIDI velocity 127 against the plain 100), and
+  the voice maps velocity onto gain and cutoff — which means a MIDI keyboard now also plays
+  touch-sensitively exactly as far as ACCENT is turned up, and a future MIDI export carries the
+  accents for free (the Los Niños reference MIDI encodes its accent row as exactly two velocity
+  classes). The market survey behind story 15.6 showed this per-step second class is the one
+  mechanism every classic sequencer has and JASS lacked — it is what the Los Niños preset
+  fakes with rests, and what parked the Kraftwerk attempt.
+- **Presets store the figure as music now (FormatVersion 7).** The STEP SEQ block writes its
+  steps as an array of note objects — `{ "On": true, "Note": 46, "Name": "Bb1", "Accent": true }`
+  — instead of 64 flat knob fields. The absolute MIDI note is canonical (resolved against the
+  latched root; the figure still transposes with the played key), the spelled name is generated
+  for the reader's eyes and ignored on load, so the two can never diverge. Older presets keep
+  loading unchanged, and are auto-migrated with a backup, as always.
 - **The write cursor can move backwards now: ← / → navigate, BACKSPACE takes back the last
   note.** Writing a figure by playing it (15.4) only ever ran forward — one slip meant reaching
   for the mouse, clicking the step knob and re-aiming. The arrow keys move the ring without

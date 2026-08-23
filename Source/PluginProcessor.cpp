@@ -986,6 +986,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
         {
             voice->setChaosValues(chaosDisplay[0].load(), chaosDisplay[1].load());   // one orbit, all voices
+            voice->setAccentDepth(*apvts.getRawParameterValue(Parameters::ID::seqAccent));   // 15.2
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                                      voice->getLFOs(), voice->getNoise(),
@@ -1041,8 +1042,9 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
             for (int s = 0; s < StepSequencer::kMaxSteps; ++s)
             {
-                stepSeq.pitch[(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
-                stepSeq.on   [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
+                stepSeq.pitch [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
+                stepSeq.on    [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
+                stepSeq.accent[(size_t) s] =       *apvts.getRawParameterValue(ID::seqAcc  (s + 1)) > 0.5f;   // 15.2
             }
 
             // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16

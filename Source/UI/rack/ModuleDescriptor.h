@@ -96,6 +96,12 @@ namespace rack
         // ModuleFrame owns the parameter and builds the predicate itself.
         juce::String toggleParamId;
 
+        // Optional THIRD state for that corner switch (15.2): with this set, a click cycles
+        // off → on → ACCENTED — the TR-909's "second press deepens it" gesture — and the accent
+        // lands in this bool parameter. Rendered by the same switch (empty / tick / filled+tick),
+        // so an accent row costs no rack space at all. Ignored when toggleParamId is empty.
+        juce::String accentParamId;
+
         // Optional read-out override for the value box: the knob shows what this returns instead of
         // the number. PERC's NOTE knob uses it to say "Kick" rather than "36" (Story 16.1) — the
         // stored value stays the note number, only its presentation changes. Injected by the editor

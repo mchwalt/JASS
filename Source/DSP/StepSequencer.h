@@ -36,6 +36,10 @@ public:
     int    length = kMaxSteps;                   // 1..32 steps before the pattern repeats
     std::array<int, kMaxSteps>  pitch {};        // semitone offset from the root, -24..+24
     std::array<bool, kMaxSteps> on {};           // false = rest: that step stays silent
+    std::array<bool, kMaxSteps> accent {};       // 15.2: an accented step is emitted HOT (velocity
+                                                 // 127 vs the plain 100) — what that does to the
+                                                 // sound is the voice's ACCENT mapping, so a MIDI
+                                                 // export of the figure carries the accents for free
     double gate = 1.0;                           // note length, ONE value for the whole pattern
 
     void prepare (double sr) { sampleRate = sr; reset(); }
@@ -122,7 +126,8 @@ public:
                         out.addEvent (juce::MidiMessage::noteOff (channel, soundingNote), i);
                         soundingNote = -1;
                     }
-                    out.addEvent (juce::MidiMessage::noteOn (channel, note, (juce::uint8) 100), i);
+                    out.addEvent (juce::MidiMessage::noteOn (channel, note,
+                                                             (juce::uint8) (accent[(size_t) s] ? 127 : 100)), i);
                     const int prev = soundingNote;   // still sounding => legato tail to close
                     soundingNote = note;
                     gateCountdown = juce::jmax (1, (int) (interval * g));
