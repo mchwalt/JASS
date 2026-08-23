@@ -10,7 +10,25 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **The write cursor can move backwards now: ← / → navigate, BACKSPACE takes back the last
+  note.** Writing a figure by playing it (15.4) only ever ran forward — one slip meant reaching
+  for the mouse, clicking the step knob and re-aiming. The arrow keys move the ring without
+  touching the figure, BACKSPACE steps back *and* switches that step off — the pitch survives
+  (the SPACE rule), so re-writing or re-enabling the step restores it. All three keys are only
+  claimed while the ring is showing; outside of writing they keep their meaning (the market
+  survey for story 15.6 showed this is the one gesture every step-entry grammar has and ours
+  lacked — the 303's BACK button, Ableton's Left arrow). The help pages now also name ESC as
+  the way out of writing, which shipped in 2026.08.8 but was nowhere to read.
+
 ### Fixed
+- **Step preview, entry and the note boxes follow the root that actually sounds.** The figure
+  transposes with the latched key, but clicking a step previewed it over the keyboard's C — with
+  Los Niños latched on Bb, the click sounded a different note than the loop played at that very
+  step, so a melody could not be assembled by ear (maintainer, 2026-08-23). Preview, write-by-
+  playing and the boxes' note names now all resolve over one reference: the latched root while a
+  figure runs, otherwise the keyboard's current C as before. That also makes playing a figure in
+  over a running latch WYSIWYG — the keys played are the notes the figure then plays.
 - **Loading a preset now lands it exactly as saved — every time, on the first try.** Presets
   sometimes arrived scrambled and had to be loaded two or three times "until everything fits".
   The cause was structural: applying a preset writes ~700 parameters (factory reset + the file's
