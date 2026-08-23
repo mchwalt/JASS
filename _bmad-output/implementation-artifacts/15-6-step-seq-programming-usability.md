@@ -63,11 +63,12 @@ evidence what makes programming figures easier.
   - [x] Prioritized list with effort stars, quick wins first (see Dev Agent Record)
   - [ ] Maintainer review — in conversation, German; the documents stay English
   - [ ] Record the decision in this file under Dev Agent Record
-- [ ] Task 4: Implement the agreed quick wins (AC4)
-  - [ ] Feature branch, Conventional Commits, CHANGELOG reasoning
-  - [ ] Help pages EN/DE in one pass
-  - [ ] Build + run + maintainer's ear (no unit-test rig — say plainly what is only
-        build-verified)
+- [ ] Task 4: Implement the agreed quick wins (AC4) — scope decided 2026-08-23: item A only;
+      B/C/D spin off as stories (B = 15.2), E moved to Feature_Ideas as a PERC idea
+  - [x] Feature branch, Conventional Commits, CHANGELOG reasoning (commit 0d1a93e)
+  - [x] Help pages EN/DE in one pass (←/→/Backspace documented, ESC added retroactively)
+  - [ ] Build + run + maintainer's ear — **build-verified 2026-08-23** (help libs + standalone
+        link clean); the maintainer's hands-on check of ←/→/Backspace is still open
 
 ## Dev Notes
 
