@@ -21,6 +21,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   lacked — the 303's BACK button, Ableton's Left arrow). The help pages now also name ESC as
   the way out of writing, which shipped in 2026.08.8 but was nowhere to read.
 
+### Fixed
+- **Step preview, entry and the note boxes follow the root that actually sounds.** The figure
+  transposes with the latched key, but clicking a step previewed it over the keyboard's C — with
+  Los Niños latched on Bb, the click sounded a different note than the loop played at that very
+  step, so a melody could not be assembled by ear (maintainer, 2026-08-23). Preview, write-by-
+  playing and the boxes' note names now all resolve over one reference: the latched root while a
+  figure runs, otherwise the keyboard's current C as before. That also makes playing a figure in
+  over a running latch WYSIWYG — the keys played are the notes the figure then plays.
+
 ## [2026.08.8] – 2026-08-23
 
 ### Added
