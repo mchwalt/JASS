@@ -827,8 +827,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (*apvts.getRawParameterValue(Parameters::ID::wavetableOn) > 0.5f) mask |= (1u << 6);
     if (*apvts.getRawParameterValue(Parameters::ID::subOn)      > 0.5f) mask |= (1u << 7);
 
-    // A newly enabled generator re-arms the auto-play drone (rising edge).
-    if ((mask & ~prevSourcesMask) != 0)
+    // A newly enabled generator re-arms the auto-play drone (rising edge) — but only while the
+    // instrument is otherwise silent: never under a LATCHED figure (a held C4 under a running
+    // bass line is the very confusion the latch removed, 15.5), and never while keys are held
+    // (the keys already sound the patch). This matters because EVERY preset load fires this edge
+    // — the factory reset drops the generator mask to zero and the file's enables raise it again,
+    // racing this code over several blocks — so the edge re-armed the drone AFTER startSeqLatch
+    // (or a held key) had just said no: a saw C4 hung under the beat until the next keypress
+    // chased it away (maintainer 2026-08-24, holding a key while switching DAF Beat ⇄ Los Ninos).
+    if ((mask & ~prevSourcesMask) != 0
+        && seqLatchedRoot.load() < 0
+        && heldNotesLo.load() == 0 && heldNotesHi.load() == 0)
         autoPlayEnabled.store(true);
     prevSourcesMask = mask;
 
