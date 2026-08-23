@@ -304,10 +304,16 @@ public:
             matrixEnablesDirty.store (false);   // nothing deferred may fire into the new patch
             crossModDirty.store (false);
             seqArpDirty.store (false);
+            killVoicesRequested.store (true);   // …and no voice of the outgoing patch survives:
+                                                // its note-off may never arrive (the chord filter
+                                                // drops channel 1 while a sequencer runs), and a
+                                                // held voice through new parameters is the
+                                                // "something dirty runs along" report (2026-08-24)
         }
     }
 private:
     std::atomic<bool> presetLoading { false };
+    std::atomic<bool> killVoicesRequested { false };   // consumed at the top of processBlock
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
     std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion

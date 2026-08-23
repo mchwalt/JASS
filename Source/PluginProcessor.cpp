@@ -797,6 +797,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
 
+    // A preset load kills every sounding voice (flag set by setPresetLoading). Nothing else does:
+    // a note held across the switch kept its voice ringing with the NEW patch's parameters — and
+    // once the new patch runs STEP SEQ, the chord filter below drops the key's channel-1 note-off,
+    // so the voice hung FOREVER (GrandPiano → DAF Beat left a saw drone under the beat,
+    // maintainer 2026-08-24). Hard stop, no tail: the old patch's tail through the new patch's
+    // processing is the very sound being removed. allNotesOff walks the voices directly —
+    // RT-safe, and immune to the chord filter since no buffer event is involved.
+    if (killVoicesRequested.exchange (false))
+        synth.allNotesOff (0, false);
+
     // Which sound generators are currently enabled (one bit each).
     unsigned mask = 0;
     for (int i = 1; i <= 3; ++i)
