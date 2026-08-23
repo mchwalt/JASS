@@ -286,7 +286,28 @@ private:
     // maps are only ever touched on the message thread (no data race).
 public:
     void reconcileParamCouplingsIfDirty();   // message thread only (editor timer)
+
+    // Preset load in progress (PresetIO::setPresetLoading hook). A saved preset is a snapshot of
+    // the state AFTER every coupling already ran, so it must be applied VERBATIM: while this is
+    // set, parameterChanged runs none of the couplings below — applyVar's factory-reset plus the
+    // file's values would otherwise fire them ~700 times against half-applied intermediate states.
+    // Entering a load also clears the two auto-enable memories: they belong to the OUTGOING patch,
+    // and carrying them across made the result of a load depend on what was loaded before (the
+    // "load it two or three times until it fits" report, 2026-08-23). Message thread only.
+    void setPresetLoading (bool loading)
+    {
+        presetLoading.store (loading);
+        if (loading)
+        {
+            matrixAutoEnabled.clear();
+            crossModAutoEnabled.clear();
+            matrixEnablesDirty.store (false);   // nothing deferred may fire into the new patch
+            crossModDirty.store (false);
+            seqArpDirty.store (false);
+        }
+    }
 private:
+    std::atomic<bool> presetLoading { false };
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
     std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion

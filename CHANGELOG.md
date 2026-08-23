@@ -10,6 +10,20 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Fixed
+- **Loading a preset now lands it exactly as saved — every time, on the first try.** Presets
+  sometimes arrived scrambled and had to be loaded two or three times "until everything fits".
+  The cause was structural: applying a preset writes ~700 parameters (factory reset + the file's
+  values), and every single write fired the parameter couplings meant for hand gestures — the
+  MOD-MATRIX auto-enable re-evaluated on each of its ~24 slot fields, the ARP/STEP-SEQ exclusion,
+  the CROSS-MOD operand coupling — all reacting to half-applied intermediate states. Worse, the
+  couplings' auto-enable memories ("*we* switched this module on, so we may switch it off again")
+  survived the preset change, so the result of a load depended on which patch was loaded BEFORE —
+  repeated loading merely converged on the right state. A saved preset is a snapshot taken after
+  every coupling already ran, so it is now applied verbatim: the couplings stay silent during the
+  load and their memories are cleared with the outgoing patch. Hand gestures behave exactly as
+  before.
+
 ## [2026.08.8] – 2026-08-23
 
 ### Added
