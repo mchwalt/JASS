@@ -49,6 +49,10 @@ SynthyProcessor::SynthyProcessor()
     // one puts it back — so a sequencer patch plays itself the moment it is loaded. -1 on load means
     // "no latch" and stops whatever the previous patch left running. Starting the latch also ends
     // the auto-play drone, since the instrument is now playing.
+    // A preset is a post-coupling snapshot: while one is applied, the parameter couplings stay
+    // silent and their auto-enable memories are dropped (see setPresetLoading in the header).
+    PresetIO::setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
+
     PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
     PresetIO::applySeqLatchRoot = [this] (int note)
     {
@@ -235,8 +239,9 @@ SynthyProcessor::~SynthyProcessor()
     // load cannot queue work into a dying thread. The abort is polled per zone, so this returns
     // in milliseconds even mid-piano.
     PresetIO::requestSamplerSet = nullptr;
-    PresetIO::seqLatchRoot      = nullptr;   // both capture `this` — drop them before it dies
+    PresetIO::seqLatchRoot      = nullptr;   // these capture `this` — drop them before it dies
     PresetIO::applySeqLatchRoot = nullptr;
+    PresetIO::setPresetLoading  = nullptr;
     samplePreload.stopThread (4000);
 
     keyboardState.removeListener(this);
@@ -474,6 +479,13 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     // Off the message thread we do NO allocation / setValueNotifyingHost: just flag the needed
     // reconciliation (atomic) and let reconcileParamCouplingsIfDirty() run it on the message thread.
     const bool onMsgThread = juce::MessageManager::existsAndIsCurrentThread();
+
+    // A preset being applied is a post-coupling snapshot — apply it verbatim, run no couplings
+    // (see setPresetLoading). Without this guard the load itself triggered them against
+    // half-applied states, and the auto-enable memories made the outcome depend on the patch
+    // loaded BEFORE — presets sometimes needed two or three loads to arrive intact.
+    if (presetLoading.load())
+        return;
 
     if (paramId.startsWith("modSlot"))   // startsWith(const char*) is alloc-free
     {
@@ -785,6 +797,27 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     juce::ScopedNoDenormals noDenormals;
     buffer.clear();
 
+    // A preset load kills every sounding voice (flag set by setPresetLoading). Nothing else does:
+    // a note held across the switch kept its voice ringing with the NEW patch's parameters — and
+    // once the new patch runs STEP SEQ, the chord filter below drops the key's channel-1 note-off,
+    // so the voice hung FOREVER (GrandPiano → DAF Beat left a saw drone under the beat,
+    // maintainer 2026-08-24). Hard stop, no tail: the old patch's tail through the new patch's
+    // processing is the very sound being removed. allNotesOff walks the voices directly —
+    // RT-safe, and immune to the chord filter since no buffer event is involved.
+    if (killVoicesRequested.exchange (false))
+    {
+        synth.allNotesOff (0, false);
+        // The drone's voice just died with the rest — reset its bookkeeping too, or a patch that
+        // WANTS the drone (no latch, nothing held) would stay silent: autoNoteOn would still say
+        // "sounding" and nothing would ever re-trigger it. The noteOff clears the keyboard state;
+        // the drone logic below then re-triggers it within this very block if it is wanted.
+        if (autoNoteOn)
+        {
+            keyboardState.noteOff (kDroneChannel, kDroneNote, 0.0f);
+            autoNoteOn = false;
+        }
+    }
+
     // Which sound generators are currently enabled (one bit each).
     unsigned mask = 0;
     for (int i = 1; i <= 3; ++i)
@@ -794,8 +827,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (*apvts.getRawParameterValue(Parameters::ID::wavetableOn) > 0.5f) mask |= (1u << 6);
     if (*apvts.getRawParameterValue(Parameters::ID::subOn)      > 0.5f) mask |= (1u << 7);
 
-    // A newly enabled generator re-arms the auto-play drone (rising edge).
-    if ((mask & ~prevSourcesMask) != 0)
+    // A newly enabled generator re-arms the auto-play drone (rising edge) — but only while the
+    // instrument is otherwise silent: never under a LATCHED figure (a held C4 under a running
+    // bass line is the very confusion the latch removed, 15.5), and never while keys are held
+    // (the keys already sound the patch). This matters because EVERY preset load fires this edge
+    // — the factory reset drops the generator mask to zero and the file's enables raise it again,
+    // racing this code over several blocks — so the edge re-armed the drone AFTER startSeqLatch
+    // (or a held key) had just said no: a saw C4 hung under the beat until the next keypress
+    // chased it away (maintainer 2026-08-24, holding a key while switching DAF Beat ⇄ Los Ninos).
+    if ((mask & ~prevSourcesMask) != 0
+        && seqLatchedRoot.load() < 0
+        && heldNotesLo.load() == 0 && heldNotesHi.load() == 0)
         autoPlayEnabled.store(true);
     prevSourcesMask = mask;
 
