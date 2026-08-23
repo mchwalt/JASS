@@ -11,6 +11,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **New demo preset "Los Ninos" (F12).** Liaisons Dangereuses' "Los Niños del Parque" (1981,
+  MS-20 + SQ-10) as a sibling to DAF Beat — same school, different trick: where Mussolini
+  hammers straight 8ths, this figure is a **24-step (6-beat) loop running polymetrically over
+  the 4/4 drums**, so bass and beat realign only every three bars. Measured from the record
+  (54 folded cycles): 114 BPM, Bb1 pedal with the beat-3 note displaced onto the 16th after
+  the beat, Db3/Ab2 accents, and the Db3→Eb3 pickup into the cycle's downbeat; saw through a
+  dark resonant lowpass (≈330-420 Hz, Q 2.6 — the MS-20 squelch), swept per 8th by the same
+  LFO→cutoff trick DAF Beat uses. Figure refined against two ear-played covers and the
+  maintainer's ear — the analysis alone misread one position (Gb1's 3rd harmonic sits exactly
+  on Db3's fundamental; the ear broke the tie).
 - **The KEYBOARD help names the range.** 88 keys, A0–C8 — the full piano layout, matching a
   grand or an 88-key digital piano — and the note that MIDI input is not limited by the
   visible range. It was nowhere to read; now it is where a player would look, on the
@@ -58,6 +68,27 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   default to 0.
 
 ### Fixed
+- **Saved presets write clean numbers again.** Parameters live as 32-bit floats; casting one
+  straight to double dragged its binary error into the JSON — a knob set to 0.6 was saved as
+  0.599999964237213, which made presets unreadable and diffs noisy. The writer now emits the
+  SHORTEST decimal that parses back to the very same float ("0.6"), so the file is cosmetic-
+  clean while every value stays bit-identical. Deliberately NOT blanket rounding: two fixed
+  decimal places would have silently doubled a 5 ms attack to 0.01.
+- **Figure-writing mode now has real exits: ESC ends it, and loading a preset clears it.**
+  Entry into writing mode is deliberately cheap (15.4: touching any step knob moves the write
+  cursor there), but the only exits were writing past the pattern's end or switching the module
+  off — so tuning one step by ear left the sequencer armed indefinitely, with every played key
+  overwriting the figure, and a freshly loaded preset inherited that armed cursor from the
+  previous patch. ESC now stops writing (matching its "stop editing" meaning everywhere), and
+  the shared preset-load path drops the cursor — a loaded figure is exactly what the next
+  played key would have overwritten.
+- **Loading a preset no longer arms the STEP SEQ write cursor.** Every preset with an active
+  step left the sequencer in figure-writing mode (ring on a step, keys overwriting the
+  pattern instead of playing it). The step ON/OFF switch previews its step on click — but the
+  preset loader replays every switch through the same notification path, so "the preset
+  switched a step on" was indistinguishable from "the player clicked it", and previewing is
+  what arms the cursor. The knob had learned this lesson in 15.3 (only a gesture with the
+  mouse on the control may sound); the switch now carries the same guard.
 - **The WAVETABLE BANK picker actually picks the bank now.** Choosing any built-in except
   Basic played *Spectral*: the combo's stock attachment spreads its six items across the
   parameter's full 0–63 range ("Digital" wrote 13, "Vocal" 38 …), and the bank lookup

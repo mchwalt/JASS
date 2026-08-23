@@ -134,6 +134,7 @@ namespace PresetIO
         // bass figure with PERC underneath it, which is the better demonstration of either, and a
         // drum map driven through the STEP SEQ was the workaround PERC replaced.
         slots[10] = "DAF Beat";         // 16.1: the bass figure with PERC underneath it
+        slots[11] = "Los Ninos";        // Liaisons Dangereuses: 24-step polymetric bass over 4/4 PERC
         return slots;
     }
 
@@ -503,7 +504,10 @@ namespace PresetIO
 
     inline bool saveToFile(APVTS& a, const juce::File& file, const juce::String& name, bool modified = false)
     {
-        return file.replaceWithText(juce::JSON::toString(toVar(a, name, modified), false));
+        // 12 decimal places, NOT the default 15: toVar stores every float as its shortest
+        // round-trip decimal (≤ 12 places), but JUCE's serialiseDouble re-expands a double to
+        // 15+ places unless capped — the cap makes it print the short form and trim the zeros.
+        return file.replaceWithText(juce::JSON::toString(toVar(a, name, modified), false, 12));
     }
 
     // ── Import (LEGACY FLAT reader, v<3) ──
