@@ -30,7 +30,11 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   DAF Beat left a saw drone running under the beat; the rack looked exactly like the preset,
   because it *was* the preset — the dirt was a voice from the patch before. Every load now
   requests a hard all-voices stop, executed at the top of the next audio block, before the new
-  patch plays a note.
+  patch plays a note. The last piece was intermittent — sometimes a saw C4 still hung until the
+  next keypress chased it away: every load also fires the "generator newly enabled" edge that
+  re-arms the auto-play drone, racing the latch start by a few audio blocks. That edge now yields
+  to a latched figure and to held keys — the drone only re-arms when the instrument is otherwise
+  silent, which is the only time it was ever wanted.
 
 ## [2026.08.8] – 2026-08-23
 
