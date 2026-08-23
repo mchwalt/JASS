@@ -6,7 +6,7 @@ Plays a 32-step figure you write yourself, transposed by the key you play. **The
 - **LEN** — how many steps before the pattern repeats.
 - **GATE** — note length. **1 = legato**: each note is held into the next step, no gap. Lower values shorten every note.
 
-Clicking or turning a step's knob sounds it, so you can write the figure by ear. The preview plays over the keyboard's current C — C3 until you shift the octave with Up / Down.
+Clicking or turning a step's knob sounds it, so you can write the figure by ear. Preview, entry and the note names all follow the root the figure sounds at: the latched key while one is running, otherwise the keyboard's current C (Up / Down shifts it).
 
 **Play the figure in instead of turning knobs.** The **Reset** button (the circular arrow in this module's title bar) empties the pattern and starts writing at step 1: a ring marks the step waiting for a note. Play a key — on the computer keyboard or a MIDI keyboard — and it is written there, switched on, and the ring moves to the next step. **SPACE** skips a step and leaves it as a rest. **← / →** move the ring without changing anything, **BACKSPACE** takes back the last note (one step back, switched off), **ESC** ends writing. Writing stops by itself after LEN steps. A **click on any step knob** moves the ring there, so a wrong note is corrected by clicking it and playing again. While the ring is showing, keys write instead of starting the pattern.
 

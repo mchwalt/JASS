@@ -109,6 +109,7 @@ public:
     // Is a latched figure running? (SPACE stops it — the editor needs to know whether there is
     // anything to stop before it falls through to the Karplus pluck.)
     bool isSeqLatched() const { return seqLatchedRoot.load() >= 0; }
+    int  getSeqLatchRoot() const { return seqLatchedRoot.load(); }   // -1 when not latched
     // Stop the latched figure. Clearing the root is enough: the next block sees nothing playing,
     // releases the sounding note and re-arms the pattern at step 0, exactly as letting go of the
     // key did before the latch existed.
