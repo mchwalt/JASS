@@ -29,6 +29,30 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   playing and the boxes' note names now all resolve over one reference: the latched root while a
   figure runs, otherwise the keyboard's current C as before. That also makes playing a figure in
   over a running latch WYSIWYG — the keys played are the notes the figure then plays.
+- **Loading a preset now lands it exactly as saved — every time, on the first try.** Presets
+  sometimes arrived scrambled and had to be loaded two or three times "until everything fits".
+  The cause was structural: applying a preset writes ~700 parameters (factory reset + the file's
+  values), and every single write fired the parameter couplings meant for hand gestures — the
+  MOD-MATRIX auto-enable re-evaluated on each of its ~24 slot fields, the ARP/STEP-SEQ exclusion,
+  the CROSS-MOD operand coupling — all reacting to half-applied intermediate states. Worse, the
+  couplings' auto-enable memories ("*we* switched this module on, so we may switch it off again")
+  survived the preset change, so the result of a load depended on which patch was loaded BEFORE —
+  repeated loading merely converged on the right state. A saved preset is a snapshot taken after
+  every coupling already ran, so it is now applied verbatim: the couplings stay silent during the
+  load and their memories are cleared with the outgoing patch. Hand gestures behave exactly as
+  before.
+- **Loading a preset silences the previous patch's voices.** Nothing ever did: a note held (or
+  still ringing) across the switch kept its voice alive and playing through the NEW patch's
+  parameters — and when the new patch runs the STEP SEQ, the sequencer's chord filter swallows
+  the key's later note-off, so the leftover voice hung forever. Switching from GrandPiano to
+  DAF Beat left a saw drone running under the beat; the rack looked exactly like the preset,
+  because it *was* the preset — the dirt was a voice from the patch before. Every load now
+  requests a hard all-voices stop, executed at the top of the next audio block, before the new
+  patch plays a note. The last piece was intermittent — sometimes a saw C4 still hung until the
+  next keypress chased it away: every load also fires the "generator newly enabled" edge that
+  re-arms the auto-play drone, racing the latch start by a few audio blocks. That edge now yields
+  to a latched figure and to held keys — the drone only re-arms when the instrument is otherwise
+  silent, which is the only time it was ever wanted.
 
 ## [2026.08.8] – 2026-08-23
 

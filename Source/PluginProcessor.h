@@ -287,7 +287,37 @@ private:
     // maps are only ever touched on the message thread (no data race).
 public:
     void reconcileParamCouplingsIfDirty();   // message thread only (editor timer)
+
+    // Preset load in progress (PresetIO::setPresetLoading hook). A saved preset is a snapshot of
+    // the state AFTER every coupling already ran, so it must be applied VERBATIM: while this is
+    // set, parameterChanged runs none of the couplings below — applyVar's factory-reset plus the
+    // file's values would otherwise fire them ~700 times against half-applied intermediate states.
+    // Entering a load also clears the two auto-enable memories: they belong to the OUTGOING patch,
+    // and carrying them across made the result of a load depend on what was loaded before (the
+    // "load it two or three times until it fits" report, 2026-08-23). Message thread only.
+    void setPresetLoading (bool loading)
+    {
+        presetLoading.store (loading);
+        if (loading)
+        {
+            matrixAutoEnabled.clear();
+            crossModAutoEnabled.clear();
+            matrixEnablesDirty.store (false);   // nothing deferred may fire into the new patch
+            crossModDirty.store (false);
+            seqArpDirty.store (false);
+        }
+        // No voice survives a load — kill on BOTH edges. On entry: the outgoing patch's voices,
+        // whose note-off may never arrive (the chord filter drops channel 1 while a sequencer
+        // runs) — a held voice through new parameters was the "something dirty runs along"
+        // report (2026-08-24). On exit: anything that started DURING the load — audio blocks run
+        // concurrently with the ~700 parameter writes, and a half-applied state can rising-edge
+        // the auto-play drone into a fresh voice. A latched figure is safe either way: its first
+        // note enters quantised to the drums' next bar, after this flag is consumed.
+        killVoicesRequested.store (true);
+    }
 private:
+    std::atomic<bool> presetLoading { false };
+    std::atomic<bool> killVoicesRequested { false };   // consumed at the top of processBlock
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
     std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion
