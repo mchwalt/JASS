@@ -79,8 +79,8 @@ once a step is an object, accent is one added field, and so is everything after 
         19-cell wrap is load-bearing)
   - [ ] Audition of an accented step sounds the accent (one preview path — `auditionStep`)
 - [ ] Task 5: Presets + docs
-  - [ ] Los Niños: 24 steps, two classes, Comment updated (AC5); maintainer's ear tunes depth
-  - [ ] Help EN/DE, CHANGELOG, `JASS_Preset_Format.md`
+  - [x] Los Niños: 24 steps, two classes, Comment updated (AC5); maintainer's ear tunes depth
+  - [x] Help EN/DE, CHANGELOG, `JASS_Preset_Format.md`
   - [ ] Build + run + maintainer's ear; say plainly what is only build-verified
 
 ## Dev Notes
@@ -160,10 +160,19 @@ Claude Fable 5.
   `ModuleFrame`, driven by two `ParameterAttachment`s so preset/host changes repaint without
   firing the cycle (the #56 lesson); `ModuleDescriptor::Knob::accentParamId` opts a knob in.
   Audition previews accented steps hot (127) and re-triggers on accent change.
-- **Still open (Task 5):** Los Niños update to the authentic 24-step two-class figure — needs
-  the per-step velocity classes extracted from `D:\downloads\los_ninos.mid` plus the
-  maintainer's ear for the ACCENT depth; demo presets not yet re-saved as v7 files in the repo.
-  DAF Beat accents = maintainer's call after hearing.
+- **Task 5 data pass done (2026-08-26):** `D:\downloads\los_ninos.mid` parsed (240 notes,
+  10 identical 24-sixteenth cycles at 115 BPM). Three velocity classes in the file, not two:
+  v98/long (the accent class), v80/short (plain), and v86/short on exactly the three high
+  fills (C#3/G#2/Bb2) — mapped to plain, being nearer 80 than 98. The preset's figure is the
+  MIDI rotated by +4 steps (verified note-for-note; the old ON pattern and all pitches match),
+  so the accents land on preset steps **1 3 7 10 12 15 19 22 24**. All 24 steps now ON, the
+  step-13 octave jump stays deliberately out (Comment still names it). Both StepSeq-carrying
+  demo presets (Los Niños, DAF Beat) re-saved as v7 via a converter that mirrors toVar's
+  post-pass exactly (key order, sharps note names, Accent omitted when plain, depth knob 0.5);
+  the other nine demo presets carry no StepSeq block at all — nothing to re-save (three are
+  v3/v4 and follow their own legacy chain). DAF Beat: figure unchanged, no accents —
+  maintainer's call after hearing. **Still open: maintainer's ear** — ACCENT depth on
+  Los Niños (ships at 0.5) and whether DAF Beat wants accents.
 - RANDOM now also rolls accents/depth (they are ordinary params) — treated as a feature of the
   button, same as random figures.
 

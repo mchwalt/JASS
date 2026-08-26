@@ -28,6 +28,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   latched root; the figure still transposes with the played key), the spelled name is generated
   for the reader's eyes and ignored on load, so the two can never diverge. Older presets keep
   loading unchanged, and are auto-migrated with a backup, as always.
+- **Los Niños plays the real figure now.** The MIDI transcription of the original shows all
+  24 sixteenths sounding, in two classes — long/loud versus short/quiet, the Korg SQ-10's
+  accent row. Until 15.2 the preset could only fake that by leaving the quiet class out; now
+  the rests are gone and the loud class carries the accent flag (the three high fills sit
+  *between* the two classes in the original and stay plain). The two shipped sequencer
+  presets (Los Niños, DAF Beat) are re-saved in the new v7 step-object format; DAF Beat's
+  figure itself is unchanged — whether it wants accents is an ear decision, not a data one.
 - **The write cursor can move backwards now: ← / → navigate, BACKSPACE takes back the last
   note.** Writing a figure by playing it (15.4) only ever ran forward — one slip meant reaching
   for the mouse, clicking the step knob and re-aiming. The arrow keys move the ring without

@@ -1,5 +1,5 @@
 {
-  "FormatVersion": 6,
+  "FormatVersion": 7,
   "Name": "DAF Beat",
   "Modified": false,
   "Filter": {
@@ -273,75 +273,174 @@
   },
   "StepSeq": {
     "Enabled": true,
-    "Pitch1": -8.0,
-    "Step1": true,
-    "Pitch2": -13.0,
-    "Step2": true,
-    "Pitch3": 2.0,
-    "Step3": true,
-    "Pitch4": -13.0,
-    "Step4": true,
-    "Pitch5": -1.0,
-    "Step5": true,
-    "Pitch6": -13.0,
-    "Step6": true,
-    "Pitch7": -13.0,
-    "Step7": true,
-    "Pitch8": -1.0,
-    "Step8": true,
-    "Pitch9": -13.0,
-    "Step9": true,
-    "Pitch10": -1.0,
-    "Step10": true,
-    "Pitch11": -13.0,
-    "Step11": true,
-    "Pitch12": -1.0,
-    "Step12": true,
-    "Pitch13": -3.0,
-    "Step13": true,
-    "Pitch14": -13.0,
-    "Step14": true,
-    "Pitch15": -1.0,
-    "Step15": true,
-    "Pitch16": -13.0,
-    "Step16": true,
     "SyncDiv": "1/8",
     "Rate": 5.200000286102295,
-    "Pitch17": 0.0,
-    "Step17": true,
-    "Pitch18": 0.0,
-    "Step18": true,
-    "Pitch19": 0.0,
-    "Step19": true,
-    "Pitch20": 0.0,
-    "Step20": true,
-    "Pitch21": 0.0,
-    "Step21": true,
-    "Pitch22": 0.0,
-    "Step22": true,
-    "Pitch23": 0.0,
-    "Step23": true,
-    "Pitch24": 0.0,
-    "Step24": true,
-    "Pitch25": 0.0,
-    "Step25": true,
-    "Pitch26": 0.0,
-    "Step26": true,
-    "Pitch27": 0.0,
-    "Step27": true,
-    "Pitch28": 0.0,
-    "Step28": true,
-    "Pitch29": 0.0,
-    "Step29": true,
-    "Pitch30": 0.0,
-    "Step30": true,
-    "Pitch31": 0.0,
-    "Step31": true,
-    "Pitch32": 0.0,
-    "Step32": true,
     "Length": 16.0,
     "Gate": 1.0,
-    "LatchRoot": 48
+    "Accent": 0.5,
+    "LatchRoot": 48,
+    "Steps": [
+      {
+        "On": true,
+        "Note": 40,
+        "Name": "E2"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 50,
+        "Name": "D3"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 47,
+        "Name": "B2"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 47,
+        "Name": "B2"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 47,
+        "Name": "B2"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 47,
+        "Name": "B2"
+      },
+      {
+        "On": true,
+        "Note": 45,
+        "Name": "A2"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 47,
+        "Name": "B2"
+      },
+      {
+        "On": true,
+        "Note": 35,
+        "Name": "B1"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3"
+      }
+    ]
   },
   "Perc": {
     "Enabled": true,

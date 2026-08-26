@@ -1,7 +1,7 @@
 {
-  "FormatVersion": 6,
+  "FormatVersion": 7,
   "Name": "Los Ninos",
-  "Comment": "Verified against a MIDI transcription of the original: the original jumps up an octave to Bb2 on step 13; this preset deliberately leaves that out (a matter of taste - to restore it, set step 13 to Bb2). The original also plays all 24 steps using two accent classes (long/loud vs. short/quiet, the Korg SQ-10 accent row); the rests here are an approximation until per-step accents exist.",
+  "Comment": "Verified against a MIDI transcription of the original (115 BPM): all 24 steps play, in the two accent classes the Korg SQ-10 accent row gave the original - the loud/long class carries the accent flag here, the ACCENT knob sets how hot it gets. The three high fills (C#3/G#2/Bb2) sit between the classes in the original (shorter and quieter than the accents) and stay plain here. The original jumps up an octave to Bb2 on step 13; this preset deliberately leaves that out (a matter of taste - to restore it, set step 13 to Bb2).",
   "Modified": false,
   "Filter": {
     "Enabled": true,
@@ -274,75 +274,183 @@
   },
   "StepSeq": {
     "Enabled": true,
-    "Pitch1": -12.0,
-    "Step1": true,
-    "Pitch2": -12.0,
-    "Step2": false,
-    "Pitch3": -12.0,
-    "Step3": true,
-    "Pitch4": -12.0,
-    "Step4": false,
-    "Pitch5": -12.0,
-    "Step5": true,
-    "Pitch6": -12.0,
-    "Step6": false,
-    "Pitch7": -12.0,
-    "Step7": true,
-    "Pitch8": 3.0,
-    "Step8": true,
-    "Pitch9": -12.0,
-    "Step9": false,
-    "Pitch10": -12.0,
-    "Step10": true,
-    "Pitch11": -2.0,
-    "Step11": true,
-    "Pitch12": -12.0,
-    "Step12": true,
-    "Pitch13": -12.0,
-    "Step13": true,
-    "Pitch14": -12.0,
-    "Step14": false,
-    "Pitch15": -12.0,
-    "Step15": true,
-    "Pitch16": -12.0,
-    "Step16": false,
     "SyncDiv": "1/16",
     "Rate": 7.6,
-    "Pitch17": -12.0,
-    "Step17": true,
-    "Pitch18": -12.0,
-    "Step18": false,
-    "Pitch19": -12.0,
-    "Step19": true,
-    "Pitch20": -12.0,
-    "Step20": false,
-    "Pitch21": -12.0,
-    "Step21": true,
-    "Pitch22": 3.0,
-    "Step22": true,
-    "Pitch23": -12.0,
-    "Step23": false,
-    "Pitch24": 5.0,
-    "Step24": true,
-    "Pitch25": 0.0,
-    "Step25": true,
-    "Pitch26": 0.0,
-    "Step26": true,
-    "Pitch27": 0.0,
-    "Step27": true,
-    "Pitch28": 0.0,
-    "Step28": true,
-    "Pitch29": 0.0,
-    "Step29": true,
-    "Pitch30": 0.0,
-    "Step30": true,
-    "Pitch31": 0.0,
-    "Step31": true,
-    "Pitch32": 0.0,
-    "Step32": true,
     "Length": 24.0,
     "Gate": 1.0,
-    "LatchRoot": 46
+    "Accent": 0.5,
+    "LatchRoot": 46,
+    "Steps": [
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 49,
+        "Name": "C#3"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 44,
+        "Name": "G#2"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 49,
+        "Name": "C#3",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1"
+      },
+      {
+        "On": true,
+        "Note": 51,
+        "Name": "D#3",
+        "Accent": true
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2"
+      }
+    ]
   },
   "Perc": {
     "Enabled": true,
