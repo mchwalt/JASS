@@ -259,6 +259,11 @@ namespace rack
                 {
                     sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
                         apvts, k->paramId, *s));
+                    // JUCE's SliderAttachment silently arms "double-click = parameter default".
+                    // With click-to-audition that is a trap — two quick clicks on a STEP SEQ knob
+                    // wiped its pitch back to 0 (maintainer 2026-08-26: nobody needs this). Off,
+                    // rack-wide: a reset gesture that can fire by accident is not a reset gesture.
+                    s->setDoubleClickReturnValue (false, 0.0);
                 }
 
                 // Named read-out (PERC NOTE: "Kick" instead of "36"). valueFromText has to be given
