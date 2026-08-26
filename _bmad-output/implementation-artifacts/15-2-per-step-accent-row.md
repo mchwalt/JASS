@@ -1,6 +1,6 @@
 # Story 15.2: Per-step accent row, on format-v7 step objects
 
-Status: ready-for-dev
+Status: done (maintainer's ear test passed 2026-08-26 — "alles passt"; ACCENT depth stays at 0.5)
 
 ## Story
 
@@ -81,7 +81,7 @@ once a step is an object, accent is one added field, and so is everything after 
 - [ ] Task 5: Presets + docs
   - [x] Los Niños: 24 steps, two classes, Comment updated (AC5); maintainer's ear tunes depth
   - [x] Help EN/DE, CHANGELOG, `JASS_Preset_Format.md`
-  - [ ] Build + run + maintainer's ear; say plainly what is only build-verified
+  - [x] Build + run + maintainer's ear; say plainly what is only build-verified
 
 ## Dev Notes
 
@@ -171,8 +171,12 @@ Claude Fable 5.
   post-pass exactly (key order, sharps note names, Accent omitted when plain, depth knob 0.5);
   the other nine demo presets carry no StepSeq block at all — nothing to re-save (three are
   v3/v4 and follow their own legacy chain). DAF Beat: figure unchanged, no accents —
-  maintainer's call after hearing. **Still open: maintainer's ear** — ACCENT depth on
-  Los Niños (ships at 0.5) and whether DAF Beat wants accents.
+  maintainer's call after hearing. **Ear test passed 2026-08-26** ("alles passt"): ACCENT
+  depth stays at 0.5, DAF Beat stays without accents. Same-day UX follow-ups from the test,
+  shipped separately: a rest's pitch knob only dims and stays turnable (condKnobs dimOnly),
+  the step switch's hit area doubled (glyph anchored top-right, visually unchanged), and the
+  JUCE double-click-to-default trap replaced by double-click = the loaded preset's value
+  (PresetIO::presetBaseline01 over the modified-star's cleanSnapshot).
 - RANDOM now also rolls accents/depth (they are ordinary params) — treated as a feature of the
   button, same as random figures.
 
