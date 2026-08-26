@@ -53,6 +53,25 @@ public:
     }
     float getModAmount() const { return modAmount; }
 
+    // Double-click restores the value the LOADED preset gave this knob (maintainer 2026-08-26).
+    // Deliberately NOT JUCE's double-click-to-default (disabled where the attachment is made):
+    // the factory default wipes a patch value, the preset baseline merely un-does the player's
+    // own twist — and while the knob is untouched it is a no-op, so it cannot fire by accident.
+    // Unset, or returning NaN (no clean baseline), a double-click does nothing.
+    std::function<double()> presetBaseline;
+
+    void mouseDoubleClick(const juce::MouseEvent& e) override
+    {
+        if (presetBaseline)
+        {
+            const double v = presetBaseline();
+            if (! std::isnan(v))
+                setValue(v, juce::sendNotificationSync);
+            return;
+        }
+        juce::Slider::mouseDoubleClick(e);
+    }
+
     void mouseDown(const juce::MouseEvent& e) override
     {
         if (e.mods.isRightButtonDown())

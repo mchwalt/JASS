@@ -1,6 +1,7 @@
 #include "ModuleFrame.h"
 #include "../HelpTextStore.h"
 #include "../../DSP/ModMatrixCatalog.h"   // ModDest::oscParamSlot — per-OSC ring routing
+#include "../../Audio/PresetIO.h"         // presetBaseline01 — double-click = the preset's value
 
 namespace rack
 {
@@ -264,6 +265,19 @@ namespace rack
                     // wiped its pitch back to 0 (maintainer 2026-08-26: nobody needs this). Off,
                     // rack-wide: a reset gesture that can fire by accident is not a reset gesture.
                     s->setDoubleClickReturnValue (false, 0.0);
+                    // Instead, double-click restores the LOADED preset's value (same day's wish):
+                    // while a knob is untouched that IS its current value — a no-op — and after
+                    // twisting it while comparing, it is the one-gesture way back. Not wired for
+                    // the decoupled display-transform knobs above: their shown value rides the
+                    // live ratio, so "the preset's value" is not what their slider displays.
+                    s->presetBaseline = [&a = apvts, id = k->paramId]() -> double
+                    {
+                        if (PresetIO::presetBaseline01)
+                            if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                                if (auto* p = a.getParameter (id))
+                                    return (double) p->convertFrom0to1 (v01);
+                        return std::numeric_limits<double>::quiet_NaN();
+                    };
                 }
 
                 // Named read-out (PERC NOTE: "Kick" instead of "36"). valueFromText has to be given
