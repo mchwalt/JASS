@@ -347,6 +347,12 @@ namespace PresetIO
     inline std::function<int()>     seqLatchRoot;
     inline std::function<void(int)> applySeqLatchRoot;
 
+    // The UI's way back to "as loaded" (maintainer 2026-08-26): a parameter's NORMALISED value in
+    // the clean snapshot the processor keeps for the modified-star — i.e. what the loaded (or last
+    // saved) preset gave it — or -1 when no clean baseline exists (a modified working state
+    // restored from LiveState). ModuleFrame maps a knob's double-click onto it.
+    inline std::function<float(const juce::String& paramId)> presetBaseline01;
+
     // Preset-load bracket. A saved preset is a snapshot taken AFTER every parameter coupling
     // already ran, so applyVar must land it VERBATIM: the processor silences its couplings
     // (matrix auto-enable, ARP/SEQ exclusion, CROSS-MOD) while this reports true and drops their

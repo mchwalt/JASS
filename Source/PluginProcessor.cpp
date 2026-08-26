@@ -65,6 +65,16 @@ SynthyProcessor::SynthyProcessor()
             stopSeqLatch();
     };
 
+    // Double-click-on-a-knob's baseline: the value the loaded preset gave that parameter.
+    // cleanSnapshot is indexed like getParameters(), which is what getParameterIndex() names.
+    PresetIO::presetBaseline01  = [this] (const juce::String& id) -> float
+    {
+        if (auto* p = apvts.getParameter (id))
+            if (const auto i = (size_t) p->getParameterIndex(); i < cleanSnapshot.size())
+                return cleanSnapshot[i];
+        return -1.0f;
+    };
+
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
 
@@ -241,6 +251,7 @@ SynthyProcessor::~SynthyProcessor()
     PresetIO::requestSamplerSet = nullptr;
     PresetIO::seqLatchRoot      = nullptr;   // these capture `this` — drop them before it dies
     PresetIO::applySeqLatchRoot = nullptr;
+    PresetIO::presetBaseline01  = nullptr;
     PresetIO::setPresetLoading  = nullptr;
     samplePreload.stopThread (4000);
 

@@ -56,11 +56,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **The step switch is easier to hit.** Cycling a step (off → on → accented) demanded pixel
   aim at the little box. Its clickable area now extends into the cell corner's empty air —
   roughly double the target — while the drawn box stays exactly where and what it was.
-- **Double-clicking a knob no longer wipes it to its default.** That was a JUCE automatism
-  (every knob attachment silently arms "double-click = parameter default"), never a JASS
-  decision — and with click-to-audition it was a trap: two quick clicks on a step knob reset
-  its pitch to 0. Off for every rack knob; a reset gesture that fires by accident is not a
-  reset gesture (maintainer, 2026-08-26). Typing an exact value stays on right-click.
+- **Double-clicking a knob now returns it to the loaded preset's value** — instead of wiping
+  it to the factory default, which is what silently happened before: a JUCE automatism, never
+  a JASS decision, and with click-to-audition a trap (two quick clicks on a step knob reset
+  its pitch to 0). The preset baseline is the safe version of the same idea: an untouched knob
+  already sits on it, so the gesture cannot fire by accident — it only ever un-does your own
+  twisting, the one-gesture way back after comparing. On an unsaved working state (no clean
+  baseline) a double-click does nothing. Typing an exact value stays on right-click.
 - **Step preview, entry and the note boxes follow the root that actually sounds.** The figure
   transposes with the latched key, but clicking a step previewed it over the keyboard's C — with
   Los Niños latched on Bb, the click sounded a different note than the loop played at that very
