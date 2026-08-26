@@ -111,6 +111,27 @@ public:
     // Poly-glide: shared read-only info filled by the processor each block (see GlideInfo).
     void setGlideInfo(const GlideInfo* g) { glideInfo = g; }
 
+    // 15.7 (STEP SEQ TIE/SLIDE): retune the sounding note WITHOUT retriggering — the 303's
+    // slide. The pitch target moves by `semitones`; seconds > 0 glides there through the same
+    // smoothed ratio the GLIDE module uses, ~0 steps instantly (a tie taking over a new pitch).
+    // The envelope is untouched: no new attack, which is the whole point.
+    void slideTo(double semitones, double seconds)
+    {
+        transposeRatio *= std::pow(2.0, semitones / 12.0);
+        if (seconds > 0.001)
+        {
+            const double now = glideRatio.getCurrentValue();
+            glideRatio.reset(currentSampleRate, seconds);
+            glideRatio.setCurrentAndTargetValue(now);
+            glideRatio.setTargetValue(transposeRatio);
+        }
+        else
+        {
+            glideRatio.reset(currentSampleRate, 0.0);
+            glideRatio.setCurrentAndTargetValue(transposeRatio);
+        }
+    }
+
 private:
     Oscillator oscillators[3];
     Oscillator subOsc;            // sub-oscillator: tracks OSC1 pitch, octave(s) down

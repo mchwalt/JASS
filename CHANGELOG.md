@@ -11,6 +11,19 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Every step has a length now — up to TIE and SLIDE (story 15.7).** The new GATE button in
+  STEP SEQ's header flips the 32 step knobs to their second meaning: the step's gate, one
+  continuum from 5–100 % of the step up to two values past the top — **TIE** (the note holds
+  through the boundary and the next step takes over *without a new attack*) and **SLIDE** (the
+  same, but the pitch glides — the 303's slide, the last mechanism every classic acid box has
+  that JASS lacked). The BeatStep Pro's model, chosen in the 15.6 market survey: staccato →
+  legato → glide on one knob. The global GATE still scales all plain steps, a step's default
+  is 100 % — so every existing preset sounds bit-identical. Preset files store the value in
+  each v8 step object as `"Gate": 36` / `"Gate": "TIE"` / `"Gate": "SLIDE"`, omitted at 100.
+  Per-step gate knobs were tried and thrown out in 15.1 ("they were all sitting at 1") — what
+  changed is a measured preset that needs them: the Los Niños original separates its two
+  accent classes by *length* as much as by level (87 % vs 36 % of a step), which no accent
+  flag can express. **Los Niños now carries exactly those measured lengths.**
 - **STEP SEQ has an accent row (story 15.2).** The corner switch of every step now cycles
   off → on → **accented** — the TR-909's "press the same button again" gesture, so 32 accents
   cost no rack space — and the new ACCENT knob sets what an accent does: the step plays louder

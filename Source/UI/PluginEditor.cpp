@@ -2208,11 +2208,31 @@ void SynthyEditor::buildRack()
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
                              + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape
                     };
+                    // …and give the knob its SECOND meaning (15.7): the per-step gate. The GATE
+                    // header latch flips the row; the value is one continuum — 5..100 % of the
+                    // step, then TIE (held through, next step takes over without a retrigger)
+                    // and SLIDE (the same, gliding — the 303). Read-out spells the two names.
+                    k->altParamId = "seqSGate" + k->paramId.substring(8);
+                    k->altTextFromValue = [](double v)
+                    {
+                        const int gv = juce::roundToInt(v);
+                        if (gv >= 102) return juce::String("SLIDE");
+                        if (gv == 101) return juce::String("TIE");
+                        return juce::String(gv) + "%";
+                    };
+                    k->altValueFromText = [](const juce::String& t)
+                    {
+                        const auto u = t.trim().toUpperCase();
+                        if (u.startsWith("SL"))  return 102.0;   // "SLIDE" (any spelling attempt)
+                        if (u.startsWith("TIE") || u == "T") return 101.0;
+                        return (double) juce::jlimit(5, 100, (int) u.getDoubleValue());
+                    };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
         // control of its own. doReset() writes the defaults first and calls this after.
         d.onReset = [this] { seqSetCursor(0); };
+        d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
         greyWhenSynced(d, P::seqRate, P::seqSync);
         addRackModule(std::move(d));
     }

@@ -43,11 +43,13 @@ namespace Modules
 
         m.params.push_back ({ "seqOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 
-        // Each step contributes THREE params: the pitch knob, its on/off, and its ACCENT (15.2).
-        // The two switches are declared with showInBody = false — they must not claim a grid cell;
-        // the editor pins them into the corner of the knob as ONE three-state switch
-        // (ModuleDescriptor::Knob::toggleParamId + accentParamId: off → on → accented, the
-        // TR-909's second-press gesture).
+        // Each step contributes FOUR params: the pitch knob, its on/off, its ACCENT (15.2), and
+        // its GATE (15.7). The two switches are declared with showInBody = false — they must not
+        // claim a grid cell; the editor pins them into the corner of the knob as ONE three-state
+        // switch (ModuleDescriptor::Knob::toggleParamId + accentParamId: off → on → accented, the
+        // TR-909's second-press gesture). The gate is showInBody = false too: it shares the pitch
+        // knob's CELL via the ROW toggle (Knob::altParamId) — the BeatStep's "the knob row cycles
+        // its meaning" gesture, so 32 gates cost no rack space either.
         auto pitchParam = [&m] (int s)
         {
             m.params.push_back ({ "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
@@ -61,6 +63,15 @@ namespace Modules
                             ParamSpec::Kind::Bool, {}, 0.0f };   // plain is the default — old figures unchanged
             acc.showInBody = false;
             m.params.push_back (acc);
+            // 15.7: per-step gate as ONE continuum (the BeatStep model): 5..100 = percent of the
+            // step (scaled by the global GATE), 101 = TIE (held through the boundary, the next
+            // step takes over without a retrigger), 102 = SLIDE (like TIE, but the pitch glides —
+            // the 303). Default 100 ⇒ exactly the pre-15.7 behaviour, so old figures are untouched.
+            ParamSpec sg { "seqSGate" + juce::String (s), "Gate" + juce::String (s), "",
+                           ParamSpec::Kind::Int,
+                           juce::NormalisableRange<float> (5.0f, 102.0f, 1.0f), 100.0f };
+            sg.showInBody = false;
+            m.params.push_back (sg);
         };
         const int half = StepSequencer::kMaxSteps / 2;
 

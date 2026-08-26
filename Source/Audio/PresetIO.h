@@ -36,7 +36,8 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 7;   // v7 = StepSeq steps as an ARRAY of note objects + accent (15.2).
+    constexpr int kFormatVersion = 8;   // v8 = step objects gain "Gate" (5..100 %, "TIE", "SLIDE"; 15.7).
+                                        // v7 = StepSeq steps as an ARRAY of note objects + accent (15.2).
                                         // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
                                         // v5 = MOD MATRIX DEST split into MODULE + PARAM (per-OSC targets).
                                         // v4 = LFO built-in target folded into matrix slots.
@@ -537,10 +538,18 @@ namespace PresetIO
                 st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
                 if (*a.getRawParameterValue(ID::seqAcc(s)) > 0.5f)
                     st->setProperty("Accent", true);
+                // v8 (15.7): the step's gate — a percent of the step, or the two values past the
+                // top of that continuum. 100 (= exactly the old behaviour) stays unwritten so the
+                // common case reads terse, mirroring how a plain step omits "Accent".
+                const int sg = (int) *a.getRawParameterValue(ID::seqSGate(s));
+                if      (sg >= 102) st->setProperty("Gate", "SLIDE");
+                else if (sg == 101) st->setProperty("Gate", "TIE");
+                else if (sg != 100) st->setProperty("Gate", sg);
                 steps.add(juce::var(st));
                 mod->removeProperty("Pitch"  + juce::String(s));
                 mod->removeProperty("Step"   + juce::String(s));
                 mod->removeProperty("Accent" + juce::String(s));
+                mod->removeProperty("Gate"   + juce::String(s));   // numbered only — the GLOBAL "Gate" stays
             }
             mod->setProperty("Steps", juce::var(steps));
         }
@@ -792,6 +801,15 @@ namespace PresetIO
                     setRaw(ID::seqStep (s + 1), (bool) st["On"] ? 1.0f : 0.0f);
                     setRaw(ID::seqPitch(s + 1), (float) juce::jlimit(-24, 24, (int) st["Note"] - ref));
                     setRaw(ID::seqAcc  (s + 1), (bool) st["Accent"] ? 1.0f : 0.0f);
+                    // v8 gate (15.7): a number is a percent, the two names are the top of the
+                    // continuum; missing (every v7 file) ⇒ 100 = the pre-15.7 behaviour.
+                    int sg = 100;
+                    if (const auto gv = st["Gate"]; gv.isString())
+                        sg = gv.toString().equalsIgnoreCase("SLIDE") ? 102
+                           : gv.toString().equalsIgnoreCase("TIE")   ? 101 : 100;
+                    else if (gv.isInt() || gv.isInt64() || gv.isDouble())
+                        sg = juce::jlimit(5, 100, (int) gv);
+                    setRaw(ID::seqSGate(s + 1), (float) sg);
                 }
             }
 
