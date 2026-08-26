@@ -194,6 +194,20 @@ namespace rack
             addAndMakeVisible (resetBtn);
         }
 
+        // Row toggle (15.7): a header latch that flips every altParamId knob between its two
+        // meanings (STEP SEQ: PITCH ⇄ GATE — the BeatStep's "the knob row cycles its meaning").
+        // It lives beside the reset because it is a VIEW switch, not a parameter: nothing about
+        // it lands in presets, and a preset load never flips what the user is looking at.
+        if (desc.altRowTitle.isNotEmpty())
+        {
+            altRowBtn = std::make_unique<juce::TextButton> (desc.altRowTitle);
+            altRowBtn->setClickingTogglesState (true);
+            altRowBtn->setTooltip ("Flip the step knobs between PITCH and " + desc.altRowTitle);
+            altRowBtn->setWantsKeyboardFocus (false);
+            altRowBtn->onClick = [this] { altRowActive = altRowBtn->getToggleState(); applyAltRow(); };
+            addAndMakeVisible (*altRowBtn);
+        }
+
         // Online-help info icon (Story 6.1): shown only when a help text exists for this
         // module's help slug (helpId(), which may alias several instances to one text).
         // Clicking it asks the editor (via onHelp) to show the shared HelpPanel; onHelp carries
@@ -405,6 +419,67 @@ namespace rack
                     };
                     s->onDragEnd = [moved, aud = k->audition] { if (*moved) aud (0, false); };
                 }
+
+                // Row toggle (15.7): a SECOND slider on this same cell, editing the alternate
+                // param; the header latch flips which of the two is visible. Built like the main
+                // knob — attachment, no double-click default, preset-baseline double-click, dims
+                // with the step — but its read-out comes from altTextFromValue ("36%" / "TIE" /
+                // "SLIDE") and its audition replays the STEP'S PITCH (the main slider holds the
+                // semitones), so a gate edit is heard on the note it phrases.
+                if (k->altParamId.isNotEmpty() && apvts.getParameter (k->altParamId) != nullptr)
+                {
+                    auto* g = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
+                    g->setKnobDiameter (knobD);
+                    g->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 14);
+                    sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+                        apvts, k->altParamId, *g));
+                    g->setDoubleClickReturnValue (false, 0.0);
+                    g->presetBaseline = [&a = apvts, id = k->altParamId]() -> double
+                    {
+                        if (PresetIO::presetBaseline01)
+                            if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                                if (auto* p = a.getParameter (id))
+                                    return (double) p->convertFrom0to1 (v01);
+                        return std::numeric_limits<double>::quiet_NaN();
+                    };
+                    if (k->altTextFromValue)
+                    {
+                        g->textFromValueFunction = k->altTextFromValue;
+                        g->valueFromTextFunction = k->altValueFromText
+                            ? k->altValueFromText
+                            : [] (const juce::String& t) { return t.getDoubleValue(); };
+                        g->updateText();
+                        g->tooltipFromValue = k->altTextFromValue;
+                        g->refreshTooltip();
+                    }
+                    if (k->audition)
+                    {
+                        auto movedG = std::make_shared<bool> (false);
+                        g->onValueChange = [g, s, movedG, aud = k->audition,
+                                            prev = std::move (g->onValueChange)]
+                        {
+                            if (prev) prev();
+                            if (g->isMouseButtonDown (true) || g->isMouseOver (true))
+                            {
+                                *movedG = true;
+                                aud ((int) s->getValue(), true);
+                            }
+                        };
+                        g->onDragStart = [s, movedG, aud = k->audition]
+                        {
+                            *movedG = false;
+                            aud ((int) s->getValue(), true);
+                        };
+                        g->onDragEnd = [movedG, aud = k->audition] { if (*movedG) aud (0, false); };
+                    }
+                    if (k->toggleParamId.isNotEmpty())
+                        if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
+                            condKnobs.push_back ({ g, nullptr, [v] { return v->load() > 0.5f; }, true });
+                    addChildComponent (*g);   // hidden until the row toggle flips (applyAltRow)
+                    if (auto* tb = cells.back().toggle)
+                        tb->toFront (false);   // the corner switch overlaps the cell — keep it clickable above g
+                    altKnobs.push_back ({ s, g });
+                }
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
@@ -588,6 +663,10 @@ namespace rack
         auto infoSlot = header.removeFromRight (20);
         if (infoBtn != nullptr)
             infoBtn->setBounds (infoSlot);
+        // Row toggle (15.7): only modules that declare one give up header width for it, so
+        // every other module's header geometry is untouched.
+        if (altRowBtn != nullptr)
+            altRowBtn->setBounds (header.removeFromRight (46).reduced (2, 1));
         header.removeFromLeft (11);   // room for the status-LED dot painted at the header's left edge
         titleLabel.setBounds (header);
 
@@ -741,6 +820,13 @@ namespace rack
             if (col >= nCols) { col = 0; ++row; }
         }
 
+        // Row toggle (15.7): the alternate slider rides EXACTLY on its main knob's bounds —
+        // the row flip is a visibility swap, never a re-layout.
+        for (auto& ak : altKnobs)
+        {
+            ak.alt->setKnobDiameter (ak.main->getKnobDiameter());
+            ak.alt->setBounds (ak.main->getBounds());
+        }
     }
 
     void ModuleFrame::paint (juce::Graphics& g)
@@ -955,6 +1041,17 @@ namespace rack
             enableBtn->setToggleState (en, juce::dontSendNotification);
         const bool off = ! en;
         if (off != dimmed) { dimmed = off; repaint(); }
+    }
+
+    void ModuleFrame::applyAltRow()
+    {
+        // The row flip is a pure visibility swap on identical bounds (see resized): the cell —
+        // and with it the corner switch, the write ring and the playhead — stays where it is.
+        for (auto& ak : altKnobs)
+        {
+            ak.main->setVisible (! altRowActive);
+            ak.alt ->setVisible (  altRowActive);
+        }
     }
 
     void ModuleFrame::refreshNamedReadouts()

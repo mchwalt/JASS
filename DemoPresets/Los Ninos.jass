@@ -1,7 +1,7 @@
 {
-  "FormatVersion": 7,
+  "FormatVersion": 8,
   "Name": "Los Ninos",
-  "Comment": "Verified against a MIDI transcription of the original (115 BPM): all 24 steps play, in the two accent classes the Korg SQ-10 accent row gave the original - the loud/long class carries the accent flag here, the ACCENT knob sets how hot it gets. The three high fills (C#3/G#2/Bb2) sit between the classes in the original (shorter and quieter than the accents) and stay plain here. The original jumps up an octave to Bb2 on step 13; this preset deliberately leaves that out (a matter of taste - to restore it, set step 13 to Bb2).",
+  "Comment": "Verified against a MIDI transcription of the original (115 BPM): all 24 steps play, in the two classes the Korg SQ-10 accent row gave the original - loud/long (accented here, gate 87%) vs quiet/short (plain, gate 36%). The three high fills (C#3/G#2/Bb2) sit between the classes in the original and stay plain at gate 41%. The original jumps up an octave to Bb2 on step 13; this preset deliberately leaves that out (a matter of taste - to restore it, set step 13 to Bb2).",
   "Modified": false,
   "Filter": {
     "Enabled": true,
@@ -285,130 +285,154 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
-        "Accent": true
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1",
-        "Accent": true
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
+        "Accent": true,
+        "Gate": 87
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
-        "Accent": true
-      },
-      {
-        "On": true,
-        "Note": 49,
-        "Name": "C#3"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
+        "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
-        "Accent": true
-      },
-      {
-        "On": true,
-        "Note": 44,
-        "Name": "G#2"
+        "Accent": true,
+        "Gate": 87
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
-        "Accent": true
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
+        "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
-        "Accent": true
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
+        "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
-        "Accent": true
+        "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
-        "Name": "A#1"
-      },
-      {
-        "On": true,
-        "Note": 34,
-        "Name": "A#1"
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
       },
       {
         "On": true,
         "Note": 49,
         "Name": "C#3",
-        "Accent": true
+        "Gate": 41
       },
       {
         "On": true,
         "Note": 34,
-        "Name": "A#1"
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 44,
+        "Name": "G#2",
+        "Gate": 41
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 41
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 49,
+        "Name": "C#3",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Gate": 36
       },
       {
         "On": true,
         "Note": 51,
         "Name": "D#3",
-        "Accent": true
+        "Accent": true,
+        "Gate": 87
       },
       {
         "On": true,

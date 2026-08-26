@@ -1,8 +1,8 @@
-# JASS `.jass` Preset Format (nested, v7)
+# JASS `.jass` Preset Format (nested, v8)
 
 JASS stores patches as **JSON** files with the extension `.jass`. The format is
 **nested** (one object per module) and versioned; the current version is
-**`FormatVersion: 7`** (defined as `PresetIO::kFormatVersion`).
+**`FormatVersion: 8`** (defined as `PresetIO::kFormatVersion`).
 
 - **Format:** JSON, UTF‑8. File extension `.jass`.
 - **Canonical source:** each module declares its own parameters and JSON shape in
@@ -78,7 +78,7 @@ Three fields sit next to the spec-driven ones because what they carry has no kno
 | `Sampler.File` | Name of the selected sample **set**. `Sampler.Set` is a session-local index into whatever is installed, so the name is what actually survives a move to another machine; it is re-resolved on load, and fetched in the background if the set is not loaded yet. |
 | `Perc.File` | The same for PERC's drum **kit** (`Perc.Kit` is the index; 0 means "no kit"). A preset carrying only the index would point at whatever set happens to sit there — for a drum pattern, usually a piano. |
 | `StepSeq.LatchRoot` | MIDI note the STEP SEQ figure is **latched** to, or the field is absent. Since the latch outlives the key that started it, a patch can be saved while a figure is running — and this is what makes it come back running, on the same note. **Absent ⇒ the patch loads silent** *and* clears whatever the previous patch left running. |
-| `StepSeq.Steps` | **v7 (story 15.2):** the 32 steps as an **array of note objects** — `{ "On": true, "Note": 46, "Name": "Bb1", "Accent": true }` — replacing the flat `Pitch1`/`Step1`/… keys (still read from older files). `Note` is the **absolute MIDI note and canonical**; `Name` is generated for the reader's eyes and ignored on load, so the two can never diverge; `Accent` is omitted when plain. Absolute pitch is resolved against `LatchRoot` (or C3 = 48 when absent), and the engine keeps root-relative offsets internally — the figure still transposes with the played key. |
+| `StepSeq.Steps` | **v7 (story 15.2):** the 32 steps as an **array of note objects** — `{ "On": true, "Note": 46, "Name": "Bb1", "Accent": true }` — replacing the flat `Pitch1`/`Step1`/… keys (still read from older files). `Note` is the **absolute MIDI note and canonical**; `Name` is generated for the reader's eyes and ignored on load, so the two can never diverge; `Accent` is omitted when plain. Absolute pitch is resolved against `LatchRoot` (or C3 = 48 when absent), and the engine keeps root-relative offsets internally — the figure still transposes with the played key. **v8 (story 15.7)** adds `"Gate"` to the step object: an integer **5–100** (percent of the step, scaled by the module's global GATE) or the string **`"TIE"`** (held through the boundary; the next step takes over without a retrigger) or **`"SLIDE"`** (the same, gliding — the 303). **Omitted ⇒ 100**, which is exactly the pre-v8 behaviour, so every v7 file loads bit-identically. |
 
 None of them is automatable, and none appears in the modulation matrix. (The steps' underlying
 on/off/accent/pitch values ARE parameters and do take part in RANDOM.)
@@ -98,7 +98,8 @@ on/off/accent/pitch values ARE parameters and do take part in RANDOM.)
   `v4` folded the LFO's built‑in target into modulation‑matrix slots; `v5` split
   the matrix DEST into MODULE + PARAM combos; `v6` sorted the matrix
   module/param catalog A→Z (the persisted PARAM index was remapped); `v7` moved
-  the STEP SEQ steps into the `StepSeq.Steps` array of note objects (see above).
+  the STEP SEQ steps into the `StepSeq.Steps` array of note objects (see above);
+  `v8` added the step objects' `Gate` field (percent / `"TIE"` / `"SLIDE"`).
   This integer contract is independent of the app's CalVer version.
 - **Migration & backups.** Presets older than the current `FormatVersion` are
   upgraded to the current format — both by the startup batch pass (`convertOldPresets`)

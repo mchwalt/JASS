@@ -1056,6 +1056,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 stepSeq.pitch [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
                 stepSeq.on    [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
                 stepSeq.accent[(size_t) s] =       *apvts.getRawParameterValue(ID::seqAcc  (s + 1)) > 0.5f;   // 15.2
+                stepSeq.sgate [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqSGate(s + 1));          // 15.7
             }
 
             // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16
@@ -1117,6 +1118,24 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     stepSeq.setStartDelay(perc.samplesToPatternStart());
             }
             stepSeq.processBlock(buffer.getNumSamples(), kept, 1, playRoot >= 0);
+
+            // 15.7 TIE/SLIDE: a takeover boundary retunes the sounding voice instead of
+            // retriggering it — MIDI cannot say that, so the sequencer recorded it and the voice
+            // is moved here (SynthVoice::slideTo: envelope untouched). Block-granular start
+            // (≤ one buffer early against a ≥ tens-of-ms step — inaudible). The chain's note-on
+            // is at least one full step old, so its voice always exists by now.
+            for (int e = 0; e < stepSeq.numLegatoEvents(); ++e)
+            {
+                const auto& ev = stepSeq.legatoEvent(e);
+                for (int v = 0; v < synth.getNumVoices(); ++v)
+                    if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(v)))
+                        if (voice->isVoiceActive() && voice->getCurrentlyPlayingNote() == ev.note)
+                        {
+                            voice->slideTo((double) ev.semitones,
+                                           ev.slide ? StepSequencer::kSlideSeconds : 0.0);
+                            break;
+                        }
+            }
             midiMessages.swapWith(kept);
         }
         else if (stepSeq.enabled)

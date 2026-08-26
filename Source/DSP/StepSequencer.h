@@ -31,6 +31,13 @@ class StepSequencer
 public:
     static constexpr int kMaxSteps = 32;
 
+    // 15.7: the per-step gate is ONE continuum (the BeatStep model) — 5..100 = percent of the
+    // step, then two values past the top: TIE (held through the boundary; the next step takes
+    // over WITHOUT a retrigger) and SLIDE (like TIE, but the pitch glides — the 303's slide).
+    static constexpr int kGateTie   = 101;
+    static constexpr int kGateSlide = 102;
+    static constexpr double kSlideSeconds = 0.06;   // 303-ish glide; tuned by the maintainer's ear
+
     bool   enabled = false;
     double stepSeconds = 0.192;                  // one step; resolved per block by the processor
     int    length = kMaxSteps;                   // 1..32 steps before the pattern repeats
@@ -40,7 +47,19 @@ public:
                                                  // 127 vs the plain 100) — what that does to the
                                                  // sound is the voice's ACCENT mapping, so a MIDI
                                                  // export of the figure carries the accents for free
-    double gate = 1.0;                           // note length, ONE value for the whole pattern
+    std::array<int, kMaxSteps>  sgate {};        // 15.7: 5..100 %, kGateTie, kGateSlide (see above);
+                                                 // filled per block by the processor, default 100
+    double gate = 1.0;                           // GLOBAL note length, scales every plain step
+
+    // 15.7: a TIE/SLIDE boundary retunes the sounding voice instead of retriggering it. The
+    // sequencer only speaks MIDI, and MIDI cannot say "change pitch, keep the envelope" — so the
+    // takeover is recorded here and the PROCESSOR applies it to the voice after this block's
+    // events are in (block-granular start, inaudible against a ≥60 ms step). `note` is the MIDI
+    // identity the voice was started with (unchanged across a whole tie chain, so the final
+    // note-off still finds it); `semitones` is the move from the pitch currently SOUNDING.
+    struct Legato { int note; int semitones; bool slide; };
+
+    StepSequencer() { sgate.fill (100); }
 
     void prepare (double sr) { sampleRate = sr; reset(); }
 
@@ -50,6 +69,8 @@ public:
         stepIndex = 0;
         soundingNote = -1;
         gateCountdown = -1;
+        tiePending = false;
+        numLegato = 0;
     }
 
     // Release whatever the pattern left sounding (switched off, or the last key let go).
@@ -61,6 +82,7 @@ public:
             soundingNote = -1;
         }
         gateCountdown = -1;
+        tiePending = false;
     }
 
     void setRoot (int midiNote) { root = juce::jlimit (0, 127, midiNote); }
@@ -73,6 +95,8 @@ public:
 
     void processBlock (int numSamples, juce::MidiBuffer& out, int channel, bool anyKeyHeld)
     {
+        numLegato = 0;   // 15.7: last block's takeovers were applied by the processor already
+
         if (! anyKeyHeld)
         {
             // Nothing held: stop, and re-arm so the NEXT key starts the figure at step 0 rather
@@ -114,33 +138,67 @@ public:
             {
                 const int s = stepIndex % steps;
                 litStep = s;   // the playhead: what is ON now, not the next one (see playingStep)
-                const double g = juce::jlimit (0.05, 1.0, gate);
+                const double g  = juce::jlimit (0.05, 1.0, gate);
+                const int    sg = juce::jlimit (5, 102, sgate[(size_t) s]);
                 if (on[(size_t) s])
                 {
                     const int note = juce::jlimit (0, 127, root + pitch[(size_t) s]);
-                    // Same note as the one still sounding? Re-strike it: note-off first, or the
-                    // synth would see two note-ons for one key and the note-off of the first would
-                    // kill the second. A DIFFERENT note is left alone — that is the legato overlap.
-                    if (soundingNote == note)
+                    if (tiePending && soundingNote >= 0)
                     {
+                        // 15.7 TIE/SLIDE takeover: the previous step held through this boundary,
+                        // so this step does NOT retrigger. A different pitch is taken over by
+                        // retuning the sounding voice (slide glides there, tie steps); the voice
+                        // keeps its envelope and its MIDI identity (soundingNote), so the chain's
+                        // eventual note-off still matches its note-on.
+                        if (note != soundingPitch && numLegato < (int) legato.size())
+                            legato[(size_t) numLegato++] = { soundingNote, note - soundingPitch, tieIsSlide };
+                        soundingPitch = note;
+                    }
+                    else
+                    {
+                        // Same note as the one still sounding? Re-strike it: note-off first, or the
+                        // synth would see two note-ons for one key and the note-off of the first
+                        // would kill the second. A DIFFERENT note is left alone — legato overlap.
+                        if (soundingNote == note)
+                        {
+                            out.addEvent (juce::MidiMessage::noteOff (channel, soundingNote), i);
+                            soundingNote = -1;
+                        }
+                        out.addEvent (juce::MidiMessage::noteOn (channel, note,
+                                                                 (juce::uint8) (accent[(size_t) s] ? 127 : 100)), i);
+                        const int prev = soundingNote;   // still sounding => legato tail to close
+                        soundingNote  = note;
+                        soundingPitch = note;
+                        if (prev >= 0)
+                            out.addEvent (juce::MidiMessage::noteOff (channel, prev), i);
+                    }
+                    // The step's own gate decides how the note leaves it: a percent schedules the
+                    // note-off (scaled by the global GATE, so default 100 is bit-exact pre-15.7),
+                    // TIE/SLIDE schedules nothing — the note holds into the next boundary, where
+                    // the takeover above (or a rest below) resolves it.
+                    if (sg >= kGateTie)
+                    {
+                        gateCountdown = -1;
+                        tiePending  = true;
+                        tieIsSlide  = (sg == kGateSlide);
+                    }
+                    else
+                    {
+                        gateCountdown = juce::jmax (1, (int) (interval * g * (sg / 100.0)));
+                        tiePending = false;
+                    }
+                }
+                else
+                {
+                    if (soundingNote >= 0)
+                    {
+                        // A rest ends the note that is running, even mid-gate — and it ends a tie
+                        // chain. That IS a hole in a legato pattern, which is what a rest is for.
                         out.addEvent (juce::MidiMessage::noteOff (channel, soundingNote), i);
                         soundingNote = -1;
+                        gateCountdown = -1;
                     }
-                    out.addEvent (juce::MidiMessage::noteOn (channel, note,
-                                                             (juce::uint8) (accent[(size_t) s] ? 127 : 100)), i);
-                    const int prev = soundingNote;   // still sounding => legato tail to close
-                    soundingNote = note;
-                    gateCountdown = juce::jmax (1, (int) (interval * g));
-                    if (prev >= 0)
-                        out.addEvent (juce::MidiMessage::noteOff (channel, prev), i);
-                }
-                else if (soundingNote >= 0)
-                {
-                    // A rest ends the note that is running, even mid-gate. That IS a hole in a
-                    // legato pattern — which is what a rest is for.
-                    out.addEvent (juce::MidiMessage::noteOff (channel, soundingNote), i);
-                    soundingNote = -1;
-                    gateCountdown = -1;
+                    tiePending = false;
                 }
                 stepIndex = (stepIndex + 1) % steps;
             }
@@ -149,6 +207,11 @@ public:
                 sampleCounter = 0;
         }
     }
+
+    // 15.7: the TIE/SLIDE takeovers this block produced — the processor applies each to the
+    // voice playing `note` (SynthVoice::slideTo) right after this block's events are in.
+    int numLegatoEvents() const noexcept { return numLegato; }
+    const Legato& legatoEvent (int i) const noexcept { return legato[(size_t) i]; }
 
     int currentStep() const noexcept { return stepIndex; }
     // The step the pattern is ON right now, for the module's playhead — NOT `stepIndex`, which has
@@ -166,7 +229,12 @@ private:
     int    sampleCounter = 0;
     int    stepIndex = 0;
     int    litStep = -1;      // step currently sounding (playhead); stepIndex is already the next one
-    int    soundingNote = -1;
+    int    soundingNote = -1; // the MIDI identity (note-on/off pair) — UNCHANGED across a tie chain
+    int    soundingPitch = -1;// what it currently sounds like (15.7: moved by TIE/SLIDE takeovers)
     int    gateCountdown = -1;
+    bool   tiePending = false;   // 15.7: the sounding step was TIE/SLIDE — next boundary takes over
+    bool   tieIsSlide = false;   //       ...and the takeover glides instead of stepping
+    std::array<Legato, 8> legato {};   // takeovers this block (fixed size — RT, one per boundary)
+    int    numLegato = 0;
     int    startDelay = 0;   // samples still to wait before the first step (quantised entry, 16.1)
 };
