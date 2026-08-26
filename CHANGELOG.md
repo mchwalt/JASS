@@ -46,6 +46,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   the way out of writing, which shipped in 2026.08.8 but was nowhere to read.
 
 ### Fixed
+- **A rest's pitch knob is editable again.** Switching a step off — with the corner switch,
+  SPACE while writing, or BACKSPACE — greyed its knob *and* took away the mouse, so re-pitching
+  a rest meant switching it back on first (and hearing it) just to turn the knob. But a rest
+  deliberately keeps its pitch (that is why SPACE and BACKSPACE don't clear it), so the knob now
+  only dims: a rest's note can be dialled in and auditioned while the step stays silent in the
+  figure. Mode-irrelevant knobs (say, STEREO's WIDTH outside Pseudo-Stereo) still lock the mouse
+  out — there the value genuinely does not apply.
+- **The step switch is easier to hit.** Cycling a step (off → on → accented) demanded pixel
+  aim at the little box. Its clickable area now extends into the cell corner's empty air —
+  roughly double the target — while the drawn box stays exactly where and what it was.
 - **Step preview, entry and the note boxes follow the root that actually sounds.** The figure
   transposes with the latched key, but clicking a step previewed it over the keyboard's C — with
   Los Niños latched on Bb, the click sounded a different note than the loop played at that very

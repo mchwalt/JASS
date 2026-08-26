@@ -129,7 +129,11 @@ namespace rack
         // by the timer, which disables + dims just that control (and its caption) when the
         // predicate is false. Component-level (setEnabled/setAlpha), so knobs and combos share it.
         // `active` caches the last applied state so we only touch the widgets on a real change.
-        struct CondKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
+        // `dimOnly` keeps the mouse alive and only dims: a STEP SEQ rest's pitch survives (the
+        // SPACE rule) and must stay editable without re-enabling the step first (maintainer
+        // 2026-08-26) — unlike a mode-irrelevant knob, whose value truly does not apply.
+        struct CondKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate;
+                          bool dimOnly = false; char active = -1; };
         // Knobs carrying Knob::highlightWhen: polled by the timer, ringed by paintOverChildren while
         // the predicate holds. `on` caches the last state so we only repaint on a real change.
         // `ring` false => the mark is a lit dot (a sequencer playhead) instead of a ring (the write

@@ -59,9 +59,16 @@ namespace rack
                 else            { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (0.0f); }
             }
 
+            // The drawn box keeps the button's ORIGINAL size; the bounds around it are a larger
+            // hit target (the little box was too small to aim at — maintainer 2026-08-26). The
+            // glyph stays anchored in the top-right corner, exactly where the whole button used
+            // to sit, so the bigger target changes nothing visually.
+            static constexpr int kGlyphW = 16, kGlyphH = 15;
+
             void paintButton (juce::Graphics& g, bool over, bool down) override
             {
-                auto r = getLocalBounds().toFloat().reduced (3.0f);
+                auto r = getLocalBounds().removeFromTop (kGlyphH).removeFromRight (kGlyphW)
+                                         .toFloat().reduced (3.0f);
                 const auto tick = findColour (juce::ToggleButton::tickColourId);
                 const auto box  = findColour (juce::ToggleButton::tickDisabledColourId);
                 if (isAccented())
@@ -300,6 +307,8 @@ namespace rack
                 // Per-knob ON/OFF switch (STEP SEQ steps): a checkbox in this cell's top-right,
                 // dimming the knob when off via the same condKnobs path as activeWhen. The
                 // predicate is built HERE from the parameter, so no editor injection is needed.
+                // dimOnly: a rest keeps its pitch (the SPACE rule), so the knob stays draggable
+                // while off — dial in (and audition) a rest's note without re-enabling it first.
                 if (k->toggleParamId.isNotEmpty())
                 {
                     juce::Button* tb;
@@ -321,7 +330,7 @@ namespace rack
                     cells.back().toggle = tb;
                     if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
                         condKnobs.push_back ({ s, cells.back().caption,
-                                               [v] { return v->load() > 0.5f; } });
+                                               [v] { return v->load() > 0.5f; }, true });
 
                     // Bringing a rest back sounds the step once (15.3), so you hear what you just
                     // restored. The switch has no value of its own — it shares the knob's cell and
@@ -667,8 +676,12 @@ namespace rack
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
                     // The optional switch rides in the cell's top-right corner, on the caption's
                     // line: it belongs to this knob, so it must not claim a cell of its own.
+                    // The bounds reach 8 px further left and 7 px further down than the drawn
+                    // box (StepSwitch anchors its glyph top-right, so nothing moves visually):
+                    // pure hit area, into the cell corner's empty air — the box itself was too
+                    // small to aim at (maintainer 2026-08-26).
                     if (cell.toggle != nullptr)
-                        cell.toggle->setBounds (cr.getRight() - 16, top - 1, 16, capH + 2);
+                        cell.toggle->setBounds (cr.getRight() - 24, top - 1, 24, capH + 9);
                 }
                 else if (isButton)
                 {
@@ -774,8 +787,11 @@ namespace rack
                 const float d  = 6.0f;
                 const auto& cell = cells[juce::jmin (m.cellIndex, cells.size() - 1)];
                 const auto  line = m.caption != nullptr ? m.caption->getBounds() : b;
-                const float right = cell.toggle != nullptr ? (float) cell.toggle->getX() - 2.0f
-                                                           : (float) line.getRight();
+                // Anchor to the DRAWN box, not the bounds — the switch's hit area is wider than
+                // its glyph, and the dot must hug what the eye sees.
+                const float right = cell.toggle != nullptr
+                                        ? (float) cell.toggle->getRight() - (float) StepSwitch::kGlyphW - 2.0f
+                                        : (float) line.getRight();
                 g.setColour (juce::Colour (0xff7bd88f));
                 g.fillEllipse (right - d, (float) line.getCentreY() - d * 0.5f, d, d);
             }
@@ -948,7 +964,8 @@ namespace rack
             const bool on = (want == 1);
             if (ck.widget != nullptr)
             {
-                ck.widget->setEnabled (on);
+                if (! ck.dimOnly)          // a dim-only control (a rest's pitch knob) keeps the mouse
+                    ck.widget->setEnabled (on);
                 ck.widget->setAlpha (on ? 1.0f : 0.35f);
             }
             if (ck.caption != nullptr)
