@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.10] – 2026-08-30
+
 ### Added
 - **STEP SEQ loads and saves MIDI now (story 15.8).** Two buttons in the module's own title
   bar — **LOAD MIDI / SAVE MIDI**. LOAD MIDI opens a `.mid` transcription as the figure: the
