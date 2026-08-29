@@ -84,6 +84,13 @@ playable figures in seconds, and JASS figures travel to the DAW.
   0.235, los_ninos.mid 0.0); (2) folding happens ONLY when a real cycle was detected —
   a non-looping file now imports as its first 32 sixteenths (the contract's fallback)
   instead of the whole piece piled mod 32.
+- **Maintainer test round 2 (2026-08-30):** the "doubled notes" file was OUR OWN export of
+  DAF Beat — the export hard-coded 120 ticks/step while DAF Beat runs at SYNC 1/8, so the
+  file was notated double-time and the reimport (grid fixed at 1/16) played the figure at
+  twice the drums' speed. Fix: export derives ticks/step from the SEQ's actual SYNC
+  (SyncDivision::beatsPerCycle; Free ⇒ 1/16). A binary-division figure round-trips exactly
+  (an 1/8 step reimports as a TIE'd pair of 16ths — same music); triplet/dotted grids export
+  truthfully but trip the reimport's quantize gate, documented.
 - **Verification**: builds clean; the import algorithm was mirrored 1:1 in Python and run
   against `D:\downloads\los_ninos.mid` → PPQ 480, tempo 115.0, 240 notes → period 24, root 34
   (Bb1), two classes (80/86 vs 98), gates exactly 87/36/41 (AC1 ✓, figure arrives rotated to

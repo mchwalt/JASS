@@ -4,7 +4,8 @@
 #include <cmath>
 #include <map>
 #include "Parameters.h"
-#include "PresetIO.h"   // setPresetLoading / applySeqLatchRoot / seqLatchRoot hooks
+#include "PresetIO.h"             // setPresetLoading / applySeqLatchRoot / seqLatchRoot hooks
+#include "../DSP/SyncDivision.h"  // export: one step lasts what the SEQ's SYNC says
 
 // STEP SEQ ⇄ Standard MIDI File (story 15.8). Import turns a .mid transcription (Los Niños,
 // Der Mussolini, basic-pitch output) into the running figure; export writes the figure back
@@ -259,8 +260,19 @@ namespace SeqMidiIO
     // pitch-changing TIE reimports as SLIDE, because MIDI cannot carry the difference.
     inline bool exportFigure (APVTS& a, const juce::File& file)
     {
-        constexpr int ppq = 480, stepTicks = ppq / 4, overlap = 30;
+        constexpr int ppq = 480, overlap = 30;
         auto raw = [&a] (const juce::String& id) { return a.getRawParameterValue (id)->load(); };
+
+        // One step lasts what the SEQ's SYNC says it lasts — NOT a hard-coded 1/16. The first
+        // cut exported DAF Beat (SYNC 1/8) at 120 ticks/step: musically notated double-time,
+        // and the re-import (whose grid IS fixed at 1/16) ran the figure at twice the drums'
+        // speed ("die Töne werden gedoppelt", maintainer 2026-08-30). Free falls back to 1/16.
+        // A binary-division figure round-trips exactly (an 1/8 step reimports as a TIE'd pair
+        // of 16ths — same music); triplet/dotted grids export truthfully but won't survive the
+        // reimport's 1/16 quantize gate — MIDI time is absolute, the 303 grid is not.
+        const int    syncIdx   = (int) raw (Parameters::ID::seqSync);
+        const double beats     = SyncDivision::isSynced (syncIdx) ? SyncDivision::beatsPerCycle (syncIdx) : 0.25;
+        const int    stepTicks = (int) std::llround (ppq * beats);
 
         const int len  = juce::jlimit (1, 32, (int) raw (Parameters::ID::seqLength));
         const int root = PresetIO::seqLatchRoot && PresetIO::seqLatchRoot() >= 0
