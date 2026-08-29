@@ -14,4 +14,4 @@ Beim Klicken oder Drehen erklingt der Schritt, du kannst die Figur also nach Geh
 
 Ersetzt den ARPEGGIATOR: es kann nur eines von beiden laufen, das Einschalten schaltet das andere aus.
 
-**MIDI-Import/-Export.** Der **LOAD**-Dialog der Kopfzeile öffnet `.mid`-Transkriptionen: Velocity wird zu Akzenten, Notenlängen zu Gate/TIE/SLIDE, der Zyklus des Loops wird erkannt, und die Figur latcht auf ihren häufigsten Ton und spielt. **SAVE** als `.mid` schreibt die Figur wieder heraus. Eine Asymmetrie: ein TIE mit Tonhöhenwechsel wird als 303-Überlappung exportiert und kommt als SLIDE zurück — MIDI kann den Unterschied nicht transportieren.
+**MIDI-Import/-Export — die Knöpfe LOAD MIDI / SAVE MIDI in der Titelzeile dieses Moduls.** LOAD MIDI öffnet eine `.mid`-Transkription: Velocity wird zu Akzenten, Notenlängen zu Gate/TIE/SLIDE, der Zyklus des Loops wird erkannt, und die Figur latcht auf ihren häufigsten Ton und spielt. SAVE MIDI schreibt die Figur wieder heraus. Eine Asymmetrie: ein TIE mit Tonhöhenwechsel wird als 303-Überlappung exportiert und kommt als SLIDE zurück — MIDI kann den Unterschied nicht transportieren.

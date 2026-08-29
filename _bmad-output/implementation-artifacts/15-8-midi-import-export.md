@@ -68,9 +68,15 @@ playable figures in seconds, and JASS figures travel to the DAW.
   assume an unscaled gate), tempo (clamped 40–250), and latches the root via
   `applySeqLatchRoot` (requantize ⇒ enters on the drums' downbeat). Export: 480 PPQ, one
   cycle, TIE chains merge, pitch takeover = 303 overlap (+30 ticks).
-- Editor: LOAD filter `*.jass;*.mid;*.midi`, SAVE `*.jass;*.mid`; `importMidiFigure` shows
-  bilingual error boxes (unreadable / SMPTE / no notes), clears the write cursor on success.
-  MIDI export deliberately does NOT touch preset name or clean state.
+- Editor: **entry point moved to the announced fallback (maintainer 2026-08-30)** — the
+  combined dialog filter could not separate ".jass or .mid?" up front (JUCE's IFileDialog
+  path builds ONE `COMDLG_FILTERSPEC` from the whole pattern string; separate dropdown
+  entries are unreachable without patching JUCE). The preset LOAD/SAVE dialogs are back to
+  `*.jass` only; STEP SEQ's title bar carries **LOAD MIDI / SAVE MIDI** buttons via the new
+  generic `ModuleDescriptor::headerActions` (built by ModuleFrame next to the GATE latch).
+  `importMidiFigure` shows bilingual error boxes (unreadable / SMPTE / no notes) and clears
+  the write cursor on success. MIDI export deliberately does NOT touch preset name or clean
+  state; both choosers start at the system's last-used folder, not the Presets folder.
 - **Verification**: builds clean; the import algorithm was mirrored 1:1 in Python and run
   against `D:\downloads\los_ninos.mid` → PPQ 480, tempo 115.0, 240 notes → period 24, root 34
   (Bb1), two classes (80/86 vs 98), gates exactly 87/36/41 (AC1 ✓, figure arrives rotated to
