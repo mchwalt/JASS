@@ -1,9 +1,13 @@
 # Story 16.2: Full-width sequencers — 48 steps, collapsible ADSR curve
 
-Status: ready-for-dev — **first slice BUILT 2026-08-31 (83e2110): the collapsible ADSR curve.**
-Generic ModuleFrame fold (collapseTitle/collapsedSize, onFootprintChanged, maxHeight counts
-the expanded size), ADSR = CURVE latch, W4U7 ⇄ W4H1, starts expanded until the width move
-lands. Remaining: the 48-step/full-width work (tasks 1-3, 5-7) + flipping the ADSR default.
+Status: BUILT 2026-08-31 (83e2110 fold + 9d4634f/add10b9 STEP SEQ + da93a46 PERC) — eye-test
+in progress with the maintainer. Deviations from the design, all maintainer-decided at the
+screen: STEP SEQ is W28 (not W30 — the spacer cells read as wasted air; 27 cells/row, knob
+size unchanged, spacing a hair tighter); PERC is W24 (boxes pack denser than knobs; the
+lane-name column gave its spare air to the boxes; pairs with ARP into one full row);
+`ModuleSpec::bodyOrder` was born here (display order decoupled from append-only
+registration). Remaining: flip the ADSR fold default once the zone layout settles (task 4),
+Los-Niños-×2 test (AC3).
 
 ## Story
 
