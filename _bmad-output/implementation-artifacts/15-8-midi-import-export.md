@@ -1,6 +1,6 @@
 # Story 15.8 (D): MIDI ⇄ STEP SEQ through the LOAD/SAVE dialogs
 
-Status: ready-for-dev (entry point decided with the maintainer 2026-08-27)
+Status: DONE 2026-08-30 — maintainer's ear test passed after three fix rounds („jetzt funzt's“): los_ninos.mid import, Mussolini export/reimport round-trip stable against the drums
 
 ## Story
 
@@ -52,11 +52,58 @@ playable figures in seconds, and JASS figures travel to the DAW.
 
 ## Tasks
 
-- [ ] Task 1: `Source/Audio/SeqMidiIO.h` (header-only): importFigure / exportFigure per the
+- [x] Task 1: `Source/Audio/SeqMidiIO.h` (header-only): importFigure / exportFigure per the
       contract above
-- [ ] Task 2: PluginEditor LOAD/SAVE branches (+ bilingual result/error boxes)
-- [ ] Task 3: Help EN/DE, CHANGELOG
-- [ ] Task 4: Build + import los_ninos.mid + maintainer's ear; say what is only build-verified
+- [x] Task 2: PluginEditor LOAD/SAVE branches (+ bilingual result/error boxes)
+- [x] Task 3: Help EN/DE, CHANGELOG
+- [x] Task 4: Build + import los_ninos.mid + maintainer's ear; say what is only build-verified
+
+## Dev Agent Record (2026-08-30)
+
+- `Source/Audio/SeqMidiIO.h`: import quantizes onto the 1/16 grid (louder note wins a step),
+  detects the cycle on positions+notes only, then FOLDS velocities/durations across cycles
+  (median) — transcription wobble averages out. Durations resolve to covered-steps + last-gate
+  (percent / 100-legato / SLIDE-overlap), synthesized held steps chain with TIE. Import writes
+  inside the `setPresetLoading` bracket, sets SYNC 1/16, LEN, GATE 1.0 (measured percents
+  assume an unscaled gate), tempo (clamped 40–250), and latches the root via
+  `applySeqLatchRoot` (requantize ⇒ enters on the drums' downbeat). Export: 480 PPQ, one
+  cycle, TIE chains merge, pitch takeover = 303 overlap (+30 ticks).
+- Editor: **entry point moved to the announced fallback (maintainer 2026-08-30)** — the
+  combined dialog filter could not separate ".jass or .mid?" up front (JUCE's IFileDialog
+  path builds ONE `COMDLG_FILTERSPEC` from the whole pattern string; separate dropdown
+  entries are unreachable without patching JUCE). The preset LOAD/SAVE dialogs are back to
+  `*.jass` only; STEP SEQ's title bar carries **LOAD MIDI / SAVE MIDI** buttons via the new
+  generic `ModuleDescriptor::headerActions` (built by ModuleFrame next to the GATE latch).
+  `importMidiFigure` shows bilingual error boxes (unreadable / SMPTE / no notes) and clears
+  the write cursor on success. MIDI export deliberately does NOT touch preset name or clean
+  state; both choosers start at the system's last-used folder, not the Presets folder.
+- **Maintainer test round 1 (2026-08-30):** buttons found, export works; a RAW basic-pitch
+  whole-song dump imported as doubled-note hash. Two fixes: (1) free-time material is
+  REJECTED loudly (mean onset distance to the 1/16 grid > 0.2 steps => notQuantized, with
+  the way out named: quantize in the DAW / export a looped section; the dump measures
+  0.235, los_ninos.mid 0.0); (2) folding happens ONLY when a real cycle was detected —
+  a non-looping file now imports as its first 32 sixteenths (the contract's fallback)
+  instead of the whole piece piled mod 32.
+- **Maintainer test round 2 (2026-08-30):** the "doubled notes" file was OUR OWN export of
+  DAF Beat — the export hard-coded 120 ticks/step while DAF Beat runs at SYNC 1/8, so the
+  file was notated double-time and the reimport (grid fixed at 1/16) played the figure at
+  twice the drums' speed. Fix: export derives ticks/step from the SEQ's actual SYNC
+  (SyncDivision::beatsPerCycle; Free ⇒ 1/16). A binary-division figure round-trips exactly
+  (an 1/8 step reimports as a TIE'd pair of 16ths — same music); triplet/dotted grids export
+  truthfully but trip the reimport's quantize gate, documented.
+- **Maintainer test round 3 (2026-08-30):** "the first pass is right, then it smears" — the
+  non-loop figure length was set from the last ONSET, not the last note's END. The re-exported
+  Mussolini (16 eighths = 32 sixteenths, last onset on step 31) imported at LEN 31: one step
+  short, so the figure shifted a sixteenth against the drums on every wrap, and the last note
+  became a spurious wrap-SLIDE. Fix: for a non-looped file the period is
+  ceil(max(onset + duration)), capped at 32 — simulated: Mussolini now LEN 32 with a clean
+  TIE+100 tail, Los Niños (looped path) unchanged.
+- **Verification**: builds clean; the import algorithm was mirrored 1:1 in Python and run
+  against `D:\downloads\los_ninos.mid` → PPQ 480, tempo 115.0, 240 notes → period 24, root 34
+  (Bb1), two classes (80/86 vs 98), gates exactly 87/36/41 (AC1 ✓, figure arrives rotated to
+  its first onset — a loop-identical rotation, inherent to the anchor rule). The in-app path
+  (dialog → SeqMidiIO → engine) and the .mid round-trip (AC2) are the maintainer's ear test:
+  LOAD `los_ninos.mid`, compare against the Los Ninos preset; SAVE as .mid, re-LOAD, compare.
 
 ## References
 

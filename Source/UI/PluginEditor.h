@@ -255,6 +255,9 @@ private:
     void setPresetName(const juce::String& name);
     void updatePresetLabel();                    // composes "Preset: X" / "Current State"
     void loadPresetFile(const juce::File& f);    // shared LOAD path (LOAD button + bank F-keys)
+    void chooseMidiImport();                     // STEP SEQ header LOAD MIDI: chooser (15.8)
+    void chooseMidiExport();                     // STEP SEQ header SAVE MIDI: chooser + export (15.8)
+    void importMidiFigure(const juce::File& f);  // the import itself: figure into STEP SEQ (15.8)
 
     // Preset quick-access bank (F1..F12) — a MASTER BUS module. The 12 slot assignments are a
     // GLOBAL app setting (PresetIO::PresetBanks.json), not per-preset.

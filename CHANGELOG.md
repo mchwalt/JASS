@@ -10,6 +10,25 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.10] – 2026-08-30
+
+### Added
+- **STEP SEQ loads and saves MIDI now (story 15.8).** Two buttons in the module's own title
+  bar — **LOAD MIDI / SAVE MIDI**. LOAD MIDI opens a `.mid` transcription as the figure: the
+  grid is 1/16 anchored on the first note, velocities become the accent row by clustering
+  (never read continuously: a transcription's wobble is noise, its two classes are signal),
+  note lengths become per-step gate up to TIE and SLIDE with the 303's overlap convention,
+  and a looped transcription is folded to its detected cycle, so a 240-note Los Niños rip
+  comes in as its 24-step figure with velocities and lengths averaged across the passes. The
+  figure latches to its most frequent note and simply starts playing, like a loaded sequencer
+  patch. SAVE MIDI writes the figure back out (480 PPQ, one cycle, engine velocities 127/100,
+  TIE chains merged into one note) for the DAW. One documented asymmetry: a pitch-changing
+  TIE exports as the 303 overlap and reimports as SLIDE — MIDI cannot carry the difference.
+  Errors are as loud as the preset path's. The design's first pick — teaching the preset
+  LOAD/SAVE dialogs `.mid` — fell to a platform fact: the native chooser shows one combined
+  filter entry, so the dialog could not separate "whole patch or just the figure?" up front;
+  the module's own buttons answer that before any dialog opens (maintainer, 2026-08-30).
+
 ## [2026.08.9] – 2026-08-29
 
 ### Added
