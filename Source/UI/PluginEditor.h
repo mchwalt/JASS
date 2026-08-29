@@ -255,6 +255,7 @@ private:
     void setPresetName(const juce::String& name);
     void updatePresetLabel();                    // composes "Preset: X" / "Current State"
     void loadPresetFile(const juce::File& f);    // shared LOAD path (LOAD button + bank F-keys)
+    void doublePercPattern();                    // PERC header x2: pattern doubles behind itself
     void chooseMidiImport();                     // STEP SEQ header LOAD MIDI: chooser (15.8)
     void chooseMidiExport();                     // STEP SEQ header SAVE MIDI: chooser + export (15.8)
     void importMidiFigure(const juce::File& f);  // the import itself: figure into STEP SEQ (15.8)

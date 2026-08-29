@@ -10,3 +10,5 @@ Four percussion tracks on a 32-step grid, played dry into the master bus. It run
 The drums are the clock: with PERC running, a STEP SEQ figure started from silence enters on the next start of the drum pattern instead of wherever you pressed the key.
 
 PERC never passes through the filter or the effects — those live in the voices, and the beat is not one. A preset whose kit is still loading stays silent rather than play the wrong one.
+
+**COPY / x2 (title bar).** **COPY** latches a copy mode: click a source step — the whole column, all four rows — then every further click stamps it onto that step. Right-click picks a new source; click COPY again to finish. **x2** appends the pattern behind itself and doubles LEN (up to 32): the same bar again, then vary the copy.

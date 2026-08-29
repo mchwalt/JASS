@@ -10,6 +10,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **PERC steps copy with one click.** Two new buttons in the module's title bar, both visible
+  — no context menu, the house rule. **COPY** latches a stamp mode: click the source step (the
+  whole column, all four rows) and every further click plants it on another step; right-click
+  re-picks the source, a second COPY ends the mode. **x2** appends the pattern behind itself
+  and doubles LEN (capped at the 32-step grid) — the classic drum-machine "same bar again,
+  then vary the copy". Both write plain parameters, so presets, LiveState and the grid's own
+  painting see the result exactly like hand edits.
+
 ## [2026.08.10] – 2026-08-30
 
 ### Added

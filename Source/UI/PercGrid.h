@@ -140,16 +140,77 @@ public:
                     g.drawRoundedRectangle (cell, 2.0f, 1.0f);
                 }
             }
+
+        // COPY mode: frame the picked source column across all four lanes, so what the next
+        // click will stamp is never a matter of memory.
+        if (copyMode && copySource >= 0)
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.85f));
+            g.drawRoundedRectangle (juce::Rectangle<float> (r.getX() + copySource * cw, r.getY() + ch,
+                                                            cw, ch * PercSequencer::kLanes).reduced (0.5f),
+                                    3.0f, 1.5f);
+        }
+    }
+
+    // Column-copy mode, driven by the COPY latch in the module header (maintainer 2026-08-30):
+    // the first click picks the SOURCE step — the whole column, all four lanes — and every
+    // further click stamps it onto the clicked step. Any number of targets, until the latch
+    // goes off. Entering and leaving both clear the source, so a fresh COPY never carries a
+    // stale column, and the ordinary paint gesture is untouched when the latch is off.
+    void setCopyMode (bool shouldCopy)
+    {
+        copyMode = shouldCopy;
+        copySource = -1;
+        repaint();
     }
 
     // Left sets a step AND sounds it, right clears one (maintainer 2026-08-11). Two buttons, two
     // meanings — a toggle made every correction a guess about what the click would do, and placing
     // a step without hearing the instrument is the blind writing this module set out to end.
     // Dragging keeps going in the same sense, so a run of sixteen hats is one gesture.
-    void mouseDown (const juce::MouseEvent& e) override { lastCell = -1; setAt (e); }
-    void mouseDrag (const juce::MouseEvent& e) override { setAt (e); }
+    void mouseDown (const juce::MouseEvent& e) override
+    {
+        if (copyMode) { copyAt (e); return; }
+        lastCell = -1; setAt (e);
+    }
+    void mouseDrag (const juce::MouseEvent& e) override
+    {
+        if (copyMode) return;   // stamping is per CLICK — a drag must not smear columns
+        setAt (e);
+    }
 
 private:
+    // Which step column the pointer is in, or -1 (also -1 in the number strip / name column).
+    int stepAt (juce::Point<float> p) const
+    {
+        const auto r = getLocalBounds().reduced (2).withTrimmedLeft (labelWidth()).toFloat();
+        const float cw = r.getWidth()  / (float) PercSequencer::kMaxSteps;
+        const float ch = r.getHeight() / (float) (PercSequencer::kLanes + 1);
+        const int s = (int) ((p.x - r.getX()) / cw);
+        const int l = (int) ((p.y - r.getY()) / ch) - 1;   // row 0 is the number strip
+        return (s >= 0 && s < PercSequencer::kMaxSteps && l >= 0 && l < PercSequencer::kLanes) ? s : -1;
+    }
+
+    void copyAt (const juce::MouseEvent& e)
+    {
+        const int s = stepAt (e.position);
+        if (s < 0)
+            return;
+        if (copySource < 0 || e.mods.isRightButtonDown())   // right click re-picks the source
+        {
+            copySource = s;
+            repaint();
+            return;
+        }
+        if (s == copySource)
+            return;
+        for (int l = 1; l <= PercSequencer::kLanes; ++l)
+            if (auto* src = apvts.getParameter (Parameters::ID::percStep (l, copySource + 1)))
+                if (auto* dst = apvts.getParameter (Parameters::ID::percStep (l, s + 1)))
+                    dst->setValueNotifyingHost (src->getValue() > 0.5f ? 1.0f : 0.0f);
+        repaint();
+    }
+
     void setAt (const juce::MouseEvent& e)
     {
         const bool value = ! e.mods.isRightButtonDown();
@@ -187,4 +248,6 @@ private:
     std::function<int()> playhead;
     std::function<void (int lane)> audition;
     int lastCell = -1;   // lane*32+step the pointer last previewed (one sound per cell)
+    bool copyMode = false;   // COPY latch state (header button)
+    int copySource = -1;     // picked source column, -1 = next click picks it
 };
