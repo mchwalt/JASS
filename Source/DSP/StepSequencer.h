@@ -29,7 +29,7 @@
 class StepSequencer
 {
 public:
-    static constexpr int kMaxSteps = 32;
+    static constexpr int kMaxSteps = 48;   // 16.2: two rows of 24 at full rack width (was 32)
 
     // 15.7: the per-step gate is ONE continuum (the BeatStep model) — 5..100 = percent of the
     // step, then two values past the top: TIE (held through the boundary; the next step takes

@@ -11,6 +11,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **STEP SEQ spans the full rack and carries 48 steps (story 16.2).** The module grows from
+  20 to all 30 rack columns: two rows of 24 step knobs — 3 bars of sixteenths, or exactly two
+  Los Niños cycles — with the knobs and their spacing unchanged (maintainer's condition; the
+  cell width lands within a pixel of before, and a spacer cell now separates the figure from
+  the SYNC/RATE/LEN/GATE/ACCENT globals, so the border reads as a border). Steps 33–48 are
+  REGISTERED after every existing parameter — the append-only contract, old DAW state keeps
+  its indices — but DISPLAYED in musical order via the new `ModuleSpec::bodyOrder`, which
+  exists precisely to decouple those two orders. Old presets load bit-identically (new steps
+  default to rests); the accent row, the GATE/TIE/SLIDE row, MIDI import/export and the write
+  cursor all extend across the new steps.
 - **The ADSR curve folds away (story 16.2, first slice).** A CURVE latch in the module's
   title bar hides the envelope display; the module shrinks to its knob row and the rack
   re-packs live — the modules below shift up, and back down when the curve returns. The
