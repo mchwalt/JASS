@@ -11,11 +11,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
-- **STEP SEQ spans the full rack and carries 48 steps (story 16.2).** The module grows from
-  20 to all 30 rack columns: two rows of 24 step knobs — 3 bars of sixteenths, or exactly two
-  Los Niños cycles — with the knobs and their spacing unchanged (maintainer's condition; the
-  cell width lands within a pixel of before, and a spacer cell now separates the figure from
-  the SYNC/RATE/LEN/GATE/ACCENT globals, so the border reads as a border). Steps 33–48 are
+- **STEP SEQ carries 48 steps now (story 16.2).** The module grows from 20 to 28 rack
+  columns: two rows of 24 step knobs — 3 bars of sixteenths, or exactly two Los Niños
+  cycles — with the knobs their usual size and the spacing a hair tighter than before
+  (maintainer's pick over a full-width variant whose spacer cell read as wasted air). Steps 33–48 are
   REGISTERED after every existing parameter — the append-only contract, old DAW state keeps
   its indices — but DISPLAYED in musical order via the new `ModuleSpec::bodyOrder`, which
   exists precisely to decouple those two orders. Old presets load bit-identically (new steps

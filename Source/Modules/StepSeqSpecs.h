@@ -7,13 +7,13 @@
 // ARPEGGIATOR (which can only re-order the notes of a held chord and runs free in Hz), each step
 // carries its own semitone offset and gate, and the clock rides on the tempo.
 //
-// Body layout (16.2: full rack width, 48 steps): 48 pitch knobs + 2 spacer cells + SYNC (2 slots),
-// RATE, LEN, GATE and ACCENT = 56 content slots over 2 rack units => 28 cells per row on W30 —
-// which keeps the cell width within a pixel of the old 19-on-W20 (maintainer 2026-08-31: "die
-// Knöpfe und deren Abstand sollen genau so bleiben"; the knob itself is the fixed Small size
-// either way). The spacer separates the figure from the globals, so the border reads as a border.
-//     row 1 = pitch  1..24 | spacer | SYNC (2 cells) | RATE
-//     row 2 = pitch 25..48 | spacer | LEN | GATE | ACCENT
+// Body layout (16.2: 48 steps at W28): 48 pitch knobs + SYNC (2 slots), RATE, LEN, GATE and
+// ACCENT = 54 content slots over 2 rack units => 27 cells per row on W28. A first cut used W30
+// with a spacer cell between figure and globals; the maintainer saw the gap and asked for the
+// tighter shape instead ("Breite 28 sollte möglich sein", 2026-08-31) — the cell width lands a
+// hair under the old 19-on-W20 and the knob itself is the fixed Small size either way.
+//     row 1 = pitch  1..24 | SYNC (2 cells) | RATE
+//     row 2 = pitch 25..48 | LEN | GATE | ACCENT
 // DISPLAY order is bodyOrder below; the params vector keeps the historical REGISTRATION order
 // (steps 1..32 + globals as shipped, steps 33..48 appended at the end) — the append-only
 // contract, so old DAW state keeps its parameter indices. That split is the whole reason
@@ -34,7 +34,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "stepseq"; m.title = "STEP SEQ"; m.persistObject = "StepSeq"; m.enableParamId = "seqOn";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W30U7;   // 16.2: full rack width, two rows of 24 steps
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28U7;   // 16.2: two rows of 24 steps, 27 cells per row
         // Visible by default (maintainer 2026-08-11), overriding the "special-purpose modules stay
         // hidden until used" rule this shipped with. It is a deliberate trade, made with the price
         // on the table: a factory-VISIBLE module always counts towards the may-appear worst case
@@ -99,11 +99,11 @@ namespace Modules
         // 16.2: steps 33..48 — REGISTERED here at the end (append-only), DISPLAYED in place below.
         for (int s = 33; s <= StepSequencer::kMaxSteps; ++s) pitchParam (s);
 
-        // ---- DISPLAY order: two rows of 24, one spacer before the globals ---------------------
+        // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
         for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
-        m.bodyOrder.insert (m.bodyOrder.end(), { "", "seqSync", "seqRate" });
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate" });
         for (int s = 25; s <= StepSequencer::kMaxSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
-        m.bodyOrder.insert (m.bodyOrder.end(), { "", "seqLength", "seqGate", "seqAccent" });
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent" });
         return m;
     }
 }
