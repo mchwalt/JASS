@@ -298,6 +298,14 @@ namespace rack
         // parameter — loading a preset must not flip what the user is looking at.
         juce::String altRowTitle;
 
+        // Header ACTION buttons (15.8): plain one-shot text buttons in the title bar, left of
+        // the row toggle. For module-scoped file actions — STEP SEQ's LOAD MIDI / SAVE MIDI:
+        // the preset dialogs cannot separate ".jass or .mid?" up front (JUCE's native chooser
+        // shows ONE combined filter entry), so the module carries its own entry points and the
+        // intent is settled before any dialog opens (maintainer 2026-08-30, the 15.8 fallback).
+        struct HeaderAction { juce::String title, tooltip; std::function<void()> onClick; };
+        std::vector<HeaderAction> headerActions;
+
         // Per-slot activity highlight (MOD MATRIX). The body is a repeating run of `groupSize`
         // controls (a routing slot = SRC·MOD·PARAM·AMT = 4). isActive(slotIndex) reports whether
         // that slot is "wired" (its MOD != Off), so the frame can DIM inactive slots and mark active
