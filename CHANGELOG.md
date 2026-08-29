@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.12] – 2026-08-31
+
 ### Added
 - **STEP SEQ shows where the figure ends.** A red line after step LEN — the knob-row
   counterpart of PERC's dimmed beyond-LEN cells (dimming was no option here: a grey knob
