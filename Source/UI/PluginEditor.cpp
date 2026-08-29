@@ -2255,10 +2255,10 @@ void SynthyEditor::buildRack()
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
     // curve), a Display body element (AD-5), owned by rackOwned so its lifetime is tied
-    // to the editor. The curve FOLDS behind the header's CURVE latch (16.2 first slice,
-    // maintainer 2026-08-31): folded the module is one knob row (W4H1) and the rack re-packs
-    // live. It starts EXPANDED for now — today's neighbours (STEP SEQ) keep the row tall
-    // anyway; the full-width move of 16.2 flips the default when folding actually pays.
+    // to the editor. The curve FOLDS behind the header's CURVE latch (16.2, maintainer
+    // 2026-08-31): folded the module is one knob row (W4H1) and the rack re-packs live.
+    // It starts FOLDED — since the sequencers took the width, ADSR lives among the flat
+    // modulators, and the curve is a look-up, not a thing to stare at (maintainer's call).
     {
         ModuleDescriptor d;
         d.sizeClass = SizeClass::W4U7; d.type = ModuleType::Modulator;
@@ -2270,6 +2270,7 @@ void SynthyEditor::buildRack()
                    Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } };
         d.collapseTitle = "CURVE";
         d.collapsedSize = SizeClass::W4H1;
+        d.startCollapsed = true;
         addRackModule(std::move(d));
     }
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
