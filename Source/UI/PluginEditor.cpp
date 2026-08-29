@@ -2255,10 +2255,23 @@ void SynthyEditor::buildRack()
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
     // curve), a Display body element (AD-5), owned by rackOwned so its lifetime is tied
-    // to the editor.
-    add(Rack::Zone::Modulation, SizeClass::W4U7, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
-        { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
-          Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
+    // to the editor. The curve FOLDS behind the header's CURVE latch (16.2 first slice,
+    // maintainer 2026-08-31): folded the module is one knob row (W4H1) and the rack re-packs
+    // live. It starts EXPANDED for now — today's neighbours (STEP SEQ) keep the row tall
+    // anyway; the full-width move of 16.2 flips the default when folding actually pays.
+    {
+        ModuleDescriptor d;
+        d.sizeClass = SizeClass::W4U7; d.type = ModuleType::Modulator;
+        d.title = "ENVELOPE - ADSR";
+        d.id = d.title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
+        d.defaultZone = Rack::Zone::Modulation;
+        d.enableParam = P::adsrOn;
+        d.body = { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
+                   Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } };
+        d.collapseTitle = "CURVE";
+        d.collapsedSize = SizeClass::W4H1;
+        addRackModule(std::move(d));
+    }
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
     // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
     for (int i = 1; i <= kNumLFOs; ++i)

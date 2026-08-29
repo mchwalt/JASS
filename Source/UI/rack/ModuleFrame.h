@@ -54,7 +54,21 @@ namespace rack
         // shared HelpPanel. Only present/shown when HelpTextStore has an entry for the id.
         std::function<void(const juce::String& id)> onHelp;
 
+        // Collapsible display (16.2): what the module measures RIGHT NOW (collapsed or full),
+        // and its worst case (always the full size — the rack's height budget uses this so
+        // expanding never overflows the window). onFootprintChanged tells the Rack to re-read
+        // the footprint and re-pack live — the "andere Module verschieben sich" the maintainer
+        // asked for.
+        SizeClass effectiveSizeClass() const noexcept
+        {
+            return (desc.collapseTitle.isNotEmpty() && collapsedState) ? desc.collapsedSize
+                                                                       : desc.sizeClass;
+        }
+        SizeClass maxSizeClass() const noexcept { return desc.sizeClass; }
+        std::function<void()> onFootprintChanged;
+
     private:
+        void applyCollapsed();   // show/hide the Display cells + re-flow this frame's body
         void timerCallback() override;
         void buildHeader();
         void buildBody();
@@ -94,6 +108,7 @@ namespace rack
             juce::Label*     caption = nullptr;   // optional caption below it (knob/combo)
             int              slots   = 1;         // grid slots this cell spans
             juce::Button*    toggle  = nullptr;   // optional per-knob on/off (top-right corner)
+            bool             display = false;     // a Display cell — folded away when collapsed (16.2)
         };
 
         juce::AudioProcessorValueTreeState& apvts;
@@ -154,6 +169,8 @@ namespace rack
         std::vector<AltKnob> altKnobs;
         std::unique_ptr<juce::TextButton> altRowBtn;   // header latch; only when altRowTitle set
         juce::OwnedArray<juce::TextButton> actionBtns; // header one-shot actions (15.8), see desc.headerActions
+        std::unique_ptr<juce::TextButton> collapseBtn; // display fold latch (16.2); only when collapseTitle set
+        bool collapsedState = false;                   // true = Display cells folded away
         bool altRowActive = false;
         void applyAltRow();   // show/hide the pairs per altRowActive
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back

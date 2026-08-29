@@ -226,6 +226,27 @@ namespace rack
             addAndMakeVisible (*b);
         }
 
+        // Display fold latch (16.2): toggles the module between its full size (Display cells
+        // visible) and collapsedSize. Toggle ON = shown, so the lit button reads as "the curve
+        // is up". The rack is told through onFootprintChanged and re-packs live.
+        if (desc.collapseTitle.isNotEmpty())
+        {
+            collapsedState = desc.startCollapsed;
+            collapseBtn = std::make_unique<juce::TextButton> (desc.collapseTitle);
+            collapseBtn->setClickingTogglesState (true);
+            collapseBtn->setToggleState (! collapsedState, juce::dontSendNotification);
+            collapseBtn->setTooltip ("Show or fold the " + desc.collapseTitle.toLowerCase()
+                                     + " display; the rack re-packs around it");
+            collapseBtn->setWantsKeyboardFocus (false);
+            collapseBtn->onClick = [this]
+            {
+                collapsedState = ! collapseBtn->getToggleState();
+                applyCollapsed();
+                if (onFootprintChanged) onFootprintChanged();
+            };
+            addAndMakeVisible (*collapseBtn);
+        }
+
         // Online-help info icon (Story 6.1): shown only when a help text exists for this
         // module's help slug (helpId(), which may alias several instances to one text).
         // Clicking it asks the editor (via onHelp) to show the shared HelpPanel; onHelp carries
@@ -622,10 +643,27 @@ namespace rack
                 if (disp->component != nullptr)   // null-safe (1.1 review carry-over)
                 {
                     addAndMakeVisible (*disp->component);
-                    cells.push_back ({ disp->component, nullptr, juce::jmax (1, disp->slots) });
+                    cells.push_back ({ disp->component, nullptr, juce::jmax (1, disp->slots),
+                                       nullptr, /*display*/ true });
                 }
             }
         }
+
+        // Apply the fold's starting state (16.2) once the cells exist.
+        if (desc.collapseTitle.isNotEmpty())
+            applyCollapsed();
+    }
+
+    // Display fold (16.2): hide/show every Display cell and re-flow the body. resized() is
+    // called explicitly because the rack may hand this frame the SAME bounds (today the
+    // neighbouring modules keep the row tall), and JUCE skips resized() when nothing moved.
+    void ModuleFrame::applyCollapsed()
+    {
+        for (auto& cell : cells)
+            if (cell.display && cell.widget != nullptr)
+                cell.widget->setVisible (! collapsedState);
+        resized();
+        repaint();
     }
 
     void ModuleFrame::doReset()
@@ -689,21 +727,29 @@ namespace rack
         // order reads left-to-right on screen (removeFromRight fills right-to-left).
         for (int i = actionBtns.size(); --i >= 0;)
             actionBtns[i]->setBounds (header.removeFromRight (72).reduced (2, 1));
+        // Display fold latch (16.2), same slot family as the row toggle.
+        if (collapseBtn != nullptr)
+            collapseBtn->setBounds (header.removeFromRight (52).reduced (2, 1));
         header.removeFromLeft (11);   // room for the status-LED dot painted at the header's left edge
         titleLabel.setBounds (header);
 
         // --- body slot grid (the single body-layout site) ---
         auto body = r.reduced (5, 4);
-        const auto spec = sizeClassSpec (desc.sizeClass);
+        // The FOLDED size when the display is away (16.2) — the fold changes the flow: fewer
+        // content rows, and the Display cells drop out of the slot accounting below entirely,
+        // so the remaining knobs spread exactly as if the module had been born this size.
+        const auto spec = sizeClassSpec (effectiveSizeClass());
 
         // The body fills the module width from its CONTENT, decoupled from the grid column
         // span AND from the knob size (PROTOTYPE): lay the content slots (combo=2, display=N,
         // else 1) across `units` rows. nCols is derived so the cells fill the full width with
         // no trailing empty cells — the cause of the old "module doesn't use its space" look.
         const int units = juce::jmax (1, spec.units);
+        auto folded = [this] (const Cell& cell) { return collapsedState && cell.display; };   // 16.2
         int rawTotal = 0;
         for (auto& cell : cells)
-            rawTotal += juce::jmax (1, cell.slots);
+            if (! folded (cell))
+                rawTotal += juce::jmax (1, cell.slots);
         rawTotal = juce::jmax (1, rawTotal);
         const int nCols = juce::jmax (1, (rawTotal + units - 1) / units);   // ceil(rawTotal / units)
 
@@ -712,7 +758,8 @@ namespace rack
         // leave a phantom gap. (deferred 1.2 review item)
         int total = 0;
         for (auto& cell : cells)
-            total += juce::jlimit (1, nCols, cell.slots);
+            if (! folded (cell))
+                total += juce::jlimit (1, nCols, cell.slots);
         total = juce::jmax (1, total);
         const int nRows = (total + nCols - 1) / nCols;
         const int cellW = body.getWidth()  / nCols;
@@ -740,6 +787,8 @@ namespace rack
         int col = 0, row = 0;
         for (auto& cell : cells)
         {
+            if (folded (cell))
+                continue;   // 16.2: a folded Display claims no slot — the knobs close the gap
             const int span = juce::jlimit (1, nCols, cell.slots);
             if (col + span > nCols) { col = 0; ++row; }
 
