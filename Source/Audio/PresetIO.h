@@ -4,6 +4,7 @@
 #include "Parameters.h"
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "../DSP/ModMatrixCatalog.h"     // v9 "Slots": generated ParamName (the catalog is dependency-free by design)
+#include "../DSP/StepSequencer.h"        // kMaxSteps — the Steps array length (48 since 16.2)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 #include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
 #include "Samples.h"       // embedded shipped SAMPLER examples (Story 12.1)
@@ -538,7 +539,7 @@ namespace PresetIO
         {
             const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
             juce::Array<juce::var> steps;
-            for (int s = 1; s <= 32; ++s)   // 32 = StepSequencer::kMaxSteps (= the JASS_INDEXED_ID cap)
+            for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)   // 48 since 16.2
             {
                 auto* st = new juce::DynamicObject();
                 const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
@@ -871,7 +872,7 @@ namespace PresetIO
                     if (auto* p = a.getParameter(id))
                         p->setValueNotifyingHost(p->convertTo0to1(raw));
                 };
-                for (int s = 0; s < juce::jmin(32, steps->size()); ++s)
+                for (int s = 0; s < juce::jmin((int) StepSequencer::kMaxSteps, steps->size()); ++s)
                 {
                     const auto& st = steps->getReference(s);
                     if (! st.isObject()) continue;
