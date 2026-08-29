@@ -2361,6 +2361,9 @@ void SynthyEditor::buildRack()
         // control of its own. doReset() writes the defaults first and calls this after.
         d.onReset = [this] { seqSetCursor(0); };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
+        // 16.2: the red line after step LEN — "where does the figure end", at a glance.
+        d.lenMarkerStepPrefix  = "seqPitch";
+        d.lenMarkerLengthParam = P::seqLength;
         // MIDI ⇄ figure (15.8): the sequencer's own entry points, so "whole preset or just the
         // MIDI track?" is answered by WHERE the user clicks, before any dialog opens.
         d.headerActions.push_back({ "LOAD MIDI",

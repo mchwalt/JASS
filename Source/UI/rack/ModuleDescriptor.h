@@ -313,6 +313,13 @@ namespace rack
         };
         std::vector<HeaderAction> headerActions;
 
+        // Pattern-length marker (16.2): with both set, a red line is drawn after the N-th knob
+        // whose param id starts with `lenMarkerStepPrefix`, N = the current value of
+        // `lenMarkerLengthParam` — STEP SEQ's "where does the figure end" cue, the knob-row
+        // equivalent of PERC's dimmed beyond-LEN cells (dimming was rejected for knobs: grey
+        // already means REST there, and two grey reasons cannot be told apart).
+        juce::String lenMarkerStepPrefix, lenMarkerLengthParam;
+
         // Collapsible display (story 16.2, first slice — maintainer 2026-08-31): with a title
         // set, the header carries a latch that folds the module's Display cells away and
         // shrinks it to `collapsedSize`; expanding restores `sizeClass` and the rack re-packs

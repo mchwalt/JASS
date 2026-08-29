@@ -15,3 +15,5 @@ Clicking or turning a step's knob sounds it, so you can write the figure by ear.
 Replaces the ARPEGGIATOR: only one of the two can run, so switching this on switches that off.
 
 **MIDI import/export — the LOAD MIDI / SAVE MIDI buttons in this module's title bar.** LOAD MIDI opens a `.mid` transcription: velocities become accents, note lengths become gate/TIE/SLIDE, the loop's cycle is detected, and the figure latches to its most frequent note and plays. SAVE MIDI writes the figure back out. One asymmetry: a TIE that changes pitch exports as the 303's overlap and comes back as SLIDE — MIDI cannot carry the difference.
+
+A **red line** after a step marks the pattern's end (LEN): everything right of it is kept but does not play.
