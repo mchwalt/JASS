@@ -77,6 +77,13 @@ playable figures in seconds, and JASS figures travel to the DAW.
   `importMidiFigure` shows bilingual error boxes (unreadable / SMPTE / no notes) and clears
   the write cursor on success. MIDI export deliberately does NOT touch preset name or clean
   state; both choosers start at the system's last-used folder, not the Presets folder.
+- **Maintainer test round 1 (2026-08-30):** buttons found, export works; a RAW basic-pitch
+  whole-song dump imported as doubled-note hash. Two fixes: (1) free-time material is
+  REJECTED loudly (mean onset distance to the 1/16 grid > 0.2 steps => notQuantized, with
+  the way out named: quantize in the DAW / export a looped section; the dump measures
+  0.235, los_ninos.mid 0.0); (2) folding happens ONLY when a real cycle was detected —
+  a non-looping file now imports as its first 32 sixteenths (the contract's fallback)
+  instead of the whole piece piled mod 32.
 - **Verification**: builds clean; the import algorithm was mirrored 1:1 in Python and run
   against `D:\downloads\los_ninos.mid` → PPQ 480, tempo 115.0, 240 notes → period 24, root 34
   (Bb1), two classes (80/86 vs 98), gates exactly 87/36/41 (AC1 ✓, figure arrives rotated to
