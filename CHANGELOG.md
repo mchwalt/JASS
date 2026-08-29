@@ -11,6 +11,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **PERC carries 48 steps now too (story 16.2).** The grid grows to 3 bars of sixteenths —
+  matching the sequencer, and two Los Niños cycles line up against a 48-step drum pattern.
+  The module takes W24, four columns less than STEP SEQ: boxes pack denser than knobs, and
+  the lane-name column gave up the air it kept between the names and the module edge
+  (maintainer, by eye, 2026-08-31). Steps 33–48 register after every existing parameter (the same
+  append-only discipline as the sequencer's); old presets load bit-identically, COPY/x2 and
+  the lane strings in preset files simply span 48 now.
 - **STEP SEQ carries 48 steps now (story 16.2).** The module grows from 20 to 28 rack
   columns: two rows of 24 step knobs — 3 bars of sixteenths, or exactly two Los Niños
   cycles — with the knobs their usual size and the spacing a hair tighter than before

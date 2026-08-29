@@ -23,7 +23,7 @@ namespace rack
     //   (e.g. W3H1) here as ONE new case for the size-tuning pass.
     // A name ending in U{n} states the GRID HEIGHT in quarter units instead of content rows — the
     // two are separate since Story 7.4 (W28U6 = 28 columns, 2 content rows, 6 quarters = 176 px).
-    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2, W28U6, W28U7, W20U7, W4U7, W30U7 };
+    enum class SizeClass  { W2H1, W3H1, W4H1, W4H2, W5H1, W6H1, W7H1, W8H1, W8H2, W9H2, W9H3, W12H2, W16H2, W24H1, W24H2, W10H1, W12H1, W13H1, W14H1, W30H1, W30H2, W28H2, W20H2, W28U6, W28U7, W20U7, W4U7, W30U7, W24U7 };
     enum class ModuleType { Generator, Modulator, Processor };       // identity / colour tag
     // For live LFO rings (AD-8): the ring target IS the modulation target. Single source of truth
     // is ModTargets.h; ModTarget::Off means "no ring on this knob" (== LFOTarget::Off).
@@ -406,7 +406,8 @@ namespace rack
             // width is what keeps the cell above ~55 px. The AMT knob is unaffected (2 cells wide,
             // capped by the row height anyway); only the combos give up a few px each.
             case SizeClass::W30U7: return { 30, 2,  7, 72, KnobSize::Small };
-            case SizeClass::W20U7: return { 20, 2,  7, 40, KnobSize::Small };   // STEP SEQ, PERC
+            case SizeClass::W20U7: return { 20, 2,  7, 40, KnobSize::Small };   // STEP SEQ, PERC (until 16.2)
+            case SizeClass::W24U7: return { 24, 2,  7, 48, KnobSize::Small };   // PERC since 16.2: the 48-step grid packs denser than knobs, so it needs four columns less than STEP SEQ — and W24 pairs with ARP (W6) into one full row
             case SizeClass::W4U7:  return {  4, 2,  7, 12, KnobSize::Small };   // ADSR (knobs + curve)
             // STEP SEQ: 32 steps as 2 x 16 plus five globals = 19 cells per row; 20 columns is
             // the narrowest width at which such a cell still reaches the 62 px a knob wants.

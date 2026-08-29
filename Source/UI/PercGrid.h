@@ -75,7 +75,9 @@ public:
     // maintainer stumbled over ("mir ist unklar, wie ich das programmiere"): a step grid says what
     // is switched on, but not what it plays. Each row now carries the instrument its NOTE knob
     // resolves to, which also ties the knobs below to the rows above.
-    int labelWidth() const { return juce::jlimit (60, 130, getWidth() / 9); }
+    // Tighter since 16.2 (maintainer: the rows can start further left — the old column kept
+    // air between the names and the module edge that 48 steps can use better).
+    int labelWidth() const { return juce::jlimit (52, 100, getWidth() / 12); }
 
     void paint (juce::Graphics& g) override
     {

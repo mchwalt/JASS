@@ -129,11 +129,11 @@ namespace Parameters
         JASS_INDEXED_ID (percNote,  4, "percNote",  "")   // which instrument of the kit a lane fires
         JASS_INDEXED_ID (percLevel, 4, "percLevel", "")
         JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
-        JASS_INDEXED_ID (percStep1, 32, "percStep1_", "")
-        JASS_INDEXED_ID (percStep2, 32, "percStep2_", "")
-        JASS_INDEXED_ID (percStep3, 32, "percStep3_", "")
-        JASS_INDEXED_ID (percStep4, 32, "percStep4_", "")
-        // Lane (1..4) + step (1..32) -> id. Audio thread safe: pure array lookups, no String built.
+        JASS_INDEXED_ID (percStep1, 48, "percStep1_", "")
+        JASS_INDEXED_ID (percStep2, 48, "percStep2_", "")
+        JASS_INDEXED_ID (percStep3, 48, "percStep3_", "")
+        JASS_INDEXED_ID (percStep4, 48, "percStep4_", "")
+        // Lane (1..4) + step (1..48) -> id. Audio thread safe: pure array lookups, no String built.
         inline const juce::String& percStep (int lane, int step)
         {
             switch (juce::jlimit (1, 4, lane))
