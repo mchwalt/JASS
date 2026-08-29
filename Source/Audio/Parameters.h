@@ -112,10 +112,10 @@ namespace Parameters
         constexpr const char* seqLength = "seqLength";
         constexpr const char* seqGate   = "seqGate";     // ONE note length for the whole pattern
         constexpr const char* seqAccent = "seqAccent";   // ACCENT depth: what an accented step does (15.2)
-        JASS_INDEXED_ID (seqPitch, 32, "seqPitch", "")   // max index = StepSequencer::kMaxSteps
-        JASS_INDEXED_ID (seqStep,  32, "seqStep",  "")   // per-step on/off (off = rest)
-        JASS_INDEXED_ID (seqAcc,   32, "seqAcc",   "")   // per-step accent flag (15.2)
-        JASS_INDEXED_ID (seqSGate, 32, "seqSGate", "")   // per-step gate 5..100 %, 101=TIE, 102=SLIDE (15.7)
+        JASS_INDEXED_ID (seqPitch, 48, "seqPitch", "")   // max index = StepSequencer::kMaxSteps (48 since 16.2)
+        JASS_INDEXED_ID (seqStep,  48, "seqStep",  "")   // per-step on/off (off = rest)
+        JASS_INDEXED_ID (seqAcc,   48, "seqAcc",   "")   // per-step accent flag (15.2)
+        JASS_INDEXED_ID (seqSGate, 48, "seqSGate", "")   // per-step gate 5..100 %, 101=TIE, 102=SLIDE (15.7)
 
         // PERC (Story 16.1) — four percussion tracks rendered straight to the master bus. The step
         // grid is one indexed id PER LANE (a 2-D index would have to build a String on the audio
@@ -129,11 +129,11 @@ namespace Parameters
         JASS_INDEXED_ID (percNote,  4, "percNote",  "")   // which instrument of the kit a lane fires
         JASS_INDEXED_ID (percLevel, 4, "percLevel", "")
         JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
-        JASS_INDEXED_ID (percStep1, 32, "percStep1_", "")
-        JASS_INDEXED_ID (percStep2, 32, "percStep2_", "")
-        JASS_INDEXED_ID (percStep3, 32, "percStep3_", "")
-        JASS_INDEXED_ID (percStep4, 32, "percStep4_", "")
-        // Lane (1..4) + step (1..32) -> id. Audio thread safe: pure array lookups, no String built.
+        JASS_INDEXED_ID (percStep1, 48, "percStep1_", "")
+        JASS_INDEXED_ID (percStep2, 48, "percStep2_", "")
+        JASS_INDEXED_ID (percStep3, 48, "percStep3_", "")
+        JASS_INDEXED_ID (percStep4, 48, "percStep4_", "")
+        // Lane (1..4) + step (1..48) -> id. Audio thread safe: pure array lookups, no String built.
         inline const juce::String& percStep (int lane, int step)
         {
             switch (juce::jlimit (1, 4, lane))
@@ -297,7 +297,7 @@ namespace Parameters
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
-            for (int i = 1; i <= 32; ++i)       { seqPitch(i); seqStep(i); seqAcc(i); seqSGate(i); }
+            for (int i = 1; i <= 48; ++i)       { seqPitch(i); seqStep(i); seqAcc(i); seqSGate(i); }   // 48 since 16.2
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
             for (int i = 1; i <= 32; ++i)       { percStep1(i); percStep2(i); percStep3(i); percStep4(i); }
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)

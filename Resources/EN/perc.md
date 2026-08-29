@@ -1,4 +1,4 @@
-Four percussion tracks on a 32-step grid, played dry into the master bus. It runs as soon as the module is switched on — no key needed.
+Four percussion tracks on a 48-step grid, played dry into the master bus. It runs as soon as the module is switched on — no key needed.
 
 - **The grid** — **left click sets a step and sounds it**, right click clears one; dragging keeps going, so a row of hats is one gesture. Each row is named after the instrument it plays. Every fourth step is shaded; steps past LEN are dimmed and stay silent.
 - **KIT** — the sample set the tracks fire from, its own and independent of the SAMPLER's.

@@ -1,7 +1,7 @@
-Spielt eine 32-Schritt-Figur, die du selbst schreibst, transponiert durch die gespielte Taste. **Die erste Taste startet sie, und sie läuft weiter** — du musst nichts gedrückt halten. Eine neue Taste setzt die Figur auf diesen Grundton, Hoch / Runter verschieben sie um eine Oktave, und die **Leertaste stoppt** sie. Das Ausschalten des Moduls ebenfalls.
+Spielt eine 48-Schritt-Figur, die du selbst schreibst, transponiert durch die gespielte Taste. **Die erste Taste startet sie, und sie läuft weiter** — du musst nichts gedrückt halten. Eine neue Taste setzt die Figur auf diesen Grundton, Hoch / Runter verschieben sie um eine Oktave, und die **Leertaste stoppt** sie. Das Ausschalten des Moduls ebenfalls.
 
-- **1 … 32** — die Note des Schritts. Die Box zeigt die echte Tonhöhe (E1, C3 …), die der Schritt in der aktuellen Oktave der Klaviatur spielt — die Figur transponiert weiterhin mit der gespielten Taste. Der Schalter in der Ecke eines Knopfes schaltet den Schritt weiter: **an → akzentuiert (gefüllt: spielt härter, Filter öffnet) → aus (eine Pause)**.
-- **GATE-Knopf (Kopfzeile)** — schaltet dieselben 32 Knöpfe auf die **Länge** jedes Schritts um: 5–100 % des Schritts, dann **TIE** (in den nächsten Schritt gehalten, der ohne neuen Anschlag übernimmt) und **SLIDE** (dasselbe, gleitend in die nächste Note — die 303). Zweiter Klick schaltet zurück auf PITCH.
+- **1 … 48** — die Note des Schritts. Die Box zeigt die echte Tonhöhe (E1, C3 …), die der Schritt in der aktuellen Oktave der Klaviatur spielt — die Figur transponiert weiterhin mit der gespielten Taste. Der Schalter in der Ecke eines Knopfes schaltet den Schritt weiter: **an → akzentuiert (gefüllt: spielt härter, Filter öffnet) → aus (eine Pause)**.
+- **GATE-Knopf (Kopfzeile)** — schaltet dieselben 48 Knöpfe auf die **Länge** jedes Schritts um: 5–100 % des Schritts, dann **TIE** (in den nächsten Schritt gehalten, der ohne neuen Anschlag übernimmt) und **SLIDE** (dasselbe, gleitend in die nächste Note — die 303). Zweiter Klick schaltet zurück auf PITCH.
 - **SYNC** — Schrittlänge als Notenwert. Auf *Free* stellen, um stattdessen RATE zu benutzen.
 - **RATE** — Schritte pro Sekunde, wenn SYNC auf *Free* steht.
 - **LEN** — nach wie vielen Schritten das Muster wiederholt.
@@ -15,3 +15,5 @@ Beim Klicken oder Drehen erklingt der Schritt, du kannst die Figur also nach Geh
 Ersetzt den ARPEGGIATOR: es kann nur eines von beiden laufen, das Einschalten schaltet das andere aus.
 
 **MIDI-Import/-Export — die Knöpfe LOAD MIDI / SAVE MIDI in der Titelzeile dieses Moduls.** LOAD MIDI öffnet eine `.mid`-Transkription: Velocity wird zu Akzenten, Notenlängen zu Gate/TIE/SLIDE, der Zyklus des Loops wird erkannt, und die Figur latcht auf ihren häufigsten Ton und spielt. SAVE MIDI schreibt die Figur wieder heraus. Eine Asymmetrie: ein TIE mit Tonhöhenwechsel wird als 303-Überlappung exportiert und kommt als SLIDE zurück — MIDI kann den Unterschied nicht transportieren.
+
+Eine **rote Linie** hinter einem Schritt markiert das Pattern-Ende (LEN): alles rechts davon bleibt erhalten, spielt aber nicht.

@@ -1,7 +1,7 @@
-Plays a 32-step figure you write yourself, transposed by the key you play. **The first key starts it and it keeps running** — you do not have to hold anything. A new key moves the figure to that root, the Up / Down octave keys shift it by an octave, and **SPACE stops it**. Switching the module off stops it too.
+Plays a 48-step figure you write yourself, transposed by the key you play. **The first key starts it and it keeps running** — you do not have to hold anything. A new key moves the figure to that root, the Up / Down octave keys shift it by an octave, and **SPACE stops it**. Switching the module off stops it too.
 
-- **1 … 32** — each step's note. The box shows the real pitch (E1, C3 …) the step sounds at the keyboard's current octave — the figure still transposes with the key you play. The switch in a knob's corner cycles the step: **on → accented (filled: plays harder, filter opens) → off (a rest)**.
-- **GATE button (header)** — flips the same 32 knobs to each step's **length**: 5–100 % of the step, then **TIE** (held into the next step, which takes over without a new attack) and **SLIDE** (the same, gliding into the next note — the 303). Flip back to PITCH with a second click.
+- **1 … 48** — each step's note. The box shows the real pitch (E1, C3 …) the step sounds at the keyboard's current octave — the figure still transposes with the key you play. The switch in a knob's corner cycles the step: **on → accented (filled: plays harder, filter opens) → off (a rest)**.
+- **GATE button (header)** — flips the same 48 knobs to each step's **length**: 5–100 % of the step, then **TIE** (held into the next step, which takes over without a new attack) and **SLIDE** (the same, gliding into the next note — the 303). Flip back to PITCH with a second click.
 - **SYNC** — step length as a note division. Set it to *Free* to use RATE instead.
 - **RATE** — steps per second when SYNC is *Free*.
 - **LEN** — how many steps before the pattern repeats.
@@ -15,3 +15,5 @@ Clicking or turning a step's knob sounds it, so you can write the figure by ear.
 Replaces the ARPEGGIATOR: only one of the two can run, so switching this on switches that off.
 
 **MIDI import/export — the LOAD MIDI / SAVE MIDI buttons in this module's title bar.** LOAD MIDI opens a `.mid` transcription: velocities become accents, note lengths become gate/TIE/SLIDE, the loop's cycle is detected, and the figure latches to its most frequent note and plays. SAVE MIDI writes the figure back out. One asymmetry: a TIE that changes pitch exports as the 303's overlap and comes back as SLIDE — MIDI cannot carry the difference.
+
+A **red line** after a step marks the pattern's end (LEN): everything right of it is kept but does not play.

@@ -74,25 +74,31 @@ info** so nothing is hidden and every control explains itself.
   parameters. Sources: LFO 1–4 / envelope / velocity. Each routing has a bipolar
   amount, auto-enables its source + target module, and shows a live modulation ring.
 - **Poly glide** (mono/legato/poly), **arpeggiator** (up/down/up-down/random)
-- **STEP SEQ** — a 32-step sequencer (two rows of sixteen) that plays a figure you
-  write, transposed by the key you play. Per-step semitone offset and an on/off
-  switch (off = rest); one global GATE for note length, 1.0 holding each note into
-  the next step. Locked to the tempo like the LFOs and DELAY, or free-running. It
-  replaces the ARPEGGIATOR — both take over the held chord, so only one can run.
-  Point it at a drum map and the offsets pick the *instrument* instead of a pitch.
+- **STEP SEQ** — a 48-step sequencer (two rows of twenty-four; a red line marks where
+  the pattern ends) that plays a figure you write, transposed by the key you play.
+  Per-step semitone offset and a three-state corner switch (off = rest, on,
+  **accented** — the ACCENT knob sets how much harder an accent plays and how far it
+  opens the filter); the **GATE** header latch flips the same knobs to each step's
+  length, from staccato through **TIE** to the 303's **SLIDE**. Locked to the tempo
+  like the LFOs and DELAY, or free-running. It replaces the ARPEGGIATOR — both take
+  over the held chord, so only one can run.
   **The first key starts it and it keeps running** — a new key moves it, the octave
   keys shift it, SPACE stops it; a patch saved while it plays comes back playing.
   **Write the figure by playing it**: Reset arms step entry, a ring shows which step
   is waiting, every key you press is written there, SPACE leaves a rest. Clicking or
   turning a step sounds it too — over the keyboard's current C, so the whole figure
   can be written by ear. While it runs, a lit dot marks the step being played and the
-  on-screen keyboard shows the note.
-- **PERC** — four percussion tracks on a 32-step grid with their own kit, their own
+  on-screen keyboard shows the note. **LOAD MIDI / SAVE MIDI** in the title bar turn
+  a `.mid` transcription into the playing figure (velocities become accents, note
+  lengths become gates/ties/slides, a looped file is folded to its cycle) and write
+  the figure back out for the DAW.
+- **PERC** — four percussion tracks on a 48-step grid with their own kit, their own
   clock and a level per track, played **dry into the master bus**. It runs as soon as
   you switch it on, no key needed, and the drums are the clock: a STEP SEQ figure
-  started from silence enters on the next start of the drum pattern. Deliberately not
-  a second note sequencer — JASS is monotimbral, so drums sent as MIDI would be
-  dragged through the patch's filter and effects.
+  started from silence enters on the next start of the drum pattern. **COPY** stamps
+  a step column onto any number of steps, **x2** doubles the pattern behind itself.
+  Deliberately not a second note sequencer — JASS is monotimbral, so drums sent as
+  MIDI would be dragged through the patch's filter and effects.
 
 **Processing & effects**
 - **Biquad filter** (lowpass/highpass, resonance) + **formant filter**

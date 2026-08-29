@@ -134,11 +134,15 @@ namespace rack
         // irrelevant knob never flashes up live before greying out.
         updateCondKnobs();
 
+        // Pattern-length marker (16.2): the LEN param whose value places the red line.
+        if (desc.lenMarkerLengthParam.isNotEmpty())
+            markerLen = apvts.getRawParameterValue (desc.lenMarkerLengthParam);
+
         // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
-        // dynamic active state — an enable param, a derived predicate, dependent combos, or a
-        // per-knob relevance predicate.
+        // dynamic active state — an enable param, a derived predicate, dependent combos, a
+        // per-knob relevance predicate, or the pattern-length marker.
         if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty()
-            || ! condKnobs.empty() || ! markedKnobs.empty())
+            || ! condKnobs.empty() || ! markedKnobs.empty() || markerLen != nullptr)
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -224,6 +228,27 @@ namespace rack
             else
                 b->onClick = act.onClick;
             addAndMakeVisible (*b);
+        }
+
+        // Display fold latch (16.2): toggles the module between its full size (Display cells
+        // visible) and collapsedSize. Toggle ON = shown, so the lit button reads as "the curve
+        // is up". The rack is told through onFootprintChanged and re-packs live.
+        if (desc.collapseTitle.isNotEmpty())
+        {
+            collapsedState = desc.startCollapsed;
+            collapseBtn = std::make_unique<juce::TextButton> (desc.collapseTitle);
+            collapseBtn->setClickingTogglesState (true);
+            collapseBtn->setToggleState (! collapsedState, juce::dontSendNotification);
+            collapseBtn->setTooltip ("Show or fold the " + desc.collapseTitle.toLowerCase()
+                                     + " display; the rack re-packs around it");
+            collapseBtn->setWantsKeyboardFocus (false);
+            collapseBtn->onClick = [this]
+            {
+                collapsedState = ! collapseBtn->getToggleState();
+                applyCollapsed();
+                if (onFootprintChanged) onFootprintChanged();
+            };
+            addAndMakeVisible (*collapseBtn);
         }
 
         // Online-help info icon (Story 6.1): shown only when a help text exists for this
@@ -338,6 +363,11 @@ namespace rack
 
                 cells.push_back ({ s, makeCaption (ownedCaptions, k->label), juce::jmax (1, k->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
+
+                // Pattern-length marker (16.2): remember the step-knob cells in figure order —
+                // bodyOrder lists them musically, so index LEN-1 IS the figure's last step.
+                if (desc.lenMarkerStepPrefix.isNotEmpty() && k->paramId.startsWith (desc.lenMarkerStepPrefix))
+                    markerCells.push_back ((int) cells.size() - 1);
 
                 // Mode-dependent knob (e.g. STEREO WIDTH/TIME outside Pseudo-Stereo): the timer
                 // disables + dims this one knob while the module stays live. Applied there, not
@@ -622,10 +652,27 @@ namespace rack
                 if (disp->component != nullptr)   // null-safe (1.1 review carry-over)
                 {
                     addAndMakeVisible (*disp->component);
-                    cells.push_back ({ disp->component, nullptr, juce::jmax (1, disp->slots) });
+                    cells.push_back ({ disp->component, nullptr, juce::jmax (1, disp->slots),
+                                       nullptr, /*display*/ true });
                 }
             }
         }
+
+        // Apply the fold's starting state (16.2) once the cells exist.
+        if (desc.collapseTitle.isNotEmpty())
+            applyCollapsed();
+    }
+
+    // Display fold (16.2): hide/show every Display cell and re-flow the body. resized() is
+    // called explicitly because the rack may hand this frame the SAME bounds (today the
+    // neighbouring modules keep the row tall), and JUCE skips resized() when nothing moved.
+    void ModuleFrame::applyCollapsed()
+    {
+        for (auto& cell : cells)
+            if (cell.display && cell.widget != nullptr)
+                cell.widget->setVisible (! collapsedState);
+        resized();
+        repaint();
     }
 
     void ModuleFrame::doReset()
@@ -689,21 +736,29 @@ namespace rack
         // order reads left-to-right on screen (removeFromRight fills right-to-left).
         for (int i = actionBtns.size(); --i >= 0;)
             actionBtns[i]->setBounds (header.removeFromRight (72).reduced (2, 1));
+        // Display fold latch (16.2), same slot family as the row toggle.
+        if (collapseBtn != nullptr)
+            collapseBtn->setBounds (header.removeFromRight (52).reduced (2, 1));
         header.removeFromLeft (11);   // room for the status-LED dot painted at the header's left edge
         titleLabel.setBounds (header);
 
         // --- body slot grid (the single body-layout site) ---
         auto body = r.reduced (5, 4);
-        const auto spec = sizeClassSpec (desc.sizeClass);
+        // The FOLDED size when the display is away (16.2) — the fold changes the flow: fewer
+        // content rows, and the Display cells drop out of the slot accounting below entirely,
+        // so the remaining knobs spread exactly as if the module had been born this size.
+        const auto spec = sizeClassSpec (effectiveSizeClass());
 
         // The body fills the module width from its CONTENT, decoupled from the grid column
         // span AND from the knob size (PROTOTYPE): lay the content slots (combo=2, display=N,
         // else 1) across `units` rows. nCols is derived so the cells fill the full width with
         // no trailing empty cells — the cause of the old "module doesn't use its space" look.
         const int units = juce::jmax (1, spec.units);
+        auto folded = [this] (const Cell& cell) { return collapsedState && cell.display; };   // 16.2
         int rawTotal = 0;
         for (auto& cell : cells)
-            rawTotal += juce::jmax (1, cell.slots);
+            if (! folded (cell))
+                rawTotal += juce::jmax (1, cell.slots);
         rawTotal = juce::jmax (1, rawTotal);
         const int nCols = juce::jmax (1, (rawTotal + units - 1) / units);   // ceil(rawTotal / units)
 
@@ -712,7 +767,8 @@ namespace rack
         // leave a phantom gap. (deferred 1.2 review item)
         int total = 0;
         for (auto& cell : cells)
-            total += juce::jlimit (1, nCols, cell.slots);
+            if (! folded (cell))
+                total += juce::jlimit (1, nCols, cell.slots);
         total = juce::jmax (1, total);
         const int nRows = (total + nCols - 1) / nCols;
         const int cellW = body.getWidth()  / nCols;
@@ -740,6 +796,8 @@ namespace rack
         int col = 0, row = 0;
         for (auto& cell : cells)
         {
+            if (folded (cell))
+                continue;   // 16.2: a folded Display claims no slot — the knobs close the gap
             const int span = juce::jlimit (1, nCols, cell.slots);
             if (col + span > nCols) { col = 0; ++row; }
 
@@ -891,6 +949,24 @@ namespace rack
 
     void ModuleFrame::paintOverChildren (juce::Graphics& g)
     {
+        // Pattern-length marker (16.2, maintainer: "eine rote Trennlinie hinter das letzte
+        // aktive Element"): a red line on the right edge of the LEN-th step knob, so where the
+        // figure wraps is visible at a glance — the knob-row counterpart of PERC's dimmed
+        // beyond-LEN cells. Red is a POSITION here, not a colour code, so it stays readable
+        // for red-green colour vision too.
+        if (! markerCells.empty() && markerLen != nullptr)
+        {
+            const int len = juce::jlimit (1, (int) markerCells.size(), (int) markerLen->load());
+            const auto& cell = cells[(size_t) markerCells[(size_t) len - 1]];
+            if (cell.widget != nullptr)
+            {
+                auto b = cell.widget->getBounds();
+                if (cell.caption != nullptr) b = b.getUnion (cell.caption->getBounds());
+                g.setColour (juce::Colour (0xffd64541));
+                g.fillRect (b.getRight() - 1, b.getY(), 3, b.getHeight());
+            }
+        }
+
         // Write cursor (Story 15.4): a ring around the ONE step the keyboard will write next. Drawn
         // in the module's identity colour, brightened — the rack's other marks are a green dot
         // (active) and a grey ring (off), so this cannot be mistaken for either. Painted before the
@@ -1004,6 +1080,13 @@ namespace rack
 
     void ModuleFrame::timerCallback()
     {
+        // Pattern-length marker (16.2): poll LEN and repaint only on a real change.
+        if (markerLen != nullptr)
+        {
+            const int now = (int) markerLen->load();
+            if (now != lastMarkerLen) { lastMarkerLen = now; repaint(); }
+        }
+
         // Dependent combos (MOD MATRIX): when a watched param (MODULE) changes, let the descriptor
         // clamp the dependent param (PARAM) if it is now out of range, then re-list the PARAM combo.
         for (size_t i = 0; i < desc.comboDeps.size(); ++i)

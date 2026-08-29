@@ -7,15 +7,17 @@
 // ARPEGGIATOR (which can only re-order the notes of a held chord and runs free in Hz), each step
 // carries its own semitone offset and gate, and the clock rides on the tempo.
 //
-// Body layout: 32 pitch knobs + SYNC (2 slots), RATE, LEN, GATE and ACCENT = 38 content slots over
-// 2 rack units => 19 cells per row. Two rows of SIXTEEN steps, not one long row (user 2026-08-10) —
-// and that is the cheaper shape in every direction: 24 steps in a single row needed the full W30 to
-// keep 62 px knobs, while 32 steps split over two rows fit into W20. More steps, ten columns less.
-// The order below is load-bearing:
-//     row 1 = pitch  1..16 | SYNC (2 cells) | RATE
-//     row 2 = pitch 17..32 | LEN | GATE | ACCENT   (15.2 filled the trailing cell)
-// so step 17 sits under step 1 and the bar structure is readable. Interleaving the globals with the
-// steps, or listing all 32 pitches first, scatters the second half across the wrong columns.
+// Body layout (16.2: 48 steps at W28): 48 pitch knobs + SYNC (2 slots), RATE, LEN, GATE and
+// ACCENT = 54 content slots over 2 rack units => 27 cells per row on W28. A first cut used W30
+// with a spacer cell between figure and globals; the maintainer saw the gap and asked for the
+// tighter shape instead ("Breite 28 sollte möglich sein", 2026-08-31) — the cell width lands a
+// hair under the old 19-on-W20 and the knob itself is the fixed Small size either way.
+//     row 1 = pitch  1..24 | SYNC (2 cells) | RATE
+//     row 2 = pitch 25..48 | LEN | GATE | ACCENT
+// DISPLAY order is bodyOrder below; the params vector keeps the historical REGISTRATION order
+// (steps 1..32 + globals as shipped, steps 33..48 appended at the end) — the append-only
+// contract, so old DAW state keeps its parameter indices. That split is the whole reason
+// ModuleSpec::bodyOrder exists.
 //
 // Each step has an ON switch in the top-right corner of its own knob — off is a rest, and the knob
 // greys out the way every other inactive control in the rack does. It lives in the knob's cell, not
@@ -32,7 +34,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "stepseq"; m.title = "STEP SEQ"; m.persistObject = "StepSeq"; m.enableParamId = "seqOn";
-        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W20U7;   // 207 px: two knob rows at the standard size
+        m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W28U7;   // 16.2: two rows of 24 steps, 27 cells per row
         // Visible by default (maintainer 2026-08-11), overriding the "special-purpose modules stay
         // hidden until used" rule this shipped with. It is a deliberate trade, made with the price
         // on the table: a factory-VISIBLE module always counts towards the may-appear worst case
@@ -73,19 +75,16 @@ namespace Modules
             sg.showInBody = false;
             m.params.push_back (sg);
         };
-        const int half = StepSequencer::kMaxSteps / 2;
-
-        // ---- ROW 1: steps 1..16, then SYNC and RATE -------------------------------------------
-        for (int s = 1; s <= half; ++s) pitchParam (s);
+        // ---- REGISTRATION order: exactly as shipped through 15.7, then 33..48 appended --------
+        // (steps 1..16, SYNC, RATE, steps 17..32, LEN, GATE, ACCENT — do not reorder!)
+        for (int s = 1; s <= 16; ++s) pitchParam (s);
         // SYNC is fed VERBATIM from SyncDivision::kNames, as DELAY and the LFOs do; retyping that
         // list is how this project has produced combo-index bugs twice. Default "1/8": the measured
         // reference runs eighths at 156 BPM (192.3 ms per step against a measured 192.0).
         m.params.push_back ({ "seqSync", "SyncDiv", "SYNC", ParamSpec::Kind::Choice, {}, 4.0f, SyncDivision::kNames });
         m.params.push_back ({ "seqRate", "Rate", "RATE", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.5f, 32.0f, 0.1f), 5.2f });   // steps/s when SYNC = Free
-
-        // ---- ROW 2: steps 17..32 under them, then LEN and GATE --------------------------------
-        for (int s = half + 1; s <= StepSequencer::kMaxSteps; ++s) pitchParam (s);
+        for (int s = 17; s <= 32; ++s) pitchParam (s);
         m.params.push_back ({ "seqLength", "Length", "LEN", ParamSpec::Kind::Int,
                               juce::NormalisableRange<float> (1.0f, (float) StepSequencer::kMaxSteps, 1.0f),
                               16.0f });   // default 16: one bar of eighths, the common case
@@ -93,11 +92,18 @@ namespace Modules
                               juce::NormalisableRange<float> (0.05f, 1.0f, 0.01f), 1.0f });
         // ACCENT (15.2): what an accented step DOES — how much its higher velocity opens the
         // filter and gains the note up. One knob for the whole pattern (the TD-3/808 model: flags
-        // per step, depth global). It takes row 2's one previously empty trailing cell, so the
-        // module's footprint is unchanged. 0 = accents inaudible; presets saved before 15.2 have
+        // per step, depth global). 0 = accents inaudible; presets saved before 15.2 have
         // no accents anyway, so the audible default only greets NEW figures.
         m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
+        // 16.2: steps 33..48 — REGISTERED here at the end (append-only), DISPLAYED in place below.
+        for (int s = 33; s <= StepSequencer::kMaxSteps; ++s) pitchParam (s);
+
+        // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
+        for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate" });
+        for (int s = 25; s <= StepSequencer::kMaxSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent" });
         return m;
     }
 }

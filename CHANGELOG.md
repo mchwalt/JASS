@@ -10,6 +10,37 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.12] – 2026-08-31
+
+### Added
+- **STEP SEQ shows where the figure ends.** A red line after step LEN — the knob-row
+  counterpart of PERC's dimmed beyond-LEN cells (dimming was no option here: a grey knob
+  already means a rest, and two grey reasons cannot be told apart). It moves live with the
+  LEN knob.
+- **PERC carries 48 steps now too (story 16.2).** The grid grows to 3 bars of sixteenths —
+  matching the sequencer, and two Los Niños cycles line up against a 48-step drum pattern.
+  The module takes W24, four columns less than STEP SEQ: boxes pack denser than knobs, and
+  the lane-name column gave up the air it kept between the names and the module edge
+  (maintainer, by eye, 2026-08-31). Steps 33–48 register after every existing parameter (the same
+  append-only discipline as the sequencer's); old presets load bit-identically, COPY/x2 and
+  the lane strings in preset files simply span 48 now.
+- **STEP SEQ carries 48 steps now (story 16.2).** The module grows from 20 to 28 rack
+  columns: two rows of 24 step knobs — 3 bars of sixteenths, or exactly two Los Niños
+  cycles — with the knobs their usual size and the spacing a hair tighter than before
+  (maintainer's pick over a full-width variant whose spacer cell read as wasted air). Steps 33–48 are
+  REGISTERED after every existing parameter — the append-only contract, old DAW state keeps
+  its indices — but DISPLAYED in musical order via the new `ModuleSpec::bodyOrder`, which
+  exists precisely to decouple those two orders. Old presets load bit-identically (new steps
+  default to rests); the accent row, the GATE/TIE/SLIDE row, MIDI import/export and the write
+  cursor all extend across the new steps.
+- **The ADSR curve folds away — and starts folded (story 16.2).** A CURVE latch in the
+  module's title bar shows or hides the envelope display; folded, the module is just its
+  knob row, and the rack re-packs live — the modules below shift up, and back down when the
+  curve returns. Since the sequencers took the width, ADSR lives among the flat modulators
+  and ships folded (the curve is a look-up, not a thing to stare at). The fold is view
+  state, never part of a preset, and the window's height budget always counts the expanded
+  size, so unfolding can never overflow it.
+
 ## [2026.08.11] – 2026-08-30
 
 ### Added

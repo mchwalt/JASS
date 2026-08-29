@@ -2255,10 +2255,24 @@ void SynthyEditor::buildRack()
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
     // curve), a Display body element (AD-5), owned by rackOwned so its lifetime is tied
-    // to the editor.
-    add(Rack::Zone::Modulation, SizeClass::W4U7, ModuleType::Modulator, "ENVELOPE - ADSR", P::adsrOn,
-        { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
-          Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } });
+    // to the editor. The curve FOLDS behind the header's CURVE latch (16.2, maintainer
+    // 2026-08-31): folded the module is one knob row (W4H1) and the rack re-packs live.
+    // It starts FOLDED — since the sequencers took the width, ADSR lives among the flat
+    // modulators, and the curve is a look-up, not a thing to stare at (maintainer's call).
+    {
+        ModuleDescriptor d;
+        d.sizeClass = SizeClass::W4U7; d.type = ModuleType::Modulator;
+        d.title = "ENVELOPE - ADSR";
+        d.id = d.title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
+        d.defaultZone = Rack::Zone::Modulation;
+        d.enableParam = P::adsrOn;
+        d.body = { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
+                   Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } };
+        d.collapseTitle = "CURVE";
+        d.collapsedSize = SizeClass::W4H1;
+        d.startCollapsed = true;
+        addRackModule(std::move(d));
+    }
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
     // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
     for (int i = 1; i <= kNumLFOs; ++i)
@@ -2347,6 +2361,9 @@ void SynthyEditor::buildRack()
         // control of its own. doReset() writes the defaults first and calls this after.
         d.onReset = [this] { seqSetCursor(0); };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
+        // 16.2: the red line after step LEN — "where does the figure end", at a glance.
+        d.lenMarkerStepPrefix  = "seqPitch";
+        d.lenMarkerLengthParam = P::seqLength;
         // MIDI ⇄ figure (15.8): the sequencer's own entry points, so "whole preset or just the
         // MIDI track?" is answered by WHERE the user clicks, before any dialog opens.
         d.headerActions.push_back({ "LOAD MIDI",

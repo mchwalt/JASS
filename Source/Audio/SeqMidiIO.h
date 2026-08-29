@@ -6,6 +6,7 @@
 #include "Parameters.h"
 #include "PresetIO.h"             // setPresetLoading / applySeqLatchRoot / seqLatchRoot hooks
 #include "../DSP/SyncDivision.h"  // export: one step lasts what the SEQ's SYNC says
+#include "../DSP/StepSequencer.h" // kMaxSteps (48 since 16.2)
 
 // STEP SEQ ⇄ Standard MIDI File (story 15.8). Import turns a .mid transcription (Los Niños,
 // Der Mussolini, basic-pitch output) into the running figure; export writes the figure back
@@ -22,7 +23,7 @@
 //     overlapping the NEXT note-on ⇒ SLIDE — the 303 convention. Ending exactly ON the next
 //     onset is a plain 100 % step (legato retrigger — DAF), NOT a tie.
 //   · Cycle detection: a transcription loops its figure many times. The smallest period p
-//     (2..32 steps, at least two full cycles seen) is the figure; velocities and durations
+//     (2..48 steps, at least two full cycles seen) is the figure; velocities and durations
 //     are FOLDED across the cycles (median), which also averages out transcription noise.
 //   · Root = the figure's most frequent note (the pedal). It lands in the LATCH, so an
 //     imported figure starts playing exactly like a loaded sequencer preset.
@@ -145,9 +146,9 @@ namespace SeqMidiIO
 
         // Cycle detection on positions + notes only (velocity and duration wobble per pass in a
         // real transcription — they are folded below instead of compared here).
-        int period = juce::jmin (span, 32);
+        int period = juce::jmin (span, StepSequencer::kMaxSteps);
         bool looped = false;
-        for (int p = 2; p <= 32 && p < span; ++p)
+        for (int p = 2; p <= StepSequencer::kMaxSteps && p < span; ++p)
         {
             if (span < 2 * p) break;   // need at least two full cycles to trust a period
             bool ok = true;
@@ -169,9 +170,9 @@ namespace SeqMidiIO
         {
             double end = 1.0;
             for (auto& [s, e] : grid)
-                if (s < 32)
+                if (s < StepSequencer::kMaxSteps)
                     end = juce::jmax (end, (double) s + juce::jmax (1.0, e.lenSteps));
-            period = juce::jlimit (1, 32, (int) std::ceil (end - 0.1));
+            period = juce::jlimit (1, StepSequencer::kMaxSteps, (int) std::ceil (end - 0.1));
         }
 
         // Fold every cycle onto the figure: median duration, all velocities kept for clustering.
@@ -245,7 +246,7 @@ namespace SeqMidiIO
         // Write the figure — inside the preset-loading bracket (PR #60): couplings silent,
         // voices killed on both edges, so half-applied steps never sound.
         if (PresetIO::setPresetLoading) PresetIO::setPresetLoading (true);
-        for (int s = 1; s <= 32; ++s)   // full reset first: import replaces the WHOLE figure
+        for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)   // full reset first: import replaces the WHOLE figure
         {
             const int q = s - 1;
             setRaw (a, Parameters::ID::seqStep  (s), on.count (q)    ? 1.0f : 0.0f);
@@ -288,7 +289,7 @@ namespace SeqMidiIO
         const double beats     = SyncDivision::isSynced (syncIdx) ? SyncDivision::beatsPerCycle (syncIdx) : 0.25;
         const int    stepTicks = (int) std::llround (ppq * beats);
 
-        const int len  = juce::jlimit (1, 32, (int) raw (Parameters::ID::seqLength));
+        const int len  = juce::jlimit (1, StepSequencer::kMaxSteps, (int) raw (Parameters::ID::seqLength));
         const int root = PresetIO::seqLatchRoot && PresetIO::seqLatchRoot() >= 0
                              ? PresetIO::seqLatchRoot() : 48;   // C3 — the same fallback the preset writer uses
 

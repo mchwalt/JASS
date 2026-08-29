@@ -1,4 +1,4 @@
-Vier Perkussionsspuren auf einem 32-Schritt-Raster, trocken auf den Master-Bus. Läuft, sobald das Modul eingeschaltet ist — ohne Taste.
+Vier Perkussionsspuren auf einem 48-Schritt-Raster, trocken auf den Master-Bus. Läuft, sobald das Modul eingeschaltet ist — ohne Taste.
 
 - **Das Raster** — **Linksklick setzt einen Schritt und spielt ihn**, Rechtsklick löscht ihn; Ziehen macht weiter, eine HiHat-Reihe ist also eine Geste. Jede Zeile trägt den Namen ihres Instruments. Jeder vierte Schritt ist hinterlegt; Schritte hinter LEN sind gedimmt und bleiben stumm.
 - **KIT** — das Sample-Set, aus dem die Spuren spielen; eigenes Set, unabhängig vom SAMPLER.
