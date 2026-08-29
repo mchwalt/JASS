@@ -7,13 +7,13 @@
 // ARPEGGIATOR (which can only re-order the notes of a held chord and runs free in Hz), each step
 // carries its own semitone offset and gate, and the clock rides on the tempo.
 //
-// Body layout: 32 pitch knobs + SYNC (2 slots), RATE, LEN and GATE = 37 content slots over 2 rack
-// units => 19 cells per row. Two rows of SIXTEEN steps, not one long row (user 2026-08-10) — and
-// that is the cheaper shape in every direction: 24 steps in a single row needed the full W30 to
+// Body layout: 32 pitch knobs + SYNC (2 slots), RATE, LEN, GATE and ACCENT = 38 content slots over
+// 2 rack units => 19 cells per row. Two rows of SIXTEEN steps, not one long row (user 2026-08-10) —
+// and that is the cheaper shape in every direction: 24 steps in a single row needed the full W30 to
 // keep 62 px knobs, while 32 steps split over two rows fit into W20. More steps, ten columns less.
 // The order below is load-bearing:
 //     row 1 = pitch  1..16 | SYNC (2 cells) | RATE
-//     row 2 = pitch 17..32 | LEN | GATE          (one trailing cell stays empty)
+//     row 2 = pitch 17..32 | LEN | GATE | ACCENT   (15.2 filled the trailing cell)
 // so step 17 sits under step 1 and the bar structure is readable. Interleaving the globals with the
 // steps, or listing all 32 pitches first, scatters the second half across the wrong columns.
 //
@@ -43,9 +43,13 @@ namespace Modules
 
         m.params.push_back ({ "seqOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 
-        // Each step contributes TWO params: the pitch knob and its on/off. The switch is declared
-        // with showInBody = false — it must not claim a grid cell, the editor pins it into the
-        // corner of its knob (ModuleDescriptor::Knob::toggleParamId).
+        // Each step contributes FOUR params: the pitch knob, its on/off, its ACCENT (15.2), and
+        // its GATE (15.7). The two switches are declared with showInBody = false — they must not
+        // claim a grid cell; the editor pins them into the corner of the knob as ONE three-state
+        // switch (ModuleDescriptor::Knob::toggleParamId + accentParamId: off → on → accented, the
+        // TR-909's second-press gesture). The gate is showInBody = false too: it shares the pitch
+        // knob's CELL via the ROW toggle (Knob::altParamId) — the BeatStep's "the knob row cycles
+        // its meaning" gesture, so 32 gates cost no rack space either.
         auto pitchParam = [&m] (int s)
         {
             m.params.push_back ({ "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
@@ -55,6 +59,19 @@ namespace Modules
                            ParamSpec::Kind::Bool, {}, 1.0f };
             on.showInBody = false;
             m.params.push_back (on);
+            ParamSpec acc { "seqAcc" + juce::String (s), "Accent" + juce::String (s), "",
+                            ParamSpec::Kind::Bool, {}, 0.0f };   // plain is the default — old figures unchanged
+            acc.showInBody = false;
+            m.params.push_back (acc);
+            // 15.7: per-step gate as ONE continuum (the BeatStep model): 5..100 = percent of the
+            // step (scaled by the global GATE), 101 = TIE (held through the boundary, the next
+            // step takes over without a retrigger), 102 = SLIDE (like TIE, but the pitch glides —
+            // the 303). Default 100 ⇒ exactly the pre-15.7 behaviour, so old figures are untouched.
+            ParamSpec sg { "seqSGate" + juce::String (s), "Gate" + juce::String (s), "",
+                           ParamSpec::Kind::Int,
+                           juce::NormalisableRange<float> (5.0f, 102.0f, 1.0f), 100.0f };
+            sg.showInBody = false;
+            m.params.push_back (sg);
         };
         const int half = StepSequencer::kMaxSteps / 2;
 
@@ -74,6 +91,13 @@ namespace Modules
                               16.0f });   // default 16: one bar of eighths, the common case
         m.params.push_back ({ "seqGate", "Gate", "GATE", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.05f, 1.0f, 0.01f), 1.0f });
+        // ACCENT (15.2): what an accented step DOES — how much its higher velocity opens the
+        // filter and gains the note up. One knob for the whole pattern (the TD-3/808 model: flags
+        // per step, depth global). It takes row 2's one previously empty trailing cell, so the
+        // module's footprint is unchanged. 0 = accents inaudible; presets saved before 15.2 have
+        // no accents anyway, so the audible default only greets NEW figures.
+        m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
+                              juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
         return m;
     }
 }

@@ -3,6 +3,7 @@
 #include <array>
 #include "Parameters.h"
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
+#include "../DSP/ModMatrixCatalog.h"     // v9 "Slots": generated ParamName (the catalog is dependency-free by design)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 #include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
 #include "Samples.h"       // embedded shipped SAMPLER examples (Story 12.1)
@@ -36,7 +37,17 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 6;   // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
+    constexpr int kFormatVersion = 10;  // v10 = every field is ALWAYS written, defaults included
+                                        //       (maintainer 2026-08-29: "beim Lesen kenne ich die
+                                        //       Defaults nicht" — a terse file is only terse for the
+                                        //       writer). Readers still accept omissions (missing ⇒
+                                        //       default), only the writer stopped producing them.
+                                        // v9 = PERC lanes and MOD MATRIX routings become arrays
+                                        //      ("Lanes" / "Slots" — structure only, values unchanged;
+                                        //      same cure the v7 STEP SEQ "Steps" array applied).
+                                        // v8 = step objects gain "Gate" (5..100 %, "TIE", "SLIDE"; 15.7).
+                                        // v7 = StepSeq steps as an ARRAY of note objects + accent (15.2).
+                                        // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
                                         // v5 = MOD MATRIX DEST split into MODULE + PARAM (per-OSC targets).
                                         // v4 = LFO built-in target folded into matrix slots.
                                         // v3 = nested-per-module. v<3 = flat (legacy).
@@ -346,6 +357,20 @@ namespace PresetIO
     inline std::function<int()>     seqLatchRoot;
     inline std::function<void(int)> applySeqLatchRoot;
 
+    // The UI's way back to "as loaded" (maintainer 2026-08-26): a parameter's NORMALISED value in
+    // the clean snapshot the processor keeps for the modified-star — i.e. what the loaded (or last
+    // saved) preset gave it — or -1 when no clean baseline exists (a modified working state
+    // restored from LiveState). ModuleFrame maps a knob's double-click onto it.
+    inline std::function<float(const juce::String& paramId)> presetBaseline01;
+
+    // Preset-load bracket. A saved preset is a snapshot taken AFTER every parameter coupling
+    // already ran, so applyVar must land it VERBATIM: the processor silences its couplings
+    // (matrix auto-enable, ARP/SEQ exclusion, CROSS-MOD) while this reports true and drops their
+    // auto-enable memories — carried across a load, those made the result depend on the PREVIOUS
+    // patch (presets needed two or three loads to arrive intact, maintainer 2026-08-23).
+    // Unset (plugin build without the hook, tests): loads behave as before.
+    inline std::function<void(bool)> setPresetLoading;
+
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
     inline void preloadSamples(std::function<bool()> shouldAbort = {})
@@ -499,6 +524,113 @@ namespace PresetIO
                 if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
                     mod->setProperty("LatchRoot", n);
 
+        // STEP SEQ steps as an ARRAY of note objects (FormatVersion 7, story 15.2) — a figure in
+        // the file reads as music instead of as a knob dump. Replaces the flat Pitch1/Step1/…
+        // keys the spec pass wrote above. Per step: "On", "Note" — the ABSOLUTE MIDI note,
+        // canonical (maintainer's design 2026-08-24; the key name was reserved when the Comment
+        // field landed) — "Name", its spelled form, generated purely for the reader's eyes (the
+        // loader ignores it, so number and name can never diverge), and "Accent" (15.2, omitted
+        // when plain so the common case stays terse). Absolute pitch is resolved against the
+        // latch root written just above — or C3 (48), the keyboard's default C, for a patch saved
+        // without a running figure. applyVar reverses the same rule, so offsets round-trip
+        // exactly and the figure still transposes with the played key.
+        if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
+        {
+            const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
+            juce::Array<juce::var> steps;
+            for (int s = 1; s <= 32; ++s)   // 32 = StepSequencer::kMaxSteps (= the JASS_INDEXED_ID cap)
+            {
+                auto* st = new juce::DynamicObject();
+                const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
+                st->setProperty("On",   *a.getRawParameterValue(ID::seqStep(s)) > 0.5f);
+                st->setProperty("Note", note);
+                st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
+                // Written even when false/100 (v10): a field the file omits forces the reader to
+                // know the default by heart — the maintainer reads these files. Loaders still
+                // treat a missing field as the default, so older terse files load unchanged.
+                st->setProperty("Accent", *a.getRawParameterValue(ID::seqAcc(s)) > 0.5f);
+                // v8 (15.7): the step's gate — a percent of the step, or the two values past the
+                // top of that continuum (100 = exactly the pre-15.7 behaviour).
+                const int sg = (int) *a.getRawParameterValue(ID::seqSGate(s));
+                if      (sg >= 102) st->setProperty("Gate", "SLIDE");
+                else if (sg == 101) st->setProperty("Gate", "TIE");
+                else                st->setProperty("Gate", sg);
+                steps.add(juce::var(st));
+                mod->removeProperty("Pitch"  + juce::String(s));
+                mod->removeProperty("Step"   + juce::String(s));
+                mod->removeProperty("Accent" + juce::String(s));
+                mod->removeProperty("Gate"   + juce::String(s));   // numbered only — the GLOBAL "Gate" stays
+            }
+            mod->setProperty("Steps", juce::var(steps));
+        }
+
+        // PERC lanes as an ARRAY of lane objects (FormatVersion 9) — the same cure the v7 pass
+        // above applied to STEP SEQ: a drum pattern in the file reads as a groove, not as 140
+        // flat keys. Per lane: "Note" (the kit key, canonical), "Name" (the GM drum name,
+        // generated purely for the reader — the loader ignores it, so number and name can never
+        // diverge), "Amp", "Pan", and "Steps" — the step row as one string, 'X' = hit,
+        // '.' = rest, exactly the row the PERC grid shows.
+        if (auto* mod = root->getProperty("Perc").getDynamicObject())
+        {
+            int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
+            while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
+            while (mod->hasProperty("Step1_" + juce::String(nSteps + 1))) ++nSteps;
+            juce::Array<juce::var> lanes;
+            for (int l = 1; l <= nLanes; ++l)
+            {
+                const juce::String L((l));
+                auto* ln = new juce::DynamicObject();
+                const int note = (int) mod->getProperty("Note" + L);
+                ln->setProperty("Note", note);
+                if (const juce::String gm (juce::MidiMessage::getRhythmInstrumentName(note)); gm.isNotEmpty())
+                    ln->setProperty("Name", gm);
+                ln->setProperty("Amp", mod->getProperty("Amp" + L));
+                ln->setProperty("Pan", mod->getProperty("Pan" + L));
+                juce::String steps;
+                for (int s = 1; s <= nSteps; ++s)
+                    steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
+                ln->setProperty("Steps", steps);
+                lanes.add(juce::var(ln));
+                mod->removeProperty("Note" + L);
+                mod->removeProperty("Amp" + L);
+                mod->removeProperty("Pan" + L);
+                for (int s = 1; s <= nSteps; ++s)
+                    mod->removeProperty("Step" + L + "_" + juce::String(s));
+            }
+            mod->setProperty("Lanes", juce::var(lanes));
+        }
+
+        // MOD MATRIX routings as an ARRAY of slot objects (FormatVersion 9), same reasoning. The
+        // flat SlotNSource/… keys the spec pass wrote move into one object per slot: "Source" and
+        // "Module" keep their label form (the append-only combo contract is unchanged), "Param"
+        // stays the persisted INT index into the module's param list — "ParamName" spells it out
+        // for the reader and is ignored by the loader, like the STEP SEQ "Name" — then "Amount"
+        // and "Quant".
+        if (auto* mod = root->getProperty("ModMatrix").getDynamicObject())
+        {
+            int nSlots = 0;
+            while (mod->hasProperty("Slot" + juce::String(nSlots + 1) + "Source")) ++nSlots;
+            juce::Array<juce::var> slots;
+            for (int n = 1; n <= nSlots; ++n)
+            {
+                const juce::String k = "Slot" + juce::String(n);
+                auto* sl = new juce::DynamicObject();
+                sl->setProperty("Source", mod->getProperty(k + "Source"));
+                const juce::String module = mod->getProperty(k + "Module").toString();
+                sl->setProperty("Module", module);
+                const int pi = (int) mod->getProperty(k + "Param");
+                sl->setProperty("Param", pi);
+                if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
+                    sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));   // "-" for Off
+                sl->setProperty("Amount", mod->getProperty(k + "Amount"));
+                sl->setProperty("Quant", mod->getProperty(k + "Quant"));
+                slots.add(juce::var(sl));
+                for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
+                    mod->removeProperty(k + f);
+            }
+            mod->setProperty("Slots", juce::var(slots));
+        }
+
         return juce::var(root);
     }
 
@@ -527,6 +659,8 @@ namespace PresetIO
         // (those are handled by the missing⇒default fallback).
         const int fileVersion = jint(v, "FormatVersion", 1);
         juce::ignoreUnused(fileVersion);
+
+        if (setPresetLoading) setPresetLoading(true);   // couplings off — same bracket as applyVar
 
         // FACTORY RESET before reading (a preset is a COMPLETE snapshot): reset every parameter
         // to its default AND clear the rack layout to factory. Any field the file omits then
@@ -702,6 +836,8 @@ namespace PresetIO
         // it via Rack::reloadLayoutFromState() after a load.
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
+
+        if (setPresetLoading) setPresetLoading(false);
     }
 
     // ── Import (nested v3 — the live reader) ──
@@ -709,6 +845,9 @@ namespace PresetIO
     {
         if (! v.isObject())
             return;
+        // Couplings off while the snapshot lands (see setPresetLoading) — the writes below would
+        // otherwise fire them hundreds of times against half-applied intermediate states.
+        if (setPresetLoading) setPresetLoading(true);
         // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
         // file's values on top (missing field => factory default). Clear the rack-layout baseline.
         for (auto* p : a.processor.getParameters())
@@ -716,6 +855,92 @@ namespace PresetIO
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
 
         Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
+
+        // STEP SEQ steps from the v7 ARRAY (see toVar) — decoded AFTER the spec pass, which read
+        // the flat v6 Pitch1/Step1… keys if the file still carries them (a v7 file does not, so
+        // the spec pass left the factory defaults standing). The absolute "Note" minus the file's
+        // latch root (C3 = 48 when none) restores the engine's offset; "Name" is readability only
+        // and deliberately ignored — the number is canonical.
+        if (auto* seq = v["StepSeq"].getDynamicObject())
+            if (auto* steps = seq->getProperty("Steps").getArray())
+            {
+                const int ref = seq->hasProperty("LatchRoot")
+                                    ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
+                auto setRaw = [&a](const juce::String& id, float raw)
+                {
+                    if (auto* p = a.getParameter(id))
+                        p->setValueNotifyingHost(p->convertTo0to1(raw));
+                };
+                for (int s = 0; s < juce::jmin(32, steps->size()); ++s)
+                {
+                    const auto& st = steps->getReference(s);
+                    if (! st.isObject()) continue;
+                    setRaw(ID::seqStep (s + 1), (bool) st["On"] ? 1.0f : 0.0f);
+                    setRaw(ID::seqPitch(s + 1), (float) juce::jlimit(-24, 24, (int) st["Note"] - ref));
+                    setRaw(ID::seqAcc  (s + 1), (bool) st["Accent"] ? 1.0f : 0.0f);
+                    // v8 gate (15.7): a number is a percent, the two names are the top of the
+                    // continuum; missing (every v7 file) ⇒ 100 = the pre-15.7 behaviour.
+                    int sg = 100;
+                    if (const auto gv = st["Gate"]; gv.isString())
+                        sg = gv.toString().equalsIgnoreCase("SLIDE") ? 102
+                           : gv.toString().equalsIgnoreCase("TIE")   ? 101 : 100;
+                    else if (gv.isInt() || gv.isInt64() || gv.isDouble())
+                        sg = juce::jlimit(5, 100, (int) gv);
+                    setRaw(ID::seqSGate(s + 1), (float) sg);
+                }
+            }
+
+        // PERC "Lanes" / MOD MATRIX "Slots" from the v9 ARRAYS (see toVar): rebuild the flat keys
+        // the spec pass understands and run it again on just that one module — so the mapping
+        // (choice label → index, clamping, legacyPersistKey) keeps living in exactly one place,
+        // ModuleRegistry::readState. Older files carry the flat keys directly and were already
+        // read by the spec pass above; a v9 file has no flat keys, so nothing is read twice.
+        {
+            auto respell = [&a](const char* object, juce::DynamicObject* flat)
+            {
+                auto* rt = new juce::DynamicObject();
+                rt->setProperty(object, juce::var(flat));
+                Modules::readState(a, juce::var(rt));
+            };
+            if (auto* mod = v["Perc"].getDynamicObject())
+                if (auto* lanes = mod->getProperty("Lanes").getArray())
+                {
+                    auto* flat = new juce::DynamicObject();
+                    for (int l = 0; l < lanes->size(); ++l)
+                    {
+                        const auto& ln = lanes->getReference(l);
+                        if (! ln.isObject()) continue;
+                        const juce::String L(l + 1);
+                        flat->setProperty("Note" + L, ln["Note"]);
+                        flat->setProperty("Amp"  + L, ln["Amp"]);
+                        if (! ln["Pan"].isVoid())
+                            flat->setProperty("Pan" + L, ln["Pan"]);   // omitted = centred (default)
+                        const juce::String steps = ln["Steps"].toString();
+                        for (int s = 0; s < steps.length(); ++s)
+                            flat->setProperty("Step" + L + "_" + juce::String(s + 1),
+                                              steps[s] == 'X' || steps[s] == 'x');
+                    }
+                    respell("Perc", flat);
+                }
+            if (auto* mod = v["ModMatrix"].getDynamicObject())
+                if (auto* slots = mod->getProperty("Slots").getArray())
+                {
+                    auto* flat = new juce::DynamicObject();
+                    for (int n = 0; n < slots->size(); ++n)
+                    {
+                        const auto& sl = slots->getReference(n);
+                        if (! sl.isObject()) continue;
+                        const juce::String k = "Slot" + juce::String(n + 1);
+                        flat->setProperty(k + "Source", sl["Source"]);
+                        flat->setProperty(k + "Module", sl["Module"]);
+                        flat->setProperty(k + "Param",  sl["Param"]);   // "ParamName" is reader-only
+                        flat->setProperty(k + "Amount", sl["Amount"]);
+                        if (! sl["Quant"].isVoid())
+                            flat->setProperty(k + "Quant", sl["Quant"]);   // omitted = "Off" (default)
+                    }
+                    respell("ModMatrix", flat);
+                }
+        }
 
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
@@ -780,6 +1005,8 @@ namespace PresetIO
                     latch = (int) seq->getProperty ("LatchRoot");
             applySeqLatchRoot (latch);
         }
+
+        if (setPresetLoading) setPresetLoading(false);   // couplings live again — for GESTURES
     }
 
     // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,
@@ -912,8 +1139,12 @@ namespace PresetIO
             f.copyFileTo(backupDir.getChildFile(f.getFileName()));   // keep the original, just in case
             if (ver < 3) applyVarFlatLegacy(a, v);                   // flat -> apvts (scratch)
             else         applyVar(a, v);                             // nested v3 -> apvts (scratch)
-            migrateSlotTargetsToModuleParam(a, v);                   // v4 SlotNTarget -> Module+Param
-            migrateV5ParamOrder(a, v);                               // v5 SlotNParam int -> A→Z reorder
+            // Version-GATED, not just content-guarded (bug found at the v9 bump, 2026-08-29): the
+            // v5 remap's own check — "SlotNModule is a string" — is true for every v6+ file too,
+            // so from the v7 bump on each conversion re-applied the v5→v6 permutation to already
+            // -sorted indices and rotated matrix targets (Alle OSC: FREQ→FB→DETUNE→AMP→…).
+            if (ver < 5) migrateSlotTargetsToModuleParam(a, v);      // v4 files only: SlotNTarget -> Module+Param
+            if (ver < 6) migrateV5ParamOrder(a, v);                  // v5 files only: SlotNParam int -> A→Z reorder
             if (ver < 4) migrateLfoTargetsToSlots(a);                // v3→v4 ONLY: v4+ already route LFOs
                                                                      // via the matrix — re-folding doubles them
             const auto name = v.getProperty("Name", f.getFileNameWithoutExtension()).toString();
@@ -956,8 +1187,10 @@ namespace PresetIO
 
             if (r.fileVersion < 3) applyVarFlatLegacy(a, v);   // flat legacy → apvts
             else                   applyVar(a, v);             // nested v3 → apvts
-            migrateSlotTargetsToModuleParam(a, v);             // v4 SlotNTarget → Module+Param
-            migrateV5ParamOrder(a, v);                         // v5 SlotNParam int → A→Z reorder
+            // Version-gated like convertOldPresets (see the note there): re-running the v5 remap
+            // on a v6+ file rotates the matrix param indices.
+            if (r.fileVersion < 5) migrateSlotTargetsToModuleParam(a, v);   // v4 files only
+            if (r.fileVersion < 6) migrateV5ParamOrder(a, v);               // v5 files only
             if (r.fileVersion < 4) migrateLfoTargetsToSlots(a);   // v3→v4 ONLY (v4+ re-fold doubles LFOs)
 
             const auto name = v.getProperty("Name", file.getFileNameWithoutExtension()).toString();

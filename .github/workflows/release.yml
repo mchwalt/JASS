@@ -116,6 +116,10 @@ jobs:
         with:
           name: ${{ env.OUT }}
           path: ${{ env.OUT }}.zip
+          # Only a hand-off to the release job; the zips live on as release assets.
+          # Default 90-day retention piles ~50 MB per release onto the 500 MB
+          # free storage quota (hit 810 MB on 2026-08-26).
+          retention-days: 1
 
   release:
     needs: [version, build]

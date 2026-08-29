@@ -10,6 +10,147 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.9] – 2026-08-29
+
+### Added
+- **Presets store the drum pattern and the mod routings as structures now (FormatVersion 9).**
+  The same cure v7 applied to the STEP SEQ figure, extended to the two remaining knob dumps:
+  PERC's 140 flat keys become `"Lanes"` — one object per lane with `Note`, the generated GM
+  drum `Name`, `Amp`, `Pan` (omitted when centred) and the step row as one readable string
+  (`"Steps": "X...X...X...X..."` — exactly what the grid shows) — and MOD MATRIX's flat
+  `Slot1Source`/… keys become `"Slots"`, one object per routing with `Source`, `Module`, the
+  canonical `Param` index plus its generated `ParamName`, `Amount`, and `Quant` (omitted at
+  Off). Values are untouched — this is structure only, so a re-saved preset sounds
+  bit-identical — and every older file still loads: the flat keys remain readable forever,
+  and the loader feeds the new arrays through the same spec-driven mapping as before, so the
+  choice-label and legacy-key logic keeps living in one place.
+- **Preset files write every field now, defaults included (FormatVersion 10).** v7–v9 kept
+  the common case terse — a plain step omitted `Accent`, a full-length step its `Gate`, a
+  centred lane its `Pan`, an unquantized slot its `Quant`. Terse is only a virtue for the
+  writer: whoever *reads* the file has to know every default by heart (maintainer,
+  2026-08-29). Loading still accepts omissions (missing ⇒ default, unchanged since v3) —
+  only the writer stopped producing them.
+- **Los Niños has its drums now — and a kit of its own.** The demo preset's percussion
+  used to be the acoustic SamsSonor kick and snare stamped on every beat; against the
+  record that read as one undifferentiated thump. A percussion stem of the original
+  (separated with lalal.ai, measured with the audio-measure workflow) showed why no
+  amount of level-tweaking could fix it: the record's kick is a *Synare-style electronic
+  boom* — a sine that starts at ~105 Hz, holds, and glides to ~45 Hz over 300 ms — and the
+  backbeat "Tschak" is not a hi-hat at all but a gated noise burst centred at 200–550 Hz
+  ("more a car door slamming than a hi-hat", and the measurement agreed: nothing above
+  9 kHz). Both sounds are now **synthesized from the measured curves**
+  (`tools/synth_losninos_kit.py`) and ship in a new seeded kit, **LosNinosDrums**,
+  alongside the top velocity layers of SamsSonor (CC BY-SA 4.0) for snare, toms and hats.
+  The preset plays the classic alternation the ear expects — kick on the downbeats, slam
+  plus snare on the backbeats, a quiet low tom keeping the record's continuous low pulse —
+  which the stem justifies: the two beat classes differ almost only above 900 Hz, so the
+  alternation is written into the *sounds*, not faked by dropping the low end.
+  (`Samples/*.flac` now embeds alongside `*.wav`/`*.sfz` so a kit can seed FLAC.)
+- **Every step has a length now — up to TIE and SLIDE (story 15.7).** The new GATE button in
+  STEP SEQ's header flips the 32 step knobs to their second meaning: the step's gate, one
+  continuum from 5–100 % of the step up to two values past the top — **TIE** (the note holds
+  through the boundary and the next step takes over *without a new attack*) and **SLIDE** (the
+  same, but the pitch glides — the 303's slide, the last mechanism every classic acid box has
+  that JASS lacked). The BeatStep Pro's model, chosen in the 15.6 market survey: staccato →
+  legato → glide on one knob. The global GATE still scales all plain steps, a step's default
+  is 100 % — so every existing preset sounds bit-identical. Preset files store the value in
+  each v8 step object as `"Gate": 36` / `"Gate": "TIE"` / `"Gate": "SLIDE"`, omitted at 100.
+  Per-step gate knobs were tried and thrown out in 15.1 ("they were all sitting at 1") — what
+  changed is a measured preset that needs them: the Los Niños original separates its two
+  accent classes by *length* as much as by level (87 % vs 36 % of a step), which no accent
+  flag can express. **Los Niños now carries exactly those measured lengths.**
+- **STEP SEQ has an accent row (story 15.2).** The corner switch of every step now cycles
+  off → on → **accented** — the TR-909's "press the same button again" gesture, so 32 accents
+  cost no rack space — and the new ACCENT knob sets what an accent does: the step plays louder
+  and the filter opens for it (the TB-303/SQ-10 recipe; at 0, accents change nothing). Under the
+  hood an accented step is simply emitted **hot** (MIDI velocity 127 against the plain 100), and
+  the voice maps velocity onto gain and cutoff — which means a MIDI keyboard now also plays
+  touch-sensitively exactly as far as ACCENT is turned up, and a future MIDI export carries the
+  accents for free (the Los Niños reference MIDI encodes its accent row as exactly two velocity
+  classes). The market survey behind story 15.6 showed this per-step second class is the one
+  mechanism every classic sequencer has and JASS lacked — it is what the Los Niños preset
+  fakes with rests, and what parked the Kraftwerk attempt.
+- **Presets store the figure as music now (FormatVersion 7).** The STEP SEQ block writes its
+  steps as an array of note objects — `{ "On": true, "Note": 46, "Name": "Bb1", "Accent": true }`
+  — instead of 64 flat knob fields. The absolute MIDI note is canonical (resolved against the
+  latched root; the figure still transposes with the played key), the spelled name is generated
+  for the reader's eyes and ignored on load, so the two can never diverge. Older presets keep
+  loading unchanged, and are auto-migrated with a backup, as always.
+- **Los Niños plays the real figure now.** The MIDI transcription of the original shows all
+  24 sixteenths sounding, in two classes — long/loud versus short/quiet, the Korg SQ-10's
+  accent row. Until 15.2 the preset could only fake that by leaving the quiet class out; now
+  the rests are gone and the loud class carries the accent flag (the three high fills sit
+  *between* the two classes in the original and stay plain). The two shipped sequencer
+  presets (Los Niños, DAF Beat) are re-saved in the new v7 step-object format; DAF Beat's
+  figure itself is unchanged — whether it wants accents is an ear decision, not a data one.
+- **The write cursor can move backwards now: ← / → navigate, BACKSPACE takes back the last
+  note.** Writing a figure by playing it (15.4) only ever ran forward — one slip meant reaching
+  for the mouse, clicking the step knob and re-aiming. The arrow keys move the ring without
+  touching the figure, BACKSPACE steps back *and* switches that step off — the pitch survives
+  (the SPACE rule), so re-writing or re-enabling the step restores it. All three keys are only
+  claimed while the ring is showing; outside of writing they keep their meaning (the market
+  survey for story 15.6 showed this is the one gesture every step-entry grammar has and ours
+  lacked — the 303's BACK button, Ableton's Left arrow). The help pages now also name ESC as
+  the way out of writing, which shipped in 2026.08.8 but was nowhere to read.
+
+### Fixed
+- **Format upgrades no longer rotate the MOD MATRIX targets.** The v5→v6 param-order remap
+  guarded itself only by "does the file carry `SlotNModule`?" — true for every v6+ file too, so
+  each FormatVersion bump since v7 re-applied the permutation to already-sorted indices and
+  quietly moved routings one step (Alle OSC: FREQ→FB→DETUNE→AMP). Found during the v9 bump when
+  a converted preset's drift slot came back pointing at feedback. Both migration passes are now
+  gated on the file's actual version (`< 5` / `< 6`), and the seeded demo presets in AppData were
+  restored from their repo originals (the drift slot of DAF Beat, Chaos Melody, Matrix Showcase
+  and Helikopter had been rotated by the v7/v8 upgrades).
+- **A rest's pitch knob is editable again.** Switching a step off — with the corner switch,
+  SPACE while writing, or BACKSPACE — greyed its knob *and* took away the mouse, so re-pitching
+  a rest meant switching it back on first (and hearing it) just to turn the knob. But a rest
+  deliberately keeps its pitch (that is why SPACE and BACKSPACE don't clear it), so the knob now
+  only dims: a rest's note can be dialled in and auditioned while the step stays silent in the
+  figure. Mode-irrelevant knobs (say, STEREO's WIDTH outside Pseudo-Stereo) still lock the mouse
+  out — there the value genuinely does not apply.
+- **The step switch is easier to hit.** Cycling a step (off → on → accented) demanded pixel
+  aim at the little box. Its clickable area now extends into the cell corner's empty air —
+  roughly double the target — while the drawn box stays exactly where and what it was.
+- **Double-clicking a knob now returns it to the loaded preset's value** — instead of wiping
+  it to the factory default, which is what silently happened before: a JUCE automatism, never
+  a JASS decision, and with click-to-audition a trap (two quick clicks on a step knob reset
+  its pitch to 0). The preset baseline is the safe version of the same idea: an untouched knob
+  already sits on it, so the gesture cannot fire by accident — it only ever un-does your own
+  twisting, the one-gesture way back after comparing. On an unsaved working state (no clean
+  baseline) a double-click does nothing. Typing an exact value stays on right-click.
+- **Step preview, entry and the note boxes follow the root that actually sounds.** The figure
+  transposes with the latched key, but clicking a step previewed it over the keyboard's C — with
+  Los Niños latched on Bb, the click sounded a different note than the loop played at that very
+  step, so a melody could not be assembled by ear (maintainer, 2026-08-23). Preview, write-by-
+  playing and the boxes' note names now all resolve over one reference: the latched root while a
+  figure runs, otherwise the keyboard's current C as before. That also makes playing a figure in
+  over a running latch WYSIWYG — the keys played are the notes the figure then plays.
+- **Loading a preset now lands it exactly as saved — every time, on the first try.** Presets
+  sometimes arrived scrambled and had to be loaded two or three times "until everything fits".
+  The cause was structural: applying a preset writes ~700 parameters (factory reset + the file's
+  values), and every single write fired the parameter couplings meant for hand gestures — the
+  MOD-MATRIX auto-enable re-evaluated on each of its ~24 slot fields, the ARP/STEP-SEQ exclusion,
+  the CROSS-MOD operand coupling — all reacting to half-applied intermediate states. Worse, the
+  couplings' auto-enable memories ("*we* switched this module on, so we may switch it off again")
+  survived the preset change, so the result of a load depended on which patch was loaded BEFORE —
+  repeated loading merely converged on the right state. A saved preset is a snapshot taken after
+  every coupling already ran, so it is now applied verbatim: the couplings stay silent during the
+  load and their memories are cleared with the outgoing patch. Hand gestures behave exactly as
+  before.
+- **Loading a preset silences the previous patch's voices.** Nothing ever did: a note held (or
+  still ringing) across the switch kept its voice alive and playing through the NEW patch's
+  parameters — and when the new patch runs the STEP SEQ, the sequencer's chord filter swallows
+  the key's later note-off, so the leftover voice hung forever. Switching from GrandPiano to
+  DAF Beat left a saw drone running under the beat; the rack looked exactly like the preset,
+  because it *was* the preset — the dirt was a voice from the patch before. Every load now
+  requests a hard all-voices stop, executed at the top of the next audio block, before the new
+  patch plays a note. The last piece was intermittent — sometimes a saw C4 still hung until the
+  next keypress chased it away: every load also fires the "generator newly enabled" edge that
+  re-arms the auto-play drone, racing the latch start by a few audio blocks. That edge now yields
+  to a latched figure and to held keys — the drone only re-arms when the instrument is otherwise
+  silent, which is the only time it was ever wanted.
+
 ## [2026.08.8] – 2026-08-23
 
 ### Added

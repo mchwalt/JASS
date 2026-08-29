@@ -1,6 +1,7 @@
 #include "ModuleFrame.h"
 #include "../HelpTextStore.h"
 #include "../../DSP/ModMatrixCatalog.h"   // ModDest::oscParamSlot — per-OSC ring routing
+#include "../../Audio/PresetIO.h"         // presetBaseline01 — double-click = the preset's value
 
 namespace rack
 {
@@ -25,6 +26,76 @@ namespace rack
             return { (double) r.start, (double) r.end, (double) r.interval,
                      (double) r.skew, r.symmetricSkew };
         }
+
+        // Three-state step switch (15.2): a click cycles OFF (rest) → ON → ACCENTED → OFF — the
+        // TR-909's second-press gesture — over TWO bool parameters (the step's on/off and its
+        // accent). ParameterAttachments keep it repainting on preset/host changes WITHOUT firing
+        // the cycle: only a real mouse click advances the state (the #56 lesson — a loader replay
+        // must never read as a gesture). Drawn by hand so the third state fits the checkbox look:
+        // empty = rest, tick = on, filled + tick = accented.
+        class StepSwitch : public juce::Button
+        {
+        public:
+            StepSwitch (juce::AudioProcessorValueTreeState& state,
+                        const juce::String& onId, const juce::String& accId)
+                : juce::Button ({}),
+                  onValue  (state.getRawParameterValue (onId)),
+                  accValue (state.getRawParameterValue (accId)),
+                  onAtt  (*state.getParameter (onId),  [this] (float) { repaint(); }),
+                  accAtt (*state.getParameter (accId), [this] (float) { repaint(); })
+            {
+            }
+
+            bool isOn()       const { return onValue  != nullptr && onValue->load()  > 0.5f; }
+            bool isAccented() const { return accValue != nullptr && accValue->load() > 0.5f; }
+
+            void clicked() override
+            {
+                // Complete gestures, so a host records single automation events. The accent is
+                // written FIRST on the way up (on+accent land as one audible state change) and
+                // cleared first on the way out.
+                const bool on = isOn(), acc = isAccented();
+                if (! on)       { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (1.0f); }
+                else if (! acc) { accAtt.setValueAsCompleteGesture (1.0f); }
+                else            { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (0.0f); }
+            }
+
+            // The drawn box keeps the button's ORIGINAL size; the bounds around it are a larger
+            // hit target (the little box was too small to aim at — maintainer 2026-08-26). The
+            // glyph stays anchored in the top-right corner, exactly where the whole button used
+            // to sit, so the bigger target changes nothing visually.
+            static constexpr int kGlyphW = 16, kGlyphH = 15;
+
+            void paintButton (juce::Graphics& g, bool over, bool down) override
+            {
+                auto r = getLocalBounds().removeFromTop (kGlyphH).removeFromRight (kGlyphW)
+                                         .toFloat().reduced (3.0f);
+                const auto tick = findColour (juce::ToggleButton::tickColourId);
+                const auto box  = findColour (juce::ToggleButton::tickDisabledColourId);
+                if (isAccented())
+                {
+                    g.setColour (tick.withAlpha (0.45f));   // the "hot" fill behind the tick
+                    g.fillRoundedRectangle (r, 3.0f);
+                }
+                g.setColour (over || down ? box.brighter (0.4f) : box);
+                g.drawRoundedRectangle (r, 3.0f, 1.0f);
+                if (isOn())
+                {
+                    g.setColour (tick);
+                    auto t = r.reduced (2.5f);
+                    juce::Path p;
+                    p.startNewSubPath (t.getX(), t.getCentreY());
+                    p.lineTo (t.getX() + t.getWidth() * 0.35f, t.getBottom() - 1.0f);
+                    p.lineTo (t.getRight(), t.getY());
+                    g.strokePath (p, juce::PathStrokeType (1.6f));
+                }
+            }
+
+        private:
+            std::atomic<float>* onValue;
+            std::atomic<float>* accValue;
+            juce::ParameterAttachment onAtt, accAtt;
+        };
     }
 
     ModuleFrame::ModuleFrame (juce::AudioProcessorValueTreeState& a, ModuleDescriptor d)
@@ -123,6 +194,20 @@ namespace rack
             addAndMakeVisible (resetBtn);
         }
 
+        // Row toggle (15.7): a header latch that flips every altParamId knob between its two
+        // meanings (STEP SEQ: PITCH ⇄ GATE — the BeatStep's "the knob row cycles its meaning").
+        // It lives beside the reset because it is a VIEW switch, not a parameter: nothing about
+        // it lands in presets, and a preset load never flips what the user is looking at.
+        if (desc.altRowTitle.isNotEmpty())
+        {
+            altRowBtn = std::make_unique<juce::TextButton> (desc.altRowTitle);
+            altRowBtn->setClickingTogglesState (true);
+            altRowBtn->setTooltip ("Flip the step knobs between PITCH and " + desc.altRowTitle);
+            altRowBtn->setWantsKeyboardFocus (false);
+            altRowBtn->onClick = [this] { altRowActive = altRowBtn->getToggleState(); applyAltRow(); };
+            addAndMakeVisible (*altRowBtn);
+        }
+
         // Online-help info icon (Story 6.1): shown only when a help text exists for this
         // module's help slug (helpId(), which may alias several instances to one text).
         // Clicking it asks the editor (via onHelp) to show the shared HelpPanel; onHelp carries
@@ -189,6 +274,24 @@ namespace rack
                 {
                     sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
                         apvts, k->paramId, *s));
+                    // JUCE's SliderAttachment silently arms "double-click = parameter default".
+                    // With click-to-audition that is a trap — two quick clicks on a STEP SEQ knob
+                    // wiped its pitch back to 0 (maintainer 2026-08-26: nobody needs this). Off,
+                    // rack-wide: a reset gesture that can fire by accident is not a reset gesture.
+                    s->setDoubleClickReturnValue (false, 0.0);
+                    // Instead, double-click restores the LOADED preset's value (same day's wish):
+                    // while a knob is untouched that IS its current value — a no-op — and after
+                    // twisting it while comparing, it is the one-gesture way back. Not wired for
+                    // the decoupled display-transform knobs above: their shown value rides the
+                    // live ratio, so "the preset's value" is not what their slider displays.
+                    s->presetBaseline = [&a = apvts, id = k->paramId]() -> double
+                    {
+                        if (PresetIO::presetBaseline01)
+                            if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                                if (auto* p = a.getParameter (id))
+                                    return (double) p->convertFrom0to1 (v01);
+                        return std::numeric_limits<double>::quiet_NaN();
+                    };
                 }
 
                 // Named read-out (PERC NOTE: "Kick" instead of "36"). valueFromText has to be given
@@ -237,17 +340,30 @@ namespace rack
                 // Per-knob ON/OFF switch (STEP SEQ steps): a checkbox in this cell's top-right,
                 // dimming the knob when off via the same condKnobs path as activeWhen. The
                 // predicate is built HERE from the parameter, so no editor injection is needed.
+                // dimOnly: a rest keeps its pitch (the SPACE rule), so the knob stays draggable
+                // while off — dial in (and audition) a rest's note without re-enabling it first.
                 if (k->toggleParamId.isNotEmpty())
                 {
-                    auto* tb = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
+                    juce::Button* tb;
+                    if (k->accentParamId.isNotEmpty())
+                    {
+                        // Three-state switch (15.2): off → on → accented, one gesture per click.
+                        tb = static_cast<juce::Button*> (ownedWidgets.add (
+                                 new StepSwitch (apvts, k->toggleParamId, k->accentParamId)));
+                    }
+                    else
+                    {
+                        auto* plain = static_cast<juce::ToggleButton*> (ownedWidgets.add (new juce::ToggleButton()));
+                        buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
+                            apvts, k->toggleParamId, *plain));
+                        tb = plain;
+                    }
                     tb->setWantsKeyboardFocus (false);   // never steal focus from the on-screen keyboard
                     addAndMakeVisible (*tb);
-                    buttonAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::ButtonAttachment> (
-                        apvts, k->toggleParamId, *tb));
                     cells.back().toggle = tb;
                     if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
                         condKnobs.push_back ({ s, cells.back().caption,
-                                               [v] { return v->load() > 0.5f; } });
+                                               [v] { return v->load() > 0.5f; }, true });
 
                     // Bringing a rest back sounds the step once (15.3), so you hear what you just
                     // restored. The switch has no value of its own — it shares the knob's cell and
@@ -256,14 +372,20 @@ namespace rack
                     // Guarded like the knob below: the ButtonAttachment replays a loaded preset
                     // through setToggleState(sendNotificationSync), so onClick also fires for every
                     // step the preset switches on — and previewing arms the write cursor (15.4).
-                    // Only a click with the mouse actually on the switch is a gesture.
+                    // Only a click with the mouse actually on the switch is a gesture. (The
+                    // three-state StepSwitch only ever changes state from a real click, but the
+                    // mouse guard stays — one rule for both kinds.) The ON test reads the PARAM,
+                    // not getToggleState — the StepSwitch never sets its Button toggle state.
                     if (k->audition)
-                        tb->onClick = [tb, s, aud = k->audition]
+                    {
+                        auto* onRaw = apvts.getRawParameterValue (k->toggleParamId);
+                        tb->onClick = [tb, s, onRaw, aud = k->audition]
                         {
-                            if (tb->getToggleState()
+                            if (onRaw != nullptr && onRaw->load() > 0.5f
                                 && (tb->isMouseButtonDown (true) || tb->isMouseOver (true)))
                                 aud ((int) s->getValue(), true);
                         };
+                    }
                 }
 
                 // Preview while editing (Story 15.3): re-trigger on every step of the knob so a
@@ -296,6 +418,67 @@ namespace rack
                         aud ((int) s->getValue(), true);
                     };
                     s->onDragEnd = [moved, aud = k->audition] { if (*moved) aud (0, false); };
+                }
+
+                // Row toggle (15.7): a SECOND slider on this same cell, editing the alternate
+                // param; the header latch flips which of the two is visible. Built like the main
+                // knob — attachment, no double-click default, preset-baseline double-click, dims
+                // with the step — but its read-out comes from altTextFromValue ("36%" / "TIE" /
+                // "SLIDE") and its audition replays the STEP'S PITCH (the main slider holds the
+                // semitones), so a gate edit is heard on the note it phrases.
+                if (k->altParamId.isNotEmpty() && apvts.getParameter (k->altParamId) != nullptr)
+                {
+                    auto* g = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
+                    g->setKnobDiameter (knobD);
+                    g->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 14);
+                    sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+                        apvts, k->altParamId, *g));
+                    g->setDoubleClickReturnValue (false, 0.0);
+                    g->presetBaseline = [&a = apvts, id = k->altParamId]() -> double
+                    {
+                        if (PresetIO::presetBaseline01)
+                            if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                                if (auto* p = a.getParameter (id))
+                                    return (double) p->convertFrom0to1 (v01);
+                        return std::numeric_limits<double>::quiet_NaN();
+                    };
+                    if (k->altTextFromValue)
+                    {
+                        g->textFromValueFunction = k->altTextFromValue;
+                        g->valueFromTextFunction = k->altValueFromText
+                            ? k->altValueFromText
+                            : [] (const juce::String& t) { return t.getDoubleValue(); };
+                        g->updateText();
+                        g->tooltipFromValue = k->altTextFromValue;
+                        g->refreshTooltip();
+                    }
+                    if (k->audition)
+                    {
+                        auto movedG = std::make_shared<bool> (false);
+                        g->onValueChange = [g, s, movedG, aud = k->audition,
+                                            prev = std::move (g->onValueChange)]
+                        {
+                            if (prev) prev();
+                            if (g->isMouseButtonDown (true) || g->isMouseOver (true))
+                            {
+                                *movedG = true;
+                                aud ((int) s->getValue(), true);
+                            }
+                        };
+                        g->onDragStart = [s, movedG, aud = k->audition]
+                        {
+                            *movedG = false;
+                            aud ((int) s->getValue(), true);
+                        };
+                        g->onDragEnd = [movedG, aud = k->audition] { if (*movedG) aud (0, false); };
+                    }
+                    if (k->toggleParamId.isNotEmpty())
+                        if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
+                            condKnobs.push_back ({ g, nullptr, [v] { return v->load() > 0.5f; }, true });
+                    addChildComponent (*g);   // hidden until the row toggle flips (applyAltRow)
+                    if (auto* tb = cells.back().toggle)
+                        tb->toFront (false);   // the corner switch overlaps the cell — keep it clickable above g
+                    altKnobs.push_back ({ s, g });
                 }
             }
             else if (auto* c = std::get_if<Combo> (&el))
@@ -480,6 +663,10 @@ namespace rack
         auto infoSlot = header.removeFromRight (20);
         if (infoBtn != nullptr)
             infoBtn->setBounds (infoSlot);
+        // Row toggle (15.7): only modules that declare one give up header width for it, so
+        // every other module's header geometry is untouched.
+        if (altRowBtn != nullptr)
+            altRowBtn->setBounds (header.removeFromRight (46).reduced (2, 1));
         header.removeFromLeft (11);   // room for the status-LED dot painted at the header's left edge
         titleLabel.setBounds (header);
 
@@ -587,8 +774,12 @@ namespace rack
                     cell.widget->setBounds (cr.getCentreX() - sw / 2, top + capH, sw, wH);
                     // The optional switch rides in the cell's top-right corner, on the caption's
                     // line: it belongs to this knob, so it must not claim a cell of its own.
+                    // The bounds reach 8 px further left and 7 px further down than the drawn
+                    // box (StepSwitch anchors its glyph top-right, so nothing moves visually):
+                    // pure hit area, into the cell corner's empty air — the box itself was too
+                    // small to aim at (maintainer 2026-08-26).
                     if (cell.toggle != nullptr)
-                        cell.toggle->setBounds (cr.getRight() - 16, top - 1, 16, capH + 2);
+                        cell.toggle->setBounds (cr.getRight() - 24, top - 1, 24, capH + 9);
                 }
                 else if (isButton)
                 {
@@ -629,6 +820,13 @@ namespace rack
             if (col >= nCols) { col = 0; ++row; }
         }
 
+        // Row toggle (15.7): the alternate slider rides EXACTLY on its main knob's bounds —
+        // the row flip is a visibility swap, never a re-layout.
+        for (auto& ak : altKnobs)
+        {
+            ak.alt->setKnobDiameter (ak.main->getKnobDiameter());
+            ak.alt->setBounds (ak.main->getBounds());
+        }
     }
 
     void ModuleFrame::paint (juce::Graphics& g)
@@ -694,8 +892,11 @@ namespace rack
                 const float d  = 6.0f;
                 const auto& cell = cells[juce::jmin (m.cellIndex, cells.size() - 1)];
                 const auto  line = m.caption != nullptr ? m.caption->getBounds() : b;
-                const float right = cell.toggle != nullptr ? (float) cell.toggle->getX() - 2.0f
-                                                           : (float) line.getRight();
+                // Anchor to the DRAWN box, not the bounds — the switch's hit area is wider than
+                // its glyph, and the dot must hug what the eye sees.
+                const float right = cell.toggle != nullptr
+                                        ? (float) cell.toggle->getRight() - (float) StepSwitch::kGlyphW - 2.0f
+                                        : (float) line.getRight();
                 g.setColour (juce::Colour (0xff7bd88f));
                 g.fillEllipse (right - d, (float) line.getCentreY() - d * 0.5f, d, d);
             }
@@ -842,6 +1043,17 @@ namespace rack
         if (off != dimmed) { dimmed = off; repaint(); }
     }
 
+    void ModuleFrame::applyAltRow()
+    {
+        // The row flip is a pure visibility swap on identical bounds (see resized): the cell —
+        // and with it the corner switch, the write ring and the playhead — stays where it is.
+        for (auto& ak : altKnobs)
+        {
+            ak.main->setVisible (! altRowActive);
+            ak.alt ->setVisible (  altRowActive);
+        }
+    }
+
     void ModuleFrame::refreshNamedReadouts()
     {
         // Only sliders that carry a textFromValue read-out; everyone else keeps JUCE's own text.
@@ -868,7 +1080,8 @@ namespace rack
             const bool on = (want == 1);
             if (ck.widget != nullptr)
             {
-                ck.widget->setEnabled (on);
+                if (! ck.dimOnly)          // a dim-only control (a rest's pitch knob) keeps the mouse
+                    ck.widget->setEnabled (on);
                 ck.widget->setAlpha (on ? 1.0f : 0.35f);
             }
             if (ck.caption != nullptr)

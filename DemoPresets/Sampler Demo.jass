@@ -1,18 +1,18 @@
 {
-  "FormatVersion": 6,
+  "FormatVersion": 10,
   "Name": "sampler Demo",
   "Modified": false,
   "Filter": {
     "Enabled": false,
     "Type": "Lowpass",
     "Cutoff": 550.0,
-    "Resonance": 0.710000038146973
+    "Resonance": 0.71000004
   },
   "Compressor": {
     "Enabled": false,
     "Threshold": -18.0,
     "Ratio": 2.0,
-    "Attack": 10.000000953674316,
+    "Attack": 10.000001,
     "Release": 120.0,
     "Makeup": 0.0
   },
@@ -32,6 +32,7 @@
     "Enabled": false,
     "Waveform": "Sine",
     "Octave": "-1 Oct",
+    "Feedback": 0.0,
     "Amp": 0.5,
     "Pan": 0.0
   },
@@ -44,8 +45,8 @@
   "Formant": {
     "Enabled": false,
     "Vowel": 0.5,
-    "Resonance": 0.699999988079071,
-    "Mix": 0.799999952316284
+    "Resonance": 0.7,
+    "Mix": 0.79999995
   },
   "Distortion": {
     "Enabled": false,
@@ -55,7 +56,7 @@
   },
   "Wavefold": {
     "Enabled": false,
-    "Drive": 0.299999982118607,
+    "Drive": 0.29999998,
     "Symmetry": 0.0,
     "Mix": 1.0
   },
@@ -69,28 +70,28 @@
     "Enabled": false,
     "Type": "Phaser",
     "Rate": 0.5,
-    "Depth": 0.699999988079071,
+    "Depth": 0.7,
     "Feedback": 0.5,
     "Mix": 0.5
   },
   "Chorus": {
     "Enabled": false,
     "Rate": 1.5,
-    "Depth": 0.005000000353903,
+    "Depth": 0.0050000004,
     "Mix": 0.5
   },
   "Delay": {
     "Enabled": false,
     "SyncDiv": "Free",
-    "Time": 0.299999982118607,
-    "Feedback": 0.399999976158142,
-    "Mix": 0.299999982118607
+    "Time": 0.29999998,
+    "Feedback": 0.39999998,
+    "Mix": 0.29999998
   },
   "Reverb": {
     "Enabled": false,
-    "RoomSize": 0.699999988079071,
+    "RoomSize": 0.7,
     "Damping": 0.5,
-    "Mix": 0.299999982118607
+    "Mix": 0.29999998
   },
   "Arp": {
     "Enabled": false,
@@ -102,41 +103,41 @@
   "Glide": {
     "Enabled": false,
     "Mode": "Mono",
-    "Time": 0.300000011920929
+    "Time": 0.3
   },
   "PitchEnv": {
     "Enabled": false,
     "Amount": 0.0,
-    "Time": 0.300000011920929
+    "Time": 0.3
   },
   "Osc1": {
     "Enabled": false,
     "Waveform": "Sawtooth",
     "Frequency": 262.0,
-    "Amplitude": 0.5,
     "UnisonVoices": 1.0,
-    "UnisonDetune": 0.200000002980232,
+    "UnisonDetune": 0.2,
     "Feedback": 0.0,
+    "Amplitude": 0.5,
     "Pan": 0.0
   },
   "Osc2": {
     "Enabled": false,
     "Waveform": "Sine",
     "Frequency": 523.0,
-    "Amplitude": 0.5,
     "UnisonVoices": 1.0,
-    "UnisonDetune": 0.200000002980232,
+    "UnisonDetune": 0.2,
     "Feedback": 0.0,
+    "Amplitude": 0.5,
     "Pan": 0.0
   },
   "Osc3": {
     "Enabled": false,
     "Waveform": "Sine",
     "Frequency": 131.0,
-    "Amplitude": 0.5,
     "UnisonVoices": 1.0,
-    "UnisonDetune": 0.200000002980232,
+    "UnisonDetune": 0.2,
     "Feedback": 0.0,
+    "Amplitude": 0.5,
     "Pan": 0.0
   },
   "CrossMod": {
@@ -150,7 +151,7 @@
     "Waveform": "Sine",
     "Target": "Frequency",
     "SyncDiv": "Free",
-    "Rate": 0.900000035762787,
+    "Rate": 0.90000004,
     "Depth": 0.5
   },
   "Lfo2": {
@@ -179,38 +180,72 @@
   },
   "ModMatrix": {
     "On": true,
-    "Slot1Source": "LFO 1",
-    "Slot1Module": "SAMPLER",
-    "Slot1Param": 0.0,
-    "Slot1Amount": 0.5,
-    "Slot2Source": "LFO 1",
-    "Slot2Module": "Off",
-    "Slot2Param": 0.0,
-    "Slot2Amount": 0.5,
-    "Slot3Source": "LFO 1",
-    "Slot3Module": "Off",
-    "Slot3Param": 0.0,
-    "Slot3Amount": 0.5,
-    "Slot4Source": "LFO 1",
-    "Slot4Module": "Off",
-    "Slot4Param": 0.0,
-    "Slot4Amount": 0.5,
-    "Slot5Source": "LFO 1",
-    "Slot5Module": "Off",
-    "Slot5Param": 0.0,
-    "Slot5Amount": 0.5,
-    "Slot6Source": "LFO 1",
-    "Slot6Module": "Off",
-    "Slot6Param": 0.0,
-    "Slot6Amount": 0.5,
-    "Slot7Source": "LFO 1",
-    "Slot7Module": "Off",
-    "Slot7Param": 0.0,
-    "Slot7Amount": 0.5,
-    "Slot8Source": "LFO 1",
-    "Slot8Module": "Off",
-    "Slot8Param": 0.0,
-    "Slot8Amount": 0.5
+    "Slots": [
+      {
+        "Source": "LFO 1",
+        "Module": "SAMPLER",
+        "Param": 0,
+        "ParamName": "AMP",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      }
+    ]
   },
   "Karplus": {
     "Enabled": false,
@@ -223,18 +258,19 @@
   "Wavetable": {
     "Enabled": false,
     "BankIndex": 0.0,
-    "Position": 0.160000011324883,
+    "Position": 0.16000001,
     "Frequency": 262.0,
     "Amplitude": 0.5,
     "UnisonVoices": 1.0,
-    "UnisonDetune": 0.200000002980232,
-    "Pan": 0.0
+    "UnisonDetune": 0.2,
+    "Pan": 0.0,
+    "Feedback": 0.0
   },
   "Adsr": {
     "Enabled": false,
-    "Attack": 0.010000000707805,
-    "Decay": 0.300000011920929,
-    "Sustain": 0.699999988079071,
+    "Attack": 0.010000001,
+    "Decay": 0.3,
+    "Sustain": 0.7,
     "Release": 0.25
   },
   "Scope": {
@@ -257,9 +293,288 @@
     "End": 1.0,
     "Mode": "Loop",
     "Amp": 0.5,
-    "Pan": 0.350000023841858,
+    "Pan": 0.35000002,
     "Speed": 1.0,
+    "Stretch": false,
+    "Release": 0.0,
     "File": "CH_01"
+  },
+  "StepSeq": {
+    "Enabled": false,
+    "SyncDiv": "1/8",
+    "Rate": 5.2000003,
+    "Length": 16.0,
+    "Gate": 1.0,
+    "Accent": 0.5,
+    "Steps": [
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 48,
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
+      }
+    ]
+  },
+  "Perc": {
+    "Enabled": false,
+    "Kit": 0.0,
+    "Amp": 0.5,
+    "SyncDiv": "1/16",
+    "Rate": 8.0,
+    "Length": 16.0,
+    "File": "SamsSonor",
+    "Lanes": [
+      {
+        "Note": 36,
+        "Name": "Bass Drum 1",
+        "Amp": 0.79999995,
+        "Pan": 0.0,
+        "Steps": "................................"
+      },
+      {
+        "Note": 38,
+        "Name": "Acoustic Snare",
+        "Amp": 0.79999995,
+        "Pan": 0.0,
+        "Steps": "................................"
+      },
+      {
+        "Note": 42,
+        "Name": "Closed Hi-Hat",
+        "Amp": 0.79999995,
+        "Pan": 0.0,
+        "Steps": "................................"
+      },
+      {
+        "Note": 46,
+        "Name": "Open Hi-Hat",
+        "Amp": 0.79999995,
+        "Pan": 0.0,
+        "Steps": "................................"
+      }
+    ]
+  },
+  "Chaos": {
+    "Enabled": false,
+    "Rate": 0.99999994
   },
   "RackLayout": [
     {

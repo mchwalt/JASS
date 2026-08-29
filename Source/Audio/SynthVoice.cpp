@@ -248,6 +248,29 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 }
                 tActive[(size_t) s.target] = true;
             }
+
+    // ── Accent (15.2) ─────────────────────────────────────────────────────────────────────────
+    // A note hotter than the sequencer's plain velocity (100) opens the filter and gains up;
+    // a softer one closes and quietens. ACCENT (STEP SEQ) scales the effect; at 0 velocity
+    // changes nothing — the pre-15.2 behaviour, and the sound of every preset saved before it.
+    // Per-block factors: the cutoff bump is baked into baseCutoff and pushed through the strips'
+    // EXISTING cutoff apply (tActive), so matrix modulation stacks on top of the accented base;
+    // the gain scales the final output samples. baseCutoff is restored/rewritten per block by
+    // applyToVoice, so nothing compounds.
+    float accentGain = 1.0f;
+    if (accentDepth > 0.0f)
+    {
+        constexpr double velRef = 100.0 / 127.0;   // the sequencer's plain velocity
+        const double f = juce::jlimit (-1.0, 1.0, ((double) noteVelocity - velRef) / (1.0 - velRef))
+                       * (double) accentDepth;
+        if (f != 0.0)
+        {
+            baseCutoff = juce::jlimit (20.0, 20000.0, baseCutoff * std::pow (2.0, f));   // ±1 octave at full
+            tActive[(size_t) LFOTarget::FilterCutoff] = true;   // push the accented base to the strips
+            accentGain = (float) std::pow (10.0, f * 4.0 / 20.0);                        // ±4 dB at full
+        }
+    }
+
     std::array<double, ModMatrixConfig::kNumTargets> modOffset {};   // per-sample summed offsets
     OscModOffsets oscOffset {};                                      // per-sample per-OSC offsets
 
@@ -588,13 +611,14 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         }
 
         // Output write: mono → both channels (today); stereo-pan → L/R (channels beyond nCh reuse the last).
+        // accentGain scales the whole note here (15.2) — one multiply, every output mode covered.
         const int nOut = outputBuffer.getNumChannels();
         if (nCh == 1)
             for (int c = 0; c < nOut; ++c)
-                outputBuffer.addSample(c, startSample + sample, channel[0]);
+                outputBuffer.addSample(c, startSample + sample, accentGain * channel[0]);
         else
             for (int c = 0; c < nOut; ++c)
-                outputBuffer.addSample(c, startSample + sample, channel[std::min(c, nCh - 1)]);
+                outputBuffer.addSample(c, startSample + sample, accentGain * channel[std::min(c, nCh - 1)]);
 
         // Free the voice when its amplitude source has fully decayed: ADSR reaching Idle (envelope
         // on), else the fast bypass gate reaching 0 (envelope off) — so a released note stops in

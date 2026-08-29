@@ -129,7 +129,11 @@ namespace rack
         // by the timer, which disables + dims just that control (and its caption) when the
         // predicate is false. Component-level (setEnabled/setAlpha), so knobs and combos share it.
         // `active` caches the last applied state so we only touch the widgets on a real change.
-        struct CondKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate; char active = -1; };
+        // `dimOnly` keeps the mouse alive and only dims: a STEP SEQ rest's pitch survives (the
+        // SPACE rule) and must stay editable without re-enabling the step first (maintainer
+        // 2026-08-26) — unlike a mode-irrelevant knob, whose value truly does not apply.
+        struct CondKnob { juce::Component* widget; juce::Label* caption; std::function<bool()> predicate;
+                          bool dimOnly = false; char active = -1; };
         // Knobs carrying Knob::highlightWhen: polled by the timer, ringed by paintOverChildren while
         // the predicate holds. `on` caches the last state so we only repaint on a real change.
         // `ring` false => the mark is a lit dot (a sequencer playhead) instead of a ring (the write
@@ -141,6 +145,16 @@ namespace rack
         std::vector<RingKnob>  ringKnobs;
         std::vector<XformKnob> xformKnobs;
         std::vector<CondKnob>  condKnobs;
+
+        // Row toggle (15.7, desc.altRowTitle): knobs carrying an altParamId own a SECOND slider
+        // on the same cell bounds; the header latch flips which of the two is visible. The cell's
+        // primary widget stays the main slider — corner switch, ring and playhead anchor to it,
+        // and both views share them.
+        struct AltKnob { SynthySlider* main; SynthySlider* alt; };
+        std::vector<AltKnob> altKnobs;
+        std::unique_ptr<juce::TextButton> altRowBtn;   // header latch; only when altRowTitle set
+        bool altRowActive = false;
+        void applyAltRow();   // show/hide the pairs per altRowActive
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back
 
         // Combos built from a dynamic provider (e.g. the Wavetable bank list). Recorded so
