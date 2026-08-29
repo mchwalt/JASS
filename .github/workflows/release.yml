@@ -11,7 +11,13 @@ on:
       - 'docs/**'
       - '_bmad-output/**'
       - '.githooks/**'
+      - '.github/**'   # a pipeline change is not a release either
   workflow_dispatch:
+    inputs:
+      version:
+        description: 'CalVer to (re)build, e.g. 2026.08.10 — attaches assets to that release; empty = mint the next MICRO'
+        required: false
+        default: ''
 
 permissions:
   contents: write       # create tags + releases
@@ -29,6 +35,18 @@ jobs:
       - id: calc
         shell: bash
         run: |
+          # A dispatched run may name an EXISTING version to repair (attach missing assets to
+          # its release) instead of minting the next MICRO — added 2026-08-30, when a broken
+          # upload step left v2026.08.9/v2026.08.10 standing without zips and every automatic
+          # path could only have minted v2026.08.11 for the same content.
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VER="${{ github.event.inputs.version }}"
+            Y=${VER%%.*}; REST=${VER#*.}; M=${REST%%.*}; C=${REST#*.}
+            echo "calver=${VER}" >> "$GITHUB_OUTPUT"
+            echo "calver_cmake=${Y}.$((10#$M)).${C}" >> "$GITHUB_OUTPUT"
+            echo "Rebuilding CalVer: ${VER}"
+            exit 0
+          fi
           YEAR=$(date -u +%Y)
           MONTH=$(date -u +%m)                 # padded, e.g. 07
           MONTHNUM=$((10#$MONTH))              # decimal, no leading zero, e.g. 7
@@ -140,5 +158,4 @@ jobs:
         shell: bash
         # Straight onto the release created above — no artifact storage involved (see the
         # release job's comment). --clobber makes a re-run of a failed build idempotent.
-        run: gh release upload "v${{ needs.version.outputs.calver }}" "${OUT}.zip" --repo "${{ github.repository }}" --clobber \
-            dist/*.zip
+        run: gh release upload "v${{ needs.version.outputs.calver }}" "${OUT}.zip" --repo "${{ github.repository }}" --clobber

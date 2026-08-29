@@ -10,3 +10,5 @@ Vier Perkussionsspuren auf einem 32-Schritt-Raster, trocken auf den Master-Bus. 
 Die Drums geben den Takt vor: Läuft PERC, steigt eine aus der Stille gestartete STEP-SEQ-Figur beim nächsten Anfang des Drum-Musters ein statt dort, wo du die Taste gedrückt hast.
 
 PERC läuft nie durch Filter oder Effekte — die sitzen in den Stimmen, und der Beat ist keine. Lädt das Kit eines Presets noch, bleibt es stumm, statt das falsche zu spielen.
+
+**COPY / x2 (Titelzeile).** **COPY** rastet einen Kopiermodus ein: Quell-Step anklicken — die ganze Spalte über alle vier Reihen — und jeder weitere Klick stempelt sie dorthin. Rechtsklick wählt eine neue Quelle; nochmal COPY beendet. **x2** hängt das Pattern hinter sich selbst und verdoppelt LEN (bis 32): derselbe Takt nochmal, dann die Kopie variieren.

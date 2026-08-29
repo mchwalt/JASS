@@ -303,7 +303,14 @@ namespace rack
         // the preset dialogs cannot separate ".jass or .mid?" up front (JUCE's native chooser
         // shows ONE combined filter entry), so the module carries its own entry points and the
         // intent is settled before any dialog opens (maintainer 2026-08-30, the 15.8 fallback).
-        struct HeaderAction { juce::String title, tooltip; std::function<void()> onClick; };
+        // With `onToggle` set instead of `onClick`, the button LATCHES and reports its state —
+        // PERC's COPY mode (stamp a step column onto others) rides the same slot.
+        struct HeaderAction
+        {
+            juce::String title, tooltip;
+            std::function<void()>     onClick;    // one-shot …
+            std::function<void(bool)> onToggle;   // … OR a latch; exactly one of the two is set
+        };
         std::vector<HeaderAction> headerActions;
 
         // Per-slot activity highlight (MOD MATRIX). The body is a repeating run of `groupSize`

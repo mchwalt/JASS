@@ -216,7 +216,13 @@ namespace rack
             auto* b = actionBtns.add (new juce::TextButton (act.title));
             b->setTooltip (act.tooltip);
             b->setWantsKeyboardFocus (false);
-            b->onClick = act.onClick;
+            if (act.onToggle)   // a latch, like the row toggle — the callback gets the state
+            {
+                b->setClickingTogglesState (true);
+                b->onClick = [b, cb = act.onToggle] { cb (b->getToggleState()); };
+            }
+            else
+                b->onClick = act.onClick;
             addAndMakeVisible (*b);
         }
 
