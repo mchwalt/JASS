@@ -10,6 +10,16 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.13] – 2026-08-31
+
+### Changed
+- **JASS is licensed under the AGPLv3 now** (was GPLv3). JUCE 9's free tier is AGPLv3 — the
+  README had still described the old GPLv3 dual licence — and relicensing the app itself keeps
+  the combination clean. For a desktop instrument the AGPL behaves exactly like the GPL; the
+  network clause only matters for hosted services. The README also states the verification
+  model plainly (no test rig — by eye and ear against measured references), and the internal
+  planning artifacts left the repository for its public life.
+
 ## [2026.08.12] – 2026-08-31
 
 ### Added

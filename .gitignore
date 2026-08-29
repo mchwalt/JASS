@@ -12,6 +12,8 @@
 # BMAD: global install — Kern liegt unter ~/.claude/bmad-core, hier nur als Junction;
 # Skills liegen global unter ~/.claude/skills. Nicht ins Repo tracken.
 /_bmad
+# BMAD planning artifacts: local working papers, not for the public repo (history scrubbed 2026-08-31)
+/_bmad-output
 /.claude/skills/
 
 # Python bytecode from the offline helpers in tools/ (created as soon as one is imported

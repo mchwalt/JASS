@@ -175,6 +175,13 @@ cmake -B build -G "Visual Studio 17 2022"
 > Note: MSBuild slash arguments (`/m`) get mangled in Git Bash — run the build
 > from **PowerShell**.
 
+### Testing
+
+There is no automated test rig. Verification is deliberate and low-tech: it
+builds, the app runs, and changes are confirmed **by eye and by ear** against
+measured references (several presets are transcribed from records and checked
+against spectral measurements — see the CHANGELOG for the reasoning per change).
+
 ## Project layout
 
 ```
@@ -233,11 +240,13 @@ git config core.hooksPath .githooks
 
 ## License
 
-JASS is released under the **[GNU GPL v3](LICENSE)**.
+JASS is released under the **[GNU AGPL v3](LICENSE)**.
 
-JASS embeds **JUCE** as a submodule. JUCE is dual-licensed (**GPLv3 or a
-commercial JUCE licence**); the GPLv3 choice covers free JUCE use. Distributing
-JASS under other terms requires an appropriate JUCE licence.
+JASS embeds **JUCE 9** as a submodule. JUCE is dual-licensed (**AGPLv3 or a
+commercial JUCE licence**); JASS's AGPLv3 matches JUCE's free tier exactly.
+Distributing JASS under other terms requires an appropriate JUCE licence.
+(For a desktop instrument the AGPL behaves like the GPL — the network clause
+only matters for hosted services.)
 
 ### Third-party data & code
 
