@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.9] – 2026-08-29
+
 ### Added
 - **Presets store the drum pattern and the mod routings as structures now (FormatVersion 9).**
   The same cure v7 applied to the STEP SEQ figure, extended to the two remaining knob dumps:
