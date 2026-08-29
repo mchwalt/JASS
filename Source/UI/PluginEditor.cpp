@@ -2,6 +2,7 @@
 #include "../DSP/WavetableBank.h"
 #include "HelpTextStore.h"           // embedded EN/DE help texts (Story 6.1)
 #include "../Audio/PresetIO.h"
+#include "../Audio/SeqMidiIO.h"    // MIDI ⇄ STEP SEQ through the LOAD/SAVE dialogs (15.8)
 #include "../Audio/Parameters.h"   // Parameters::ID for the rack
 #include "../Version.h"            // JASS::versionString() (CalVer)
 #include "../Modules/AllModules.h"  // spec-driven module descriptors (makeModuleDescriptor + Modules::*)
@@ -480,6 +481,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // Preset Save / Load (JASS .jass JSON)
     addAndMakeVisible(saveBtn);
     addAndMakeVisible(loadBtn);
+    // Presets keep their own clean dialogs (*.jass only). MIDI ⇄ STEP SEQ (15.8) enters through
+    // the sequencer's OWN header buttons instead: JUCE's native chooser shows one combined
+    // filter entry, so a shared dialog could not say up front whether the user means the whole
+    // patch or just the figure (maintainer 2026-08-30 — the design's announced fallback).
     saveBtn.onClick = [this]
     {
         presetChooser = std::make_unique<juce::FileChooser>(
@@ -1101,6 +1106,94 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
                       + juce::String(PresetIO::kFormatVersion)
                       + ".\nA backup was saved to the PresetsBackup folder."));
     }
+}
+
+// STEP SEQ's LOAD MIDI / SAVE MIDI (story 15.8): the choosers behind the module's own header
+// buttons. They start at the system's last-used folder — transcriptions live in Downloads or a
+// DAW project, never in the Presets folder.
+void SynthyEditor::chooseMidiImport()
+{
+    presetChooser = std::make_unique<juce::FileChooser>(
+        currentLang == "DE" ? "MIDI-Figur laden" : "Load MIDI figure",
+        juce::File(), "*.mid;*.midi");
+    auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
+    juce::Component::SafePointer<SynthyEditor> self (this);
+    presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
+    {
+        if (self == nullptr) return;
+        if (auto f = fc.getResult(); f != juce::File{})
+            self->importMidiFigure(f);
+    });
+}
+
+void SynthyEditor::chooseMidiExport()
+{
+    presetChooser = std::make_unique<juce::FileChooser>(
+        currentLang == "DE" ? "Figur als MIDI speichern" : "Save figure as MIDI",
+        juce::File(), "*.mid");
+    auto flags = juce::FileBrowserComponent::saveMode
+               | juce::FileBrowserComponent::canSelectFiles
+               | juce::FileBrowserComponent::warnAboutOverwriting;
+    juce::Component::SafePointer<SynthyEditor> self (this);
+    presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
+    {
+        if (self == nullptr) return;
+        auto f = fc.getResult();
+        if (f == juce::File{}) return;
+        if (! f.hasFileExtension("mid;midi")) f = f.withFileExtension("mid");
+        // Exports the FIGURE, not the patch: preset name and clean-state stay untouched —
+        // writing a .mid does not make the .jass on disk any truer.
+        if (! SeqMidiIO::exportFigure(self->processor.getAPVTS(), f))
+            juce::NativeMessageBox::showMessageBoxAsync(
+                juce::MessageBoxIconType::WarningIcon,
+                self->currentLang == "DE" ? "MIDI-Export fehlgeschlagen" : "MIDI export failed",
+                (self->currentLang == "DE"
+                    ? juce::String("Die Figur enth\xc3\xa4lt keine aktiven Steps oder die Datei ist nicht schreibbar.")
+                    : juce::String("The figure has no active steps, or the file is not writable.")));
+    });
+}
+
+// The import itself (story 15.8): the transcription becomes the running figure. Errors are as
+// LOUD as the preset path's — a file that silently does nothing teaches the user the feature
+// does not exist. Success is silent: the imported figure latches to its root and PLAYS.
+void SynthyEditor::importMidiFigure(const juce::File& f)
+{
+    const auto res = SeqMidiIO::importFigure(processor.getAPVTS(), f);
+    if (res.error != SeqMidiIO::Error::none)
+    {
+        const bool de = currentLang == "DE";
+        juce::String why;
+        switch (res.error)
+        {
+            case SeqMidiIO::Error::smpteTime:
+                why = de ? juce::String("verwendet SMPTE-Zeitformat \xe2\x80\x93 nicht unterst\xc3\xbctzt.")
+                         : juce::String("uses SMPTE time format \xe2\x80\x93 not supported.");
+                break;
+            case SeqMidiIO::Error::noNotes:
+                why = de ? juce::String("enth\xc3\xa4lt keine Noten.")
+                         : juce::String("contains no notes.");
+                break;
+            case SeqMidiIO::Error::notQuantized:
+                why = de ? juce::String("liegt nicht auf einem 1/16-Raster (frei eingespieltes oder "
+                                        "roh transkribiertes Material). Bitte in der DAW quantisieren "
+                                        "oder einen geloopten Ausschnitt exportieren.")
+                         : juce::String("is not on a 1/16 grid (freely played or raw transcription "
+                                        "material). Please quantize it in the DAW, or export a looped "
+                                        "section.");
+                break;
+            default:
+                why = de ? juce::String("konnte nicht gelesen werden (keine MIDI-Datei?).")
+                         : juce::String("could not be read (not a MIDI file?).");
+                break;
+        }
+        juce::NativeMessageBox::showMessageBoxAsync(
+            juce::MessageBoxIconType::WarningIcon,
+            de ? "MIDI-Import fehlgeschlagen" : "MIDI import failed",
+            "\xe2\x80\x9e" + f.getFileNameWithoutExtension() + "\xe2\x80\x9c " + why);
+        return;
+    }
+    // Same hygiene as a preset load: an armed write cursor belongs to the figure that is gone.
+    seqSetCursor(-1);
 }
 
 // Remove every F-key assignment of this preset name — the bank stores names and re-resolves them
@@ -2233,6 +2326,14 @@ void SynthyEditor::buildRack()
         // control of its own. doReset() writes the defaults first and calls this after.
         d.onReset = [this] { seqSetCursor(0); };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
+        // MIDI ⇄ figure (15.8): the sequencer's own entry points, so "whole preset or just the
+        // MIDI track?" is answered by WHERE the user clicks, before any dialog opens.
+        d.headerActions.push_back({ "LOAD MIDI",
+                                    "Import a .mid transcription as the figure",
+                                    [this] { chooseMidiImport(); } });
+        d.headerActions.push_back({ "SAVE MIDI",
+                                    "Export the figure as a .mid file",
+                                    [this] { chooseMidiExport(); } });
         greyWhenSynced(d, P::seqRate, P::seqSync);
         addRackModule(std::move(d));
     }

@@ -153,6 +153,7 @@ namespace rack
         struct AltKnob { SynthySlider* main; SynthySlider* alt; };
         std::vector<AltKnob> altKnobs;
         std::unique_ptr<juce::TextButton> altRowBtn;   // header latch; only when altRowTitle set
+        juce::OwnedArray<juce::TextButton> actionBtns; // header one-shot actions (15.8), see desc.headerActions
         bool altRowActive = false;
         void applyAltRow();   // show/hide the pairs per altRowActive
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back

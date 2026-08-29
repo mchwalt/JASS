@@ -208,6 +208,18 @@ namespace rack
             addAndMakeVisible (*altRowBtn);
         }
 
+        // Header one-shot actions (15.8): STEP SEQ's LOAD MIDI / SAVE MIDI. Plain buttons — the
+        // work lives in the descriptor's callback (the editor opens the chooser and runs the
+        // import/export); the frame only puts a clickable, tooltipped word in the title bar.
+        for (const auto& act : desc.headerActions)
+        {
+            auto* b = actionBtns.add (new juce::TextButton (act.title));
+            b->setTooltip (act.tooltip);
+            b->setWantsKeyboardFocus (false);
+            b->onClick = act.onClick;
+            addAndMakeVisible (*b);
+        }
+
         // Online-help info icon (Story 6.1): shown only when a help text exists for this
         // module's help slug (helpId(), which may alias several instances to one text).
         // Clicking it asks the editor (via onHelp) to show the shared HelpPanel; onHelp carries
@@ -667,6 +679,10 @@ namespace rack
         // every other module's header geometry is untouched.
         if (altRowBtn != nullptr)
             altRowBtn->setBounds (header.removeFromRight (46).reduced (2, 1));
+        // Header actions (15.8), left of the row toggle. Reverse order, so the declaration
+        // order reads left-to-right on screen (removeFromRight fills right-to-left).
+        for (int i = actionBtns.size(); --i >= 0;)
+            actionBtns[i]->setBounds (header.removeFromRight (72).reduced (2, 1));
         header.removeFromLeft (11);   // room for the status-LED dot painted at the header's left edge
         titleLabel.setBounds (header);
 

@@ -25,3 +25,5 @@ The assignments are a **global** setting (stored in `PresetBanks.json`), indepen
 If a slot's preset file was renamed or deleted on disk, pressing the key says so once and clears the slot. The header **DELETE** button removes a preset file entirely (to the recycle bin) and clears its key with it.
 
 Out of the box, **F1–F4 come pre-assigned with the four demo presets** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). The header **RESET** button restores this factory bank.
+
+**MIDI lives at the STEP SEQ.** These dialogs handle whole presets (`.jass`) only. To load or save just the sequencer's figure as a MIDI file, use **LOAD MIDI / SAVE MIDI** in the STEP SEQ module's title bar.
