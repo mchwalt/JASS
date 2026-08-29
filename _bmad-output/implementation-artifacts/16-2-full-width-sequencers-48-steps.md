@@ -1,6 +1,9 @@
 # Story 16.2: Full-width sequencers — 48 steps, collapsible ADSR curve
 
-Status: ready-for-dev (design decided with the maintainer 2026-08-30/31)
+Status: ready-for-dev — **first slice BUILT 2026-08-31 (83e2110): the collapsible ADSR curve.**
+Generic ModuleFrame fold (collapseTitle/collapsedSize, onFootprintChanged, maxHeight counts
+the expanded size), ADSR = CURVE latch, W4U7 ⇄ W4H1, starts expanded until the width move
+lands. Remaining: the 48-step/full-width work (tasks 1-3, 5-7) + flipping the ADSR default.
 
 ## Story
 
