@@ -15,8 +15,9 @@ Windows & Linux builds (Standalone + VST3), produced automatically on every merg
 
 ### 🎧 Hear it
 
-**[Listen to the demo (MP3, ~1 min)](docs/Demo.mp3)** — recorded straight out of
-JASS. GitHub opens it in its built-in audio player.
+**[Download the demo to hear it (MP3, ~1 min)](https://raw.githubusercontent.com/mchwalt/JASS/main/docs/Demo.mp3)** —
+recorded straight out of JASS. Depending on your browser it plays right away or
+lands in your downloads.
 
 ## Why this project
 
