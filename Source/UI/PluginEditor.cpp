@@ -1153,6 +1153,27 @@ void SynthyEditor::chooseMidiExport()
     });
 }
 
+// PERC's x2 (maintainer 2026-08-30): append the pattern behind itself and double LEN — the
+// classic drum-machine "same bar again, then vary the copy". Capped at the 32-step grid; at
+// LEN 17..31 it copies what still fits (a partial doubling beats a dead button), at 32 it
+// does nothing. Plain parameter writes, so undo/preset/LiveState all see it like hand edits.
+void SynthyEditor::doublePercPattern()
+{
+    namespace P = Parameters::ID;
+    auto& a = processor.getAPVTS();
+    const int len    = (int) *a.getRawParameterValue(P::percLength);
+    const int newLen = juce::jmin(2 * len, (int) PercSequencer::kMaxSteps);
+    if (newLen <= len)
+        return;
+    for (int l = 1; l <= PercSequencer::kLanes; ++l)
+        for (int s = 1; s + len <= newLen; ++s)
+            if (auto* src = a.getParameter(P::percStep(l, s)))
+                if (auto* dst = a.getParameter(P::percStep(l, s + len)))
+                    dst->setValueNotifyingHost(src->getValue() > 0.5f ? 1.0f : 0.0f);
+    if (auto* lp = a.getParameter(P::percLength))
+        lp->setValueNotifyingHost(lp->convertTo0to1((float) newLen));
+}
+
 // The import itself (story 15.8): the transcription becomes the running figure. Errors are as
 // LOUD as the preset path's — a file that silently does nothing teaches the user the feature
 // does not exist. Success is silent: the imported figure latches to its root and PLAYS.
@@ -2342,9 +2363,19 @@ void SynthyEditor::buildRack()
     // grid's 62 px cell), and the KIT list is dynamic, exactly like the SAMPLER's SET.
     {
         auto d = makeModuleDescriptor(Modules::perc());
-        auto* grid = rackOwned.add(new PercGrid(apvts,
-                                                [this] { return processor.getPercStep(); },
-                                                [this](int lane) { processor.auditionPercLane(lane); }));
+        auto* grid = new PercGrid(apvts,
+                                  [this] { return processor.getPercStep(); },
+                                  [this](int lane) { processor.auditionPercLane(lane); });
+        rackOwned.add(grid);   // typed pointer kept: the COPY latch below talks to PercGrid itself
+        // Step duplication (maintainer 2026-08-30, "3. bitte" = both): COPY latches a
+        // column-stamp mode on the grid; x2 appends the pattern behind itself. Visible header
+        // buttons, no context menu — the house rule.
+        d.headerActions.push_back({ "COPY",
+                                    "Copy a step column: click the source, then every target (right-click re-picks)",
+                                    {}, [grid](bool on) { grid->setCopyMode(on); } });
+        d.headerActions.push_back({ "x2",
+                                    "Double the pattern: steps 1..LEN repeat behind themselves, LEN doubles",
+                                    [this] { doublePercPattern(); }, {} });
         // The grid goes FIRST so it fills row 1 and the controls wrap into row 2 beneath it. Cells
         // fill in body order, so this one insert is the whole layout.
         d.body.insert(d.body.begin(), Display{ grid, 19 });
