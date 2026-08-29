@@ -171,6 +171,12 @@ namespace rack
         juce::OwnedArray<juce::TextButton> actionBtns; // header one-shot actions (15.8), see desc.headerActions
         std::unique_ptr<juce::TextButton> collapseBtn; // display fold latch (16.2); only when collapseTitle set
         bool collapsedState = false;                   // true = Display cells folded away
+
+        // Pattern-length marker (16.2): cell indices of the step knobs in figure order, the
+        // LEN param's raw value, and the last length painted (poll-and-repaint like the rest).
+        std::vector<int> markerCells;
+        std::atomic<float>* markerLen = nullptr;
+        int lastMarkerLen = -1;
         bool altRowActive = false;
         void applyAltRow();   // show/hide the pairs per altRowActive
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back

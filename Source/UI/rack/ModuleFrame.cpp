@@ -134,11 +134,15 @@ namespace rack
         // irrelevant knob never flashes up live before greying out.
         updateCondKnobs();
 
+        // Pattern-length marker (16.2): the LEN param whose value places the red line.
+        if (desc.lenMarkerLengthParam.isNotEmpty())
+            markerLen = apvts.getRawParameterValue (desc.lenMarkerLengthParam);
+
         // Poll-and-repaint-on-change (mirrors EnvelopeDisplay) whenever the module has a
-        // dynamic active state — an enable param, a derived predicate, dependent combos, or a
-        // per-knob relevance predicate.
+        // dynamic active state — an enable param, a derived predicate, dependent combos, a
+        // per-knob relevance predicate, or the pattern-length marker.
         if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty()
-            || ! condKnobs.empty() || ! markedKnobs.empty())
+            || ! condKnobs.empty() || ! markedKnobs.empty() || markerLen != nullptr)
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -359,6 +363,11 @@ namespace rack
 
                 cells.push_back ({ s, makeCaption (ownedCaptions, k->label), juce::jmax (1, k->slots) });
                 if (auto* cap = cells.back().caption) addAndMakeVisible (*cap);
+
+                // Pattern-length marker (16.2): remember the step-knob cells in figure order —
+                // bodyOrder lists them musically, so index LEN-1 IS the figure's last step.
+                if (desc.lenMarkerStepPrefix.isNotEmpty() && k->paramId.startsWith (desc.lenMarkerStepPrefix))
+                    markerCells.push_back ((int) cells.size() - 1);
 
                 // Mode-dependent knob (e.g. STEREO WIDTH/TIME outside Pseudo-Stereo): the timer
                 // disables + dims this one knob while the module stays live. Applied there, not
@@ -940,6 +949,24 @@ namespace rack
 
     void ModuleFrame::paintOverChildren (juce::Graphics& g)
     {
+        // Pattern-length marker (16.2, maintainer: "eine rote Trennlinie hinter das letzte
+        // aktive Element"): a red line on the right edge of the LEN-th step knob, so where the
+        // figure wraps is visible at a glance — the knob-row counterpart of PERC's dimmed
+        // beyond-LEN cells. Red is a POSITION here, not a colour code, so it stays readable
+        // for red-green colour vision too.
+        if (! markerCells.empty() && markerLen != nullptr)
+        {
+            const int len = juce::jlimit (1, (int) markerCells.size(), (int) markerLen->load());
+            const auto& cell = cells[(size_t) markerCells[(size_t) len - 1]];
+            if (cell.widget != nullptr)
+            {
+                auto b = cell.widget->getBounds();
+                if (cell.caption != nullptr) b = b.getUnion (cell.caption->getBounds());
+                g.setColour (juce::Colour (0xffd64541));
+                g.fillRect (b.getRight() - 1, b.getY(), 3, b.getHeight());
+            }
+        }
+
         // Write cursor (Story 15.4): a ring around the ONE step the keyboard will write next. Drawn
         // in the module's identity colour, brightened — the rack's other marks are a green dot
         // (active) and a grey ring (off), so this cannot be mistaken for either. Painted before the
@@ -1053,6 +1080,13 @@ namespace rack
 
     void ModuleFrame::timerCallback()
     {
+        // Pattern-length marker (16.2): poll LEN and repaint only on a real change.
+        if (markerLen != nullptr)
+        {
+            const int now = (int) markerLen->load();
+            if (now != lastMarkerLen) { lastMarkerLen = now; repaint(); }
+        }
+
         // Dependent combos (MOD MATRIX): when a watched param (MODULE) changes, let the descriptor
         // clamp the dependent param (PARAM) if it is now out of range, then re-list the PARAM combo.
         for (size_t i = 0; i < desc.comboDeps.size(); ++i)

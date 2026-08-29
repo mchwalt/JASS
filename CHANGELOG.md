@@ -11,6 +11,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **STEP SEQ shows where the figure ends.** A red line after step LEN — the knob-row
+  counterpart of PERC's dimmed beyond-LEN cells (dimming was no option here: a grey knob
+  already means a rest, and two grey reasons cannot be told apart). It moves live with the
+  LEN knob.
 - **PERC carries 48 steps now too (story 16.2).** The grid grows to 3 bars of sixteenths —
   matching the sequencer, and two Los Niños cycles line up against a 48-step drum pattern.
   The module takes W24, four columns less than STEP SEQ: boxes pack denser than knobs, and
