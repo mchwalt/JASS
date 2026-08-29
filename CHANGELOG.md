@@ -11,7 +11,28 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
-- **Los Niños has its drums now — and a kit of its own.** The demo preset's percussion
+### Fixed
+- **Format upgrades no longer rotate the MOD MATRIX targets.** The v5→v6 param-order remap
+  guarded itself only by "does the file carry `SlotNModule`?" — true for every v6+ file too, so
+  each FormatVersion bump since v7 re-applied the permutation to already-sorted indices and
+  quietly moved routings one step (Alle OSC: FREQ→FB→DETUNE→AMP). Found during the v9 bump when
+  a converted preset's drift slot came back pointing at feedback. Both migration passes are now
+  gated on the file's actual version (`< 5` / `< 6`), and the seeded demo presets in AppData were
+  restored from their repo originals (the drift slot of DAF Beat, Chaos Melody, Matrix Showcase
+  and Helikopter had been rotated by the v7/v8 upgrades).
+
+### Added
+- **Presets store the drum pattern and the mod routings as structures now (FormatVersion 9).**
+  The same cure v7 applied to the STEP SEQ figure, extended to the two remaining knob dumps:
+  PERC's 140 flat keys become `"Lanes"` — one object per lane with `Note`, the generated GM
+  drum `Name`, `Amp`, `Pan` (omitted when centred) and the step row as one readable string
+  (`"Steps": "X...X...X...X..."` — exactly what the grid shows) — and MOD MATRIX's flat
+  `Slot1Source`/… keys become `"Slots"`, one object per routing with `Source`, `Module`, the
+  canonical `Param` index plus its generated `ParamName`, `Amount`, and `Quant` (omitted at
+  Off). Values are untouched — this is structure only, so a re-saved preset sounds
+  bit-identical — and every older file still loads: the flat keys remain readable forever,
+  and the loader feeds the new arrays through the same spec-driven mapping as before, so the
+  choice-label and legacy-key logic keeps living in one place. The demo preset's percussion
   used to be the acoustic SamsSonor kick and snare stamped on every beat; against the
   record that read as one undifferentiated thump. A percussion stem of the original
   (separated with lalal.ai, measured with the audio-measure workflow) showed why no

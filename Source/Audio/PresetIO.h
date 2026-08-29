@@ -3,6 +3,7 @@
 #include <array>
 #include "Parameters.h"
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
+#include "../DSP/ModMatrixCatalog.h"     // v9 "Slots": generated ParamName (the catalog is dependency-free by design)
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 #include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
 #include "Samples.h"       // embedded shipped SAMPLER examples (Story 12.1)
@@ -36,7 +37,10 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 8;   // v8 = step objects gain "Gate" (5..100 %, "TIE", "SLIDE"; 15.7).
+    constexpr int kFormatVersion = 9;   // v9 = PERC lanes and MOD MATRIX routings become arrays
+                                        //      ("Lanes" / "Slots" — structure only, values unchanged;
+                                        //      same cure the v7 STEP SEQ "Steps" array applied).
+                                        // v8 = step objects gain "Gate" (5..100 %, "TIE", "SLIDE"; 15.7).
                                         // v7 = StepSeq steps as an ARRAY of note objects + accent (15.2).
                                         // v6 = MOD MATRIX modules + params sorted A→Z (param INT remapped).
                                         // v5 = MOD MATRIX DEST split into MODULE + PARAM (per-OSC targets).
@@ -554,6 +558,75 @@ namespace PresetIO
             mod->setProperty("Steps", juce::var(steps));
         }
 
+        // PERC lanes as an ARRAY of lane objects (FormatVersion 9) — the same cure the v7 pass
+        // above applied to STEP SEQ: a drum pattern in the file reads as a groove, not as 140
+        // flat keys. Per lane: "Note" (the kit key, canonical), "Name" (the GM drum name,
+        // generated purely for the reader — the loader ignores it, so number and name can never
+        // diverge), "Amp", "Pan" (omitted when centred, the default), and "Steps" — the step row
+        // as one string, 'X' = hit, '.' = rest, exactly the row the PERC grid shows.
+        if (auto* mod = root->getProperty("Perc").getDynamicObject())
+        {
+            int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
+            while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
+            while (mod->hasProperty("Step1_" + juce::String(nSteps + 1))) ++nSteps;
+            juce::Array<juce::var> lanes;
+            for (int l = 1; l <= nLanes; ++l)
+            {
+                const juce::String L((l));
+                auto* ln = new juce::DynamicObject();
+                const int note = (int) mod->getProperty("Note" + L);
+                ln->setProperty("Note", note);
+                if (const juce::String gm (juce::MidiMessage::getRhythmInstrumentName(note)); gm.isNotEmpty())
+                    ln->setProperty("Name", gm);
+                ln->setProperty("Amp", mod->getProperty("Amp" + L));
+                if ((double) mod->getProperty("Pan" + L) != 0.0)
+                    ln->setProperty("Pan", mod->getProperty("Pan" + L));
+                juce::String steps;
+                for (int s = 1; s <= nSteps; ++s)
+                    steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
+                ln->setProperty("Steps", steps);
+                lanes.add(juce::var(ln));
+                mod->removeProperty("Note" + L);
+                mod->removeProperty("Amp" + L);
+                mod->removeProperty("Pan" + L);
+                for (int s = 1; s <= nSteps; ++s)
+                    mod->removeProperty("Step" + L + "_" + juce::String(s));
+            }
+            mod->setProperty("Lanes", juce::var(lanes));
+        }
+
+        // MOD MATRIX routings as an ARRAY of slot objects (FormatVersion 9), same reasoning. The
+        // flat SlotNSource/… keys the spec pass wrote move into one object per slot: "Source" and
+        // "Module" keep their label form (the append-only combo contract is unchanged), "Param"
+        // stays the persisted INT index into the module's param list — "ParamName" spells it out
+        // for the reader and is ignored by the loader, like the STEP SEQ "Name" — then "Amount",
+        // and "Quant" (omitted at "Off", the default, so an unquantized slot stays terse).
+        if (auto* mod = root->getProperty("ModMatrix").getDynamicObject())
+        {
+            int nSlots = 0;
+            while (mod->hasProperty("Slot" + juce::String(nSlots + 1) + "Source")) ++nSlots;
+            juce::Array<juce::var> slots;
+            for (int n = 1; n <= nSlots; ++n)
+            {
+                const juce::String k = "Slot" + juce::String(n);
+                auto* sl = new juce::DynamicObject();
+                sl->setProperty("Source", mod->getProperty(k + "Source"));
+                const juce::String module = mod->getProperty(k + "Module").toString();
+                sl->setProperty("Module", module);
+                const int pi = (int) mod->getProperty(k + "Param");
+                sl->setProperty("Param", pi);
+                if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi > 0)
+                    sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));
+                sl->setProperty("Amount", mod->getProperty(k + "Amount"));
+                if (const auto q = mod->getProperty(k + "Quant").toString(); q.isNotEmpty() && q != "Off")
+                    sl->setProperty("Quant", q);
+                slots.add(juce::var(sl));
+                for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
+                    mod->removeProperty(k + f);
+            }
+            mod->setProperty("Slots", juce::var(slots));
+        }
+
         return juce::var(root);
     }
 
@@ -813,6 +886,58 @@ namespace PresetIO
                 }
             }
 
+        // PERC "Lanes" / MOD MATRIX "Slots" from the v9 ARRAYS (see toVar): rebuild the flat keys
+        // the spec pass understands and run it again on just that one module — so the mapping
+        // (choice label → index, clamping, legacyPersistKey) keeps living in exactly one place,
+        // ModuleRegistry::readState. Older files carry the flat keys directly and were already
+        // read by the spec pass above; a v9 file has no flat keys, so nothing is read twice.
+        {
+            auto respell = [&a](const char* object, juce::DynamicObject* flat)
+            {
+                auto* rt = new juce::DynamicObject();
+                rt->setProperty(object, juce::var(flat));
+                Modules::readState(a, juce::var(rt));
+            };
+            if (auto* mod = v["Perc"].getDynamicObject())
+                if (auto* lanes = mod->getProperty("Lanes").getArray())
+                {
+                    auto* flat = new juce::DynamicObject();
+                    for (int l = 0; l < lanes->size(); ++l)
+                    {
+                        const auto& ln = lanes->getReference(l);
+                        if (! ln.isObject()) continue;
+                        const juce::String L(l + 1);
+                        flat->setProperty("Note" + L, ln["Note"]);
+                        flat->setProperty("Amp"  + L, ln["Amp"]);
+                        if (! ln["Pan"].isVoid())
+                            flat->setProperty("Pan" + L, ln["Pan"]);   // omitted = centred (default)
+                        const juce::String steps = ln["Steps"].toString();
+                        for (int s = 0; s < steps.length(); ++s)
+                            flat->setProperty("Step" + L + "_" + juce::String(s + 1),
+                                              steps[s] == 'X' || steps[s] == 'x');
+                    }
+                    respell("Perc", flat);
+                }
+            if (auto* mod = v["ModMatrix"].getDynamicObject())
+                if (auto* slots = mod->getProperty("Slots").getArray())
+                {
+                    auto* flat = new juce::DynamicObject();
+                    for (int n = 0; n < slots->size(); ++n)
+                    {
+                        const auto& sl = slots->getReference(n);
+                        if (! sl.isObject()) continue;
+                        const juce::String k = "Slot" + juce::String(n + 1);
+                        flat->setProperty(k + "Source", sl["Source"]);
+                        flat->setProperty(k + "Module", sl["Module"]);
+                        flat->setProperty(k + "Param",  sl["Param"]);   // "ParamName" is reader-only
+                        flat->setProperty(k + "Amount", sl["Amount"]);
+                        if (! sl["Quant"].isVoid())
+                            flat->setProperty(k + "Quant", sl["Quant"]);   // omitted = "Off" (default)
+                    }
+                    respell("ModMatrix", flat);
+                }
+        }
+
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
 
@@ -1010,8 +1135,12 @@ namespace PresetIO
             f.copyFileTo(backupDir.getChildFile(f.getFileName()));   // keep the original, just in case
             if (ver < 3) applyVarFlatLegacy(a, v);                   // flat -> apvts (scratch)
             else         applyVar(a, v);                             // nested v3 -> apvts (scratch)
-            migrateSlotTargetsToModuleParam(a, v);                   // v4 SlotNTarget -> Module+Param
-            migrateV5ParamOrder(a, v);                               // v5 SlotNParam int -> A→Z reorder
+            // Version-GATED, not just content-guarded (bug found at the v9 bump, 2026-08-29): the
+            // v5 remap's own check — "SlotNModule is a string" — is true for every v6+ file too,
+            // so from the v7 bump on each conversion re-applied the v5→v6 permutation to already
+            // -sorted indices and rotated matrix targets (Alle OSC: FREQ→FB→DETUNE→AMP→…).
+            if (ver < 5) migrateSlotTargetsToModuleParam(a, v);      // v4 files only: SlotNTarget -> Module+Param
+            if (ver < 6) migrateV5ParamOrder(a, v);                  // v5 files only: SlotNParam int -> A→Z reorder
             if (ver < 4) migrateLfoTargetsToSlots(a);                // v3→v4 ONLY: v4+ already route LFOs
                                                                      // via the matrix — re-folding doubles them
             const auto name = v.getProperty("Name", f.getFileNameWithoutExtension()).toString();
@@ -1054,8 +1183,10 @@ namespace PresetIO
 
             if (r.fileVersion < 3) applyVarFlatLegacy(a, v);   // flat legacy → apvts
             else                   applyVar(a, v);             // nested v3 → apvts
-            migrateSlotTargetsToModuleParam(a, v);             // v4 SlotNTarget → Module+Param
-            migrateV5ParamOrder(a, v);                         // v5 SlotNParam int → A→Z reorder
+            // Version-gated like convertOldPresets (see the note there): re-running the v5 remap
+            // on a v6+ file rotates the matrix param indices.
+            if (r.fileVersion < 5) migrateSlotTargetsToModuleParam(a, v);   // v4 files only
+            if (r.fileVersion < 6) migrateV5ParamOrder(a, v);               // v5 files only
             if (r.fileVersion < 4) migrateLfoTargetsToSlots(a);   // v3→v4 ONLY (v4+ re-fold doubles LFOs)
 
             const auto name = v.getProperty("Name", file.getFileNameWithoutExtension()).toString();
