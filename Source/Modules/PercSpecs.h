@@ -3,7 +3,7 @@
 #include "../DSP/SyncDivision.h"    // SYNC combo, fed verbatim
 #include "../DSP/PercSequencer.h"   // kLanes / kMaxSteps — one definition for DSP and UI
 
-// PERC (Story 16.1) — four percussion tracks on a 32-step grid, rendered straight into the master
+// PERC (Story 16.1) — four percussion tracks on a 48-step grid (32 until 16.2), rendered straight into the master
 // bus. Params only: the body is assembled in the editor, because the step grid is a custom
 // component (128 switches at a 62 px grid cell would be six rack units) and the KIT combo is a
 // dynamic list, like the SAMPLER's SET.
@@ -26,7 +26,7 @@ namespace Modules
         // Next to STEP SEQ rather than in a zone of its own: a PERCUSSION zone for a single module
         // is an empty drawer, and the point of the layer-B framing is that PERC is not a new
         // category but a second instance of something the rack already has (decision 2026-08-10).
-        m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W20U7;   // 207 px: the step grid plus one knob row
+        m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W24U7;   // 16.2: 48-step grid plus one knob row at W24 — approved by eye ("das sah gut aus", 2026-08-31)
         m.defaultVisible = true;    // maintainer 2026-08-11; see the same note in StepSeqSpecs.h —
                                     // a factory-visible module is always in the worst-case height
 
@@ -97,17 +97,25 @@ namespace Modules
                                   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f });
         }
 
-        // The grid itself: 4 lanes x 32 steps of Bool, all showInBody = false. They claim no cell —
+        // The grid itself: 4 lanes x 48 steps of Bool, all showInBody = false. They claim no cell —
         // the PercGrid component paints them and writes them straight to the APVTS.
+        // REGISTRATION order is append-only: the shipped 4x32 block stays exactly as it was,
+        // steps 33..48 of every lane follow BEHIND it (16.2) — a naive kMaxSteps loop would have
+        // spliced lane 1's new steps in front of lane 2's old ones and shifted every index.
+        auto stepParam = [&m] (int l, int s)
+        {
+            ParamSpec step { "percStep" + juce::String (l) + "_" + juce::String (s),
+                             "Step" + juce::String (l) + "_" + juce::String (s), "",
+                             ParamSpec::Kind::Bool, {}, 0.0f };
+            step.showInBody = false;
+            m.params.push_back (step);
+        };
         for (int l = 1; l <= PercSequencer::kLanes; ++l)
-            for (int s = 1; s <= PercSequencer::kMaxSteps; ++s)
-            {
-                ParamSpec step { "percStep" + juce::String (l) + "_" + juce::String (s),
-                                 "Step" + juce::String (l) + "_" + juce::String (s), "",
-                                 ParamSpec::Kind::Bool, {}, 0.0f };
-                step.showInBody = false;
-                m.params.push_back (step);
-            }
+            for (int s = 1; s <= 32; ++s)
+                stepParam (l, s);
+        for (int l = 1; l <= PercSequencer::kLanes; ++l)
+            for (int s = 33; s <= PercSequencer::kMaxSteps; ++s)
+                stepParam (l, s);
         return m;
     }
 }
