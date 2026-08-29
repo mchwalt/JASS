@@ -295,10 +295,13 @@ private:
     int kbBaseOctave = 4;   // computer-keyboard octave (Up / Down arrows shift it)
 
     // Preview of a STEP SEQ step while it is edited (Story 15.3). The step's value is an offset in
-    // semitones, so it is sounded against the computer keyboard's current C — C3 by default, and it
-    // follows the Up/Down octave keys, so the reference is the one you are playing on.
-    void auditionStep (int semitones, bool sounding);
+    // semitones, so it needs a reference — seqPitchReference(): the LATCHED root while a figure is
+    // running (what you click is what the loop plays), otherwise the computer keyboard's current C.
+    void auditionStep (int semitones, bool sounding, bool accented = false);
+    int  seqPitchReference() const;   // the root a step offset actually sounds against (15.6)
+    int  seqRefShown  = -1;   // last reference the note boxes were texted with (timer re-texts)
     int auditionNote  = -1;   // MIDI note currently previewing, or -1
+    bool auditionAccented = false;   // 15.2: preview velocity of the sounding audition note
     int auditionTicks = 0;    // 30 Hz timer ticks until the safety release (a wheel or a typed
                               // value has no drag end that could close the note)
 

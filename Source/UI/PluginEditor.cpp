@@ -911,6 +911,15 @@ void SynthyEditor::timerCallback()
         if (keyboard != nullptr)
             keyboard->setPatternNote (processor.getSeqNote());
 
+        // The STEP SEQ note boxes resolve their names over the root that actually sounds (15.6) —
+        // re-text them whenever that reference moves: a new latch, a stopped one, an octave shift.
+        if (const int ref = seqPitchReference(); ref != seqRefShown)
+        {
+            seqRefShown = ref;
+            if (rackBody != nullptr)
+                rackBody->refreshNamedReadouts();
+        }
+
         // Recording a figure (15.4): parameters are written HERE, on the message thread, from the
         // note handleNoteOn parked — that callback runs on the audio thread for hardware MIDI.
         // Switching STEP SEQ off ends the recording, so an armed cursor can never outlive its module.
@@ -1287,15 +1296,25 @@ void SynthyEditor::retuneSoundingComputerKeys()
     }
 }
 
+// The root a step's semitone offset resolves against — for the preview, for writing by playing,
+// and for the note names in the boxes, so all three always agree with the figure itself (15.6).
+// While a figure is LATCHED that is the latched root: clicking a step then sounds exactly what the
+// running loop plays there (before, the preview stayed in the keyboard's key while the pattern ran
+// transposed — no way to build a melody by ear, maintainer 2026-08-23). Without a latch it is the
+// computer keyboard's current C, moving with the Up/Down octave keys as before.
+int SynthyEditor::seqPitchReference() const
+{
+    return processor.isSeqLatched() ? processor.getSeqLatchRoot() : 12 * kbBaseOctave;
+}
+
 // Sound the step that is being edited (Story 15.3). A step's value is a number of SEMITONES, so it
-// needs a reference pitch: the computer keyboard's current C — MIDI 48 (C3) by default, moving with
-// the Up/Down octave keys, so the preview matches the octave you are playing in.
+// needs a reference pitch: seqPitchReference() — the root the figure actually sounds at.
 //
 // It rides its own MIDI channel. Channel 1 would be swallowed: while STEP SEQ (or the ARP) runs the
 // processor drops every channel-1 note so that only the pattern sounds — precisely the moment a
 // preview is wanted. Velocity is the 100 the sequencer itself emits, or the preview would be louder
 // than the step it previews.
-void SynthyEditor::auditionStep(int semitones, bool sounding)
+void SynthyEditor::auditionStep(int semitones, bool sounding, bool accented)
 {
     auto& state = processor.getKeyboardState();
     const int ch = SynthyProcessor::kAuditionChannel;
@@ -1307,13 +1326,16 @@ void SynthyEditor::auditionStep(int semitones, bool sounding)
         auditionTicks = 0;
         return;
     }
-    const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + semitones);
-    if (note != auditionNote)
+    const int note = juce::jlimit(0, 127, seqPitchReference() + semitones);
+    if (note != auditionNote || accented != auditionAccented)   // accent change re-triggers too (15.2)
     {
         if (auditionNote >= 0)
             state.noteOff(ch, auditionNote, 0.0f);   // re-trigger: a drag scrubs the scale
-        state.noteOn(ch, note, 100.0f / 127.0f);
+        // 100 is what the sequencer emits for a plain step; an ACCENTED one plays hot (127),
+        // so the preview sounds exactly like the figure will (15.2).
+        state.noteOn(ch, note, accented ? 1.0f : 100.0f / 127.0f);
         auditionNote = note;
+        auditionAccented = accented;
     }
     auditionTicks = 24;   // ~0.8 s at the editor's 30 Hz — the wheel and the value box have no
                           // drag end, and a hanging note is worse than a short one
@@ -1333,9 +1355,10 @@ void SynthyEditor::seqSetCursor(int step)
         seqPendingNote.store(-1);   // drop anything parked between the last note and the stop
 }
 
-// Write the played note into the cursor's step and move on. The value is the offset from the
-// computer keyboard's current C — the SAME reference auditionStep previews with (15.3), so what a
-// knob sounds and what a key writes agree, and both follow the Up/Down octave keys (AC2).
+// Write the played note into the cursor's step and move on. The value is the offset from
+// seqPitchReference() — the SAME reference auditionStep previews with (15.3), so what a knob
+// sounds and what a key writes agree. With a latch running that means WYSIWYG: the keys played
+// into the figure are exactly the notes the figure then plays (15.6).
 void SynthyEditor::seqWriteNote(int midiNote)
 {
     if (seqCursor < 0 || seqCursor >= StepSequencer::kMaxSteps)
@@ -1343,7 +1366,7 @@ void SynthyEditor::seqWriteNote(int midiNote)
     namespace P = Parameters::ID;
     auto& apvts     = processor.getAPVTS();
     const int step  = seqCursor + 1;                                       // params are 1-based
-    const int semis = juce::jlimit(-24, 24, midiNote - 12 * kbBaseOctave);
+    const int semis = juce::jlimit(-24, 24, midiNote - seqPitchReference());
 
     if (auto* p = apvts.getParameter(P::seqPitch(step)))
         p->setValueNotifyingHost(p->convertTo0to1((float) semis));
@@ -1423,6 +1446,31 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     if (key == juce::KeyPress::escapeKey && seqCursor >= 0)
     {
         seqSetCursor(-1);
+        return true;
+    }
+    // ← / → move the write cursor without touching the figure (15.6): step back to fix a slip,
+    // step forward to leave steps as they are. Like SPACE, the keys are only claimed while a
+    // figure is being written — outside of that they keep whatever meaning they have elsewhere.
+    if ((key == juce::KeyPress::leftKey || key == juce::KeyPress::rightKey) && seqCursor >= 0)
+    {
+        const int len  = (int) *processor.getAPVTS().getRawParameterValue(Parameters::ID::seqLength);
+        const int last = juce::jmin(len, (int) StepSequencer::kMaxSteps) - 1;
+        const int dir  = (key == juce::KeyPress::rightKey) ? 1 : -1;
+        seqSetCursor(juce::jlimit(0, last, seqCursor + dir));
+        return true;
+    }
+    // Backspace takes back the last entry: cursor back one step AND that step switched off. The
+    // pitch survives (the SPACE rule), so re-writing or re-enabling the step restores it. On the
+    // first step there is nothing to take back — the key is consumed, nothing changes.
+    if (key == juce::KeyPress::backspaceKey && seqCursor >= 0)
+    {
+        if (seqCursor > 0)
+        {
+            const int prev = seqCursor - 1;
+            seqSetCursor(prev);
+            if (auto* on = processor.getAPVTS().getParameter(Parameters::ID::seqStep(prev + 1)))
+                on->setValueNotifyingHost(0.0f);
+        }
         return true;
     }
     // Up / Down arrows shift the computer-keyboard octave. (Moved off z/x — those are now note keys,
@@ -2129,38 +2177,62 @@ void SynthyEditor::buildRack()
                 {
                     const int step = k->paramId.substring(8).getIntValue();   // 1-based
                     k->toggleParamId = "seqStep" + k->paramId.substring(8);
+                    k->accentParamId = "seqAcc"  + k->paramId.substring(8);   // 15.2: third switch state
                     k->audition = [this, step](int semis, bool sounding)
                     {
                         if (sounding) seqSetCursor(step - 1);   // a click selects, exactly as 15.3 sounds
-                        auditionStep(semis, sounding);
+                        // An accented step previews HOT (15.2) — the same velocity the figure plays.
+                        const bool acc = *processor.getAPVTS().getRawParameterValue(
+                                             Parameters::ID::seqAcc(step)) > 0.5f;
+                        auditionStep(semis, sounding, acc);
                     };
                     k->highlightWhen = [this, step] { return seqCursor == step - 1; };
                     // …and mark the step the pattern is ON, the way PERC's grid marks its column
                     // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
                     k->playingWhen = [this, step] { return processor.getSeqStep() == step - 1; };
                     // …and read out the NOTE, not the raw semitone count (maintainer 2026-08-18):
-                    // the value stays the offset from the keyboard's current C, the display simply
-                    // resolves it through the SAME reference audition sounds it with — box, preview
-                    // and played figure always agree, and the octave keys re-text the boxes
-                    // (keyPressed → rackBody->refreshNamedReadouts). 60 = C4, as everywhere in JASS.
+                    // the value stays an offset, the display resolves it through the SAME reference
+                    // audition sounds it with — seqPitchReference(), so box, preview and the RUNNING
+                    // figure always agree, latched or not (15.6). The timer re-texts the boxes when
+                    // that reference moves (a new latch, the octave keys). 60 = C4, as everywhere.
                     k->textFromValue = [this](double v)
                     {
-                        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
+                        const int note = juce::jlimit(0, 127, seqPitchReference() + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4);
                     };
                     // Hover adds the MIDI number the box has no room for ("E1 · 40") — for
                     // transcribing from templates that count in numbers (maintainer 2026-08-18).
                     k->tooltipFromValue = [this](double v)
                     {
-                        const int note = juce::jlimit(0, 127, 12 * kbBaseOctave + juce::roundToInt(v));
+                        const int note = juce::jlimit(0, 127, seqPitchReference() + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
                              + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape
+                    };
+                    // …and give the knob its SECOND meaning (15.7): the per-step gate. The GATE
+                    // header latch flips the row; the value is one continuum — 5..100 % of the
+                    // step, then TIE (held through, next step takes over without a retrigger)
+                    // and SLIDE (the same, gliding — the 303). Read-out spells the two names.
+                    k->altParamId = "seqSGate" + k->paramId.substring(8);
+                    k->altTextFromValue = [](double v)
+                    {
+                        const int gv = juce::roundToInt(v);
+                        if (gv >= 102) return juce::String("SLIDE");
+                        if (gv == 101) return juce::String("TIE");
+                        return juce::String(gv) + "%";
+                    };
+                    k->altValueFromText = [](const juce::String& t)
+                    {
+                        const auto u = t.trim().toUpperCase();
+                        if (u.startsWith("SL"))  return 102.0;   // "SLIDE" (any spelling attempt)
+                        if (u.startsWith("TIE") || u == "T") return 101.0;
+                        return (double) juce::jlimit(5, 100, (int) u.getDoubleValue());
                     };
                 }
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
         // control of its own. doReset() writes the defaults first and calls this after.
         d.onReset = [this] { seqSetCursor(0); };
+        d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
         greyWhenSynced(d, P::seqRate, P::seqSync);
         addRackModule(std::move(d));
     }

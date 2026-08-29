@@ -96,6 +96,12 @@ namespace rack
         // ModuleFrame owns the parameter and builds the predicate itself.
         juce::String toggleParamId;
 
+        // Optional THIRD state for that corner switch (15.2): with this set, a click cycles
+        // off → on → ACCENTED — the TR-909's "second press deepens it" gesture — and the accent
+        // lands in this bool parameter. Rendered by the same switch (empty / tick / filled+tick),
+        // so an accent row costs no rack space at all. Ignored when toggleParamId is empty.
+        juce::String accentParamId;
+
         // Optional read-out override for the value box: the knob shows what this returns instead of
         // the number. PERC's NOTE knob uses it to say "Kick" rather than "36" (Story 16.1) — the
         // stored value stays the note number, only its presentation changes. Injected by the editor
@@ -133,6 +139,15 @@ namespace rack
         // the MIDI number ("E1 · 40") for transcribing from templates. Editor-injected, like
         // textFromValue. Appended last so existing aggregate initializers stay valid.
         std::function<juce::String (double value)> tooltipFromValue;
+
+        // Optional ALTERNATE parameter sharing this knob's CELL (15.7): with the module's row
+        // toggle (ModuleDescriptor::altRowTitle) flipped, the cell edits this param instead —
+        // the BeatStep's "the knob row cycles its meaning". STEP SEQ: pitch ⇄ per-step gate.
+        // ModuleFrame builds a second (hidden) slider on the same bounds; corner switch, write
+        // ring and playhead stay anchored to the cell and work in both views. Editor-injected.
+        juce::String altParamId;
+        std::function<juce::String (double value)>       altTextFromValue;   // alt row's read-out
+        std::function<double (const juce::String& text)> altValueFromText;   // ...and its inverse
     };
 
     struct Combo
@@ -276,6 +291,12 @@ namespace rack
         // Dependent-combo links (see ComboDependency). Polled in the frame's timer (message thread),
         // so a MODULE change re-lists its slot's PARAM combo without touching the audio thread.
         std::vector<ComboDependency> comboDeps;
+
+        // Row toggle title (15.7): non-empty => the header shows a latch button with this text,
+        // and every Knob carrying an altParamId flips between its two params with it (STEP SEQ:
+        // "GATE" flips the 32 step knobs between pitch and per-step gate). View state, not a
+        // parameter — loading a preset must not flip what the user is looking at.
+        juce::String altRowTitle;
 
         // Per-slot activity highlight (MOD MATRIX). The body is a repeating run of `groupSize`
         // controls (a routing slot = SRC·MOD·PARAM·AMT = 4). isActive(slotIndex) reports whether

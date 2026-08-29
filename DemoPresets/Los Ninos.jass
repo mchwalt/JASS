@@ -1,7 +1,6 @@
 {
-  "FormatVersion": 6,
+  "FormatVersion": 10,
   "Name": "Los Ninos",
-  "Comment": "Verified against a MIDI transcription of the original: the original jumps up an octave to Bb2 on step 13; this preset deliberately leaves that out (a matter of taste - to restore it, set step 13 to Bb2). The original also plays all 24 steps using two accent classes (long/loud vs. short/quiet, the Korg SQ-10 accent row); the rests here are an approximation until per-step accents exist.",
   "Modified": false,
   "Filter": {
     "Enabled": true,
@@ -13,7 +12,7 @@
     "Enabled": false,
     "Threshold": -18.0,
     "Ratio": 2.0,
-    "Attack": 10.0,
+    "Attack": 10.000001,
     "Release": 120.0,
     "Makeup": 0.0
   },
@@ -33,6 +32,7 @@
     "Enabled": false,
     "Waveform": "Sine",
     "Octave": "-1 Oct",
+    "Feedback": 0.0,
     "Amp": 0.5,
     "Pan": 0.0
   },
@@ -46,7 +46,7 @@
     "Enabled": false,
     "Vowel": 0.5,
     "Resonance": 0.7,
-    "Mix": 0.8
+    "Mix": 0.79999995
   },
   "Distortion": {
     "Enabled": false,
@@ -56,7 +56,7 @@
   },
   "Wavefold": {
     "Enabled": false,
-    "Drive": 0.3,
+    "Drive": 0.29999998,
     "Symmetry": 0.0,
     "Mix": 1.0
   },
@@ -77,33 +77,33 @@
   "Chorus": {
     "Enabled": false,
     "Rate": 1.5,
-    "Depth": 0.005,
+    "Depth": 0.0050000004,
     "Mix": 0.5
   },
   "Delay": {
     "Enabled": false,
     "SyncDiv": "1/8",
     "Time": 0.19,
-    "Feedback": 0.3,
-    "Mix": 0.2
+    "Feedback": 0.29999998,
+    "Mix": 0.19999999
   },
   "Reverb": {
     "Enabled": false,
-    "RoomSize": 0.3,
-    "Damping": 0.6,
-    "Mix": 0.15
+    "RoomSize": 0.29999998,
+    "Damping": 0.59999996,
+    "Mix": 0.14999999
   },
   "Arp": {
     "Enabled": false,
     "Mode": "Up",
-    "Rate": 5.2,
+    "Rate": 5.2000003,
     "Octaves": 1.0,
     "Gate": 1.0
   },
   "Glide": {
     "Enabled": false,
     "Mode": "Mono",
-    "Time": 0.02
+    "Time": 0.020000001
   },
   "PitchEnv": {
     "Enabled": false,
@@ -114,30 +114,30 @@
     "Enabled": true,
     "Waveform": "Sawtooth",
     "Frequency": 262.0,
-    "Amplitude": 0.6,
     "UnisonVoices": 1.0,
     "UnisonDetune": 0.0,
     "Feedback": 0.0,
+    "Amplitude": 0.59999996,
     "Pan": 0.0
   },
   "Osc2": {
     "Enabled": false,
     "Waveform": "Sawtooth",
     "Frequency": 262.0,
-    "Amplitude": 0.4,
     "UnisonVoices": 1.0,
     "UnisonDetune": 0.0,
     "Feedback": 0.0,
+    "Amplitude": 0.39999998,
     "Pan": 0.0
   },
   "Osc3": {
     "Enabled": false,
     "Waveform": "Sine",
     "Frequency": 131.0,
-    "Amplitude": 0.5,
     "UnisonVoices": 1.0,
     "UnisonDetune": 0.2,
     "Feedback": 0.0,
+    "Amplitude": 0.5,
     "Pan": 0.0
   },
   "CrossMod": {
@@ -180,46 +180,72 @@
   },
   "ModMatrix": {
     "On": true,
-    "Slot1Source": "LFO 1",
-    "Slot1Module": "FILTER",
-    "Slot1Param": 0.0,
-    "Slot1Amount": -0.15,
-    "Slot2Source": "LFO 2",
-    "Slot2Module": "Alle OSC",
-    "Slot2Param": 3.0,
-    "Slot2Amount": 0.012,
-    "Slot3Source": "LFO 1",
-    "Slot3Module": "Off",
-    "Slot3Param": 0.0,
-    "Slot3Amount": 0.5,
-    "Slot4Source": "LFO 1",
-    "Slot4Module": "Off",
-    "Slot4Param": 0.0,
-    "Slot4Amount": 0.5,
-    "Slot5Source": "LFO 1",
-    "Slot5Module": "Off",
-    "Slot5Param": 0.0,
-    "Slot5Amount": 0.5,
-    "Slot6Source": "LFO 1",
-    "Slot6Module": "Off",
-    "Slot6Param": 0.0,
-    "Slot6Amount": 0.5,
-    "Slot7Source": "LFO 1",
-    "Slot7Module": "Off",
-    "Slot7Param": 0.0,
-    "Slot7Amount": 0.5,
-    "Slot8Source": "LFO 1",
-    "Slot8Module": "Off",
-    "Slot8Param": 0.0,
-    "Slot8Amount": 0.5,
-    "Slot1Quant": "Off",
-    "Slot2Quant": "Off",
-    "Slot3Quant": "Off",
-    "Slot4Quant": "Off",
-    "Slot5Quant": "Off",
-    "Slot6Quant": "Off",
-    "Slot7Quant": "Off",
-    "Slot8Quant": "Off"
+    "Slots": [
+      {
+        "Source": "LFO 1",
+        "Module": "FILTER",
+        "Param": 0,
+        "ParamName": "CUTOFF",
+        "Amount": -0.14999998,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 2",
+        "Module": "Alle OSC",
+        "Param": 3,
+        "ParamName": "FREQ",
+        "Amount": 0.012000084,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "Off",
+        "Param": 0,
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
+      }
+    ]
   },
   "Karplus": {
     "Enabled": false,
@@ -237,14 +263,15 @@
     "Amplitude": 0.5,
     "UnisonVoices": 1.0,
     "UnisonDetune": 0.2,
-    "Pan": 0.0
+    "Pan": 0.0,
+    "Feedback": 0.0
   },
   "Adsr": {
     "Enabled": true,
-    "Attack": 0.005,
+    "Attack": 0.0050000004,
     "Decay": 0.05,
     "Sustain": 1.0,
-    "Release": 0.12
+    "Release": 0.120000005
   },
   "Scope": {
     "Enabled": true
@@ -274,228 +301,281 @@
   },
   "StepSeq": {
     "Enabled": true,
-    "Pitch1": -12.0,
-    "Step1": true,
-    "Pitch2": -12.0,
-    "Step2": false,
-    "Pitch3": -12.0,
-    "Step3": true,
-    "Pitch4": -12.0,
-    "Step4": false,
-    "Pitch5": -12.0,
-    "Step5": true,
-    "Pitch6": -12.0,
-    "Step6": false,
-    "Pitch7": -12.0,
-    "Step7": true,
-    "Pitch8": 3.0,
-    "Step8": true,
-    "Pitch9": -12.0,
-    "Step9": false,
-    "Pitch10": -12.0,
-    "Step10": true,
-    "Pitch11": -2.0,
-    "Step11": true,
-    "Pitch12": -12.0,
-    "Step12": true,
-    "Pitch13": -12.0,
-    "Step13": true,
-    "Pitch14": -12.0,
-    "Step14": false,
-    "Pitch15": -12.0,
-    "Step15": true,
-    "Pitch16": -12.0,
-    "Step16": false,
     "SyncDiv": "1/16",
     "Rate": 7.6,
-    "Pitch17": -12.0,
-    "Step17": true,
-    "Pitch18": -12.0,
-    "Step18": false,
-    "Pitch19": -12.0,
-    "Step19": true,
-    "Pitch20": -12.0,
-    "Step20": false,
-    "Pitch21": -12.0,
-    "Step21": true,
-    "Pitch22": 3.0,
-    "Step22": true,
-    "Pitch23": -12.0,
-    "Step23": false,
-    "Pitch24": 5.0,
-    "Step24": true,
-    "Pitch25": 0.0,
-    "Step25": true,
-    "Pitch26": 0.0,
-    "Step26": true,
-    "Pitch27": 0.0,
-    "Step27": true,
-    "Pitch28": 0.0,
-    "Step28": true,
-    "Pitch29": 0.0,
-    "Step29": true,
-    "Pitch30": 0.0,
-    "Step30": true,
-    "Pitch31": 0.0,
-    "Step31": true,
-    "Pitch32": 0.0,
-    "Step32": true,
     "Length": 24.0,
     "Gate": 1.0,
-    "LatchRoot": 46
+    "Accent": 0.5,
+    "LatchRoot": 46,
+    "Steps": [
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 49,
+        "Name": "C#3",
+        "Accent": false,
+        "Gate": 41
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 44,
+        "Name": "G#2",
+        "Accent": false,
+        "Gate": 41
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 41
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 49,
+        "Name": "C#3",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 34,
+        "Name": "A#1",
+        "Accent": false,
+        "Gate": 36
+      },
+      {
+        "On": true,
+        "Note": 51,
+        "Name": "D#3",
+        "Accent": true,
+        "Gate": 87
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      },
+      {
+        "On": true,
+        "Note": 46,
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
+      }
+    ]
   },
   "Perc": {
     "Enabled": true,
-    "Kit": 22.0,
+    "Kit": 19.0,
     "Amp": 1.0,
     "SyncDiv": "1/8",
     "Rate": 7.6,
     "Length": 16.0,
-    "Note1": 36.0,
-    "Amp1": 0.8,
-    "Pan1": 0.0,
-    "Note2": 38.0,
-    "Amp2": 0.85,
-    "Pan2": 0.0,
-    "Note3": 42.0,
-    "Amp3": 0.4,
-    "Pan3": 0.15,
-    "Note4": 46.0,
-    "Amp4": 0.5,
-    "Pan4": 0.15,
-    "Step1_1": true,
-    "Step1_2": false,
-    "Step1_3": true,
-    "Step1_4": false,
-    "Step1_5": true,
-    "Step1_6": false,
-    "Step1_7": true,
-    "Step1_8": false,
-    "Step1_9": true,
-    "Step1_10": false,
-    "Step1_11": true,
-    "Step1_12": false,
-    "Step1_13": true,
-    "Step1_14": false,
-    "Step1_15": true,
-    "Step1_16": false,
-    "Step1_17": false,
-    "Step1_18": false,
-    "Step1_19": false,
-    "Step1_20": false,
-    "Step1_21": false,
-    "Step1_22": false,
-    "Step1_23": false,
-    "Step1_24": false,
-    "Step1_25": false,
-    "Step1_26": false,
-    "Step1_27": false,
-    "Step1_28": false,
-    "Step1_29": false,
-    "Step1_30": false,
-    "Step1_31": false,
-    "Step1_32": false,
-    "Step2_1": true,
-    "Step2_2": false,
-    "Step2_3": true,
-    "Step2_4": false,
-    "Step2_5": true,
-    "Step2_6": false,
-    "Step2_7": true,
-    "Step2_8": false,
-    "Step2_9": true,
-    "Step2_10": false,
-    "Step2_11": true,
-    "Step2_12": false,
-    "Step2_13": true,
-    "Step2_14": false,
-    "Step2_15": true,
-    "Step2_16": false,
-    "Step2_17": false,
-    "Step2_18": false,
-    "Step2_19": false,
-    "Step2_20": false,
-    "Step2_21": false,
-    "Step2_22": false,
-    "Step2_23": false,
-    "Step2_24": false,
-    "Step2_25": false,
-    "Step2_26": false,
-    "Step2_27": false,
-    "Step2_28": false,
-    "Step2_29": false,
-    "Step2_30": false,
-    "Step2_31": false,
-    "Step2_32": false,
-    "Step3_1": false,
-    "Step3_2": false,
-    "Step3_3": false,
-    "Step3_4": false,
-    "Step3_5": false,
-    "Step3_6": false,
-    "Step3_7": false,
-    "Step3_8": false,
-    "Step3_9": false,
-    "Step3_10": false,
-    "Step3_11": false,
-    "Step3_12": false,
-    "Step3_13": false,
-    "Step3_14": false,
-    "Step3_15": false,
-    "Step3_16": false,
-    "Step3_17": false,
-    "Step3_18": false,
-    "Step3_19": false,
-    "Step3_20": false,
-    "Step3_21": false,
-    "Step3_22": false,
-    "Step3_23": false,
-    "Step3_24": false,
-    "Step3_25": false,
-    "Step3_26": false,
-    "Step3_27": false,
-    "Step3_28": false,
-    "Step3_29": false,
-    "Step3_30": false,
-    "Step3_31": false,
-    "Step3_32": false,
-    "Step4_1": false,
-    "Step4_2": false,
-    "Step4_3": false,
-    "Step4_4": false,
-    "Step4_5": false,
-    "Step4_6": false,
-    "Step4_7": false,
-    "Step4_8": false,
-    "Step4_9": false,
-    "Step4_10": false,
-    "Step4_11": false,
-    "Step4_12": false,
-    "Step4_13": false,
-    "Step4_14": false,
-    "Step4_15": false,
-    "Step4_16": false,
-    "Step4_17": false,
-    "Step4_18": false,
-    "Step4_19": false,
-    "Step4_20": false,
-    "Step4_21": false,
-    "Step4_22": false,
-    "Step4_23": false,
-    "Step4_24": false,
-    "Step4_25": false,
-    "Step4_26": false,
-    "Step4_27": false,
-    "Step4_28": false,
-    "Step4_29": false,
-    "Step4_30": false,
-    "Step4_31": false,
-    "Step4_32": false,
-    "File": "SamsSonor"
+    "File": "LosNinosDrums",
+    "Lanes": [
+      {
+        "Note": 36,
+        "Name": "Bass Drum 1",
+        "Amp": 0.79999995,
+        "Pan": 0.0,
+        "Steps": "X...X...X...X..................."
+      },
+      {
+        "Note": 38,
+        "Name": "Acoustic Snare",
+        "Amp": 0.65,
+        "Pan": 0.0,
+        "Steps": "..X...X...X...X................."
+      },
+      {
+        "Note": 43,
+        "Name": "High Floor Tom",
+        "Amp": 0.5,
+        "Pan": 0.0,
+        "Steps": "X.X.X.X.X.X.X.X................."
+      },
+      {
+        "Note": 39,
+        "Name": "Hand Clap",
+        "Amp": 0.59999996,
+        "Pan": 0.14999998,
+        "Steps": "..X...X...X...X................."
+      }
+    ]
   },
   "Chaos": {
     "Enabled": false,
-    "Rate": 1.0
+    "Rate": 0.99999994
   },
   "RackLayout": [
     {
