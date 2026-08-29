@@ -37,7 +37,12 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 9;   // v9 = PERC lanes and MOD MATRIX routings become arrays
+    constexpr int kFormatVersion = 10;  // v10 = every field is ALWAYS written, defaults included
+                                        //       (maintainer 2026-08-29: "beim Lesen kenne ich die
+                                        //       Defaults nicht" — a terse file is only terse for the
+                                        //       writer). Readers still accept omissions (missing ⇒
+                                        //       default), only the writer stopped producing them.
+                                        // v9 = PERC lanes and MOD MATRIX routings become arrays
                                         //      ("Lanes" / "Slots" — structure only, values unchanged;
                                         //      same cure the v7 STEP SEQ "Steps" array applied).
                                         // v8 = step objects gain "Gate" (5..100 %, "TIE", "SLIDE"; 15.7).
@@ -540,15 +545,16 @@ namespace PresetIO
                 st->setProperty("On",   *a.getRawParameterValue(ID::seqStep(s)) > 0.5f);
                 st->setProperty("Note", note);
                 st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
-                if (*a.getRawParameterValue(ID::seqAcc(s)) > 0.5f)
-                    st->setProperty("Accent", true);
+                // Written even when false/100 (v10): a field the file omits forces the reader to
+                // know the default by heart — the maintainer reads these files. Loaders still
+                // treat a missing field as the default, so older terse files load unchanged.
+                st->setProperty("Accent", *a.getRawParameterValue(ID::seqAcc(s)) > 0.5f);
                 // v8 (15.7): the step's gate — a percent of the step, or the two values past the
-                // top of that continuum. 100 (= exactly the old behaviour) stays unwritten so the
-                // common case reads terse, mirroring how a plain step omits "Accent".
+                // top of that continuum (100 = exactly the pre-15.7 behaviour).
                 const int sg = (int) *a.getRawParameterValue(ID::seqSGate(s));
                 if      (sg >= 102) st->setProperty("Gate", "SLIDE");
                 else if (sg == 101) st->setProperty("Gate", "TIE");
-                else if (sg != 100) st->setProperty("Gate", sg);
+                else                st->setProperty("Gate", sg);
                 steps.add(juce::var(st));
                 mod->removeProperty("Pitch"  + juce::String(s));
                 mod->removeProperty("Step"   + juce::String(s));
@@ -562,8 +568,8 @@ namespace PresetIO
         // above applied to STEP SEQ: a drum pattern in the file reads as a groove, not as 140
         // flat keys. Per lane: "Note" (the kit key, canonical), "Name" (the GM drum name,
         // generated purely for the reader — the loader ignores it, so number and name can never
-        // diverge), "Amp", "Pan" (omitted when centred, the default), and "Steps" — the step row
-        // as one string, 'X' = hit, '.' = rest, exactly the row the PERC grid shows.
+        // diverge), "Amp", "Pan", and "Steps" — the step row as one string, 'X' = hit,
+        // '.' = rest, exactly the row the PERC grid shows.
         if (auto* mod = root->getProperty("Perc").getDynamicObject())
         {
             int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
@@ -579,8 +585,7 @@ namespace PresetIO
                 if (const juce::String gm (juce::MidiMessage::getRhythmInstrumentName(note)); gm.isNotEmpty())
                     ln->setProperty("Name", gm);
                 ln->setProperty("Amp", mod->getProperty("Amp" + L));
-                if ((double) mod->getProperty("Pan" + L) != 0.0)
-                    ln->setProperty("Pan", mod->getProperty("Pan" + L));
+                ln->setProperty("Pan", mod->getProperty("Pan" + L));
                 juce::String steps;
                 for (int s = 1; s <= nSteps; ++s)
                     steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
@@ -599,8 +604,8 @@ namespace PresetIO
         // flat SlotNSource/… keys the spec pass wrote move into one object per slot: "Source" and
         // "Module" keep their label form (the append-only combo contract is unchanged), "Param"
         // stays the persisted INT index into the module's param list — "ParamName" spells it out
-        // for the reader and is ignored by the loader, like the STEP SEQ "Name" — then "Amount",
-        // and "Quant" (omitted at "Off", the default, so an unquantized slot stays terse).
+        // for the reader and is ignored by the loader, like the STEP SEQ "Name" — then "Amount"
+        // and "Quant".
         if (auto* mod = root->getProperty("ModMatrix").getDynamicObject())
         {
             int nSlots = 0;
@@ -615,11 +620,10 @@ namespace PresetIO
                 sl->setProperty("Module", module);
                 const int pi = (int) mod->getProperty(k + "Param");
                 sl->setProperty("Param", pi);
-                if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi > 0)
-                    sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));
+                if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
+                    sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));   // "-" for Off
                 sl->setProperty("Amount", mod->getProperty(k + "Amount"));
-                if (const auto q = mod->getProperty(k + "Quant").toString(); q.isNotEmpty() && q != "Off")
-                    sl->setProperty("Quant", q);
+                sl->setProperty("Quant", mod->getProperty(k + "Quant"));
                 slots.add(juce::var(sl));
                 for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
                     mod->removeProperty(k + f);

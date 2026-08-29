@@ -32,7 +32,13 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   Off). Values are untouched — this is structure only, so a re-saved preset sounds
   bit-identical — and every older file still loads: the flat keys remain readable forever,
   and the loader feeds the new arrays through the same spec-driven mapping as before, so the
-  choice-label and legacy-key logic keeps living in one place. The demo preset's percussion
+  choice-label and legacy-key logic keeps living in one place.
+- **Preset files write every field now, defaults included (FormatVersion 10).** v7–v9 kept
+  the common case terse — a plain step omitted `Accent`, a full-length step its `Gate`, a
+  centred lane its `Pan`, an unquantized slot its `Quant`. Terse is only a virtue for the
+  writer: whoever *reads* the file has to know every default by heart (maintainer,
+  2026-08-29). Loading still accepts omissions (missing ⇒ default, unchanged since v3) —
+  only the writer stopped producing them. The demo preset's percussion
   used to be the acoustic SamsSonor kick and snare stamped on every beat; against the
   record that read as one undifferentiated thump. A percussion stem of the original
   (separated with lalal.ai, measured with the audio-measure workflow) showed why no

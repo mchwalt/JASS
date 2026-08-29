@@ -1,5 +1,5 @@
 {
-  "FormatVersion": 9,
+  "FormatVersion": 10,
   "Name": "Matrix Demo",
   "Modified": false,
   "Filter": {
@@ -186,49 +186,64 @@
         "Module": "FILTER",
         "Param": 0,
         "ParamName": "CUTOFF",
-        "Amount": 1.0
+        "Amount": 1.0,
+        "Quant": "Off"
       },
       {
         "Source": "Velocity",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.35000002
+        "ParamName": "-",
+        "Amount": 0.35000002,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.0
+        "ParamName": "-",
+        "Amount": 0.0,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.0
+        "ParamName": "-",
+        "Amount": 0.0,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       }
     ]
   },
@@ -295,168 +310,232 @@
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 48,
-        "Name": "C3"
+        "Name": "C3",
+        "Accent": false,
+        "Gate": 100
       }
     ]
   },
   "Perc": {
     "Enabled": false,
-    "Kit": 0.0,
+    "Kit": 1.0,
     "Amp": 0.5,
     "SyncDiv": "1/16",
     "Rate": 8.0,
@@ -467,24 +546,28 @@
         "Note": 36,
         "Name": "Bass Drum 1",
         "Amp": 0.79999995,
+        "Pan": 0.0,
         "Steps": "................................"
       },
       {
         "Note": 38,
         "Name": "Acoustic Snare",
         "Amp": 0.79999995,
+        "Pan": 0.0,
         "Steps": "................................"
       },
       {
         "Note": 42,
         "Name": "Closed Hi-Hat",
         "Amp": 0.79999995,
+        "Pan": 0.0,
         "Steps": "................................"
       },
       {
         "Note": 46,
         "Name": "Open Hi-Hat",
         "Amp": 0.79999995,
+        "Pan": 0.0,
         "Steps": "................................"
       }
     ]

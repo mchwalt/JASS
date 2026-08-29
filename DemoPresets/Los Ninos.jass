@@ -1,5 +1,5 @@
 {
-  "FormatVersion": 9,
+  "FormatVersion": 10,
   "Name": "Los Ninos",
   "Modified": false,
   "Filter": {
@@ -186,50 +186,64 @@
         "Module": "FILTER",
         "Param": 0,
         "ParamName": "CUTOFF",
-        "Amount": -0.14999998
+        "Amount": -0.14999998,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 2",
         "Module": "Alle OSC",
         "Param": 3,
         "ParamName": "FREQ",
-        "Amount": 0.012000084
+        "Amount": 0.012000084,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       },
       {
         "Source": "LFO 1",
         "Module": "Off",
         "Param": 0,
-        "Amount": 0.5000001
+        "ParamName": "-",
+        "Amount": 0.5000001,
+        "Quant": "Off"
       }
     ]
   },
@@ -305,6 +319,7 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -318,18 +333,21 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -343,12 +361,14 @@
         "On": true,
         "Note": 49,
         "Name": "C#3",
+        "Accent": false,
         "Gate": 41
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -362,6 +382,7 @@
         "On": true,
         "Note": 44,
         "Name": "G#2",
+        "Accent": false,
         "Gate": 41
       },
       {
@@ -375,12 +396,14 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 41
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -394,18 +417,21 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -419,12 +445,14 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -438,6 +466,7 @@
         "On": true,
         "Note": 34,
         "Name": "A#1",
+        "Accent": false,
         "Gate": 36
       },
       {
@@ -450,42 +479,58 @@
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       },
       {
         "On": true,
         "Note": 46,
-        "Name": "A#2"
+        "Name": "A#2",
+        "Accent": false,
+        "Gate": 100
       }
     ]
   },
@@ -502,18 +547,21 @@
         "Note": 36,
         "Name": "Bass Drum 1",
         "Amp": 0.79999995,
+        "Pan": 0.0,
         "Steps": "X...X...X...X..................."
       },
       {
         "Note": 38,
         "Name": "Acoustic Snare",
         "Amp": 0.65,
+        "Pan": 0.0,
         "Steps": "..X...X...X...X................."
       },
       {
         "Note": 43,
         "Name": "High Floor Tom",
         "Amp": 0.5,
+        "Pan": 0.0,
         "Steps": "X.X.X.X.X.X.X.X................."
       },
       {
