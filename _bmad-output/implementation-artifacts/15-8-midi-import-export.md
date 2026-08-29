@@ -91,6 +91,13 @@ playable figures in seconds, and JASS figures travel to the DAW.
   (SyncDivision::beatsPerCycle; Free ⇒ 1/16). A binary-division figure round-trips exactly
   (an 1/8 step reimports as a TIE'd pair of 16ths — same music); triplet/dotted grids export
   truthfully but trip the reimport's quantize gate, documented.
+- **Maintainer test round 3 (2026-08-30):** "the first pass is right, then it smears" — the
+  non-loop figure length was set from the last ONSET, not the last note's END. The re-exported
+  Mussolini (16 eighths = 32 sixteenths, last onset on step 31) imported at LEN 31: one step
+  short, so the figure shifted a sixteenth against the drums on every wrap, and the last note
+  became a spurious wrap-SLIDE. Fix: for a non-looped file the period is
+  ceil(max(onset + duration)), capped at 32 — simulated: Mussolini now LEN 32 with a clean
+  TIE+100 tail, Los Niños (looped path) unchanged.
 - **Verification**: builds clean; the import algorithm was mirrored 1:1 in Python and run
   against `D:\downloads\los_ninos.mid` → PPQ 480, tempo 115.0, 240 notes → period 24, root 34
   (Bb1), two classes (80/86 vs 98), gates exactly 87/36/41 (AC1 ✓, figure arrives rotated to

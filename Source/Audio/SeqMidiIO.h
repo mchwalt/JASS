@@ -159,6 +159,20 @@ namespace SeqMidiIO
             }
             if (ok) { period = p; looped = true; break; }
         }
+        // A non-looping figure is as long as its music, not as its last ONSET: exporting DAF
+        // Beat (16 eighths = 32 sixteenths) put the last onset on step 31, and a length of 31
+        // shifted the whole figure one sixteenth against the drums on every wrap — "the first
+        // pass is right, then it all smears" (maintainer, 2026-08-30). The last note's DURATION
+        // belongs to the cycle. (A looped file needs none of this: its period comes from the
+        // repetition, and a note held across the seam wraps into the next pass by design.)
+        if (! looped)
+        {
+            double end = 1.0;
+            for (auto& [s, e] : grid)
+                if (s < 32)
+                    end = juce::jmax (end, (double) s + juce::jmax (1.0, e.lenSteps));
+            period = juce::jlimit (1, 32, (int) std::ceil (end - 0.1));
+        }
 
         // Fold every cycle onto the figure: median duration, all velocities kept for clustering.
         // ONLY when a real period was found — folding a non-looping file mod 32 would pile the
