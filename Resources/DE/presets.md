@@ -25,3 +25,5 @@ Die Belegungen sind eine **globale** Einstellung (in `PresetBanks.json` gespeich
 Wurde die Preset-Datei eines Platzes umbenannt oder gelöscht, meldet die Taste das einmal und räumt den Platz. Der **DELETE**-Knopf in der Kopfzeile löscht eine Preset-Datei ganz (in den Papierkorb) und räumt ihre Taste gleich mit.
 
 Ab Werk sind **F1–F4 mit den vier Demo-Presets vorbelegt** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). Der **RESET**-Knopf in der Kopfzeile stellt diese Werksbelegung wieder her.
+
+**MIDI über dieselben Dialoge.** **LOAD** in der Kopfzeile öffnet auch `.mid`-Dateien: Die Figur wird in den STEP SEQ importiert — Akzente aus der Velocity, Notenlängen als Gate/TIE/SLIDE, eine geloopte Transkription kommt als ihr Zyklus an — und spielt sofort auf ihrem Grundton. **SAVE** mit einem `.mid`-Namen schreibt die aktuelle Figur als MIDI-Datei für die DAW. Presets selbst bleiben `.jass`.
