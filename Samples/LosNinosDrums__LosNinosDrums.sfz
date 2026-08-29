@@ -1,0 +1,25 @@
+// LosNinosDrums - drum kit for the "Los Ninos" demo preset (flat layout so the
+// first-run seeding, which knows one folder level, can ship it).
+//
+// Synthesized from measurements of the record's percussion stem:
+//   key 36  LosNinosKick.wav - sine sweep 105 -> 45 Hz over ~300 ms, full level
+//           held ~90 ms (Synare-style electronic kick), pure sine (a saturated
+//           first take buzzed "like a cajon" - maintainer's ear, 2026-08-29).
+//   key 39  DoorSlam.wav - the backbeat "Tschak": gated noise burst, body
+//           120-500 Hz (~180 ms), mid slap to ~100 ms, highs only a 20 ms clack,
+//           plus a damped 190 Hz panel ping. A real hi-hat reads as wrong here.
+// The rest are the top velocity layers of the SamsSonor kit, same GM notes:
+// Sonor Force 3001 sampled by Sam Greene, mapped by kinwie - CC BY-SA 4.0
+// (https://creativecommons.org/licenses/by-sa/4.0/).
+<group>
+note_polyphony=1
+<region> key=36 sample=LosNinosKick.wav
+<region> key=35 sample=KickSonor.flac
+<region> key=38 sample=SnareLH.flac
+<region> key=39 sample=DoorSlam.wav
+<region> key=43 sample=TomLow.flac
+
+<group>
+note_polyphony=2
+<region> key=42 sample=HHClosed.flac group=1 off_by=1
+<region> key=46 sample=HHOpen.flac group=2 off_by=1

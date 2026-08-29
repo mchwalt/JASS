@@ -11,6 +11,22 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
+- **Los Niños has its drums now — and a kit of its own.** The demo preset's percussion
+  used to be the acoustic SamsSonor kick and snare stamped on every beat; against the
+  record that read as one undifferentiated thump. A percussion stem of the original
+  (separated with lalal.ai, measured with the audio-measure workflow) showed why no
+  amount of level-tweaking could fix it: the record's kick is a *Synare-style electronic
+  boom* — a sine that starts at ~105 Hz, holds, and glides to ~45 Hz over 300 ms — and the
+  backbeat "Tschak" is not a hi-hat at all but a gated noise burst centred at 200–550 Hz
+  ("more a car door slamming than a hi-hat", and the measurement agreed: nothing above
+  9 kHz). Both sounds are now **synthesized from the measured curves**
+  (`tools/synth_losninos_kit.py`) and ship in a new seeded kit, **LosNinosDrums**,
+  alongside the top velocity layers of SamsSonor (CC BY-SA 4.0) for snare, toms and hats.
+  The preset plays the classic alternation the ear expects — kick on the downbeats, slam
+  plus snare on the backbeats, a quiet low tom keeping the record's continuous low pulse —
+  which the stem justifies: the two beat classes differ almost only above 900 Hz, so the
+  alternation is written into the *sounds*, not faked by dropping the low end.
+  (`Samples/*.flac` now embeds alongside `*.wav`/`*.sfz` so a kit can seed FLAC.)
 - **Every step has a length now — up to TIE and SLIDE (story 15.7).** The new GATE button in
   STEP SEQ's header flips the 32 step knobs to their second meaning: the step's gate, one
   continuum from 5–100 % of the step up to two values past the top — **TIE** (the note holds
