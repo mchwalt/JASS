@@ -13,6 +13,11 @@ Windows & Linux builds (Standalone + VST3), produced automatically on every merg
 > **VST3:** a VST3 build is produced as well, but it has so far only been tested
 > **very superficially in vPlayer 4 Lite** — treat plugin support as experimental.
 
+### 🎧 Hear it
+
+**[Listen to the demo (MP3, ~1 min)](docs/Demo.mp3)** — recorded straight out of
+JASS. GitHub opens it in its built-in audio player.
+
 ## Why this project
 
 JASS is about building a **simple synthesizer with an intuitive interface** — one
