@@ -29,7 +29,7 @@ namespace SeqMidiIO
 {
     using APVTS = juce::AudioProcessorValueTreeState;
 
-    enum class Error { none, unreadable, smpteTime, noNotes };
+    enum class Error { none, unreadable, smpteTime, noNotes, notQuantized };
 
     struct ImportResult
     {
@@ -107,10 +107,30 @@ namespace SeqMidiIO
             return r;
         }
 
-        // Quantize onto the 1/16 grid, anchored on the first onset. One note per step: the
-        // louder one wins (a transcription chord is an artefact; the sequencer is monophonic).
         std::sort (evs.begin(), evs.end(), [] (const Ev& x, const Ev& y) { return x.step < y.step; });
         const double anchor = evs.getReference (0).step;
+
+        // Free-time material is rejected LOUDLY, not mangled: a raw whole-song transcription
+        // (basic-pitch at its default 120 BPM) has onsets nowhere near any 1/16 grid, and
+        // quantizing those is inventing a figure the file does not contain. Uniformly random
+        // offsets average 0.25 steps from the grid; a quantized loop sits at ~0. (Found with
+        // exactly such a file, 2026-08-30 — it imported as doubled-note hash before this.)
+        {
+            double dev = 0.0;
+            for (auto& e : evs)
+            {
+                const double p = e.step - anchor;
+                dev += std::abs (p - (double) std::llround (p));
+            }
+            if (dev / evs.size() > 0.2)
+            {
+                r.error = Error::notQuantized;
+                return r;
+            }
+        }
+
+        // Quantize onto the 1/16 grid, anchored on the first onset. One note per step: the
+        // louder one wins (a transcription chord is an artefact; the sequencer is monophonic).
         std::map<int, Ev> grid;
         for (auto& e : evs)
         {
@@ -125,6 +145,7 @@ namespace SeqMidiIO
         // Cycle detection on positions + notes only (velocity and duration wobble per pass in a
         // real transcription — they are folded below instead of compared here).
         int period = juce::jmin (span, 32);
+        bool looped = false;
         for (int p = 2; p <= 32 && p < span; ++p)
         {
             if (span < 2 * p) break;   // need at least two full cycles to trust a period
@@ -135,13 +156,17 @@ namespace SeqMidiIO
                 const bool hx = x != grid.end(), hy = y != grid.end();
                 ok = (hx == hy) && (! hx || x->second.note == y->second.note);
             }
-            if (ok) { period = p; break; }
+            if (ok) { period = p; looped = true; break; }
         }
 
         // Fold every cycle onto the figure: median duration, all velocities kept for clustering.
+        // ONLY when a real period was found — folding a non-looping file mod 32 would pile the
+        // whole piece onto 32 steps. Without a cycle the figure is the first 32 sixteenths,
+        // exactly the fallback the contract names.
         std::map<int, Fold> fig;
         for (auto& [s, e] : grid)
         {
+            if (! looped && s >= period) break;   // grid is an ordered map
             auto& f = fig[s % period];
             f.note = e.note;
             f.vels.add (e.vel);

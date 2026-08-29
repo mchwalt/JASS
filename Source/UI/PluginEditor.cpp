@@ -1173,6 +1173,14 @@ void SynthyEditor::importMidiFigure(const juce::File& f)
                 why = de ? juce::String("enth\xc3\xa4lt keine Noten.")
                          : juce::String("contains no notes.");
                 break;
+            case SeqMidiIO::Error::notQuantized:
+                why = de ? juce::String("liegt nicht auf einem 1/16-Raster (frei eingespieltes oder "
+                                        "roh transkribiertes Material). Bitte in der DAW quantisieren "
+                                        "oder einen geloopten Ausschnitt exportieren.")
+                         : juce::String("is not on a 1/16 grid (freely played or raw transcription "
+                                        "material). Please quantize it in the DAW, or export a looped "
+                                        "section.");
+                break;
             default:
                 why = de ? juce::String("konnte nicht gelesen werden (keine MIDI-Datei?).")
                          : juce::String("could not be read (not a MIDI file?).");
