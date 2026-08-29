@@ -37,8 +37,31 @@ jobs:
           echo "calver_cmake=${YEAR}.${MONTHNUM}.${COUNT}" >> "$GITHUB_OUTPUT"
           echo "Next CalVer: ${YEAR}.${MONTH}.${COUNT}"
 
-  build:
+  # The release is created FIRST (empty), and each build job attaches its zip directly.
+  # Why not upload-artifact as a hand-off? Release assets do not count against the Actions
+  # artifact storage quota — the 500 MB free tier killed the 2026.08.9 run even at 1-day
+  # retention, because quota usage recalculates only every 6-12 hours (2026-08-30). Bonus:
+  # a failed build now leaves a visible, half-filled release, and "re-run failed jobs"
+  # simply uploads the missing zip (--clobber). Never re-run the WHOLE workflow for a fix:
+  # the version job would count the now-existing tag and mint the next MICRO.
+  release:
     needs: version
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER="${{ needs.version.outputs.calver }}"
+          gh release view "v${VER}" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+          gh release create "v${VER}" \
+            --repo "${{ github.repository }}" \
+            --target "${{ github.sha }}" \
+            --title "v${VER}" \
+            --notes "Automated release for v${VER} (CalVer). Windows and Linux builds (Standalone + VST3) attached below. See CHANGELOG.md. VST3 is experimental."
+
+  build:
+    needs: [version, release]
     strategy:
       fail-fast: false
       matrix:
@@ -111,34 +134,11 @@ jobs:
         shell: bash
         run: (cd stage && zip -r "../${OUT}.zip" "${OUT}")
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: ${{ env.OUT }}
-          path: ${{ env.OUT }}.zip
-          # Only a hand-off to the release job; the zips live on as release assets.
-          # Default 90-day retention piles ~50 MB per release onto the 500 MB
-          # free storage quota (hit 810 MB on 2026-08-26).
-          retention-days: 1
-
-  release:
-    needs: [version, build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/download-artifact@v8
-        with:
-          path: dist
-          merge-multiple: true
-      - name: List artifacts
-        run: ls -R dist
-      - name: Create release
+      - name: Upload release asset
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          VER="${{ needs.version.outputs.calver }}"
-          gh release create "v${VER}" \
-            --repo "${{ github.repository }}" \
-            --target "${{ github.sha }}" \
-            --title "v${VER}" \
-            --notes "Automated release for v${VER} (CalVer). Windows and Linux builds (Standalone + VST3) attached below. See CHANGELOG.md. VST3 is experimental." \
+        shell: bash
+        # Straight onto the release created above — no artifact storage involved (see the
+        # release job's comment). --clobber makes a re-run of a failed build idempotent.
+        run: gh release upload "v${{ needs.version.outputs.calver }}" "${OUT}.zip" --repo "${{ github.repository }}" --clobber \
             dist/*.zip
