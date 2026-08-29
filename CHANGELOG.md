@@ -10,6 +10,8 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.08.11] – 2026-08-30
+
 ### Added
 - **PERC steps copy with one click.** Two new buttons in the module's title bar, both visible
   — no context menu, the house rule. **COPY** latches a stamp mode: click the source step (the
