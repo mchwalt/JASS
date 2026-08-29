@@ -1,6 +1,6 @@
 # Story 15.8 (D): MIDI ⇄ STEP SEQ through the LOAD/SAVE dialogs
 
-Status: built 2026-08-30 — build-verified + algorithm simulated against los_ninos.mid; in-app ear test pending
+Status: DONE 2026-08-30 — maintainer's ear test passed after three fix rounds („jetzt funzt's“): los_ninos.mid import, Mussolini export/reimport round-trip stable against the drums
 
 ## Story
 
