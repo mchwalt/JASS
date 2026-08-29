@@ -313,6 +313,15 @@ namespace rack
         };
         std::vector<HeaderAction> headerActions;
 
+        // Collapsible display (story 16.2, first slice — maintainer 2026-08-31): with a title
+        // set, the header carries a latch that folds the module's Display cells away and
+        // shrinks it to `collapsedSize`; expanding restores `sizeClass` and the rack re-packs
+        // LIVE, shifting the rows below. ADSR: the envelope curve behind a CURVE button. View
+        // state — never persisted into presets (a preset load must not resize the rack).
+        juce::String collapseTitle;                       // empty = feature off
+        SizeClass    collapsedSize = SizeClass::W4H1;
+        bool         startCollapsed = false;
+
         // Per-slot activity highlight (MOD MATRIX). The body is a repeating run of `groupSize`
         // controls (a routing slot = SRC·MOD·PARAM·AMT = 4). isActive(slotIndex) reports whether
         // that slot is "wired" (its MOD != Off), so the frame can DIM inactive slots and mark active

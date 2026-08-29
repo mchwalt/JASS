@@ -10,6 +10,15 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **The ADSR curve folds away (story 16.2, first slice).** A CURVE latch in the module's
+  title bar hides the envelope display; the module shrinks to its knob row and the rack
+  re-packs live — the modules below shift up, and back down when the curve returns. The
+  fold is view state, never part of a preset, and the window's height budget always counts
+  the expanded size, so unfolding can never overflow it. Today the payoff is small — the
+  STEP SEQ next door keeps the row tall — but it is the mechanism the rest of 16.2 (full-
+  width sequencers with 48 steps) builds on.
+
 ## [2026.08.11] – 2026-08-30
 
 ### Added

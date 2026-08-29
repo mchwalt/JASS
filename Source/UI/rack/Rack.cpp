@@ -256,7 +256,6 @@ namespace rack
 
     void Rack::addModule (ModuleDescriptor desc)
     {
-        const auto spec = sizeClassSpec (desc.sizeClass);   // read footprint BEFORE moving
         const auto zone = desc.defaultZone;                 // AD-10: zone declared on descriptor
         const auto id   = desc.id;
         const bool vis  = desc.defaultVisible;              // factory visibility (Story 4.3)
@@ -265,9 +264,23 @@ namespace rack
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
+        // A frame with a display fold (16.2) changes size at runtime: re-read its footprint
+        // and re-pack the rack live — the rows below shift, exactly what the fold promises.
+        f->onFootprintChanged = [this, f]
+        {
+            for (auto& p : placed)
+                if (p.frame == f)
+                {
+                    const auto s = sizeClassSpec (f->effectiveSizeClass());
+                    p.cols = s.cols; p.units = s.heightUnits;
+                }
+            relayout();
+        };
         // Placement uses the GRID height (quarter units), never the content-row count — those are
         // two different numbers since Story 7.4 and conflating them is what kept a module from
-        // being any height other than a multiple of 114 px.
+        // being any height other than a multiple of 114 px. The footprint is read from the FRAME
+        // (not the descriptor, which was moved into it) so a fold's starting state counts.
+        const auto spec = sizeClassSpec (f->effectiveSizeClass());
         placed.push_back ({ id, f, spec.cols, spec.heightUnits, alignR });
 
         // Seed the RackLayout model (AD-10): call order becomes within-zone position, so the
@@ -574,7 +587,18 @@ namespace rack
             if (! e.visible && ! isVisualOnly (e.id))
                 for (const auto& d : defaultLayout)
                     if (d.id == e.id) { e.visible = d.visible; break; }
+        // A folded display (16.2) measures at its EXPANDED footprint, so unfolding it can
+        // never overflow the window the way a preset-revealed module could — the same
+        // worst-case principle PR #27 established for visibility.
+        auto savedPlaced = self->placed;
+        for (auto& p : self->placed)
+            if (p.frame != nullptr && p.frame->effectiveSizeClass() != p.frame->maxSizeClass())
+            {
+                const auto s = sizeClassSpec (p.frame->maxSizeClass());
+                p.cols = s.cols; p.units = s.heightUnits;
+            }
         const int h = self->layout (width, /*apply*/ false);
+        self->placed      = std::move (savedPlaced);
         self->layoutModel = std::move (saved);
         return h;
     }
