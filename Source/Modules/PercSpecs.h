@@ -113,8 +113,15 @@ namespace Modules
         for (int l = 1; l <= PercSequencer::kLanes; ++l)
             for (int s = 1; s <= 32; ++s)
                 stepParam (l, s);
+        // 16.2's block: lanes × steps 33..48. FROZEN at 48 — extending ITS loop bound would splice
+        // lane 1's new steps in front of lane 2's 33..48 and shift every shipped index (the same
+        // trap 16.2 documented). New steps go in their own block below.
         for (int l = 1; l <= PercSequencer::kLanes; ++l)
-            for (int s = 33; s <= PercSequencer::kMaxSteps; ++s)
+            for (int s = 33; s <= 48; ++s)
+                stepParam (l, s);
+        // 16.3's block: lanes × steps 49..kMaxSteps, appended BEHIND everything shipped.
+        for (int l = 1; l <= PercSequencer::kLanes; ++l)
+            for (int s = 49; s <= PercSequencer::kMaxSteps; ++s)
                 stepParam (l, s);
         return m;
     }

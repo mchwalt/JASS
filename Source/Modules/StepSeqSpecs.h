@@ -97,12 +97,16 @@ namespace Modules
         m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
         // 16.2: steps 33..48 — REGISTERED here at the end (append-only), DISPLAYED in place below.
+        // 16.3 simply lets the same tail run on to kMaxSteps: 33..48 keep the indices they shipped
+        // with, 49..192 follow behind them. (Single lane — no PERC-style interleaving trap here.)
         for (int s = 33; s <= StepSequencer::kMaxSteps; ++s) pitchParam (s);
 
         // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
+        // The body shows ONE PAGE (kPageSteps knobs); ModuleFrame rebinds these cells to the
+        // shown page's params (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
         for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate" });
-        for (int s = 25; s <= StepSequencer::kMaxSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
+        for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent" });
         return m;
     }

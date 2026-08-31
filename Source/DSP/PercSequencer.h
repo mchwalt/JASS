@@ -26,7 +26,10 @@ class PercSequencer
 {
 public:
     static constexpr int kLanes    = 4;
-    static constexpr int kMaxSteps = 48;   // 16.2: full-width grid, 3 bars of 16ths (was 32)
+    // 16.3: pattern capacity, same reasoning as StepSequencer — a generous fixed cap (the APVTS
+    // parameter list cannot grow at runtime), shown one 48-step page at a time in the UI.
+    static constexpr int kMaxSteps  = 192;   // was 48 (16.2), 32 before that
+    static constexpr int kPageSteps = 48;    // one UI page of the grid (16.2 geometry)
 
     bool   enabled = false;
     double stepSeconds = 0.125;                 // one step; resolved per block by the processor

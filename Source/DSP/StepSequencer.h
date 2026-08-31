@@ -29,7 +29,12 @@
 class StepSequencer
 {
 public:
-    static constexpr int kMaxSteps = 48;   // 16.2: two rows of 24 at full rack width (was 32)
+    // 16.3: the pattern capacity — a GENEROUS cap (the APVTS parameter list is fixed at
+    // construction, so unlike the engine arrays it cannot grow at runtime; 4 pages of 48 covers
+    // an 8-bar phrase of 16ths with room to spare). The UI shows kPageSteps at a time behind
+    // A/B/C/D page buttons; everything else derives from kMaxSteps — no other literal.
+    static constexpr int kMaxSteps  = 192;   // was 48 (16.2), 32 before that
+    static constexpr int kPageSteps = 48;    // one UI page: two knob rows of 24 (16.2 geometry)
 
     // 15.7: the per-step gate is ONE continuum (the BeatStep model) — 5..100 = percent of the
     // step, then two values past the top: TIE (held through the boundary; the next step takes

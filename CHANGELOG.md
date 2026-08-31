@@ -10,6 +10,22 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **STEP SEQ and PERC hold up to 192 steps, shown as four 48-step pages (story 16.3).** Two
+  songs in a row had hit the same wall: pop music phrases in 2/4/8 bars — 32/64/128
+  sixteenths — and the old 48-step maximum (a UI-geometry number, not a musical one) could
+  not hold a 4-bar figure. The grids stay exactly as they were; **A/B/C/D** buttons in the
+  module headers page through the pattern, a dot marks the page that is playing, and a
+  **FOLLOW** latch flips the view with the playhead (picking a page by hand pauses it — the
+  display must never flip away under an editing cursor; latching again jumps back). Writing
+  a figure crosses pages by itself, PERC's COPY stamps across pages, and MIDI import/export
+  carries the full length. 192 = 4×48 is a deliberately generous ceiling: the parameter list
+  of a plugin is fixed at construction, so "as many as the song needs" has to be "more than
+  any song will ask for". Old presets load and sound bit-identically (steps beyond their
+  saved length default to silence — LEN rules, as always). Known trade-off, same as 16.2:
+  the LEN ranges changed, so normalized VST3 automation of LEN from older sessions remaps;
+  the standalone is unaffected.
+
 ## [2026.08.13] – 2026-08-31
 
 ### Changed

@@ -315,6 +315,22 @@ private:
     // click on any step knob moves it there, and it clears itself past LEN or when STEP SEQ goes off.
     int  seqCursor = -1;
     void seqSetCursor (int step);            // -1 stops; also drives the processor's record flag
+
+    // --- Step pages (16.3) ---------------------------------------------------------------------
+    // View state for the two paged sequencer grids: which 48-step page is shown, and whether the
+    // display follows the playhead (the catch convention: a MANUAL page pick pauses FOLLOW so the
+    // page cannot flip away under an editing cursor; re-latching jumps to the playing page). The
+    // ModuleFrames poll these through their descriptor's paging hooks and rebuild/repaint on a
+    // change; the timer below does the auto-flip. Pure UI state — never in a preset.
+    int  seqShownPage  = 0;
+    bool seqFollow     = true;
+    int  percShownPage = 0;
+    bool percFollow    = true;
+    PercGrid* percGrid = nullptr;            // typed pointer (rackOwned owns it): page offset pushes
+    int  seqPlayingPage()  const;            // page under the playhead, -1 when not running
+    int  percPlayingPage() const;
+    void setSeqPage  (int page, bool manual);   // manual = a page-button pick (pauses FOLLOW)
+    void setPercPage (int page, bool manual);
     void seqWriteNote (int midiNote);        // write the cursor's step from a played note, advance
     void seqAdvanceCursor();                 // next step, or stop past LEN
     void seqSkipStep();                      // SPACE: switch this step OFF (a rest) and move on

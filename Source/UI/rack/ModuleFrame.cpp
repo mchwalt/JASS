@@ -103,6 +103,7 @@ namespace rack
     {
         assertFitsClass (desc);   // debug guardrail (Story 1.1)
         buildHeader();
+        headerButtonAtts = buttonAtt.size();   // 16.3: a body rebuild clears only what buildBody adds
         buildBody();
 
         // Make THIS frame's OWN controls never grab keyboard focus on click, so a module revealed
@@ -142,7 +143,8 @@ namespace rack
         // dynamic active state — an enable param, a derived predicate, dependent combos, a
         // per-knob relevance predicate, or the pattern-length marker.
         if (enableValue != nullptr || desc.enabledWhen || ! desc.comboDeps.empty()
-            || ! condKnobs.empty() || ! markedKnobs.empty() || markerLen != nullptr)
+            || ! condKnobs.empty() || ! markedKnobs.empty() || markerLen != nullptr
+            || desc.paging.pageCount > 1)
         {
             dimmed = ! moduleEnabled();
             startTimerHz (20);
@@ -230,6 +232,39 @@ namespace rack
             addAndMakeVisible (*b);
         }
 
+        // Step pages (16.3): one button per pattern page (A/B/C/D) plus the FOLLOW latch. A page
+        // button PICKS its page by hand — the editor's setPage drops FOLLOW so the display cannot
+        // flip away under an editing cursor (the Logic/Cubase catch convention); re-latching
+        // FOLLOW jumps to the playing page and resumes. The playing page is marked with a dot on
+        // its button (updatePageButtons), so the sequencer's position is visible from any page.
+        if (desc.paging.pageCount > 1)
+        {
+            for (int i = 0; i < desc.paging.pageCount; ++i)
+            {
+                auto* b = pageBtns.add (new juce::TextButton (
+                              juce::String::charToString ((juce::juce_wchar) ('A' + i))));
+                const int lo = i * desc.paging.stepsPerPage + 1;
+                b->setTooltip ("Show steps " + juce::String (lo) + ".."
+                               + juce::String (lo + desc.paging.stepsPerPage - 1)
+                               + " (picking a page by hand pauses FOLLOW)");
+                b->setWantsKeyboardFocus (false);
+                b->onClick = [this, i] { if (desc.paging.setPage) desc.paging.setPage (i); };
+                addAndMakeVisible (*b);
+            }
+            followBtn = std::make_unique<juce::TextButton> ("FOLLOW");
+            followBtn->setClickingTogglesState (true);
+            followBtn->setToggleState (desc.paging.getFollow ? desc.paging.getFollow() : true,
+                                       juce::dontSendNotification);
+            followBtn->setTooltip ("Follow the playhead: the shown page flips with the running "
+                                   "pattern. Picking a page by hand pauses it; latch again to resume.");
+            followBtn->setWantsKeyboardFocus (false);
+            followBtn->onClick = [this]
+            {
+                if (desc.paging.setFollow) desc.paging.setFollow (followBtn->getToggleState());
+            };
+            addAndMakeVisible (*followBtn);
+        }
+
         // Display fold latch (16.2): toggles the module between its full size (Display cells
         // visible) and collapsedSize. Toggle ON = shown, so the lit button reads as "the curve
         // is up". The rack is told through onFootprintChanged and re-packs live.
@@ -270,10 +305,31 @@ namespace rack
         // Seed only — resized() sets the real diameter per cell (one standard, capped by the cell).
         const int knobD = KnobSize::Standard;
 
+        // Step pages (16.3): the body is built FOR the shown page — a paged knob cell binds the
+        // shown page's params instead of page A's. desc.body itself always keeps the page-A ids
+        // (the editor's injected lambdas translate themselves through the shared page state).
+        builtPage = shownPage();
+        hasPagedCells = false;
+
         for (auto& el : desc.body)
         {
-            if (auto* k = std::get_if<Knob> (&el))
+            if (auto* k0 = std::get_if<Knob> (&el))
             {
+                // Page translation (16.3): a shallow copy with the four bound ids shifted by
+                // builtPage * stepsPerPage. Everything below reads through `k`, so page A and
+                // page D are built by literally the same code.
+                Knob pagedCopy;
+                const Knob* k = k0;
+                if (idIsPaged (k0->paramId))
+                {
+                    hasPagedCells = true;
+                    pagedCopy = *k0;
+                    pagedCopy.paramId = pagedId (pagedCopy.paramId);
+                    if (pagedCopy.toggleParamId.isNotEmpty()) pagedCopy.toggleParamId = pagedId (pagedCopy.toggleParamId);
+                    if (pagedCopy.accentParamId.isNotEmpty()) pagedCopy.accentParamId = pagedId (pagedCopy.accentParamId);
+                    if (pagedCopy.altParamId.isNotEmpty())    pagedCopy.altParamId    = pagedId (pagedCopy.altParamId);
+                    k = &pagedCopy;
+                }
                 auto* s = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
                 s->setKnobDiameter (knobD);
                 // Anatomy: NAME caption ABOVE the knob, numeric VALUE box BELOW it (like the
@@ -675,6 +731,87 @@ namespace rack
         repaint();
     }
 
+    // --- Step pages (16.3) --------------------------------------------------------------------
+
+    bool ModuleFrame::idIsPaged (const juce::String& id) const
+    {
+        if (desc.paging.pageCount <= 1 || desc.paging.stepsPerPage <= 0)
+            return false;
+        for (const auto& pre : desc.paging.pagedPrefixes)
+            if (id.length() > pre.length() && id.startsWith (pre)
+                && id.substring (pre.length()).containsOnly ("0123456789"))
+                return true;
+        return false;
+    }
+
+    juce::String ModuleFrame::pagedId (const juce::String& id) const
+    {
+        if (builtPage <= 0)
+            return id;
+        int i = id.length();
+        while (i > 0 && juce::CharacterFunctions::isDigit (id[i - 1])) --i;
+        const int n = id.substring (i).getIntValue();
+        return id.substring (0, i) + juce::String (n + builtPage * desc.paging.stepsPerPage);
+    }
+
+    void ModuleFrame::rebuildPagedBody()
+    {
+        // Tear down ONLY what buildBody created — header widgets and their attachments stay.
+        // Attachments go FIRST (their destructors talk to the widgets they watch), widgets after.
+        sliderAtt.clear();
+        comboAtt.clear();
+        buttonAtt.erase (buttonAtt.begin() + (long) headerButtonAtts, buttonAtt.end());
+        cells.clear();               // Display components are editor-owned: buildBody re-adds them
+        markedKnobs.clear();
+        ringKnobs.clear();
+        xformKnobs.clear();
+        condKnobs.clear();
+        altKnobs.clear();
+        dynCombos.clear();
+        indexValueCombos.clear();
+        comboValues.clear();
+        actionButtons.clear();
+        markerCells.clear();
+        ownedWidgets.clear();        // deletes the body widgets (Components detach themselves)
+        ownedCaptions.clear();
+
+        buildBody();
+
+        // Mirror the constructor's after-build passes for the fresh widgets.
+        for (auto* w : ownedWidgets)
+            if (w != nullptr) { w->setWantsKeyboardFocus (false); w->setMouseClickGrabsKeyboardFocus (false); }
+        applyAltRow();       // a page flip keeps the GATE view if it was up
+        updateCondKnobs();
+        resized();
+        repaint();
+    }
+
+    void ModuleFrame::updatePageButtons()
+    {
+        const int  shown   = shownPage();
+        const int  playing = desc.paging.playingPage ? desc.paging.playingPage() : -1;
+        const bool follow  = desc.paging.getFollow ? desc.paging.getFollow() : false;
+
+        // The playing page carries a dot on its button — visible from whichever page is shown.
+        if (playing != lastPlayingPage)
+        {
+            lastPlayingPage = playing;
+            for (int i = 0; i < pageBtns.size(); ++i)
+                pageBtns[i]->setButtonText (juce::String::charToString ((juce::juce_wchar) ('A' + i))
+                                            + (i == playing ? juce::String::fromUTF8 ("\xe2\x80\xa2") : juce::String()));
+        }
+        for (int i = 0; i < pageBtns.size(); ++i)
+            if (pageBtns[i]->getToggleState() != (i == shown))
+                pageBtns[i]->setToggleState (i == shown, juce::dontSendNotification);
+        const char fs = follow ? (char) 1 : (char) 0;
+        if (fs != lastFollowState)
+        {
+            lastFollowState = fs;
+            if (followBtn != nullptr)
+                followBtn->setToggleState (follow, juce::dontSendNotification);
+        }
+    }
+
     void ModuleFrame::doReset()
     {
         // Reset ALL of the module's parameters to their factory defaults, EXCEPT the
@@ -696,6 +833,22 @@ namespace rack
             else if (auto* c = std::get_if<Combo>  (&el)) resetId (c->paramId);
             else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
         }
+
+        // Step pages (16.3): the body lists one page — reset the SAME params on every other page
+        // too (same scope as above: the knob's main param; corner/alt params keep today's reset
+        // semantics on every page alike).
+        if (desc.paging.pageCount > 1 && desc.paging.stepsPerPage > 0)
+            for (const auto& el : desc.body)
+                if (auto* k = std::get_if<Knob> (&el))
+                    if (idIsPaged (k->paramId))
+                    {
+                        int i = k->paramId.length();
+                        while (i > 0 && juce::CharacterFunctions::isDigit (k->paramId[i - 1])) --i;
+                        const auto base = k->paramId.substring (0, i);
+                        const int  n    = k->paramId.substring (i).getIntValue();
+                        for (int p = 1; p < desc.paging.pageCount; ++p)
+                            resetId (base + juce::String (n + p * desc.paging.stepsPerPage));
+                    }
 
         // Extra non-param reset (e.g. the Oscilloscope's time-base, or WAVETABLE dropping its
         // user-loaded banks). Run it, then re-poll any dynamic-provider combo so its item list
@@ -736,6 +889,11 @@ namespace rack
         // order reads left-to-right on screen (removeFromRight fills right-to-left).
         for (int i = actionBtns.size(); --i >= 0;)
             actionBtns[i]->setBounds (header.removeFromRight (72).reduced (2, 1));
+        // Step pages (16.3), left of the header actions: … A B C D FOLLOW [LOAD MIDI] …
+        if (followBtn != nullptr)
+            followBtn->setBounds (header.removeFromRight (62).reduced (2, 1));
+        for (int i = pageBtns.size(); --i >= 0;)
+            pageBtns[i]->setBounds (header.removeFromRight (28).reduced (2, 1));
         // Display fold latch (16.2), same slot family as the row toggle.
         if (collapseBtn != nullptr)
             collapseBtn->setBounds (header.removeFromRight (52).reduced (2, 1));
@@ -956,14 +1114,23 @@ namespace rack
         // for red-green colour vision too.
         if (! markerCells.empty() && markerLen != nullptr)
         {
-            const int len = juce::jlimit (1, (int) markerCells.size(), (int) markerLen->load());
-            const auto& cell = cells[(size_t) markerCells[(size_t) len - 1]];
-            if (cell.widget != nullptr)
+            // Page-aware since 16.3: the line lands on the page that CONTAINS the boundary; on
+            // any other page it is simply absent (the figure runs on past both edges).
+            int len = (int) markerLen->load();
+            if (desc.paging.pageCount > 1 && desc.paging.stepsPerPage > 0)
+                len -= builtPage * desc.paging.stepsPerPage;
+            else
+                len = juce::jlimit (1, (int) markerCells.size(), len);
+            if (len >= 1 && len <= (int) markerCells.size())
             {
-                auto b = cell.widget->getBounds();
-                if (cell.caption != nullptr) b = b.getUnion (cell.caption->getBounds());
-                g.setColour (juce::Colour (0xffd64541));
-                g.fillRect (b.getRight() - 1, b.getY(), 3, b.getHeight());
+                const auto& cell = cells[(size_t) markerCells[(size_t) len - 1]];
+                if (cell.widget != nullptr)
+                {
+                    auto b = cell.widget->getBounds();
+                    if (cell.caption != nullptr) b = b.getUnion (cell.caption->getBounds());
+                    g.setColour (juce::Colour (0xffd64541));
+                    g.fillRect (b.getRight() - 1, b.getY(), 3, b.getHeight());
+                }
             }
         }
 
@@ -1080,6 +1247,20 @@ namespace rack
 
     void ModuleFrame::timerCallback()
     {
+        // Step pages (16.3): the shown page is editor-owned view state — poll it, and when it
+        // moved (a page button, FOLLOW's auto-flip, the write cursor crossing a boundary),
+        // rebuild the body against the new page's params. A paging module without paged cells
+        // (PERC — its grid is a custom Display that windows itself) only repaints.
+        if (desc.paging.pageCount > 1)
+        {
+            if (shownPage() != builtPage)
+            {
+                if (hasPagedCells) rebuildPagedBody();   // sets builtPage via buildBody
+                else               { builtPage = shownPage(); repaint(); }
+            }
+            updatePageButtons();
+        }
+
         // Pattern-length marker (16.2): poll LEN and repaint only on a real change.
         if (markerLen != nullptr)
         {

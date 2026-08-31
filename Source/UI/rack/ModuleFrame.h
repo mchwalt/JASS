@@ -74,6 +74,16 @@ namespace rack
         void buildBody();
         void doReset();
 
+        // Step pages (16.3): tear the body down and rebuild it against the shown page's params —
+        // by construction every attachment, corner switch, alt slider and predicate rebinds
+        // correctly (the same code path that built page A builds page C). Header widgets survive.
+        void rebuildPagedBody();
+        // "seqPitch7" + page 2 => "seqPitch103": add page*stepsPerPage to the trailing number.
+        juce::String pagedId (const juce::String& id) const;
+        bool idIsPaged (const juce::String& id) const;   // main id starts with a paged prefix
+        int shownPage() const { return desc.paging.getPage ? juce::jlimit (0, juce::jmax (0, desc.paging.pageCount - 1), desc.paging.getPage()) : 0; }
+        void updatePageButtons();   // toggle states + the playing-page dot marker
+
         // Apply each Knob::activeWhen predicate: an irrelevant knob is disabled (ignores the
         // mouse) and dimmed, together with its caption. Only touches widgets on a real change.
         void updateCondKnobs();
@@ -179,6 +189,18 @@ namespace rack
         int lastMarkerLen = -1;
         bool altRowActive = false;
         void applyAltRow();   // show/hide the pairs per altRowActive
+
+        // Step pages (16.3): page buttons + FOLLOW latch (header, like the row toggle), the last
+        // page the body was BUILT for (poll-and-rebuild on change), the last playing page painted
+        // on the buttons, and how many buttonAtt entries belong to the HEADER (the enable toggle)
+        // so a body rebuild can clear only its own attachments.
+        juce::OwnedArray<juce::TextButton> pageBtns;
+        std::unique_ptr<juce::TextButton>  followBtn;
+        int    builtPage       = 0;
+        int    lastPlayingPage = -2;
+        char   lastFollowState = -1;
+        bool   hasPagedCells   = false;   // false (PERC): page flips need no body rebuild
+        size_t headerButtonAtts = 0;
         double liveRatio = 1.0;   // latest played-note ratio (1.0 = base); read by write-back
 
         // Combos built from a dynamic provider (e.g. the Wavetable bank list). Recorded so

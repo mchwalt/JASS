@@ -318,7 +318,34 @@ namespace rack
         // `lenMarkerLengthParam` — STEP SEQ's "where does the figure end" cue, the knob-row
         // equivalent of PERC's dimmed beyond-LEN cells (dimming was rejected for knobs: grey
         // already means REST there, and two grey reasons cannot be told apart).
+        // Page-aware since 16.3: the line lands on the page that contains the boundary.
         juce::String lenMarkerStepPrefix, lenMarkerLengthParam;
+
+        // Step pages (16.3): the body's step cells are a WINDOW of `stepsPerPage` onto a pattern
+        // `pageCount` pages long. The header grows page buttons (A/B/C/D — the TR-909's pattern
+        // pages, chosen over smooth scrolling: a grid of discrete click targets must not move
+        // under the pointer) and a FOLLOW latch (Logic's "Catch Playhead": while playing, the
+        // shown page flips with the playhead; picking a page BY HAND drops the latch so the
+        // display never flips away under an editing cursor — re-latching jumps back and resumes).
+        //
+        // The page STATE lives with the EDITOR (it drives the write cursor, the PERC grid offset
+        // and the auto-flip in its timer); the frame polls getPage and REBUILDS its body when it
+        // changes — every knob whose param id starts with one of `pagedPrefixes` (including its
+        // corner-switch and alt-row ids) is rebound to the shown page's params by adding
+        // page*stepsPerPage to the id's trailing number. A module with paging but no paged body
+        // cells (PERC — its grid is a custom Display) gets the header buttons only.
+        struct StepPaging
+        {
+            int pageCount    = 0;   // 0/1 = feature off
+            int stepsPerPage = 0;
+            std::vector<juce::String> pagedPrefixes;      // e.g. { "seqPitch" } — MAIN ids only
+            std::function<int()>      getPage;            // shown page, editor-owned view state
+            std::function<void(int)>  setPage;            // a MANUAL pick (drops FOLLOW there)
+            std::function<int()>      playingPage;        // page under the playhead, -1 = silent
+            std::function<bool()>     getFollow;
+            std::function<void(bool)> setFollow;          // re-latch jumps to the playing page
+        };
+        StepPaging paging;
 
         // Collapsible display (story 16.2, first slice — maintainer 2026-08-31): with a title
         // set, the header carries a latch that folds the module's Display cells away and
