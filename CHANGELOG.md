@@ -14,9 +14,11 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 - **STEP SEQ and PERC hold up to 192 steps, shown as four 48-step pages (story 16.3).** Two
   songs in a row had hit the same wall: pop music phrases in 2/4/8 bars — 32/64/128
   sixteenths — and the old 48-step maximum (a UI-geometry number, not a musical one) could
-  not hold a 4-bar figure. The grids stay exactly as they were; **A/B/C/D** buttons in the
-  module headers page through the pattern, a dot marks the page that is playing, and a
-  **FOLLOW** latch flips the view with the playhead (picking a page by hand pauses it — the
+  not hold a 4-bar figure. The grids stay exactly as they were; **< / >** in the module
+  headers page through the pattern (the read-out says shown page / pages — prev/next rather
+  than one button per page, so raising the cap never widens the header), a dot marks the
+  page that is playing, and a
+  **FOLLOW** latch flips the view with the playhead (stepping a page by hand pauses it — the
   display must never flip away under an editing cursor; latching again jumps back). Writing
   a figure crosses pages by itself, PERC's COPY stamps across pages, and MIDI import/export
   carries the full length. 192 = 4×48 is a deliberately generous ceiling: the parameter list

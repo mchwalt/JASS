@@ -322,11 +322,12 @@ namespace rack
         juce::String lenMarkerStepPrefix, lenMarkerLengthParam;
 
         // Step pages (16.3): the body's step cells are a WINDOW of `stepsPerPage` onto a pattern
-        // `pageCount` pages long. The header grows page buttons (A/B/C/D — the TR-909's pattern
-        // pages, chosen over smooth scrolling: a grid of discrete click targets must not move
-        // under the pointer) and a FOLLOW latch (Logic's "Catch Playhead": while playing, the
-        // shown page flips with the playhead; picking a page BY HAND drops the latch so the
-        // display never flips away under an editing cursor — re-latching jumps back and resumes).
+        // `pageCount` pages long. The header grows '<' / page read-out / '>' (prev/next rather
+        // than one button per page, so a future cap raise never widens the header; page FLIP
+        // rather than smooth scrolling: a grid of discrete click targets must not move under
+        // the pointer) and a FOLLOW latch (Logic's "Catch Playhead": while playing, the shown
+        // page flips with the playhead; stepping a page BY HAND drops the latch so the display
+        // never flips away under an editing cursor — re-latching jumps back and resumes).
         //
         // The page STATE lives with the EDITOR (it drives the write cursor, the PERC grid offset
         // and the auto-flip in its timer); the frame polls getPage and REBUILDS its body when it

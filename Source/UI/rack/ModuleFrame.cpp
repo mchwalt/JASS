@@ -232,25 +232,37 @@ namespace rack
             addAndMakeVisible (*b);
         }
 
-        // Step pages (16.3): one button per pattern page (A/B/C/D) plus the FOLLOW latch. A page
-        // button PICKS its page by hand — the editor's setPage drops FOLLOW so the display cannot
-        // flip away under an editing cursor (the Logic/Cubase catch convention); re-latching
-        // FOLLOW jumps to the playing page and resumes. The playing page is marked with a dot on
-        // its button (updatePageButtons), so the sequencer's position is visible from any page.
+        // Step pages (16.3): '<' / read-out / '>' plus the FOLLOW latch. Prev/next rather than
+        // one button per page (maintainer 2026-09-01: "morgen komme ich auf die Idee, weitere
+        // Pages hinzuzufügen") — the header stays this size whatever kMaxSteps grows to. The
+        // read-out says shown/total and, with a dot, the page the pattern is playing on.
+        // Stepping by hand drops FOLLOW so the display cannot flip away under an editing cursor
+        // (the Logic/Cubase catch convention); re-latching jumps to the playing page and resumes.
         if (desc.paging.pageCount > 1)
         {
-            for (int i = 0; i < desc.paging.pageCount; ++i)
+            auto makeStep = [this] (std::unique_ptr<juce::TextButton>& slot,
+                                    const juce::String& glyph, int dir)
             {
-                auto* b = pageBtns.add (new juce::TextButton (
-                              juce::String::charToString ((juce::juce_wchar) ('A' + i))));
-                const int lo = i * desc.paging.stepsPerPage + 1;
-                b->setTooltip ("Show steps " + juce::String (lo) + ".."
-                               + juce::String (lo + desc.paging.stepsPerPage - 1)
-                               + " (picking a page by hand pauses FOLLOW)");
-                b->setWantsKeyboardFocus (false);
-                b->onClick = [this, i] { if (desc.paging.setPage) desc.paging.setPage (i); };
-                addAndMakeVisible (*b);
-            }
+                slot = std::make_unique<juce::TextButton> (glyph);
+                slot->setTooltip (juce::String (dir < 0 ? "Previous" : "Next")
+                                  + " page of steps (stepping by hand pauses FOLLOW)");
+                slot->setWantsKeyboardFocus (false);
+                slot->onClick = [this, dir]
+                {
+                    const int p = shownPage() + dir;
+                    if (desc.paging.setPage && p >= 0 && p < desc.paging.pageCount)
+                        desc.paging.setPage (p);
+                };
+                addAndMakeVisible (*slot);
+            };
+            makeStep (pagePrevBtn, "<", -1);
+            makeStep (pageNextBtn, ">",  1);
+            pageLabel = std::make_unique<juce::Label>();
+            pageLabel->setJustificationType (juce::Justification::centred);
+            pageLabel->setInterceptsMouseClicks (false, false);
+            pageLabel->setTooltip ("Shown page / pages; the dot marks the page that is playing");
+            addAndMakeVisible (*pageLabel);
+
             followBtn = std::make_unique<juce::TextButton> ("FOLLOW");
             followBtn->setClickingTogglesState (true);
             followBtn->setToggleState (desc.paging.getFollow ? desc.paging.getFollow() : true,
@@ -797,17 +809,23 @@ namespace rack
         const int  playing = desc.paging.playingPage ? desc.paging.playingPage() : -1;
         const bool follow  = desc.paging.getFollow ? desc.paging.getFollow() : false;
 
-        // The playing page carries a dot on its button — visible from whichever page is shown.
-        if (playing != lastPlayingPage)
+        // Read-out: "2/4", with the playing page marked by a dot — "•2/4" when the pattern plays
+        // the shown page, "2/4 •1" when it plays elsewhere. Text, not colour, so it stays
+        // readable for red-green colour vision.
+        if (pageLabel != nullptr)
         {
-            lastPlayingPage = playing;
-            for (int i = 0; i < pageBtns.size(); ++i)
-                pageBtns[i]->setButtonText (juce::String::charToString ((juce::juce_wchar) ('A' + i))
-                                            + (i == playing ? juce::String::fromUTF8 ("\xe2\x80\xa2") : juce::String()));
+            const auto dot = juce::String::fromUTF8 ("\xe2\x80\xa2");
+            auto text = juce::String (shown + 1) + "/" + juce::String (desc.paging.pageCount);
+            if (playing == shown)                 text = dot + text;
+            else if (playing >= 0)                text = text + " " + dot + juce::String (playing + 1);
+            if (text != lastPageText)
+            {
+                lastPageText = text;
+                pageLabel->setText (text, juce::dontSendNotification);
+            }
         }
-        for (int i = 0; i < pageBtns.size(); ++i)
-            if (pageBtns[i]->getToggleState() != (i == shown))
-                pageBtns[i]->setToggleState (i == shown, juce::dontSendNotification);
+        if (pagePrevBtn != nullptr) pagePrevBtn->setEnabled (shown > 0);
+        if (pageNextBtn != nullptr) pageNextBtn->setEnabled (shown < desc.paging.pageCount - 1);
         const char fs = follow ? (char) 1 : (char) 0;
         if (fs != lastFollowState)
         {
@@ -894,11 +912,15 @@ namespace rack
         // order reads left-to-right on screen (removeFromRight fills right-to-left).
         for (int i = actionBtns.size(); --i >= 0;)
             actionBtns[i]->setBounds (header.removeFromRight (72).reduced (2, 1));
-        // Step pages (16.3), left of the header actions: … A B C D FOLLOW [LOAD MIDI] …
+        // Step pages (16.3), left of the header actions: … < 2/4 > FOLLOW [LOAD MIDI] …
         if (followBtn != nullptr)
             followBtn->setBounds (header.removeFromRight (62).reduced (2, 1));
-        for (int i = pageBtns.size(); --i >= 0;)
-            pageBtns[i]->setBounds (header.removeFromRight (28).reduced (2, 1));
+        if (pageNextBtn != nullptr)
+            pageNextBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
+        if (pageLabel != nullptr)
+            pageLabel->setBounds (header.removeFromRight (56).reduced (0, 1));
+        if (pagePrevBtn != nullptr)
+            pagePrevBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
         // Display fold latch (16.2), same slot family as the row toggle.
         if (collapseBtn != nullptr)
             collapseBtn->setBounds (header.removeFromRight (52).reduced (2, 1));

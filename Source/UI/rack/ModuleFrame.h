@@ -190,14 +190,16 @@ namespace rack
         bool altRowActive = false;
         void applyAltRow();   // show/hide the pairs per altRowActive
 
-        // Step pages (16.3): page buttons + FOLLOW latch (header, like the row toggle), the last
-        // page the body was BUILT for (poll-and-rebuild on change), the last playing page painted
-        // on the buttons, and how many buttonAtt entries belong to the HEADER (the enable toggle)
-        // so a body rebuild can clear only its own attachments.
-        juce::OwnedArray<juce::TextButton> pageBtns;
-        std::unique_ptr<juce::TextButton>  followBtn;
+        // Step pages (16.3): '<' / page read-out / '>' + FOLLOW latch (header, like the row
+        // toggle — the maintainer swapped per-page buttons for prev/next so a future cap raise
+        // never grows the header), the last page the body was BUILT for (poll-and-rebuild on
+        // change), the read-out cache, and how many buttonAtt entries belong to the HEADER
+        // (the enable toggle) so a body rebuild can clear only its own attachments.
+        std::unique_ptr<juce::TextButton> pagePrevBtn, pageNextBtn;
+        std::unique_ptr<juce::Label>      pageLabel;
+        std::unique_ptr<juce::TextButton> followBtn;
         int    builtPage       = 0;
-        int    lastPlayingPage = -2;
+        juce::String lastPageText;
         char   lastFollowState = -1;
         bool   hasPagedCells   = false;   // false (PERC): page flips need no body rebuild
         size_t headerButtonAtts = 0;

@@ -18,4 +18,4 @@ Replaces the ARPEGGIATOR: only one of the two can run, so switching this on swit
 
 A **red line** after a step marks the pattern's end (LEN): everything right of it is kept but does not play.
 
-**Pages (A / B / C / D, header).** The 48 knobs show one page of the pattern; the buttons switch between four pages of 48 (LEN up to 192 = 12 bars of sixteenths). A dot on a button marks where the pattern is playing right now. With **FOLLOW** latched the shown page flips with the playhead; picking a page by hand pauses FOLLOW — latch it again to jump back and resume. Writing with the ring crosses pages by itself.
+**Pages (< 1/4 >, header).** The 48 knobs show one page of the pattern; **< / >** step through four pages of 48 (LEN up to 192 = 12 bars of sixteenths). The read-out says shown page / pages, and a dot marks where the pattern is playing right now. With **FOLLOW** latched the shown page flips with the playhead; stepping a page by hand pauses FOLLOW — latch it again to jump back and resume. Writing with the ring crosses pages by itself.

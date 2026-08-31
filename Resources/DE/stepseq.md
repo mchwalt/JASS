@@ -18,4 +18,4 @@ Ersetzt den ARPEGGIATOR: es kann nur eines von beiden laufen, das Einschalten sc
 
 Eine **rote Linie** hinter einem Schritt markiert das Pattern-Ende (LEN): alles rechts davon bleibt erhalten, spielt aber nicht.
 
-**Seiten (A / B / C / D, Kopfzeile).** Die 48 Knöpfe zeigen eine Seite des Musters; die Knöpfe schalten zwischen vier Seiten à 48 um (LEN bis 192 = 12 Takte Sechzehntel). Ein Punkt auf einem Knopf zeigt, wo das Muster gerade spielt. Mit gerastetem **FOLLOW** blättert die Anzeige mit dem Muster mit; eine von Hand gewählte Seite pausiert FOLLOW — erneut rasten springt zurück und folgt wieder. Die Eingabe mit dem Ring wechselt die Seite von selbst.
+**Seiten (< 1/4 >, Kopfzeile).** Die 48 Knöpfe zeigen eine Seite des Musters; **< / >** blättern durch vier Seiten à 48 (LEN bis 192 = 12 Takte Sechzehntel). Die Anzeige nennt Seite / Seiten, ein Punkt zeigt, wo das Muster gerade spielt. Mit gerastetem **FOLLOW** blättert die Anzeige mit dem Muster mit; von Hand blättern pausiert FOLLOW — erneut rasten springt zurück und folgt wieder. Die Eingabe mit dem Ring wechselt die Seite von selbst.
