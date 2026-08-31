@@ -328,6 +328,11 @@ namespace rack
                     if (pagedCopy.toggleParamId.isNotEmpty()) pagedCopy.toggleParamId = pagedId (pagedCopy.toggleParamId);
                     if (pagedCopy.accentParamId.isNotEmpty()) pagedCopy.accentParamId = pagedId (pagedCopy.accentParamId);
                     if (pagedCopy.altParamId.isNotEmpty())    pagedCopy.altParamId    = pagedId (pagedCopy.altParamId);
+                    // The CAPTION counts along too: a step knob's label is its number, so page C
+                    // must read 97..144, exactly as PERC's self-drawn number strip does.
+                    if (pagedCopy.label.isNotEmpty() && pagedCopy.label.containsOnly ("0123456789"))
+                        pagedCopy.label = juce::String (pagedCopy.label.getIntValue()
+                                                        + builtPage * desc.paging.stepsPerPage);
                     k = &pagedCopy;
                 }
                 auto* s = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
