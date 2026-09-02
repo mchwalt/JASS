@@ -570,6 +570,12 @@ namespace PresetIO
                 else if (sg == 101) st->setProperty("Gate", "TIE");
                 else                st->setProperty("Gate", sg);
                 steps.add(juce::var(st));
+            }
+            // The spec pass wrote flat keys for ALL kMaxSteps — remove every one of them, not
+            // just the `used` range, or the trimmed tail leaks into the file as a flat-key
+            // desert (maintainer caught Pitch385..Gate768 flat, 2026-09-02).
+            for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)
+            {
                 mod->removeProperty("Pitch"  + juce::String(s));
                 mod->removeProperty("Step"   + juce::String(s));
                 mod->removeProperty("Accent" + juce::String(s));
@@ -637,17 +643,25 @@ namespace PresetIO
             for (int n = 1; n <= nSlots; ++n)
             {
                 const juce::String k = "Slot" + juce::String(n);
-                auto* sl = new juce::DynamicObject();
-                sl->setProperty("Source", mod->getProperty(k + "Source"));
                 const juce::String module = mod->getProperty(k + "Module").toString();
-                sl->setProperty("Module", module);
-                const int pi = (int) mod->getProperty(k + "Param");
-                sl->setProperty("Param", pi);
-                if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
-                    sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));   // "-" for Off
-                sl->setProperty("Amount", mod->getProperty(k + "Amount"));
-                sl->setProperty("Quant", mod->getProperty(k + "Quant"));
-                slots.add(juce::var(sl));
+                // An "Off" slot is factory state and stays OUT of the file (maintainer
+                // 2026-09-02, the step-array cure applied here): the reader factory-resets
+                // first, so a missing slot IS off. Survivors compact upward on reload —
+                // slot order carries no meaning, only the routings do. The flat keys are
+                // still removed for EVERY slot below, or they would be written flat.
+                if (module != "Off")
+                {
+                    auto* sl = new juce::DynamicObject();
+                    sl->setProperty("Source", mod->getProperty(k + "Source"));
+                    sl->setProperty("Module", module);
+                    const int pi = (int) mod->getProperty(k + "Param");
+                    sl->setProperty("Param", pi);
+                    if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
+                        sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));
+                    sl->setProperty("Amount", mod->getProperty(k + "Amount"));
+                    sl->setProperty("Quant", mod->getProperty(k + "Quant"));
+                    slots.add(juce::var(sl));
+                }
                 for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
                     mod->removeProperty(k + f);
             }

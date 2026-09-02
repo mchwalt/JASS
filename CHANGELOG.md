@@ -39,9 +39,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   build supports — tolerable at 48, but at 768 every patch would carry ~750 lines of
   "Off C3" and four 768-dot drum rows, and these files are meant to be read by eye. The
   writer now stops at LEN, extended to the last step/hit that differs from the default so
-  material parked beyond the LEN line still round-trips. No format change: the reader has
-  always treated a missing step as silence, so old (longer) and new (shorter) files load
-  alike.
+  material parked beyond the LEN line still round-trips. MOD MATRIX slots on "Off" stay out
+  of the file for the same reason (the active routings compact upward on reload — slot
+  order carries no meaning). No format change: the reader has always treated a missing
+  step or slot as the default, so old (longer) and new (shorter) files load alike.
 
 ## [2026.08.13] – 2026-08-31
 
