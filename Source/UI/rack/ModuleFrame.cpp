@@ -862,28 +862,48 @@ namespace rack
                 p->setValueNotifyingHost (p->getDefaultValue());
         };
 
+        // A knob owns more than its main param: the corner toggle (STEP SEQ's on/off), the accent
+        // switch and the alt-row param (the gate) all belong to it — resetting only paramId left a
+        // step ON at pitch 0 after a reset, so the "empty the pattern" button filled it with the
+        // root instead (maintainer 2026-09-02). Reset the whole family.
+        auto resetKnob = [&] (const Knob& k)
+        {
+            resetId (k.paramId);
+            resetId (k.toggleParamId);
+            resetId (k.accentParamId);
+            resetId (k.altParamId);
+        };
         for (const auto& el : desc.body)
         {
-            if (auto* k = std::get_if<Knob>   (&el)) resetId (k->paramId);
+            if (auto* k = std::get_if<Knob>   (&el)) resetKnob (*k);
             else if (auto* c = std::get_if<Combo>  (&el)) resetId (c->paramId);
             else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
         }
 
-        // Step pages (16.3): the body lists one page — reset the SAME params on every other page
-        // too (same scope as above: the knob's main param; corner/alt params keep today's reset
-        // semantics on every page alike).
+        // Step pages (16.3): the body lists one page — reset the SAME family on every other page
+        // too. Each id carries a trailing step number; shift it by page*stepsPerPage.
         if (desc.paging.pageCount > 1 && desc.paging.stepsPerPage > 0)
+        {
+            auto resetShifted = [&] (const juce::String& id, int off)
+            {
+                if (id.isEmpty()) return;
+                int i = id.length();
+                while (i > 0 && juce::CharacterFunctions::isDigit (id[i - 1])) --i;
+                if (i >= id.length()) return;   // no trailing number: not a paged id
+                resetId (id.substring (0, i) + juce::String (id.substring (i).getIntValue() + off));
+            };
             for (const auto& el : desc.body)
                 if (auto* k = std::get_if<Knob> (&el))
                     if (idIsPaged (k->paramId))
-                    {
-                        int i = k->paramId.length();
-                        while (i > 0 && juce::CharacterFunctions::isDigit (k->paramId[i - 1])) --i;
-                        const auto base = k->paramId.substring (0, i);
-                        const int  n    = k->paramId.substring (i).getIntValue();
                         for (int p = 1; p < desc.paging.pageCount; ++p)
-                            resetId (base + juce::String (n + p * desc.paging.stepsPerPage));
-                    }
+                        {
+                            const int off = p * desc.paging.stepsPerPage;
+                            resetShifted (k->paramId,       off);
+                            resetShifted (k->toggleParamId, off);
+                            resetShifted (k->accentParamId, off);
+                            resetShifted (k->altParamId,    off);
+                        }
+        }
 
         // Extra non-param reset (e.g. the Oscilloscope's time-base, or WAVETABLE dropping its
         // user-loaded banks). Run it, then re-poll any dynamic-provider combo so its item list
