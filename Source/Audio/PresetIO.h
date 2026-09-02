@@ -538,8 +538,21 @@ namespace PresetIO
         if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
         {
             const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
+            // Only the USED steps are written (16 pages would be ~750 "Off C3" lines in every
+            // file otherwise — these files are read by eye). Used = up to LEN, extended to the
+            // last step that differs from factory default so material parked beyond the LEN line
+            // survives the round-trip. The reader has always tolerated a short array: it factory-
+            // resets first, so a missing step IS the default.
+            int used = juce::jlimit(1, (int) StepSequencer::kMaxSteps,
+                                    (int) *a.getRawParameterValue(ID::seqLength));
+            for (int s = StepSequencer::kMaxSteps; s > used; --s)
+                if (*a.getRawParameterValue(ID::seqStep(s)) > 0.5f
+                    || (int) *a.getRawParameterValue(ID::seqPitch(s)) != 0
+                    ||       *a.getRawParameterValue(ID::seqAcc(s)) > 0.5f
+                    || (int) *a.getRawParameterValue(ID::seqSGate(s)) != 100)
+                { used = s; break; }
             juce::Array<juce::var> steps;
-            for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)   // 48 since 16.2
+            for (int s = 1; s <= used; ++s)
             {
                 auto* st = new juce::DynamicObject();
                 const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
@@ -576,6 +589,15 @@ namespace PresetIO
             int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
             while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
             while (mod->hasProperty("Step1_" + juce::String(nSteps + 1))) ++nSteps;
+            // Only the used cells are written (same cure as the STEP SEQ array above — 16 pages
+            // would be four 768-dot rows in every file): up to LENGTH, extended to the last hit
+            // in any lane so hits parked beyond it survive. All rows share one width — the grid
+            // alignment is what makes the file readable. Reading pads with rests, as ever.
+            int used = juce::jlimit(1, juce::jmax(1, nSteps), (int) mod->getProperty("Length"));
+            for (int l = 1; l <= nLanes; ++l)
+                for (int s = nSteps; s > used; --s)
+                    if ((bool) mod->getProperty("Step" + juce::String(l) + "_" + juce::String(s)))
+                    { used = s; break; }
             juce::Array<juce::var> lanes;
             for (int l = 1; l <= nLanes; ++l)
             {
@@ -588,7 +610,7 @@ namespace PresetIO
                 ln->setProperty("Amp", mod->getProperty("Amp" + L));
                 ln->setProperty("Pan", mod->getProperty("Pan" + L));
                 juce::String steps;
-                for (int s = 1; s <= nSteps; ++s)
+                for (int s = 1; s <= used; ++s)
                     steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
                 ln->setProperty("Steps", steps);
                 lanes.add(juce::var(ln));

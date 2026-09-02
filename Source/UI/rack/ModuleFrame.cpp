@@ -917,8 +917,8 @@ namespace rack
             followBtn->setBounds (header.removeFromRight (62).reduced (2, 1));
         if (pageNextBtn != nullptr)
             pageNextBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
-        if (pageLabel != nullptr)
-            pageLabel->setBounds (header.removeFromRight (56).reduced (0, 1));
+        if (pageLabel != nullptr)   // 72: "16/16 •12" (16 pages since 2026-09-02) needs the room
+            pageLabel->setBounds (header.removeFromRight (72).reduced (0, 1));
         if (pagePrevBtn != nullptr)
             pagePrevBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
         // Display fold latch (16.2), same slot family as the row toggle.

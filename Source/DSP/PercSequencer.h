@@ -28,7 +28,8 @@ public:
     static constexpr int kLanes    = 4;
     // 16.3: pattern capacity, same reasoning as StepSequencer — a generous fixed cap (the APVTS
     // parameter list cannot grow at runtime), shown one 48-step page at a time in the UI.
-    static constexpr int kMaxSteps  = 192;   // was 48 (16.2), 32 before that
+    // 16 pages since 2026-09-02, in step with the note sequencer: drums follow the song.
+    static constexpr int kMaxSteps  = 768;   // was 192 (16.3), 48 (16.2), 32 before that
     static constexpr int kPageSteps = 48;    // one UI page of the grid (16.2 geometry)
 
     bool   enabled = false;

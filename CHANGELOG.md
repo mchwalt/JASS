@@ -11,7 +11,7 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 ## [Unreleased]
 
 ### Added
-- **STEP SEQ and PERC hold up to 192 steps, shown as four 48-step pages (story 16.3).** Two
+- **STEP SEQ and PERC hold up to 768 steps, shown as sixteen 48-step pages (story 16.3).** Two
   songs in a row had hit the same wall: pop music phrases in 2/4/8 bars — 32/64/128
   sixteenths — and the old 48-step maximum (a UI-geometry number, not a musical one) could
   not hold a 4-bar figure. The grids stay exactly as they were; **< / >** in the module
@@ -21,12 +21,23 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   **FOLLOW** latch flips the view with the playhead (stepping a page by hand pauses it — the
   display must never flip away under an editing cursor; latching again jumps back). Writing
   a figure crosses pages by itself, PERC's COPY stamps across pages, and MIDI import/export
-  carries the full length. 192 = 4×48 is a deliberately generous ceiling: the parameter list
+  carries the full length. 768 = 16×48 is a deliberately generous ceiling: the parameter list
   of a plugin is fixed at construction, so "as many as the song needs" has to be "more than
-  any song will ask for". Old presets load and sound bit-identically (steps beyond their
-  saved length default to silence — LEN rules, as always). Known trade-off, same as 16.2:
-  the LEN ranges changed, so normalized VST3 automation of LEN from older sessions remaps;
-  the standalone is unaffected.
+  any song will ask for" — and the Roboter full-melody test showed a whole song line wants
+  ~400 steps, so the story's original 4 pages became 16 (the arrays cost kilobytes; the real
+  price is parameter count, accepted). Old presets load and sound bit-identically (steps
+  beyond their saved length default to silence — LEN rules, as always). Known trade-off,
+  same as 16.2: the LEN ranges changed, so normalized VST3 automation of LEN from older
+  sessions remaps; the standalone is unaffected.
+
+### Changed
+- **Presets store only the steps a figure uses.** Saving used to write every step slot the
+  build supports — tolerable at 48, but at 768 every patch would carry ~750 lines of
+  "Off C3" and four 768-dot drum rows, and these files are meant to be read by eye. The
+  writer now stops at LEN, extended to the last step/hit that differs from the default so
+  material parked beyond the LEN line still round-trips. No format change: the reader has
+  always treated a missing step as silence, so old (longer) and new (shorter) files load
+  alike.
 
 ## [2026.08.13] – 2026-08-31
 

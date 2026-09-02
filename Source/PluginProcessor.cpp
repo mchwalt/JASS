@@ -1051,7 +1051,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                       ? SyncDivision::delaySeconds(syncBpm, sdiv)
                                       : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::seqRate));
             stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
-            for (int s = 0; s < StepSequencer::kMaxSteps; ++s)
+            // Only the playable range is copied: playback clamps to `length` with the same bound,
+            // so steps beyond it are never read — and at kMaxSteps 768 (16 pages) copying the full
+            // arrays would be ~3000 atomic loads per block for a 16-step figure.
+            const int seqUsed = juce::jlimit(1, (int) StepSequencer::kMaxSteps, stepSeq.length);
+            for (int s = 0; s < seqUsed; ++s)
             {
                 stepSeq.pitch [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
                 stepSeq.on    [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
@@ -1309,8 +1313,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             perc.note [(size_t) l] = (int) *apvts.getRawParameterValue(ID::percNote (l + 1));
             perc.level[(size_t) l] =       *apvts.getRawParameterValue(ID::percLevel(l + 1));
             perc.pan  [(size_t) l] =       *apvts.getRawParameterValue(ID::percPan  (l + 1));
+            // Same bound playback uses (see PercSequencer::processBlock) — cells past LENGTH are
+            // never read, so they are not copied either (16 pages would be ~3000 loads per block).
             if (percOn)
-                for (int s = 0; s < PercSequencer::kMaxSteps; ++s)
+                for (int s = 0, n = juce::jlimit(1, (int) PercSequencer::kMaxSteps, perc.length); s < n; ++s)
                     perc.on[(size_t) l][(size_t) s] =
                         *apvts.getRawParameterValue(ID::percStep(l + 1, s + 1)) > 0.5f;
         }
