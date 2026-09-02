@@ -545,12 +545,20 @@ namespace PresetIO
             // resets first, so a missing step IS the default.
             int used = juce::jlimit(1, (int) StepSequencer::kMaxSteps,
                                     (int) *a.getRawParameterValue(ID::seqLength));
+            // A step's FACTORY DEFAULT is On=TRUE (seqStep default 1.0 — a fresh figure has every
+            // cell live, LEN decides how many sound), pitch 0, no accent, gate 100. Extend past
+            // LEN only for cells that DIFFER from that — the earlier "seqStep > 0.5 => used"
+            // test treated every default cell as parked material and wrote all 768 (maintainer
+            // caught a 384-step figure saving to 768, 2026-09-02).
+            auto stepIsDefault = [&a](int s)
+            {
+                return *a.getRawParameterValue(ID::seqStep(s)) > 0.5f
+                    && (int) *a.getRawParameterValue(ID::seqPitch(s)) == 0
+                    &&       *a.getRawParameterValue(ID::seqAcc(s)) < 0.5f
+                    && (int) *a.getRawParameterValue(ID::seqSGate(s)) == 100;
+            };
             for (int s = StepSequencer::kMaxSteps; s > used; --s)
-                if (*a.getRawParameterValue(ID::seqStep(s)) > 0.5f
-                    || (int) *a.getRawParameterValue(ID::seqPitch(s)) != 0
-                    ||       *a.getRawParameterValue(ID::seqAcc(s)) > 0.5f
-                    || (int) *a.getRawParameterValue(ID::seqSGate(s)) != 100)
-                { used = s; break; }
+                if (! stepIsDefault(s)) { used = s; break; }
             // …rounded UP to a full 16-step bar (maintainer 2026-09-02, the Laufindex formula
             // "(LEN/16)*16 + 16" with integer division): the array always ends on a bar
             // boundary, so the last bar reads complete instead of stopping mid-line. A LEN
