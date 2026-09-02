@@ -1011,7 +1011,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getPitchEnvOnRef(),
                                      voice->getModSlots(), voice->getModMatrixOnRef(),
                                      voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
-                                     lfoRateHz, delayTimeSec);
+                                     lfoRateHz, delayTimeSec,
+                                     voice->getFilterKeytrackRef());
         }
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.

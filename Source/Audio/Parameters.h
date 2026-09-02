@@ -66,6 +66,7 @@ namespace Parameters
         constexpr const char* filterType   = "filterType";
         constexpr const char* filterCutoff = "filterCutoff";
         constexpr const char* filterReso   = "filterReso";
+        constexpr const char* filterTrack  = "filterTrack";
 
         // Distortion
         constexpr const char* distortionOn    = "distortionOn";
@@ -335,7 +336,8 @@ namespace Parameters
                               PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
                               ModSlot* modSlots, bool& modMatrixOn,
                               int& outputModeOut, float* generatorPanOut,   // Epic 10: output mode + 7 pans
-                              const double* lfoRateHz, double delayTimeSec)
+                              const double* lfoRateHz, double delayTimeSec,
+                              double& filterKeytrackOut)   // filter keytracking amount 0..1
     {
         // Modulation matrix (Story 8.1): read the master enable + N slots into the voice.
         modMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f;
@@ -396,6 +398,9 @@ namespace Parameters
                                  : FilterType::Off);
         filter.setCutoff(*apvts.getRawParameterValue(ID::filterCutoff));
         filter.setResonance(*apvts.getRawParameterValue(ID::filterReso));
+        // Keytracking amount 0..1 (the voice applies it to baseCutoff with the played ratio, so
+        // the note is factored in per block on top of this fixed cutoff, LFO/matrix and accent).
+        filterKeytrackOut = *apvts.getRawParameterValue(ID::filterTrack) / 100.0;
 
         const bool distortionOn = *apvts.getRawParameterValue(ID::distortionOn) > 0.5f;
         distortion.type  = distortionOn ? static_cast<DistortionType>(static_cast<int>(*apvts.getRawParameterValue(ID::distortionType)) + 1)
