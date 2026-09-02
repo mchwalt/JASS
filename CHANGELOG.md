@@ -31,6 +31,10 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   sessions remaps; the standalone is unaffected.
 
 ### Changed
+- **The LEN knobs move in steps of 8; Shift keeps single steps.** With 768 positions on one
+  knob, a bare wheel notch used to jump ~31 steps and a drag landed on arbitrary values —
+  LEN is aimed at musical lengths, and those are multiples of 8 in practice. Shift is the
+  fine control it always was, and the right-click value box still takes any exact number.
 - **Presets store only the steps a figure uses.** Saving used to write every step slot the
   build supports — tolerable at 48, but at 768 every patch would carry ~750 lines of
   "Off C3" and four 768-dot drum rows, and these files are meant to be read by eye. The
