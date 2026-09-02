@@ -551,6 +551,11 @@ namespace PresetIO
                     ||       *a.getRawParameterValue(ID::seqAcc(s)) > 0.5f
                     || (int) *a.getRawParameterValue(ID::seqSGate(s)) != 100)
                 { used = s; break; }
+            // …rounded UP to a full 16-step bar (maintainer 2026-09-02, the Laufindex formula
+            // "(LEN/16)*16 + 16" with integer division): the array always ends on a bar
+            // boundary, so the last bar reads complete instead of stopping mid-line. A LEN
+            // already on the boundary gains nothing — at most 15 rest lines are added.
+            used = juce::jmin((int) StepSequencer::kMaxSteps, ((used + 15) / 16) * 16);
             juce::Array<juce::var> steps;
             for (int s = 1; s <= used; ++s)
             {
