@@ -126,6 +126,12 @@ namespace rack
         // what you are about to overwrite). Same polling path, also editor-injected.
         std::function<bool()> playingWhen;
 
+        // Optional COARSE quantum for very long integer ranges (the 768-step LEN knobs): without
+        // Shift the knob moves in multiples of this — drags snap, a wheel notch jumps to the next
+        // multiple — while Shift keeps the single-interval fine control. 0 = plain behaviour.
+        // Editor-injected; the right-click text box always accepts exact values.
+        int coarseStep = 0;
+
         // Layout width in body slots (a plain control = 1), exactly like Combo::slots. A knob grows
         // to fill its cell (see ModuleFrame::resized), and a 1-slot cell in a densely packed module
         // is narrower than it is tall — the rotary is then capped by the WIDTH and the row's height

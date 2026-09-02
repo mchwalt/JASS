@@ -2409,6 +2409,10 @@ void SynthyEditor::buildRack()
                         return (double) juce::jlimit(5, 100, (int) u.getDoubleValue());
                     };
                 }
+                else if (k->paramId == P::seqLength)
+                    // LEN across 768 steps (cap raise 2026-09-02): bare drag/wheel in 8s —
+                    // half a bar of 16ths per move — Shift in single steps, as before.
+                    k->coarseStep = 8;
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
         // control of its own. doReset() writes the defaults first and calls this after.
@@ -2512,6 +2516,7 @@ void SynthyEditor::buildRack()
         // along ("Kick · 36", 2026-08-18) so a GM drum-map template transfers without guessing.
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
+            {
                 if (k->paramId.startsWith("percNote"))
                     k->textFromValue = [this](double v)
                     {
@@ -2519,6 +2524,9 @@ void SynthyEditor::buildRack()
                             static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
                         return PercNames::forNote(kit, (int) v) + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String((int) v);   // "·" as UTF-8 escape
                     };
+                else if (k->paramId == P::percLength)
+                    k->coarseStep = 8;   // same LEN feel as STEP SEQ: 8s bare, single steps shifted
+            }
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));
     }

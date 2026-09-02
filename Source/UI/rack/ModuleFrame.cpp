@@ -349,6 +349,7 @@ namespace rack
                 }
                 auto* s = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
                 s->setKnobDiameter (knobD);
+                if (k->coarseStep > 0) s->setCoarseStep (k->coarseStep);   // LEN: 8s bare, 1s shifted
                 // Anatomy: NAME caption ABOVE the knob, numeric VALUE box BELOW it (like the
                 // legacy/C# UI) — the value read-out is existing behaviour and must survive the
                 // migration (FR13). The box is editable in place (double-click) and shows the

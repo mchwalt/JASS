@@ -93,6 +93,25 @@ public:
         Slider::mouseDrag(e);
     }
 
+    // Coarse quantum for very long integer ranges (LEN across 768 steps): without Shift the knob
+    // moves in multiples of this, Shift keeps single-interval fine control (maintainer 2026-09-02:
+    // "ohne Shift meinetwegen in 8er Schritten, Shift+LEN weiterhin in Einzelschritten").
+    void setCoarseStep(int quanta) { coarseStep = quanta; }
+
+    // Drag path: snapValue sees every drag-derived value, so the quantising lives here — the
+    // text box (dragMode == notDragging) stays exact, as does any programmatic setValue.
+    double snapValue(double attemptedValue, juce::Slider::DragMode dragMode) override
+    {
+        if (coarseStep > 0 && dragMode != juce::Slider::notDragging
+            && ! juce::ModifierKeys::currentModifiers.isShiftDown())
+        {
+            const double iv = getInterval() > 0.0 ? getInterval() : 1.0;
+            const double q  = coarseStep * iv;
+            return juce::jlimit(getMinimum(), getMaximum(), std::round(attemptedValue / q) * q);
+        }
+        return juce::Slider::snapValue(attemptedValue, dragMode);
+    }
+
     void mouseWheelMove(const juce::MouseEvent& e, const juce::MouseWheelDetails& wheel) override
     {
         const double range    = getMaximum() - getMinimum();
@@ -100,6 +119,25 @@ public:
         if (range <= 0.0) { juce::Slider::mouseWheelMove(e, wheel); return; }
 
         const double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
+
+        // Coarse-quantum knobs (LEN, 768 positions): a notch jumps to the NEXT multiple of the
+        // quantum, Shift moves one interval — mirrors the drag behaviour above.
+        if (coarseStep > 0)
+        {
+            const double iv = interval > 0.0 ? interval : 1.0;
+            double nv;
+            if (e.mods.isShiftDown())
+                nv = getValue() + dir * iv;
+            else
+            {
+                const double q = coarseStep * iv;
+                const double m = std::floor(getValue() / q + 1e-9);
+                nv = dir > 0 ? (m + 1) * q
+                             : (getValue() - m * q < 1e-9 ? (m - 1) * q : m * q);
+            }
+            setValue(juce::jlimit(getMinimum(), getMaximum(), nv), juce::sendNotificationSync);
+            return;
+        }
 
         // Discrete ranges (unison voices 1..7, octaves, a STEP SEQ step at ±24 semitones): exactly
         // one interval per notch, and modifiers change nothing — there is nothing finer to reach.
@@ -129,4 +167,5 @@ public:
 private:
     int knobDiameter = KnobSize::Small;   // single standard size for all modules
     float modAmount = 0.0f;   // live LFO modulation for the ring (-1..+1)
+    int coarseStep = 0;       // >0: un-shifted moves quantise to multiples of this many intervals
 };
