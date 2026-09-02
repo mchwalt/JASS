@@ -4,6 +4,14 @@
 # substitute. Bypass in a genuine emergency with:  git push --no-verify)
 #
 # Enable this hook in your clone:  git config core.hooksPath .githooks
+#
+# Only the public repo is guarded; pushes to other remotes (e.g. a private
+# work-in-progress mirror) pass through.
+remote_url="$2"
+case "$remote_url" in
+    *github.com/mchwalt/JASS.git|*github.com/mchwalt/JASS|*github.com:mchwalt/JASS.git|*github.com:mchwalt/JASS) ;;
+    *) exit 0 ;;
+esac
 protected="refs/heads/main"
 while read local_ref local_sha remote_ref remote_sha; do
     if [ "$remote_ref" = "$protected" ]; then

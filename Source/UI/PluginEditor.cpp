@@ -916,6 +916,16 @@ void SynthyEditor::timerCallback()
         if (keyboard != nullptr)
             keyboard->setPatternNote (processor.getSeqNote());
 
+        // Step pages (16.3), the FOLLOW auto-flip: while a pattern runs and FOLLOW is latched,
+        // the shown page tracks the playhead's page. Editing wins — while the write cursor is
+        // armed the display stays with the cursor (seqSetCursor moves it), so the flip is skipped.
+        if (seqFollow && seqCursor < 0)
+            if (const int p = seqPlayingPage(); p >= 0 && p != seqShownPage)
+                setSeqPage (p, false);
+        if (percFollow)
+            if (const int p = percPlayingPage(); p >= 0 && p != percShownPage)
+                setPercPage (p, false);
+
         // The STEP SEQ note boxes resolve their names over the root that actually sounds (15.6) —
         // re-text them whenever that reference moves: a new latch, a stopped one, an octave shift.
         if (const int ref = seqPitchReference(); ref != seqRefShown)
@@ -1154,9 +1164,9 @@ void SynthyEditor::chooseMidiExport()
 }
 
 // PERC's x2 (maintainer 2026-08-30): append the pattern behind itself and double LEN — the
-// classic drum-machine "same bar again, then vary the copy". Capped at the 32-step grid; at
-// LEN 17..31 it copies what still fits (a partial doubling beats a dead button), at 32 it
-// does nothing. Plain parameter writes, so undo/preset/LiveState all see it like hand edits.
+// classic drum-machine "same bar again, then vary the copy". Capped at kMaxSteps; short of the
+// cap it copies what still fits (a partial doubling beats a dead button), at the cap it does
+// nothing. Plain parameter writes, so undo/preset/LiveState all see it like hand edits.
 void SynthyEditor::doublePercPattern()
 {
     namespace P = Parameters::ID;
@@ -1467,6 +1477,44 @@ void SynthyEditor::seqSetCursor(int step)
     processor.setSeqRecordArmed(seqCursor >= 0);
     if (seqCursor < 0)
         seqPendingNote.store(-1);   // drop anything parked between the last note and the stop
+    // Step pages (16.3): editing wins over the playhead — the shown page follows the cursor
+    // across a 48-step boundary (a write running past page A continues visibly on page B).
+    // Not a manual page pick: FOLLOW stays latched and resumes once the cursor stops.
+    if (seqCursor >= 0)
+        setSeqPage(seqCursor / StepSequencer::kPageSteps, false);
+}
+
+// --- Step pages (16.3) ---------------------------------------------------------------------------
+// The shown page is view state the ModuleFrames poll (they rebuild their step cells against the
+// new page's params); PERC's grid gets its window pushed directly. A MANUAL pick — a page button —
+// pauses FOLLOW (the Logic/Cubase catch convention): the display must never flip away under an
+// editing cursor. Re-latching FOLLOW (setFollow true) jumps to the playing page and resumes.
+int SynthyEditor::seqPlayingPage() const
+{
+    const int s = processor.getSeqStep();
+    return s >= 0 ? s / StepSequencer::kPageSteps : -1;
+}
+
+int SynthyEditor::percPlayingPage() const
+{
+    const int s = processor.getPercStep();
+    return s >= 0 ? s / PercSequencer::kPageSteps : -1;
+}
+
+void SynthyEditor::setSeqPage(int page, bool manual)
+{
+    seqShownPage = juce::jlimit(0, StepSequencer::kMaxSteps / StepSequencer::kPageSteps - 1, page);
+    if (manual)
+        seqFollow = false;
+}
+
+void SynthyEditor::setPercPage(int page, bool manual)
+{
+    percShownPage = juce::jlimit(0, PercSequencer::kMaxSteps / PercSequencer::kPageSteps - 1, page);
+    if (manual)
+        percFollow = false;
+    if (percGrid != nullptr)
+        percGrid->setPageOffset(percShownPage * PercSequencer::kPageSteps);
 }
 
 // Write the played note into the cursor's step and move on. The value is the offset from
@@ -2303,21 +2351,26 @@ void SynthyEditor::buildRack()
             if (auto* k = std::get_if<Knob>(&el))
                 if (k->paramId.startsWith("seqPitch"))
                 {
-                    const int step = k->paramId.substring(8).getIntValue();   // 1-based
+                    const int step = k->paramId.substring(8).getIntValue();   // 1-based, page A
                     k->toggleParamId = "seqStep" + k->paramId.substring(8);
                     k->accentParamId = "seqAcc"  + k->paramId.substring(8);   // 15.2: third switch state
-                    k->audition = [this, step](int semis, bool sounding)
+                    // Step pages (16.3): this CELL shows step `step` OF THE SHOWN PAGE — the frame
+                    // rebinds its params per page, and these editor hooks translate themselves
+                    // through the same shared page state, so cell 7 on page C selects, marks and
+                    // previews step 103. (Read seqShownPage at CALL time, never captured.)
+                    auto absStep = [this, step] { return step + seqShownPage * StepSequencer::kPageSteps; };
+                    k->audition = [this, absStep](int semis, bool sounding)
                     {
-                        if (sounding) seqSetCursor(step - 1);   // a click selects, exactly as 15.3 sounds
+                        if (sounding) seqSetCursor(absStep() - 1);   // a click selects, exactly as 15.3 sounds
                         // An accented step previews HOT (15.2) — the same velocity the figure plays.
                         const bool acc = *processor.getAPVTS().getRawParameterValue(
-                                             Parameters::ID::seqAcc(step)) > 0.5f;
+                                             Parameters::ID::seqAcc(absStep())) > 0.5f;
                         auditionStep(semis, sounding, acc);
                     };
-                    k->highlightWhen = [this, step] { return seqCursor == step - 1; };
+                    k->highlightWhen = [this, absStep] { return seqCursor == absStep() - 1; };
                     // …and mark the step the pattern is ON, the way PERC's grid marks its column
                     // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
-                    k->playingWhen = [this, step] { return processor.getSeqStep() == step - 1; };
+                    k->playingWhen = [this, absStep] { return processor.getSeqStep() == absStep() - 1; };
                     // …and read out the NOTE, not the raw semitone count (maintainer 2026-08-18):
                     // the value stays an offset, the display resolves it through the SAME reference
                     // audition sounds it with — seqPitchReference(), so box, preview and the RUNNING
@@ -2356,6 +2409,10 @@ void SynthyEditor::buildRack()
                         return (double) juce::jlimit(5, 100, (int) u.getDoubleValue());
                     };
                 }
+                else if (k->paramId == P::seqLength)
+                    // LEN across 768 steps (cap raise 2026-09-02): bare drag/wheel in 8s —
+                    // half a bar of 16ths per move — Shift in single steps, as before.
+                    k->coarseStep = 8;
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
         // control of its own. doReset() writes the defaults first and calls this after.
@@ -2364,6 +2421,30 @@ void SynthyEditor::buildRack()
         // 16.2: the red line after step LEN — "where does the figure end", at a glance.
         d.lenMarkerStepPrefix  = "seqPitch";
         d.lenMarkerLengthParam = P::seqLength;
+        // Step pages (16.3): the 48 knobs are a window onto kMaxSteps; A/B/C/D + FOLLOW in the
+        // header. State lives HERE (the cursor, the timer's auto-flip and these hooks share it).
+        d.paging.pageCount     = StepSequencer::kMaxSteps / StepSequencer::kPageSteps;
+        d.paging.stepsPerPage  = StepSequencer::kPageSteps;
+        d.paging.pagedPrefixes = { "seqPitch" };
+        d.paging.getPage       = [this] { return seqShownPage; };
+        d.paging.setPage       = [this](int p) { setSeqPage(p, true); };
+        d.paging.playingPage   = [this] { return seqPlayingPage(); };
+        d.paging.getFollow     = [this] { return seqFollow; };
+        d.paging.setFollow     = [this](bool f)
+        {
+            seqFollow = f;
+            if (f)   // re-latching jumps to the playing page and resumes following
+                if (const int p = seqPlayingPage(); p >= 0) setSeqPage(p, false);
+        };
+        // Laufindex (maintainer 2026-09-02): live "step/LEN" beside the pager — at 768 steps
+        // the playing-page dot alone no longer says where in the figure the playhead is.
+        d.headerReadout = [this]
+        {
+            const int s = processor.getSeqStep();
+            if (s < 0) return juce::String();
+            const int len = (int) *processor.getAPVTS().getRawParameterValue(P::seqLength);
+            return juce::String(s + 1) + "/" + juce::String(len);
+        };
         // MIDI ⇄ figure (15.8): the sequencer's own entry points, so "whole preset or just the
         // MIDI track?" is answered by WHERE the user clicks, before any dialog opens.
         d.headerActions.push_back({ "LOAD MIDI",
@@ -2384,6 +2465,21 @@ void SynthyEditor::buildRack()
                                   [this] { return processor.getPercStep(); },
                                   [this](int lane) { processor.auditionPercLane(lane); });
         rackOwned.add(grid);   // typed pointer kept: the COPY latch below talks to PercGrid itself
+        percGrid = grid;       // 16.3: page flips push their window offset into the grid
+        // Step pages (16.3): same A/B/C/D + FOLLOW as STEP SEQ. No paged body cells here — the
+        // grid windows itself via setPageOffset — so a flip costs a repaint, not a rebuild.
+        d.paging.pageCount    = PercSequencer::kMaxSteps / PercSequencer::kPageSteps;
+        d.paging.stepsPerPage = PercSequencer::kPageSteps;
+        d.paging.getPage      = [this] { return percShownPage; };
+        d.paging.setPage      = [this](int p) { setPercPage(p, true); };
+        d.paging.playingPage  = [this] { return percPlayingPage(); };
+        d.paging.getFollow    = [this] { return percFollow; };
+        d.paging.setFollow    = [this](bool f)
+        {
+            percFollow = f;
+            if (f)
+                if (const int p = percPlayingPage(); p >= 0) setPercPage(p, false);
+        };
         // Step duplication (maintainer 2026-08-30, "3. bitte" = both): COPY latches a
         // column-stamp mode on the grid; x2 appends the pattern behind itself. Visible header
         // buttons, no context menu — the house rule.
@@ -2429,6 +2525,7 @@ void SynthyEditor::buildRack()
         // along ("Kick · 36", 2026-08-18) so a GM drum-map template transfers without guessing.
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
+            {
                 if (k->paramId.startsWith("percNote"))
                     k->textFromValue = [this](double v)
                     {
@@ -2436,6 +2533,9 @@ void SynthyEditor::buildRack()
                             static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::percKit)) - 1);
                         return PercNames::forNote(kit, (int) v) + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String((int) v);   // "·" as UTF-8 escape
                     };
+                else if (k->paramId == P::percLength)
+                    k->coarseStep = 8;   // same LEN feel as STEP SEQ: 8s bare, single steps shifted
+            }
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));
     }

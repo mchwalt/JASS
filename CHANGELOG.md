@@ -10,6 +10,52 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **STEP SEQ and PERC hold up to 768 steps, shown as sixteen 48-step pages (story 16.3).** Two
+  songs in a row had hit the same wall: pop music phrases in 2/4/8 bars — 32/64/128
+  sixteenths — and the old 48-step maximum (a UI-geometry number, not a musical one) could
+  not hold a 4-bar figure. The grids stay exactly as they were; **< / >** in the module
+  headers page through the pattern (the read-out says shown page / pages — prev/next rather
+  than one button per page, so raising the cap never widens the header), a dot marks the
+  page that is playing, and a
+  **FOLLOW** latch flips the view with the playhead (stepping a page by hand pauses it — the
+  display must never flip away under an editing cursor; latching again jumps back). Writing
+  a figure crosses pages by itself, PERC's COPY stamps across pages, and MIDI import/export
+  carries the full length. 768 = 16×48 is a deliberately generous ceiling: the parameter list
+  of a plugin is fixed at construction, so "as many as the song needs" has to be "more than
+  any song will ask for" — and the Roboter full-melody test showed a whole song line wants
+  ~400 steps, so the story's original 4 pages became 16 (the arrays cost kilobytes; the real
+  price is parameter count, accepted). Old presets load and sound bit-identically (steps
+  beyond their saved length default to silence — LEN rules, as always). Known trade-off,
+  same as 16.2: the LEN ranges changed, so normalized VST3 automation of LEN from older
+  sessions remaps; the standalone is unaffected.
+- **Long figures stay navigable, in the file and in the rack.** Every step object in a saved
+  preset now leads with its running index (`"Step": 137`) — pure orientation while paging
+  through the file; the loader keeps reading by position and ignores it, exactly as it
+  ignores the spelled note "Name". And the STEP SEQ header shows a live "137/384" read-out
+  beside the pager while the figure runs: with up to 16 pages, the playing-page dot alone
+  no longer says where in the figure the playhead is.
+
+### Changed
+- **A fresh STEP SEQ figure is an empty grid, not 48 cells on the root.** The step default was
+  "on", so a reset — or a new patch — lit every cell playing the root note, and the reset
+  button that promised to "empty the pattern" did the opposite. Now a step defaults to a rest,
+  the way every hardware sequencer and JASS's own PERC grid already behave: you fill the figure
+  in. Existing presets are unaffected — each stores its playing steps explicitly, so a step it
+  never mentioned never sounded — and they trim their empty tails away on the next save.
+- **The LEN knobs move in steps of 8; Shift keeps single steps.** With 768 positions on one
+  knob, a bare wheel notch used to jump ~31 steps and a drag landed on arbitrary values —
+  LEN is aimed at musical lengths, and those are multiples of 8 in practice. Shift is the
+  fine control it always was, and the right-click value box still takes any exact number.
+- **Presets store only the steps a figure uses.** Saving used to write every step slot the
+  build supports — tolerable at 48, but at 768 every patch would carry ~750 lines of
+  "Off C3" and four 768-dot drum rows, and these files are meant to be read by eye. The
+  writer now stops at LEN, extended to the last step/hit that differs from the default so
+  material parked beyond the LEN line still round-trips. MOD MATRIX slots on "Off" stay out
+  of the file for the same reason (the active routings compact upward on reload — slot
+  order carries no meaning). No format change: the reader has always treated a missing
+  step or slot as the default, so old (longer) and new (shorter) files load alike.
+
 ## [2026.08.13] – 2026-08-31
 
 ### Changed

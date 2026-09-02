@@ -126,6 +126,12 @@ namespace rack
         // what you are about to overwrite). Same polling path, also editor-injected.
         std::function<bool()> playingWhen;
 
+        // Optional COARSE quantum for very long integer ranges (the 768-step LEN knobs): without
+        // Shift the knob moves in multiples of this — drags snap, a wheel notch jumps to the next
+        // multiple — while Shift keeps the single-interval fine control. 0 = plain behaviour.
+        // Editor-injected; the right-click text box always accepts exact values.
+        int coarseStep = 0;
+
         // Layout width in body slots (a plain control = 1), exactly like Combo::slots. A knob grows
         // to fill its cell (see ModuleFrame::resized), and a 1-slot cell in a densely packed module
         // is narrower than it is tall — the rotary is then capped by the WIDTH and the row's height
@@ -318,7 +324,41 @@ namespace rack
         // `lenMarkerLengthParam` — STEP SEQ's "where does the figure end" cue, the knob-row
         // equivalent of PERC's dimmed beyond-LEN cells (dimming was rejected for knobs: grey
         // already means REST there, and two grey reasons cannot be told apart).
+        // Page-aware since 16.3: the line lands on the page that contains the boundary.
         juce::String lenMarkerStepPrefix, lenMarkerLengthParam;
+
+        // Step pages (16.3): the body's step cells are a WINDOW of `stepsPerPage` onto a pattern
+        // `pageCount` pages long. The header grows '<' / page read-out / '>' (prev/next rather
+        // than one button per page, so a future cap raise never widens the header; page FLIP
+        // rather than smooth scrolling: a grid of discrete click targets must not move under
+        // the pointer) and a FOLLOW latch (Logic's "Catch Playhead": while playing, the shown
+        // page flips with the playhead; stepping a page BY HAND drops the latch so the display
+        // never flips away under an editing cursor — re-latching jumps back and resumes).
+        //
+        // The page STATE lives with the EDITOR (it drives the write cursor, the PERC grid offset
+        // and the auto-flip in its timer); the frame polls getPage and REBUILDS its body when it
+        // changes — every knob whose param id starts with one of `pagedPrefixes` (including its
+        // corner-switch and alt-row ids) is rebound to the shown page's params by adding
+        // page*stepsPerPage to the id's trailing number. A module with paging but no paged body
+        // cells (PERC — its grid is a custom Display) gets the header buttons only.
+        struct StepPaging
+        {
+            int pageCount    = 0;   // 0/1 = feature off
+            int stepsPerPage = 0;
+            std::vector<juce::String> pagedPrefixes;      // e.g. { "seqPitch" } — MAIN ids only
+            std::function<int()>      getPage;            // shown page, editor-owned view state
+            std::function<void(int)>  setPage;            // a MANUAL pick (drops FOLLOW there)
+            std::function<int()>      playingPage;        // page under the playhead, -1 = silent
+            std::function<bool()>     getFollow;
+            std::function<void(bool)> setFollow;          // re-latch jumps to the playing page
+        };
+        StepPaging paging;
+
+        // Optional LIVE POSITION read-out in the header ("Laufindex", maintainer 2026-09-02):
+        // polled in the frame timer beside the pager. STEP SEQ feeds it "step/LEN" — at 768
+        // steps the playing-page dot alone no longer says where in the figure the playhead is.
+        // Empty string = nothing playing, the label goes blank. Editor-injected.
+        std::function<juce::String()> headerReadout;
 
         // Collapsible display (story 16.2, first slice — maintainer 2026-08-31): with a title
         // set, the header carries a latch that folds the module's Display cells away and

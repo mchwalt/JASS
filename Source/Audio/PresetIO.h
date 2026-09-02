@@ -538,10 +538,39 @@ namespace PresetIO
         if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
         {
             const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
+            // Only the USED steps are written (16 pages would be ~750 "Off C3" lines in every
+            // file otherwise — these files are read by eye). Used = up to LEN, extended to the
+            // last step that differs from factory default so material parked beyond the LEN line
+            // survives the round-trip. The reader has always tolerated a short array: it factory-
+            // resets first, so a missing step IS the default.
+            int used = juce::jlimit(1, (int) StepSequencer::kMaxSteps,
+                                    (int) *a.getRawParameterValue(ID::seqLength));
+            // A step's FACTORY DEFAULT is OFF (a rest), pitch 0, no accent, gate 100. Extend past
+            // LEN only for cells that DIFFER from that — so parked material (an ON step or a set
+            // pitch/accent/gate) survives while the empty tail is dropped.
+            auto stepIsDefault = [&a](int s)
+            {
+                return *a.getRawParameterValue(ID::seqStep(s)) < 0.5f
+                    && (int) *a.getRawParameterValue(ID::seqPitch(s)) == 0
+                    &&       *a.getRawParameterValue(ID::seqAcc(s)) < 0.5f
+                    && (int) *a.getRawParameterValue(ID::seqSGate(s)) == 100;
+            };
+            for (int s = StepSequencer::kMaxSteps; s > used; --s)
+                if (! stepIsDefault(s)) { used = s; break; }
+            // …rounded UP to a full 16-step bar (maintainer 2026-09-02, the Laufindex formula
+            // "(LEN/16)*16 + 16" with integer division): the array always ends on a bar
+            // boundary, so the last bar reads complete instead of stopping mid-line. A LEN
+            // already on the boundary gains nothing — at most 15 rest lines are added.
+            used = juce::jmin((int) StepSequencer::kMaxSteps, ((used + 15) / 16) * 16);
             juce::Array<juce::var> steps;
-            for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)   // 48 since 16.2
+            for (int s = 1; s <= used; ++s)
             {
                 auto* st = new juce::DynamicObject();
+                // "Step" — the running index, FIRST so every line of the file says where it is
+                // (maintainer 2026-09-02: nobody counts 384 objects by eye while paging through
+                // a preset). Orientation only: the loader reads by POSITION and ignores this,
+                // exactly as it ignores "Name" — the two can never disagree with the music.
+                st->setProperty("Step", s);
                 const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
                 st->setProperty("On",   *a.getRawParameterValue(ID::seqStep(s)) > 0.5f);
                 st->setProperty("Note", note);
@@ -557,6 +586,12 @@ namespace PresetIO
                 else if (sg == 101) st->setProperty("Gate", "TIE");
                 else                st->setProperty("Gate", sg);
                 steps.add(juce::var(st));
+            }
+            // The spec pass wrote flat keys for ALL kMaxSteps — remove every one of them, not
+            // just the `used` range, or the trimmed tail leaks into the file as a flat-key
+            // desert (maintainer caught Pitch385..Gate768 flat, 2026-09-02).
+            for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)
+            {
                 mod->removeProperty("Pitch"  + juce::String(s));
                 mod->removeProperty("Step"   + juce::String(s));
                 mod->removeProperty("Accent" + juce::String(s));
@@ -576,6 +611,15 @@ namespace PresetIO
             int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
             while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
             while (mod->hasProperty("Step1_" + juce::String(nSteps + 1))) ++nSteps;
+            // Only the used cells are written (same cure as the STEP SEQ array above — 16 pages
+            // would be four 768-dot rows in every file): up to LENGTH, extended to the last hit
+            // in any lane so hits parked beyond it survive. All rows share one width — the grid
+            // alignment is what makes the file readable. Reading pads with rests, as ever.
+            int used = juce::jlimit(1, juce::jmax(1, nSteps), (int) mod->getProperty("Length"));
+            for (int l = 1; l <= nLanes; ++l)
+                for (int s = nSteps; s > used; --s)
+                    if ((bool) mod->getProperty("Step" + juce::String(l) + "_" + juce::String(s)))
+                    { used = s; break; }
             juce::Array<juce::var> lanes;
             for (int l = 1; l <= nLanes; ++l)
             {
@@ -588,7 +632,7 @@ namespace PresetIO
                 ln->setProperty("Amp", mod->getProperty("Amp" + L));
                 ln->setProperty("Pan", mod->getProperty("Pan" + L));
                 juce::String steps;
-                for (int s = 1; s <= nSteps; ++s)
+                for (int s = 1; s <= used; ++s)
                     steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
                 ln->setProperty("Steps", steps);
                 lanes.add(juce::var(ln));
@@ -615,17 +659,25 @@ namespace PresetIO
             for (int n = 1; n <= nSlots; ++n)
             {
                 const juce::String k = "Slot" + juce::String(n);
-                auto* sl = new juce::DynamicObject();
-                sl->setProperty("Source", mod->getProperty(k + "Source"));
                 const juce::String module = mod->getProperty(k + "Module").toString();
-                sl->setProperty("Module", module);
-                const int pi = (int) mod->getProperty(k + "Param");
-                sl->setProperty("Param", pi);
-                if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
-                    sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));   // "-" for Off
-                sl->setProperty("Amount", mod->getProperty(k + "Amount"));
-                sl->setProperty("Quant", mod->getProperty(k + "Quant"));
-                slots.add(juce::var(sl));
+                // An "Off" slot is factory state and stays OUT of the file (maintainer
+                // 2026-09-02, the step-array cure applied here): the reader factory-resets
+                // first, so a missing slot IS off. Survivors compact upward on reload —
+                // slot order carries no meaning, only the routings do. The flat keys are
+                // still removed for EVERY slot below, or they would be written flat.
+                if (module != "Off")
+                {
+                    auto* sl = new juce::DynamicObject();
+                    sl->setProperty("Source", mod->getProperty(k + "Source"));
+                    sl->setProperty("Module", module);
+                    const int pi = (int) mod->getProperty(k + "Param");
+                    sl->setProperty("Param", pi);
+                    if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
+                        sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));
+                    sl->setProperty("Amount", mod->getProperty(k + "Amount"));
+                    sl->setProperty("Quant", mod->getProperty(k + "Quant"));
+                    slots.add(juce::var(sl));
+                }
                 for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
                     mod->removeProperty(k + f);
             }

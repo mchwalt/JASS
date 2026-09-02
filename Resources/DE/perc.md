@@ -1,4 +1,4 @@
-Vier Perkussionsspuren auf einem 48-Schritt-Raster, trocken auf den Master-Bus. Läuft, sobald das Modul eingeschaltet ist — ohne Taste.
+Vier Perkussionsspuren auf einem Raster mit bis zu 192 Schritten, trocken auf den Master-Bus. Läuft, sobald das Modul eingeschaltet ist — ohne Taste.
 
 - **Das Raster** — **Linksklick setzt einen Schritt und spielt ihn**, Rechtsklick löscht ihn; Ziehen macht weiter, eine HiHat-Reihe ist also eine Geste. Jede Zeile trägt den Namen ihres Instruments. Jeder vierte Schritt ist hinterlegt; Schritte hinter LEN sind gedimmt und bleiben stumm.
 - **KIT** — das Sample-Set, aus dem die Spuren spielen; eigenes Set, unabhängig vom SAMPLER.
@@ -11,4 +11,6 @@ Die Drums geben den Takt vor: Läuft PERC, steigt eine aus der Stille gestartete
 
 PERC läuft nie durch Filter oder Effekte — die sitzen in den Stimmen, und der Beat ist keine. Lädt das Kit eines Presets noch, bleibt es stumm, statt das falsche zu spielen.
 
-**COPY / x2 (Titelzeile).** **COPY** rastet einen Kopiermodus ein: Quell-Step anklicken — die ganze Spalte über alle vier Reihen — und jeder weitere Klick stempelt sie dorthin. Rechtsklick wählt eine neue Quelle; nochmal COPY beendet. **x2** hängt das Pattern hinter sich selbst und verdoppelt LEN (bis 32): derselbe Takt nochmal, dann die Kopie variieren.
+**COPY / x2 (Titelzeile).** **COPY** rastet einen Kopiermodus ein: Quell-Step anklicken — die ganze Spalte über alle vier Reihen — und jeder weitere Klick stempelt sie dorthin. Rechtsklick wählt eine neue Quelle; nochmal COPY beendet. **x2** hängt das Pattern hinter sich selbst und verdoppelt LEN (bis 192): derselbe Takt nochmal, dann die Kopie variieren.
+
+**Seiten (< 1/4 >, Titelzeile).** Das Raster zeigt eine Seite à 48 Schritte; **< / >** blättern durch vier Seiten (die Schrittnummern sagen, wo du bist). Die Anzeige nennt Seite / Seiten, ein Punkt markiert die spielende Seite. Mit gerastetem **FOLLOW** blättert die Ansicht mit dem Beat mit; von Hand blättern pausiert FOLLOW — erneut rasten springt zurück und folgt wieder. COPY arbeitet über Seiten hinweg: Quelle wählen, Seite wechseln, stempeln.

@@ -57,8 +57,12 @@ namespace Modules
             m.params.push_back ({ "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
                                   juce::String (s), ParamSpec::Kind::Int,
                                   juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f });
+            // Default OFF (2026-09-02): a fresh figure is an EMPTY grid you fill, like every
+            // hardware step sequencer and like PERC — Reset "empties the pattern" (its own words)
+            // instead of lighting all 768 cells on the root. Safe against old presets: every one
+            // stores its playing steps explicitly (up to LEN), so a missing step never sounded.
             ParamSpec on { "seqStep" + juce::String (s), "Step" + juce::String (s), "",
-                           ParamSpec::Kind::Bool, {}, 1.0f };
+                           ParamSpec::Kind::Bool, {}, 0.0f };
             on.showInBody = false;
             m.params.push_back (on);
             ParamSpec acc { "seqAcc" + juce::String (s), "Accent" + juce::String (s), "",
@@ -97,12 +101,16 @@ namespace Modules
         m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
         // 16.2: steps 33..48 — REGISTERED here at the end (append-only), DISPLAYED in place below.
+        // 16.3 simply lets the same tail run on to kMaxSteps: 33..48 keep the indices they shipped
+        // with, 49..192 follow behind them. (Single lane — no PERC-style interleaving trap here.)
         for (int s = 33; s <= StepSequencer::kMaxSteps; ++s) pitchParam (s);
 
         // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
+        // The body shows ONE PAGE (kPageSteps knobs); ModuleFrame rebinds these cells to the
+        // shown page's params (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
         for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate" });
-        for (int s = 25; s <= StepSequencer::kMaxSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
+        for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent" });
         return m;
     }

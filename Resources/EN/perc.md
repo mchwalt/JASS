@@ -1,4 +1,4 @@
-Four percussion tracks on a 48-step grid, played dry into the master bus. It runs as soon as the module is switched on — no key needed.
+Four percussion tracks on a step grid of up to 192 steps, played dry into the master bus. It runs as soon as the module is switched on — no key needed.
 
 - **The grid** — **left click sets a step and sounds it**, right click clears one; dragging keeps going, so a row of hats is one gesture. Each row is named after the instrument it plays. Every fourth step is shaded; steps past LEN are dimmed and stay silent.
 - **KIT** — the sample set the tracks fire from, its own and independent of the SAMPLER's.
@@ -11,4 +11,6 @@ The drums are the clock: with PERC running, a STEP SEQ figure started from silen
 
 PERC never passes through the filter or the effects — those live in the voices, and the beat is not one. A preset whose kit is still loading stays silent rather than play the wrong one.
 
-**COPY / x2 (title bar).** **COPY** latches a copy mode: click a source step — the whole column, all four rows — then every further click stamps it onto that step. Right-click picks a new source; click COPY again to finish. **x2** appends the pattern behind itself and doubles LEN (up to 32): the same bar again, then vary the copy.
+**COPY / x2 (title bar).** **COPY** latches a copy mode: click a source step — the whole column, all four rows — then every further click stamps it onto that step. Right-click picks a new source; click COPY again to finish. **x2** appends the pattern behind itself and doubles LEN (up to 192): the same bar again, then vary the copy.
+
+**Pages (< 1/4 >, title bar).** The grid shows one page of 48 steps; **< / >** step through four pages (the step numbers say where you are). The read-out says shown page / pages, and a dot marks the page that is playing. With **FOLLOW** latched the view flips with the beat; stepping a page by hand pauses FOLLOW — latch it again to jump back and resume. COPY works across pages: pick the source, flip the page, stamp.

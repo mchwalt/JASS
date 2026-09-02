@@ -79,11 +79,22 @@ public:
     // air between the names and the module edge that 48 steps can use better).
     int labelWidth() const { return juce::jlimit (52, 100, getWidth() / 12); }
 
+    // Step pages (16.3): the grid draws ONE page of the pattern; the module's A/B/C/D buttons
+    // (and FOLLOW) move this window. Steps, playhead, LEN and the COPY source stay ABSOLUTE —
+    // a column copied on page A stamps onto page C without any bookkeeping.
+    void setPageOffset (int firstStep)
+    {
+        const int clamped = juce::jlimit (0, PercSequencer::kMaxSteps - PercSequencer::kPageSteps, firstStep);
+        if (clamped == pageOffset) return;
+        pageOffset = clamped;
+        repaint();
+    }
+
     void paint (juce::Graphics& g) override
     {
         const auto full = getLocalBounds().reduced (2);
         const auto r = full.withTrimmedLeft (labelWidth());
-        const float cw = (float) r.getWidth()  / (float) PercSequencer::kMaxSteps;
+        const float cw = (float) r.getWidth()  / (float) PercSequencer::kPageSteps;
         const float ch = (float) r.getHeight() / (float) (PercSequencer::kLanes + 1);   // +1 = the number strip
 
         // Lane names, from the same three sources the NOTE read-out uses.
@@ -107,24 +118,27 @@ public:
             }
         }
 
-        // Step numbers, and the four-step grouping that makes a bar readable at a glance.
+        // Step numbers (ABSOLUTE — page C starts at 97), and the four-step grouping that makes
+        // a bar readable at a glance.
         g.setFont (juce::FontOptions (10.0f));
         const int len = (int) *apvts.getRawParameterValue (Parameters::ID::percLength);
-        for (int s = 0; s < PercSequencer::kMaxSteps; ++s)
+        for (int vi = 0; vi < PercSequencer::kPageSteps; ++vi)
         {
+            const int s = pageOffset + vi;
             const bool inPattern = s < len;
             g.setColour (juce::Colours::white.withAlpha (inPattern ? 0.45f : 0.15f));
             if (s % 4 == 0)
                 g.drawText (juce::String (s + 1),
-                            juce::Rectangle<float> (r.getX() + s * cw, (float) r.getY(), cw, ch),
+                            juce::Rectangle<float> (r.getX() + vi * cw, (float) r.getY(), cw, ch),
                             juce::Justification::centredLeft);
         }
 
         const int head = playhead ? playhead() : -1;
         for (int l = 0; l < PercSequencer::kLanes; ++l)
-            for (int s = 0; s < PercSequencer::kMaxSteps; ++s)
+            for (int vi = 0; vi < PercSequencer::kPageSteps; ++vi)
             {
-                auto cell = juce::Rectangle<float> (r.getX() + s * cw,
+                const int s = pageOffset + vi;
+                auto cell = juce::Rectangle<float> (r.getX() + vi * cw,
                                                     r.getY() + (l + 1) * ch,
                                                     cw, ch).reduced (1.5f);
                 const bool on  = *apvts.getRawParameterValue (Parameters::ID::percStep (l + 1, s + 1)) > 0.5f;
@@ -144,11 +158,12 @@ public:
             }
 
         // COPY mode: frame the picked source column across all four lanes, so what the next
-        // click will stamp is never a matter of memory.
-        if (copyMode && copySource >= 0)
+        // click will stamp is never a matter of memory. (Absolute — shown only when its page is.)
+        if (copyMode && copySource >= pageOffset && copySource < pageOffset + PercSequencer::kPageSteps)
         {
             g.setColour (juce::Colours::white.withAlpha (0.85f));
-            g.drawRoundedRectangle (juce::Rectangle<float> (r.getX() + copySource * cw, r.getY() + ch,
+            g.drawRoundedRectangle (juce::Rectangle<float> (r.getX() + (copySource - pageOffset) * cw,
+                                                            r.getY() + ch,
                                                             cw, ch * PercSequencer::kLanes).reduced (0.5f),
                                     3.0f, 1.5f);
         }
@@ -182,15 +197,18 @@ public:
     }
 
 private:
-    // Which step column the pointer is in, or -1 (also -1 in the number strip / name column).
+    // Which step column the pointer is in — ABSOLUTE (page offset applied) — or -1 (also -1 in
+    // the number strip / name column).
     int stepAt (juce::Point<float> p) const
     {
         const auto r = getLocalBounds().reduced (2).withTrimmedLeft (labelWidth()).toFloat();
-        const float cw = r.getWidth()  / (float) PercSequencer::kMaxSteps;
+        const float cw = r.getWidth()  / (float) PercSequencer::kPageSteps;
         const float ch = r.getHeight() / (float) (PercSequencer::kLanes + 1);
-        const int s = (int) ((p.x - r.getX()) / cw);
-        const int l = (int) ((p.y - r.getY()) / ch) - 1;   // row 0 is the number strip
-        return (s >= 0 && s < PercSequencer::kMaxSteps && l >= 0 && l < PercSequencer::kLanes) ? s : -1;
+        const int vi = (int) ((p.x - r.getX()) / cw);
+        const int l  = (int) ((p.y - r.getY()) / ch) - 1;   // row 0 is the number strip
+        const int s  = pageOffset + vi;
+        return (vi >= 0 && vi < PercSequencer::kPageSteps && s < PercSequencer::kMaxSteps
+                && l >= 0 && l < PercSequencer::kLanes) ? s : -1;
     }
 
     void copyAt (const juce::MouseEvent& e)
@@ -218,11 +236,13 @@ private:
         const bool value = ! e.mods.isRightButtonDown();
         auto p = e.position;
         const auto r = getLocalBounds().reduced (2).withTrimmedLeft (labelWidth()).toFloat();
-        const float cw = r.getWidth()  / (float) PercSequencer::kMaxSteps;
+        const float cw = r.getWidth()  / (float) PercSequencer::kPageSteps;
         const float ch = r.getHeight() / (float) (PercSequencer::kLanes + 1);
-        const int s = (int) ((p.x - r.getX()) / cw);
-        const int l = (int) ((p.y - r.getY()) / ch) - 1;   // row 0 is the number strip
-        if (s < 0 || s >= PercSequencer::kMaxSteps || l < 0 || l >= PercSequencer::kLanes)
+        const int vi = (int) ((p.x - r.getX()) / cw);
+        const int l  = (int) ((p.y - r.getY()) / ch) - 1;   // row 0 is the number strip
+        const int s  = pageOffset + vi;                     // absolute (16.3)
+        if (vi < 0 || vi >= PercSequencer::kPageSteps || s >= PercSequencer::kMaxSteps
+            || l < 0 || l >= PercSequencer::kLanes)
             return;
         auto* param = apvts.getParameter (Parameters::ID::percStep (l + 1, s + 1));
         if (param == nullptr)
@@ -249,7 +269,8 @@ private:
     juce::AudioProcessorValueTreeState& apvts;
     std::function<int()> playhead;
     std::function<void (int lane)> audition;
-    int lastCell = -1;   // lane*32+step the pointer last previewed (one sound per cell)
+    int lastCell = -1;   // lane*kMaxSteps+step the pointer last previewed (one sound per cell)
     bool copyMode = false;   // COPY latch state (header button)
-    int copySource = -1;     // picked source column, -1 = next click picks it
+    int copySource = -1;     // picked source column (ABSOLUTE step), -1 = next click picks it
+    int pageOffset = 0;      // 16.3: first step of the shown page (0/48/96/144)
 };

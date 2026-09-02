@@ -227,8 +227,22 @@ Two independent version numbers — don't conflate them:
   git config core.hooksPath .githooks
   ```
 
-  (`.githooks/pre-push` blocks pushes to `main`; server-side branch
-  protection isn't available on this private repo's plan.)
+  (`.githooks/pre-push` blocks pushes to `main` **on the public repo only**;
+  other remotes pass through. Server-side branch protection isn't available
+  on this repo's plan. ⚠️ The config line above is the *only* supported way
+  to enable the guard — don't copy the script into `.git/hooks/`, or that
+  copy silently shadows every later fix to the tracked hook.)
+- **Private work-in-progress** (since the repo went public, 2026-08-31):
+  experiments and half-baked ideas are not pushed to the public repo.
+  The maintainer keeps a plain private repo (`JASS-private` — GitHub cannot
+  make a *fork* of your own public repo private) attached as a second
+  remote: `git remote add private <url>`, then
+  `git push private experiment/foo`. Finished work still travels
+  `develop` → public `origin` as usual. Two caveats: **GitHub Actions must
+  stay disabled on the mirror** (otherwise `release.yml` mints releases on
+  every `main` push there), and merging an experiment into `develop`
+  publishes its *entire* commit history — squash first if the WIP commits
+  shouldn't go public.
 - **CHANGELOG** (`CHANGELOG.md`, Keep-a-Changelog style): collect notes under
   `## [Unreleased]`; promote them to a `## [YYYY.MM.MICRO]` section **as part
   of the PR** that will release them. Entries carry the reasoning, not just
@@ -241,13 +255,13 @@ Two independent version numbers — don't conflate them:
 - `.gitattributes`: `* text=auto`; `*.sh` and `.githooks/**` forced LF;
   `*.wav`, `*.jass`, images marked binary.
 - `.gitignore` highlights: `/build/`, `.vs/`, `.claude/settings.local.json`,
-  `/_bmad` (a junction to a globally installed BMAD core — the tracked BMAD
-  *artifacts* live in `_bmad-output/`), `__pycache__/`.
-- **`_bmad-output/`** is tracked on purpose: PRD, architecture spine
-  (AD-1…AD-12), epics, and 30+ per-story implementation notes — the richest
-  source for *why* the code is the way it is. `project-context.md` in there
-  is partly stale (pre-rebrand); the `docs/` files supersede it where they
-  conflict.
+  `/_bmad` (a junction to a globally installed BMAD core), `/_bmad-output/`,
+  `__pycache__/`.
+- **`_bmad-output/`** (PRD, architecture spine AD-1…AD-12, epics, 30+
+  per-story implementation notes) was removed from the repository and its
+  entire history before the repo went public (2026-08-31, `git filter-repo`);
+  it lives on only in the maintainer's local working copies. The `docs/`
+  files are the public record of the architecture.
 
 ---
 
