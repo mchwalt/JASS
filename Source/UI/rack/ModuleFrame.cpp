@@ -277,6 +277,17 @@ namespace rack
             addAndMakeVisible (*followBtn);
         }
 
+        // Live position read-out ("Laufindex", 2026-09-02): a small header label the timer feeds
+        // from desc.headerReadout — "137/384" while the figure runs, blank when it is silent.
+        if (desc.headerReadout)
+        {
+            readoutLabel = std::make_unique<juce::Label>();
+            readoutLabel->setJustificationType (juce::Justification::centred);
+            readoutLabel->setInterceptsMouseClicks (false, false);
+            readoutLabel->setTooltip ("Playing step / LEN");
+            addAndMakeVisible (*readoutLabel);
+        }
+
         // Display fold latch (16.2): toggles the module between its full size (Display cells
         // visible) and collapsedSize. Toggle ON = shown, so the lit button reads as "the curve
         // is up". The rack is told through onFootprintChanged and re-packs live.
@@ -916,6 +927,8 @@ namespace rack
         // Step pages (16.3), left of the header actions: … < 2/4 > FOLLOW [LOAD MIDI] …
         if (followBtn != nullptr)
             followBtn->setBounds (header.removeFromRight (62).reduced (2, 1));
+        if (readoutLabel != nullptr)   // "137/384" right of the pager: 56 px fits "704/704"
+            readoutLabel->setBounds (header.removeFromRight (56).reduced (0, 1));
         if (pageNextBtn != nullptr)
             pageNextBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
         if (pageLabel != nullptr)   // 72: "16/16 •12" (16 pages since 2026-09-02) needs the room
@@ -1287,6 +1300,18 @@ namespace rack
                 else               { builtPage = shownPage(); repaint(); }
             }
             updatePageButtons();
+        }
+
+        // Live position read-out: poll the hook, re-text only on change (same discipline as
+        // the page label — a Label::setText per tick would repaint the header at timer rate).
+        if (readoutLabel != nullptr)
+        {
+            const auto text = desc.headerReadout();
+            if (text != lastReadoutText)
+            {
+                lastReadoutText = text;
+                readoutLabel->setText (text, juce::dontSendNotification);
+            }
         }
 
         // Pattern-length marker (16.2): poll LEN and repaint only on a real change.

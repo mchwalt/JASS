@@ -354,6 +354,12 @@ namespace rack
         };
         StepPaging paging;
 
+        // Optional LIVE POSITION read-out in the header ("Laufindex", maintainer 2026-09-02):
+        // polled in the frame timer beside the pager. STEP SEQ feeds it "step/LEN" — at 768
+        // steps the playing-page dot alone no longer says where in the figure the playhead is.
+        // Empty string = nothing playing, the label goes blank. Editor-injected.
+        std::function<juce::String()> headerReadout;
+
         // Collapsible display (story 16.2, first slice — maintainer 2026-08-31): with a title
         // set, the header carries a latch that folds the module's Display cells away and
         // shrinks it to `collapsedSize`; expanding restores `sizeClass` and the rack re-packs

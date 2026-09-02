@@ -198,8 +198,9 @@ namespace rack
         std::unique_ptr<juce::TextButton> pagePrevBtn, pageNextBtn;
         std::unique_ptr<juce::Label>      pageLabel;
         std::unique_ptr<juce::TextButton> followBtn;
+        std::unique_ptr<juce::Label>      readoutLabel;   // live position ("step/LEN"), timer-fed
         int    builtPage       = 0;
-        juce::String lastPageText;
+        juce::String lastPageText, lastReadoutText;
         char   lastFollowState = -1;
         bool   hasPagedCells   = false;   // false (PERC): page flips need no body rebuild
         size_t headerButtonAtts = 0;

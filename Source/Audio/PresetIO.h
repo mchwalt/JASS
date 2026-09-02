@@ -555,6 +555,11 @@ namespace PresetIO
             for (int s = 1; s <= used; ++s)
             {
                 auto* st = new juce::DynamicObject();
+                // "Step" — the running index, FIRST so every line of the file says where it is
+                // (maintainer 2026-09-02: nobody counts 384 objects by eye while paging through
+                // a preset). Orientation only: the loader reads by POSITION and ignores this,
+                // exactly as it ignores "Name" — the two can never disagree with the music.
+                st->setProperty("Step", s);
                 const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
                 st->setProperty("On",   *a.getRawParameterValue(ID::seqStep(s)) > 0.5f);
                 st->setProperty("Note", note);

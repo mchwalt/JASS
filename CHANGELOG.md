@@ -29,6 +29,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   beyond their saved length default to silence — LEN rules, as always). Known trade-off,
   same as 16.2: the LEN ranges changed, so normalized VST3 automation of LEN from older
   sessions remaps; the standalone is unaffected.
+- **Long figures stay navigable, in the file and in the rack.** Every step object in a saved
+  preset now leads with its running index (`"Step": 137`) — pure orientation while paging
+  through the file; the loader keeps reading by position and ignores it, exactly as it
+  ignores the spelled note "Name". And the STEP SEQ header shows a live "137/384" read-out
+  beside the pager while the figure runs: with up to 16 pages, the playing-page dot alone
+  no longer says where in the figure the playhead is.
 
 ### Changed
 - **The LEN knobs move in steps of 8; Shift keeps single steps.** With 768 positions on one

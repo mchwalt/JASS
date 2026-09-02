@@ -2436,6 +2436,15 @@ void SynthyEditor::buildRack()
             if (f)   // re-latching jumps to the playing page and resumes following
                 if (const int p = seqPlayingPage(); p >= 0) setSeqPage(p, false);
         };
+        // Laufindex (maintainer 2026-09-02): live "step/LEN" beside the pager — at 768 steps
+        // the playing-page dot alone no longer says where in the figure the playhead is.
+        d.headerReadout = [this]
+        {
+            const int s = processor.getSeqStep();
+            if (s < 0) return juce::String();
+            const int len = (int) *processor.getAPVTS().getRawParameterValue(P::seqLength);
+            return juce::String(s + 1) + "/" + juce::String(len);
+        };
         // MIDI ⇄ figure (15.8): the sequencer's own entry points, so "whole preset or just the
         // MIDI track?" is answered by WHERE the user clicks, before any dialog opens.
         d.headerActions.push_back({ "LOAD MIDI",
