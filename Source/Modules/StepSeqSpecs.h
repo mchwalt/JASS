@@ -57,8 +57,12 @@ namespace Modules
             m.params.push_back ({ "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
                                   juce::String (s), ParamSpec::Kind::Int,
                                   juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f });
+            // Default OFF (2026-09-02): a fresh figure is an EMPTY grid you fill, like every
+            // hardware step sequencer and like PERC — Reset "empties the pattern" (its own words)
+            // instead of lighting all 768 cells on the root. Safe against old presets: every one
+            // stores its playing steps explicitly (up to LEN), so a missing step never sounded.
             ParamSpec on { "seqStep" + juce::String (s), "Step" + juce::String (s), "",
-                           ParamSpec::Kind::Bool, {}, 1.0f };
+                           ParamSpec::Kind::Bool, {}, 0.0f };
             on.showInBody = false;
             m.params.push_back (on);
             ParamSpec acc { "seqAcc" + juce::String (s), "Accent" + juce::String (s), "",

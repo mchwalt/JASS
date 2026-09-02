@@ -545,14 +545,12 @@ namespace PresetIO
             // resets first, so a missing step IS the default.
             int used = juce::jlimit(1, (int) StepSequencer::kMaxSteps,
                                     (int) *a.getRawParameterValue(ID::seqLength));
-            // A step's FACTORY DEFAULT is On=TRUE (seqStep default 1.0 — a fresh figure has every
-            // cell live, LEN decides how many sound), pitch 0, no accent, gate 100. Extend past
-            // LEN only for cells that DIFFER from that — the earlier "seqStep > 0.5 => used"
-            // test treated every default cell as parked material and wrote all 768 (maintainer
-            // caught a 384-step figure saving to 768, 2026-09-02).
+            // A step's FACTORY DEFAULT is OFF (a rest), pitch 0, no accent, gate 100. Extend past
+            // LEN only for cells that DIFFER from that — so parked material (an ON step or a set
+            // pitch/accent/gate) survives while the empty tail is dropped.
             auto stepIsDefault = [&a](int s)
             {
-                return *a.getRawParameterValue(ID::seqStep(s)) > 0.5f
+                return *a.getRawParameterValue(ID::seqStep(s)) < 0.5f
                     && (int) *a.getRawParameterValue(ID::seqPitch(s)) == 0
                     &&       *a.getRawParameterValue(ID::seqAcc(s)) < 0.5f
                     && (int) *a.getRawParameterValue(ID::seqSGate(s)) == 100;

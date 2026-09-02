@@ -37,6 +37,12 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   no longer says where in the figure the playhead is.
 
 ### Changed
+- **A fresh STEP SEQ figure is an empty grid, not 48 cells on the root.** The step default was
+  "on", so a reset — or a new patch — lit every cell playing the root note, and the reset
+  button that promised to "empty the pattern" did the opposite. Now a step defaults to a rest,
+  the way every hardware sequencer and JASS's own PERC grid already behave: you fill the figure
+  in. Existing presets are unaffected — each stores its playing steps explicitly, so a step it
+  never mentioned never sounded — and they trim their empty tails away on the next save.
 - **The LEN knobs move in steps of 8; Shift keeps single steps.** With 768 positions on one
   knob, a bare wheel notch used to jump ~31 steps and a drag landed on arbitrary values —
   LEN is aimed at musical lengths, and those are multiples of 8 in practice. Shift is the
