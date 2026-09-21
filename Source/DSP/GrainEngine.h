@@ -100,7 +100,7 @@ public:
         for (auto& g : grains)
         {
             if (! g.active) continue;
-            const double w = 0.5 * (1.0 - g.c0);           // Hann via cos recurrence
+            const double w = g.gain * 0.5 * (1.0 - g.c0);  // Hann via cos recurrence × the grain's own norm
             const float sL = hermiteRead (g.l, g.n, g.pos);
             const float sR = (g.r == g.l) ? sL : hermiteRead (g.r, g.n, g.pos);
             outL += w * sL;
@@ -110,7 +110,10 @@ public:
             g.pos += g.rate;
             if (++g.age >= g.length) g.active = false;
         }
-        const float gain = (float) (level * norm);
+        // LEVEL stays a live per-sample factor (AMP modulation must breathe); the overlap norm is
+        // baked into each grain at spawn, so turning DENS or SIZE never steps the grains already
+        // sounding — the maintainer heard exactly that zipper on the first play (2026-09-21).
+        const float gain = (float) level;
         return { (float) outL * gain, (float) outR * gain };
     }
 
@@ -155,6 +158,7 @@ private:
         double pos = 0.0, rate = 1.0;
         int    length = 0, age = 0;
         double c0 = 1.0, c1 = 1.0, k = 2.0;   // cos recurrence: c[age] = cos(age·2π/length)
+        double gain = 1.0;                    // overlap norm at spawn time (see nextSample)
         bool   active = false;
     };
 
@@ -214,6 +218,7 @@ private:
         g->l = matL; g->r = matR; g->n = matFrames;
         g->pos = start; g->rate = rate;
         g->length = length; g->age = 0;
+        g->gain = norm;   // frozen for this grain's life; DENS/SIZE moves only affect new grains
         const double step = 6.283185307179586 / (double) length;
         g->c0 = 1.0; g->c1 = std::cos (step); g->k = 2.0 * g->c1;
         g->active = true;
