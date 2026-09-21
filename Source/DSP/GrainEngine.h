@@ -17,13 +17,20 @@
 // repitcher at negative SNR and chose signalsmith-stretch for that job; here the artefacts are the
 // sound, and SPRAY breaks the periodic combing that made them ugly there.
 //
+// KEY mode (Story 17.2): the grain rate follows the played note's frequency instead of DENS, and
+// the grain CONTENT is no longer transposed by the key — the pitch you hear is the repetition rate
+// (FOF / VOSIM / pitch-synchronous granular), the sample's own formants stay where they are. SIZE
+// is then the formant bandwidth, and is capped so the pool never drops a grain (a dropped grain in
+// a periodic train halves the pitch). Found as the SPRAY-0 regime in the Task-1 measurement.
+//
 // RT contract: no allocation ever (fixed arrays), no locks, one cos-recurrence per grain instead of
 // a cos() per sample. Pool full ⇒ the new grain is DROPPED, never stolen (a stolen grain is cut
 // mid-window = a click per steal). JUCE-free: the scratch harness compiles this header alone.
 class GrainEngine
 {
 public:
-    static constexpr int kMaxGrains = 32;
+    static constexpr int    kMaxGrains     = 32;
+    static constexpr double kKeyMaxPeriods = 2.0;   // KEY mode: grain length ≤ this many periods of the note
 
     struct Out { float l, r; };
 
@@ -31,7 +38,6 @@ public:
     void setSampleRate (double sr) noexcept
     {
         hostSampleRate = sr > 1000.0 ? sr : 44100.0;
-        updateNorm();
         reset();
     }
 
@@ -39,21 +45,30 @@ public:
     void setEnabled (bool on) noexcept                { enabled = on; }
     void setPosition (double frac) noexcept           { position = std::clamp (frac, 0.0, 1.0); }
     void setSpray (double frac) noexcept              { spray = std::clamp (frac, 0.0, 1.0); }
-    void setSizeMs (double ms) noexcept               { sizeMs = std::clamp (ms, 1.0, 2000.0); updateNorm(); }
-    void setDensity (double grainsPerSecond) noexcept { density = std::clamp (grainsPerSecond, 0.1, 1000.0); updateNorm(); }
+    void setSizeMs (double ms) noexcept               { sizeMs = std::clamp (ms, 1.0, 2000.0); }
+    void setDensity (double grainsPerSecond) noexcept { density = std::clamp (grainsPerSecond, 0.1, 1000.0); }
     void setPitchSpread (double semis) noexcept       { pitchSpread = std::clamp (semis, 0.0, 48.0); }
     void setPitchCenter (double semis) noexcept       { pitchCenter = std::clamp (semis, -48.0, 48.0); }
     void setQuant (int q) noexcept                    { quant = std::clamp (q, 0, 4); }
     void setLevel (double lvl) noexcept               { level = std::clamp (lvl, 0.0, 2.0); }
+    void setKeyMode (bool on) noexcept                { keyMode = on; }
 
-    // Loudness normalisation against the expected overlap o = size · density: gain = o^-exp.
-    // 0.5 is the incoherent-sum law (power adds), 1.0 the coherent one (amplitude adds). The scratch
-    // harness measured the real cloud and set the default; kept settable for future measurement.
-    void setNormExponent (double e) noexcept          { normExp = std::clamp (e, 0.0, 1.0); updateNorm(); }
+    // Loudness normalisation against the expected overlap o = length · rate: gain = o^-exp.
+    // 0.5 is the incoherent-sum law (power adds), 1.0 the coherent one (amplitude adds). Measured
+    // 2026-09-21 (scratch harness, EPiano C4 mono + CH_01 stereo, DENS 5…200 × SIZE 5…300 ms ×
+    // SPRAY 0/10/50 %): with o^-0.5 the dense regime (o ≥ 1) sits within a 2.7 dB span across the
+    // whole grid; o^-0.75 drifts to −18 dB. The residual −4.3 dB is the Hann window's own power
+    // (mean w² = 3/8), compensated by sqrt(8/3) so a dense cloud lands at the source's loudness for
+    // the same LEVEL as the SAMPLER. The sparse regime (o < 1: clicks with silence between) stays
+    // quieter by nature. SPRAY 0 at high overlap is the pitch-synchronous regime — see KEY mode.
+    void setNormExponent (double e) noexcept          { normExp = std::clamp (e, 0.0, 1.0); }
 
     // Note transposition as a rate factor: f(note)/f(zone root) · tune — the same `pitchFactor`
     // SamplePlayer::computeRate builds, so PITCH 0 + QUANT Off is exactly the sampler's tape pitch.
     void setPitchFactor (double f) noexcept           { pitchFactor = std::clamp (f, 1.0 / 64.0, 64.0); }
+
+    // The played note's absolute frequency (KEY mode: the grain rate). Set at note-on.
+    void setNoteHz (double hz) noexcept               { noteHz = std::clamp (hz, 8.0, 8000.0); }
 
     // ── material (note-on; pointers must outlive the grains — the store guarantees it) ─────────
     void setMaterial (const float* left, const float* right, int frames, double fileSampleRate) noexcept
@@ -88,11 +103,12 @@ public:
             return { 0.0f, 0.0f };
 
         // Scheduler: fractional period accumulator, so 44100/30 = 1470.0 grains/s stays exact.
+        // KEY mode: one grain per period of the played note — the rate IS the pitch.
         nextOnset -= 1.0;
         if (nextOnset <= 0.0)
         {
             spawn();
-            nextOnset += hostSampleRate / density;
+            nextOnset += hostSampleRate / grainRate();
             if (nextOnset < 1.0) nextOnset = 1.0;   // never more than one spawn per sample
         }
 
@@ -132,7 +148,8 @@ public:
     }
     uint64_t spawnedCount() const noexcept { return spawned; }
     uint64_t droppedCount() const noexcept { return dropped; }
-    double   currentNorm() const noexcept  { return norm; }
+    double   currentNorm() const noexcept  { return lastNorm; }
+    double   grainRate() const noexcept    { return keyMode ? noteHz : density; }   // grains per second
 
     // The per-grain pitch draw, exposed so the harness can histogram it. QUANT off: continuous
     // spread around the centre. QUANT on: an integer scale step, uniform over the degrees within
@@ -172,34 +189,35 @@ private:
         return (double) (next (s) >> 8) * (2.0 / 16777216.0) - 1.0;
     }
 
-    // Measured 2026-09-21 (scratch harness, EPiano C4 mono + CH_01 stereo, DENS 5…200 × SIZE
-    // 5…300 ms × SPRAY 0/10/50 %): with o^-0.5 the dense regime (o ≥ 1) sits at −4…−7 dB below
-    // the source RMS for SPRAY 10 %, a 2.7 dB spread across the whole grid; o^-0.75 drifts to
-    // −18 dB, o^-1 further. The residual −4.3 dB is the Hann window's own power (mean w² = 3/8),
-    // so sqrt(8/3) puts a dense cloud at the source's loudness for the same LEVEL as the SAMPLER.
-    // The sparse regime (o < 1: single clicks with silence between) stays quieter by nature —
-    // normalising clicks up to pad loudness would be wrong. SPRAY 0 at high overlap is the
-    // pitch-synchronous (FOF) regime: identical grains every 1/DENS form a tone at DENS Hz and
-    // comb the source's partials — up to −25 dB on a tonal sample. Not a level bug; it is the
-    // classic "density becomes the pitch" sound, and any SPRAY above a few % leaves it.
-    void updateNorm() noexcept
-    {
-        constexpr double kHannPowerComp = 1.6329931618554521;   // sqrt(8/3)
-        const double overlap = std::max (1.0, sizeMs * 0.001 * density);
-        norm = kHannPowerComp * std::pow (overlap, -normExp);
-    }
-
     void spawn() noexcept
     {
         Grain* g = nullptr;
         for (auto& c : grains) if (! c.active) { g = &c; break; }
         if (g == nullptr) { ++dropped; return; }   // pool full: drop, never steal
 
+        const double rate_ = grainRate();
         int length = (int) std::lround (sizeMs * 0.001 * hostSampleRate);
         length = std::max (length, 8);
+        if (keyMode)
+        {
+            // Two caps. (1) Overlap < kMaxGrains so the periodic train is never thinned — a dropped
+            // grain in KEY mode would halve the pitch. (2) At most kKeyMaxPeriods periods of the
+            // note: measured 2026-09-22 on the EPiano C4 sample, a grain longer than ~2 periods
+            // resolves the SOURCE's own partials (window narrower than their spacing), and the
+            // note's harmonics then fall between them — −15 dB at 440 Hz for 10 ms, −31 dB for
+            // 20 ms, −40 dB at 880 Hz. At 2 periods the level stays within ±1.5 dB from 110 to
+            // 880 Hz (constant-Q formant). SIZE therefore acts up to 2/f: 18 ms at 110 Hz, 4.5 ms
+            // at 440 Hz. The help says so.
+            const int capPool    = (int) ((double) (kMaxGrains - 1) * hostSampleRate / rate_);
+            const int capPeriods = (int) (kKeyMaxPeriods * hostSampleRate / rate_);
+            length = std::max (8, std::min ({ length, capPool, capPeriods }));
+        }
 
         const double offsetSemis = drawOffsetSemis (rng, pitchCenter, pitchSpread, quant);
-        const double rate = pitchFactor * std::exp2 (offsetSemis / 12.0) * (fileRate / hostSampleRate);
+        // KEY mode reads the content at the file's own speed (formants stay put; the rate is the
+        // pitch); cloud mode transposes it with the key like the sampler's tape path.
+        const double contentFactor = keyMode ? 1.0 : pitchFactor;
+        const double rate = contentFactor * std::exp2 (offsetSemis / 12.0) * (fileRate / hostSampleRate);
 
         // Keep the whole read span inside the material: hermiteRead clamps and cannot overrun, but
         // a grain hanging over the end would read the held edge sample — a Hann-shaped DC bump.
@@ -215,10 +233,15 @@ private:
         const double start  = std::clamp (centre + spray * (double) (matFrames - 1) * bipolar (rng),
                                           0.0, maxSpan - span);
 
+        // Overlap norm for THIS grain (see setNormExponent): sqrt(8/3) · o^-exp, o = length · rate.
+        constexpr double kHannPowerComp = 1.6329931618554521;   // sqrt(8/3)
+        const double overlap = std::max (1.0, (double) length / hostSampleRate * rate_);
+        lastNorm = kHannPowerComp * std::pow (overlap, -normExp);
+
         g->l = matL; g->r = matR; g->n = matFrames;
         g->pos = start; g->rate = rate;
         g->length = length; g->age = 0;
-        g->gain = norm;   // frozen for this grain's life; DENS/SIZE moves only affect new grains
+        g->gain = lastNorm;   // frozen for this grain's life; DENS/SIZE moves only affect new grains
         const double step = 6.283185307179586 / (double) length;
         g->c0 = 1.0; g->c1 = std::cos (step); g->k = 2.0 * g->c1;
         g->active = true;
@@ -231,11 +254,11 @@ private:
     int    matFrames = 0;
     double fileRate = 44100.0, hostSampleRate = 44100.0;
 
-    bool   enabled = false;
-    double position = 0.0, spray = 0.1, sizeMs = 60.0, density = 20.0;
+    bool   enabled = false, keyMode = false;
+    double position = 0.0, spray = 0.1, sizeMs = 60.0, density = 20.0, noteHz = 261.6255653005986;
     double pitchSpread = 0.0, pitchCenter = 0.0, pitchFactor = 1.0, level = 0.5;
     int    quant = 0;
-    double normExp = 0.5, norm = 1.0;
+    double normExp = 0.5, lastNorm = 1.0;
 
     double   nextOnset = 0.0;
     uint32_t rng = 0x9E3779B9u;

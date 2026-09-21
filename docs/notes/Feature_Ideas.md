@@ -48,6 +48,7 @@ by accident.
 | Idea | What it does | Effort | Coolness |
 |---|---|---|---|
 | **Sound-design pass with the existing blocks** | Before building the next engine feature, deliberately author 10–20 "impossible" sounds from what is already there — wavetable + wavefolder + cross-FM + self-FM + chaos + S&H + QUANT (ChatGPT, 2026-08). Where the attempts hit a wall tells reliably which feature JASS actually needs next; the keepers become demo presets. | ★★ | ★★★ |
+| **Preset: GRAIN × CHAOS × QUANT × WAVEFOLD** | The combination two external reviewers called out after story 17.1 (2026-09-21): a GRAIN cloud on a sampled instrument, CHAOS X → POS wandering through the recording, per-grain pitches on a QUANT scale, and the WAVEFOLD folding the summed cloud into something no sample library sounds like. A candidate for the sound-design pass above, not a feature — every block exists. | ★ | ★★★★ |
 | **WAV export / recording** | Record what you play. | ★★ | ★★★ |
 | **MIDI learn** | Bind knobs to a hardware controller. | ★★★ | ★★★★ |
 | **Rack drag & drop** | Move modules between zones, reorder within a zone. Show/hide shipped long ago (MODULES panel), and the redesign delivered the enablers (stable module ids, explicit zone per `ModuleSpec`) — what's left is the layout-as-data model and the drag UI. | ★★★★ | ★★★ |

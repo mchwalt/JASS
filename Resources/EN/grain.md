@@ -4,6 +4,10 @@ SAMPLER itself may stay off, and both may sound together.
 
 - **QUANT** — snaps every grain's pitch to a scale relative to the played note (Chromatic, Major,
   Minor, Pentatonic). Off = free.
+- **KEY** — pitch-synchronous mode: one grain per period of the played note, so the repetition
+  rate *is* the pitch and the sample's own timbre stays where it is (formant synthesis on any
+  recording). DENS is ignored; SIZE acts up to two periods of the note (longer grains would let high
+  notes fall between the sample's own partials); keep SPRAY low for a clean tone.
 - **POS** — where in the sample the grains start.
 - **SPRAY** — how far they scatter around POS. 0 reads one spot (a stutter — at high DENS the
   density itself becomes the pitch); 100 % smears the whole file.

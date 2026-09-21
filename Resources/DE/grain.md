@@ -4,6 +4,10 @@ selbst darf aus bleiben, beide dürfen zusammen klingen.
 
 - **QUANT** — rastet die Tonhöhe jedes Korns auf eine Skala relativ zur gespielten Note (Chromatisch,
   Dur, Moll, Pentatonik). Off = frei.
+- **KEY** — tonhöhensynchroner Modus: ein Korn pro Periode der gespielten Note, die Wiederholrate *ist*
+  die Tonhöhe, die Klangfarbe des Samples bleibt stehen (Formantsynthese auf jeder Aufnahme). DENS wird
+  ignoriert; SIZE wirkt bis zu zwei Perioden der Note (längere Körner ließen hohe Noten zwischen die
+  Teiltöne des Samples fallen); SPRAY klein halten für einen sauberen Ton.
 - **POS** — wo im Sample die Körner starten.
 - **SPRAY** — wie weit sie um POS streuen. 0 liest eine Stelle (ein Stottern — bei hoher DENS wird die
   Dichte selbst zur Tonhöhe); 100 % verwischt die ganze Datei.

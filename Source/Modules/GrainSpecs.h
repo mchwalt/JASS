@@ -36,10 +36,15 @@ namespace Modules
             { "grainQuant",   "Quant",    "QUANT", ParamSpec::Kind::Choice, {}, 0.0f, { "Off", "Chrom", "Major", "Minor", "Penta" } },
             { "grainAmp",     "Amp",      "AMP",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::GrainAmp },
             { "grainPan",     "Pan",      "PAN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::GrainPan },
+            // Story 17.2 — KEY: pitch-synchronous mode. The grain rate follows the played note (DENS
+            // is ignored, greyed in the editor) and the content is NOT transposed by the key: the pitch
+            // is the repetition rate, the sample's formants stay put (FOF / VOSIM). Append-only,
+            // default off ⇒ 17.1 presets unchanged.
+            { "grainKey",     "Key",      "KEY",   ParamSpec::Kind::Bool, {}, 0.0f },
         };
-        // House rule (maintainer 2026-09-21): the combo comes before the knobs. Display order only —
-        // the params list above stays in its append-only order.
-        m.bodyOrder = { "grainQuant", "grainPos", "grainSpray", "grainSize", "grainDensity",
+        // House rule (maintainer 2026-09-21): combo and toggle come before the knobs. Display order
+        // only — the params list above stays in its append-only order.
+        m.bodyOrder = { "grainQuant", "grainKey", "grainPos", "grainSpray", "grainSize", "grainDensity",
                         "grainPitch", "grainAmp", "grainPan" };
         return m;
     }

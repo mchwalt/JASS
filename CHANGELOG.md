@@ -31,6 +31,17 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   power, measured on tonal and loop material to stay within ±3 dB across the whole DENS × SIZE
   range. SPRAY 0 at high DENS is the classic pitch-synchronous regime — the density becomes the
   pitch and combs a tonal source — kept as a sound, not "fixed".
+- **GRAIN · KEY — pitch-synchronous mode (story 17.2).** The measurement above showed the cloud
+  turning into a tone when identical grains repeat at a fixed rate; two reviewers read that as a
+  second personality of the same engine, and it is: with KEY on, one grain fires per period of the
+  played note, so the repetition rate *is* the pitch (FOF / VOSIM), and the grain content is no
+  longer transposed by the key — the sample's own formants stay where they are. A vocal, a bowed
+  string, a bell played chromatically with its timbre intact. DENS is ignored (greyed). SIZE acts
+  up to two periods of the note: measured on the EPiano sample, a longer grain resolves the
+  source's own partials and the note's harmonics fall between them (−15 dB at 440 Hz for 10 ms,
+  −40 dB at 880 Hz for 20 ms), while at two periods the level stays within ±1.5 dB from 110 to
+  880 Hz. A second cap keeps the overlap under the pool size, so the train is never thinned (a
+  dropped grain in a periodic train halves the pitch). Off by default; 17.1 presets unchanged.
 
 ### Fixed
 - **Sampler PAN as a matrix target only worked while another PAN target was active.** The

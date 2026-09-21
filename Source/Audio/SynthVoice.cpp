@@ -85,6 +85,7 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
         grain.setMaterial(z->getData(0), z->isStereo() ? z->getData(1) : nullptr,
                           z->getLength(), z->fileSampleRate);
         grain.setPitchFactor(sampler.pitchFactorForZone());
+        grain.setNoteHz(juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber));   // 17.2 KEY: rate = note
         grain.trigger();
     }
     else

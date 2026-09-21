@@ -287,6 +287,7 @@ namespace Parameters
         constexpr const char* grainQuant   = "grainQuant";     // 0 Off, 1 Chrom, 2 Major, 3 Minor, 4 Penta
         constexpr const char* grainAmp     = "grainAmp";
         constexpr const char* grainPan     = "grainPan";
+        constexpr const char* grainKey     = "grainKey";       // 17.2: pitch-synchronous mode (rate = note)
 
         // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
         // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
@@ -542,6 +543,7 @@ namespace Parameters
         grain.setPitchSpread(*apvts.getRawParameterValue(ID::grainPitch));
         grain.setQuant(static_cast<int>(*apvts.getRawParameterValue(ID::grainQuant)));
         grain.setLevel(*apvts.getRawParameterValue(ID::grainAmp));
+        grain.setKeyMode(*apvts.getRawParameterValue(ID::grainKey) > 0.5f);   // 17.2
 
         wavetable.setEnabled(*apvts.getRawParameterValue(ID::wavetableOn) > 0.5f);
         wavetable.setBank(WavetableBankStore::instance().getBank(

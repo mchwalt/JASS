@@ -2300,8 +2300,13 @@ void SynthyEditor::buildRack()
         addRackModule(std::move(d));
     }
     // GRAIN (Story 17.1) — spec-driven, right after the SAMPLER whose SET it plays. Hidden by
-    // default (the rack is full); the rack menu shows it.
-    addRackModule(makeModuleDescriptor(Modules::grain()));
+    // default (the rack is full); the rack menu shows it. 17.2: with KEY on the grain rate is the
+    // played note, so DENS greys out — same path as an LFO's RATE under Tempo-Sync (Bool reads 0/1).
+    {
+        auto d = makeModuleDescriptor(Modules::grain());
+        greyWhenSynced(d, P::grainDensity, P::grainKey);
+        addRackModule(std::move(d));
+    }
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
