@@ -34,7 +34,7 @@
     "Waveform": "Triangle",
     "Target": "Off",
     "SyncDiv": "Free",
-    "Rate": 0.1,
+    "Rate": 0.05,
     "Depth": 1.0
   },
   "Filter": {
@@ -54,13 +54,13 @@
     "Mix": 0.3
   },
   "Sampler": {
-    "Enabled": false,
+    "Enabled": true,
     "Set": 5.0,
     "Root": 60.0,
     "Start": 0.0,
     "End": 1.0,
     "Mode": "One-Shot",
-    "Amp": 0.5,
+    "Amp": 0.25,
     "Pan": 0.0,
     "Speed": 1.0,
     "Stretch": false,

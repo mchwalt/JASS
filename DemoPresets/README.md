@@ -39,11 +39,14 @@ quick-access bank on **F1–F6** (in the order listed below).
 - **Sampler Demo.jass** (F7) — the **SAMPLER** module (Story 12.1) in action, built on the shipped
   example recordings (user-authored patch).
 - **Grain Cloud.jass** (F9) — the **GRAIN** module (Story 17.1): a granular cloud on the shipped
-  **EPiano** set, SAMPLER itself off. Deliberately sparse (SIZE 250 ms, DENS 8, SPRAY 8 %) so
-  single grains are audible as notes. **LFO 1 → GRAIN · PITCH** (a 10 s triangle, ±1 octave)
-  slides the pitch centre of the cloud up and down; with **QUANT Major** that is a staircase
-  through the major scale of the played note, with QUANT Off the same movement is a glissando —
-  the one A/B that makes QUANT unmistakable. **CHAOS X → GRAIN · POS** wanders slowly through the
+  **EPiano** set; the SAMPLER plays the dry note quietly underneath as the root the ear needs.
+  Deliberately sparse (SIZE 250 ms, DENS 8, SPRAY 8 %) so single grains are audible as notes.
+  **LFO 1 → GRAIN · PITCH** (a 20 s triangle, ±1 octave) slides the pitch centre of the cloud up
+  and down; with **QUANT Major** that is a staircase through the major scale of the played note,
+  with QUANT Off the same movement is a glissando — the one A/B that makes QUANT unmistakable.
+  Major vs Minor differ on three of the seven steps (third, sixth, seventh) — listen against the
+  dry root when the staircase passes the third; Major vs Penta (7 vs 5 steps) is the bigger
+  contrast. **CHAOS X → GRAIN · POS** wanders slowly through the
   recording, a 3 s ADSR release lets the cloud keep spawning after the key lifts, REVERB adds
   room. Hold one note; then raise PITCH for a spread around the centre, DENS for a pad, SPRAY 0
   for the stutter, or swap the SET for one of the grand pianos.
