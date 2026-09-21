@@ -1003,6 +1003,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getLFOs(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getSampler(), samplerMasterFrac,   // Story 12.1 (+ loop clock)
+                                     voice->getGrain(),                         // Story 17.1
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
                                      voice->getAdsrOnRef(), voice->getMixModeOnRef(),

@@ -20,6 +20,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
     sampler.setSampleRate(sampleRate);   // Story 12.1
+    grain.setSampleRate(sampleRate);     // Story 17.1
     // Prepare EVERY channel strip's effects (not just strip 0) so a later Stereo-Pan channel is ready
     // (its delay/reverb buffers preallocated) — no allocation ever happens on the audio thread.
     for (auto& s : strips)

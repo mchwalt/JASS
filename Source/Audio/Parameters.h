@@ -10,6 +10,7 @@
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/SamplePlayer.h"          // Story 12.1: SAMPLER generator (+ SampleBank store)
+#include "../DSP/GrainEngine.h"           // Story 17.1: GRAIN generator (cloud on the sampler's set)
 #include "../DSP/StepSequencer.h"         // 16.3: kMaxSteps — the indexed-ID counts derive from it
 #include "../DSP/PercSequencer.h"         //       (one source of truth, no drifting literals)
 #include "../DSP/SyncDivision.h"
@@ -276,6 +277,17 @@ namespace Parameters
         constexpr const char* samplerStretch = "samplerStretch";   // 12.3: pitch/time decoupling on/off
         constexpr const char* samplerRelease = "samplerRelease";   // 12.4: note-off fade fallback (s); 0 = off
 
+        // GRAIN (Story 17.1): granular cloud on the SAMPLER's set. No set param of its own.
+        constexpr const char* grainOn      = "grainOn";
+        constexpr const char* grainPos     = "grainPos";       // centre of grain starts, fraction of the zone
+        constexpr const char* grainSpray   = "grainSpray";     // random spread around POS, fraction of the zone
+        constexpr const char* grainSize    = "grainSize";      // grain length, ms
+        constexpr const char* grainDensity = "grainDensity";   // grains per second
+        constexpr const char* grainPitch   = "grainPitch";     // per-grain pitch spread, semitones
+        constexpr const char* grainQuant   = "grainQuant";     // 0 Off, 1 Chrom, 2 Major, 3 Minor, 4 Penta
+        constexpr const char* grainAmp     = "grainAmp";
+        constexpr const char* grainPan     = "grainPan";
+
         // Preset quick-access bank enable (MASTER BUS). UI-only (dim placeholder) — the F1..F12
         // slot assignments themselves are a GLOBAL app setting (PresetBanks.json), not per-preset,
         // so only this enabler is an APVTS param. Append-only, default true.
@@ -331,6 +343,7 @@ namespace Parameters
                               LFO* lfos, NoiseGenerator& noise,
                               KarplusStrong& karplus, WavetableOscillator& wavetable,
                               SamplePlayer& sampler, double samplerLoopFrac,   // Story 12.1 (+ shared loop clock)
+                              GrainEngine& grain,                              // Story 17.1
                               MixMode& mixMode, Oscillator& subOsc, int& subOctave,
                               bool& adsrOn, bool& mixModeOn, int& mixSrcA, int& mixSrcB,
                               PitchEnvelope& pitchEnv, double& pitchEnvAmount, bool& pitchEnvOn,
@@ -475,6 +488,10 @@ namespace Parameters
             const float spread = (set != nullptr && set->isStereo()) ? (hrir ? 0.5f : 1.0f) : 0.0f;
             generatorPanOut[PanSamplerL] = juce::jlimit(-1.0f, 1.0f, sPan - spread);
             generatorPanOut[PanSamplerR] = juce::jlimit(-1.0f, 1.0f, sPan + spread);
+            // GRAIN (17.1) reads the same set, so the same stereo rule applies to its L/R pair.
+            const float gPan = *apvts.getRawParameterValue(ID::grainPan);
+            generatorPanOut[PanGrainL] = juce::jlimit(-1.0f, 1.0f, gPan - spread);
+            generatorPanOut[PanGrainR] = juce::jlimit(-1.0f, 1.0f, gPan + spread);
         }
 
         // LFOs — one loop for all (Tempo-Sync resolved per LFO in processBlock => lfoRateHz[i]).
@@ -514,6 +531,17 @@ namespace Parameters
         sampler.setStretchMode(*apvts.getRawParameterValue(ID::samplerStretch) > 0.5f);   // 12.3
         sampler.setReleaseFallback(*apvts.getRawParameterValue(ID::samplerRelease));      // 12.4
         sampler.setLoopSyncPhase(samplerLoopFrac);
+
+        // GRAIN (Story 17.1): the cloud's per-block parameters. Its material (zone + pitch factor)
+        // is set at note-on by the voice from the sampler's zone pick — nothing to do here.
+        grain.setEnabled(*apvts.getRawParameterValue(ID::grainOn) > 0.5f);
+        grain.setPosition(*apvts.getRawParameterValue(ID::grainPos));
+        grain.setSpray(*apvts.getRawParameterValue(ID::grainSpray));
+        grain.setSizeMs(*apvts.getRawParameterValue(ID::grainSize));
+        grain.setDensity(*apvts.getRawParameterValue(ID::grainDensity));
+        grain.setPitchSpread(*apvts.getRawParameterValue(ID::grainPitch));
+        grain.setQuant(static_cast<int>(*apvts.getRawParameterValue(ID::grainQuant)));
+        grain.setLevel(*apvts.getRawParameterValue(ID::grainAmp));
 
         wavetable.setEnabled(*apvts.getRawParameterValue(ID::wavetableOn) > 0.5f);
         wavetable.setBank(WavetableBankStore::instance().getBank(

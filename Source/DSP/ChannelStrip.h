@@ -23,9 +23,11 @@ enum class OutputMode { Mono = 0, PseudoStereo = 1, StereoPan = 2, Binaural = 3,
 // SAMPLER (Story 12.1) occupies TWO slots: a stereo sample's L/R are two mono sub-sources with
 // their own pans (PAN knob ± a fixed spread), so each channel inherits the full spatialization
 // (own equal-power/binaural/HRTF render). Mono samples use only PanSamplerL at the plain pan.
-inline constexpr int kNumPanGenerators = 9;
+// GRAIN (Story 17.1) plays the same set and gets the same L/R pair. Growing this count changes a
+// struct SynthVoice embeds by value ⇒ full /t:Rebuild (MODULE_SYSTEM.md §7).
+inline constexpr int kNumPanGenerators = 11;
 enum PanGen { PanOsc1 = 0, PanOsc2, PanOsc3, PanSub, PanNoise, PanKarplus, PanWavetable,
-              PanSamplerL, PanSamplerR };
+              PanSamplerL, PanSamplerR, PanGrainL, PanGrainR };
 
 // The post-generator effect chain, one set per output channel.
 struct ChannelStrip

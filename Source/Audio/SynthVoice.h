@@ -11,6 +11,7 @@
 #include "../DSP/KarplusStrong.h"
 #include "../DSP/WavetableOscillator.h"
 #include "../DSP/SamplePlayer.h"   // Story 12.1: SAMPLER generator
+#include "../DSP/GrainEngine.h"    // Story 17.1: GRAIN generator (cloud on the sampler's zone)
 #include "../DSP/ModMatrix.h"
 #include "../DSP/ChannelStrip.h"   // Epic 10: ChannelStrip, kMaxOutChannels, OutputMode, positionToGains
 #include "../DSP/BinauralPanner.h" // Epic 10 (10.3): parametric binaural per-generator renderer
@@ -57,6 +58,7 @@ public:
     MixMode& getMixMode() { return mixMode; }
     WavetableOscillator& getWavetable() { return wavetable; }
     SamplePlayer& getSampler() { return sampler; }   // Story 12.1
+    GrainEngine&  getGrain()   { return grain; }     // Story 17.1
 
     // ── Story 12.7: choke groups act ACROSS voices ───────────────────────────────────────────
     // A voice knows only its own note (that is what keeps it RT-safe and simple, Story 11.1), so a
@@ -157,6 +159,7 @@ private:
     KarplusStrong karplus;
     WavetableOscillator wavetable;
     SamplePlayer sampler;   // Story 12.1: recordings as a generator (stereo via PanSamplerL/R)
+    GrainEngine  grain;     // Story 17.1: granular cloud on the sampler's zone (PanGrainL/R)
     const std::vector<SynthVoice*>* voicePeers = nullptr;   // 12.7 (see setVoicePeers)
 
     MixMode mixMode = MixMode::RingMod;   // only meaningful when mixModeOn; off => additive
