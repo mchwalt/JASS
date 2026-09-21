@@ -43,6 +43,21 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   880 Hz. A second cap keeps the overlap under the pool size, so the train is never thinned (a
   dropped grain in a periodic train halves the pitch). Off by default; 17.1 presets unchanged.
 
+- **SAMPLER loads MP3.** JUCE 9.0.2 turns its MP3 decoder on by default, so the only missing piece
+  was the file filter: LOAD, FOLDER sets and `.sfz` regions accept `.mp3` next to WAV/AIFF/FLAC.
+  Why it matters here: the Roboter drum kit had to be cut from an MP3 by hand and converted first —
+  now the recording goes straight in. One honest limit: MP3 carries encoder padding at the start, so
+  a loop point will not be seamless the way a WAV loop is; use MP3 for one-shots, pads and GRAIN
+  material, keep loops on WAV/FLAC.
+
+### Changed
+- **JUCE 9.0.0 → 9.0.2.** Two patch releases, no API JASS uses changed (the removed
+  `getMidiInputSelectorListBox` and the OpenGL image changes do not occur in the code). What they
+  bring to JASS: WAV files with a missing final pad byte load again, malformed audio files are
+  rejected by the library before our own guards, MP3 decoding is enabled by default (the SAMPLER's
+  file filter does not offer it yet — that is a separate step), VST3 hosting fixes. Verified: full
+  rebuild, startup smoke test, presets load.
+
 ### Fixed
 - **Sampler PAN as a matrix target only worked while another PAN target was active.** The
   auto-pan predicate in the voice never listed `SamplerPan` (since 12.1); a routing to SAMPLER PAN

@@ -1,4 +1,4 @@
-Plays your own **recordings** (WAV/AIFF/FLAC) as a sound source — through the whole JASS chain:
+Plays your own **recordings** (WAV/AIFF/FLAC/MP3 — MP3 for one-shots and pads, loops stay seamless only from WAV/FLAC) as a sound source — through the whole JASS chain:
 filter, wavefolder, mod matrix, arpeggiator, PAN and the binaural output modes.
 
 - **LOAD** copies a file into your Samples folder (`%AppData%\JASS\Samples`) and loads it; **SET**

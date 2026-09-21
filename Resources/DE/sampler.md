@@ -1,4 +1,4 @@
-Spielt eigene **Aufnahmen** (WAV/AIFF/FLAC) als Klangquelle — durch die ganze JASS-Kette: Filter,
+Spielt eigene **Aufnahmen** (WAV/AIFF/FLAC/MP3 — MP3 für One-Shots und Flächen, Loops nur aus WAV/FLAC nahtlos) als Klangquelle — durch die ganze JASS-Kette: Filter,
 Wavefolder, Mod-Matrix, Arpeggiator, PAN und die binauralen Ausgabemodi.
 
 - **LOAD** kopiert eine Datei in deinen Samples-Ordner (`%AppData%\JASS\Samples`) und lädt sie;

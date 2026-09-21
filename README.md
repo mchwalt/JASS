@@ -46,7 +46,7 @@ info** so nothing is hidden and every control explains itself.
   PWM, Spectral) with example WAVs, position morph, **WAV import**, own unison
 - **Noise** — white / pink / brown / blue
 - **Karplus-Strong** — plucked string, played from the keyboard
-- **SAMPLER** — play your own recordings (WAV/AIFF/FLAC, ≤60 s) as a sound source
+- **SAMPLER** — play your own recordings (WAV/AIFF/FLAC/MP3, ≤60 s) as a sound source
   through the whole chain: ROOT-key tape-style transposition, START/END, One-Shot /
   Loop (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED
   (0.25×–4×), stereo files rendered as two placed sub-sources. **Multisampling**:
