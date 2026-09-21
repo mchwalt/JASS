@@ -50,7 +50,7 @@ Damit wir **nichts doppelt bauen**. ✅ = in JASS vorhanden, 🟡 = teilweise, �
 | Wavetable-**Morphing** über mehrere WTs | 🟡 | WT-Position-Morph in _einer_ Bank; A→B→C-Morph offen |
 | MPE (per-note Pitch/Timbre/Pressure) | ⬜ | siehe §3 |
 | Microtonale Skalen (19/31-TET, arab./ind.) | ⬜ | siehe §3 |
-| Granular-Synthese | ⬜ | schon im Backlog (★★★★/★★★★★) |
+| Granular-Synthese | 🔨 | Story 17.1 `GRAIN` in Arbeit (Design 2026-09-21) |
 | Spektral/FFT-Sounds | ⬜ | anspruchsvoll, siehe §3 |
 | Kompressor | ⬜ | fehlt in der FX-Kette |
 | Convolution-Reverb / Shimmer | ⬜ | Shimmer = Pitch-Shift-Feedback im Reverb |
@@ -119,7 +119,7 @@ Zufallsabweichungen sorgen dafür, dass es sich **nie exakt wiederholt**. Der Nu
 | **Kompressor** | fehlt komplett in der FX-Kette; Glue/Punch | ★★ | ★★★ |
 | **Shimmer-/Convolution-Reverb** | Shimmer = Pitch-Shift im Reverb-Feedback („Aurora Glass"); Convolution = IR laden | ★★★★ | ★★★★ |
 | **Oversampling (FM/Distortion)** | Anti-Aliasing → sauberere aggressive Sounds | ★★★ | ★★★ |
-| **Granular-Synthese** | Sample → Körner (Clouds/Texturen), Grain-Size/Position/Pitch modulierbar | ★★★★ | ★★★★★ |
+| **Granular-Synthese** — 🔨 Story 17.1 `GRAIN` | Sample → Körner (Clouds/Texturen), Grain-Size/Position/Pitch modulierbar; Material = SAMPLER-Set, Per-Korn-Pitch auf QUANT-Skala | ★★★★ | ★★★★★ |
 | **Microtonale Skalen** | 19/31-TET, arab./ind. Skalen, Scala-`.scl`-Import → sofort außergewöhnlich | ★★★ | ★★★★ |
 | **MPE** | per-note Pitch/Timbre/Pressure als Matrix-Quellen (ROLI/Osmose) | ★★★★ | ★★★★ |
 | **Spektral/FFT** | Formanten verschieben, Spektrum morphen — anspruchsvoll, langfristig | ★★★★★ | ★★★★★ |
