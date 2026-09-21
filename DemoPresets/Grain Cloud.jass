@@ -30,7 +30,12 @@
     "Enabled": false
   },
   "Lfo1": {
-    "Enabled": false
+    "Enabled": true,
+    "Waveform": "Triangle",
+    "Target": "Off",
+    "SyncDiv": "Free",
+    "Rate": 0.1,
+    "Depth": 1.0
   },
   "Filter": {
     "Enabled": false
@@ -68,8 +73,8 @@
     "Spray": 0.08,
     "Size": 250.0,
     "Density": 8.0,
-    "Pitch": 7.0,
-    "Quant": "Penta",
+    "Pitch": 0.0,
+    "Quant": "Major",
     "Amp": 0.7,
     "Pan": 0.0
   },
@@ -85,6 +90,14 @@
         "Module": "GRAIN",
         "Param": 3,
         "ParamName": "POS",
+        "Amount": 0.5,
+        "Quant": "Off"
+      },
+      {
+        "Source": "LFO 1",
+        "Module": "GRAIN",
+        "Param": 2,
+        "ParamName": "PITCH",
         "Amount": 0.5,
         "Quant": "Off"
       }

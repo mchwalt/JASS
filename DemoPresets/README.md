@@ -40,12 +40,13 @@ quick-access bank on **F1–F6** (in the order listed below).
   example recordings (user-authored patch).
 - **Grain Cloud.jass** (F9) — the **GRAIN** module (Story 17.1): a granular cloud on the shipped
   **EPiano** set, SAMPLER itself off. Deliberately sparse (SIZE 250 ms, DENS 8, SPRAY 8 %) so
-  single grains are audible as notes: PITCH 7 with **QUANT Penta** scatters them over the
-  pentatonic degrees around the played note — switch QUANT to Off and the same grains land
-  between the notes. **CHAOS X → GRAIN · POS** wanders slowly through the recording, a 3 s ADSR
-  release lets the cloud keep spawning after the key lifts, REVERB adds room. Hold one note
-  first, then a chord; raise DENS for a pad, SPRAY 0 for the stutter, or swap the SET for one of
-  the grand pianos.
+  single grains are audible as notes. **LFO 1 → GRAIN · PITCH** (a 10 s triangle, ±1 octave)
+  slides the pitch centre of the cloud up and down; with **QUANT Major** that is a staircase
+  through the major scale of the played note, with QUANT Off the same movement is a glissando —
+  the one A/B that makes QUANT unmistakable. **CHAOS X → GRAIN · POS** wanders slowly through the
+  recording, a 3 s ADSR release lets the cloud keep spawning after the key lifts, REVERB adds
+  room. Hold one note; then raise PITCH for a spread around the centre, DENS for a pad, SPRAY 0
+  for the stutter, or swap the SET for one of the grand pianos.
 
 These ship embedded in the binary and are seeded into the user's Presets folder on
 first run if missing (`PresetIO::seedDemoPresets`), so every user gets them.
