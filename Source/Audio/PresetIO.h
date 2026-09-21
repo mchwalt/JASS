@@ -141,10 +141,12 @@ namespace PresetIO
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
         slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
         slots[7] = "GrandPiano";        // the plain instrument: SplendidPiano set, nothing else on
-        // F9 and F10 are deliberately EMPTY. They held `DAF Bass` and `Drum Pattern`, the two
+        slots[8] = "Grain Cloud";       // 17.1: GRAIN on the EPiano set, CHAOS X → POS, QUANT Penta
+        // F10 is deliberately EMPTY. F9 and F10 held `DAF Bass` and `Drum Pattern`, the two
         // presets that introduced the STEP SEQ — both retired 2026-08-11: `DAF Beat` plays the same
         // bass figure with PERC underneath it, which is the better demonstration of either, and a
-        // drum map driven through the STEP SEQ was the workaround PERC replaced.
+        // drum map driven through the STEP SEQ was the workaround PERC replaced. F9 was taken by
+        // `Grain Cloud` on 2026-09-21.
         slots[10] = "DAF Beat";         // 16.1: the bass figure with PERC underneath it
         slots[11] = "Los Ninos";        // Liaisons Dangereuses: 24-step polymetric bass over 4/4 PERC
         return slots;

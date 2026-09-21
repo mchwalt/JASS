@@ -10,6 +10,33 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+### Added
+- **GRAIN — granular synthesis on the SAMPLER's material (story 17.1).** A new generator module
+  plays whatever SET the SAMPLER holds as a cloud of short grains: **POS / SPRAY** say where in the
+  recording the grains start and how far they scatter, **SIZE** (5–300 ms) how long each one is,
+  **DENS** how many per second, **PITCH** how far each grain is transposed at random — and
+  **QUANT** snaps every grain to a scale relative to the played note, so the spray becomes a
+  melody instead of a smear. POS, SIZE, PITCH (there: the centre of the cloud), AMP and PAN are
+  MOD MATRIX targets; the patch this was built for is CHAOS X → POS, a deterministic wander
+  through a recording. The SAMPLER may stay off — its SET is the material, one loader for both —
+  and both may sound at once. Hidden by default (the rack is full); old presets load bit-identical.
+  Why a texture generator and not a pitch-shifter: story 12.3 measured a naive granular repitcher
+  at negative SNR and chose STRETCH for that job — here the artefacts are the sound, and SPRAY
+  breaks the periodic combing that made them ugly there. Design points that came out of review
+  and measurement: scheduling runs through the ADSR release (a staccato tap into a long release
+  leaves a full cloud, not two orphan grains); a full grain pool drops the new grain instead of
+  cutting an old one (no clicks — DENS simply saturates at 32 / SIZE); per-grain pitches are drawn
+  uniformly over scale *degrees*, not rounded from semitones (rounding would favour the degrees
+  next to a three-semitone gap); and the loudness follows 1/√overlap plus the Hann window's own
+  power, measured on tonal and loop material to stay within ±3 dB across the whole DENS × SIZE
+  range. SPRAY 0 at high DENS is the classic pitch-synchronous regime — the density becomes the
+  pitch and combs a tonal source — kept as a sound, not "fixed".
+
+### Fixed
+- **Sampler PAN as a matrix target only worked while another PAN target was active.** The
+  auto-pan predicate in the voice never listed `SamplerPan` (since 12.1); a routing to SAMPLER PAN
+  alone changed nothing. Found while adding GRAIN's pan to the same line.
+
 ## [2026.09.1] – 2026-09-21
 
 ### Added

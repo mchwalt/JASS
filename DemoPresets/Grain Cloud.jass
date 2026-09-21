@@ -1,0 +1,95 @@
+{
+  "FormatVersion": 10,
+  "Name": "Grain Cloud",
+  "Modified": false,
+  "Master": {
+    "On": true,
+    "Volume": 0.5,
+    "Tempo": 120.0
+  },
+  "Stereo": {
+    "Enabled": true,
+    "Mode": "Stereo-Pan",
+    "Width": 0.5,
+    "Time": 12.0,
+    "Room": 0.5
+  },
+  "Osc1": {
+    "Enabled": false
+  },
+  "Osc2": {
+    "Enabled": false
+  },
+  "Osc3": {
+    "Enabled": false
+  },
+  "Sub": {
+    "Enabled": false
+  },
+  "Noise": {
+    "Enabled": false
+  },
+  "Lfo1": {
+    "Enabled": true,
+    "Waveform": "Sine",
+    "Target": "Off",
+    "SyncDiv": "Free",
+    "Rate": 0.08,
+    "Depth": 0.5
+  },
+  "Filter": {
+    "Enabled": false
+  },
+  "Adsr": {
+    "Enabled": true,
+    "Attack": 0.4,
+    "Decay": 0.5,
+    "Sustain": 0.8,
+    "Release": 3.0
+  },
+  "Reverb": {
+    "Enabled": true,
+    "RoomSize": 0.7,
+    "Damping": 0.4,
+    "Mix": 0.3
+  },
+  "Sampler": {
+    "Enabled": false,
+    "Set": 5.0,
+    "Root": 60.0,
+    "Start": 0.0,
+    "End": 1.0,
+    "Mode": "One-Shot",
+    "Amp": 0.5,
+    "Pan": 0.0,
+    "Speed": 1.0,
+    "Stretch": false,
+    "Release": 0.0,
+    "File": "EPiano"
+  },
+  "Grain": {
+    "Enabled": true,
+    "Position": 0.15,
+    "Spray": 0.15,
+    "Size": 120.0,
+    "Density": 25.0,
+    "Pitch": 12.0,
+    "Quant": "Penta",
+    "Amp": 0.6,
+    "Pan": 0.0
+  },
+  "Chaos": {
+    "Enabled": true,
+    "Rate": 0.3
+  },
+  "ModMatrix": {
+    "On": true,
+    "Slots": [
+      { "Source": "Chaos X", "Module": "GRAIN", "Param": 3, "ParamName": "POS",  "Amount": 0.6,  "Quant": "Off" },
+      { "Source": "LFO 1",   "Module": "GRAIN", "Param": 4, "ParamName": "SIZE", "Amount": 0.35, "Quant": "Off" }
+    ]
+  },
+  "RackLayout": [
+    { "id": "grain", "zone": "GENERATORS", "pos": 8, "vis": true, "alignR": false }
+  ]
+}

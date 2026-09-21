@@ -256,7 +256,11 @@ Per sample:
    root — is picked per voice at note-on, Story 12.2; the optional STRETCH
    mode decouples pitch from time via a per-voice vendored Signalsmith
    Stretch instance — configured in `prepareToPlay`, allocation-free in
-   `process` — Story 12.3).
+   `process` — Story 12.3) → **GRAIN** (`DSP/GrainEngine.h`, Story 17.1: a
+   per-voice pool of 32 Hann grains on the zone the sampler picked at note-on,
+   own pan pair `PanGrainL/R`; grains per second scheduling, pool-full drops
+   the new grain, per-grain pitch drawn uniformly over `ScaleMask.h` degrees;
+   scheduling runs through the release — the voice ADSR shapes the cloud).
 6. Global amplitude tremolo, then the envelope/gate gain.
 7. **Per-channel effect chain** — each output channel owns a full
    `ChannelStrip`, so a left-panned generator also reverberates left:
@@ -268,7 +272,7 @@ Per sample:
 
 **[`DSP/ChannelStrip.h`](Glossary.md#channelstrip)** is the channel-agnostic voice bus:
 `kMaxOutChannels = 2` (a later surround phase raises it),
-`kNumPanGenerators = 9` (OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R),
+`kNumPanGenerators = 11` (OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R, GRAIN L/R),
 `positionToGains()` returns 1.0 for mono (byte-identical legacy path) or
 equal-power cos/sin for stereo. The voice's legacy single-channel FX members
 are reference aliases onto `strips[0]`, so all pre-stereo code paths still

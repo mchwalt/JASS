@@ -63,6 +63,12 @@ info** so nothing is hidden and every control explains itself.
     Sets load in the background, so a library of this size no longer delays
     the start of the app — a patch's own instrument is fetched first and
     selected as soon as it is ready.
+- **GRAIN** — granular synthesis on the SAMPLER's set: a cloud of short grains
+  with POS/SPRAY (where in the recording), SIZE (5–300 ms), DENS (grains per
+  second) and a per-grain PITCH spread that **QUANT** snaps to a scale relative to
+  the played note. Position, size, pitch centre, amp and pan are matrix targets —
+  CHAOS X → POS wanders through a recording. A texture generator, not a
+  pitch-shifter (that is SAMPLER + STRETCH).
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys

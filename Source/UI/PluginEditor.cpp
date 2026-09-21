@@ -2299,6 +2299,9 @@ void SynthyEditor::buildRack()
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));
     }
+    // GRAIN (Story 17.1) — spec-driven, right after the SAMPLER whose SET it plays. Hidden by
+    // default (the rack is full); the rack menu shows it.
+    addRackModule(makeModuleDescriptor(Modules::grain()));
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
