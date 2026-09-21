@@ -30,12 +30,7 @@
     "Enabled": false
   },
   "Lfo1": {
-    "Enabled": true,
-    "Waveform": "Sine",
-    "Target": "Off",
-    "SyncDiv": "Free",
-    "Rate": 0.08,
-    "Depth": 0.5
+    "Enabled": false
   },
   "Filter": {
     "Enabled": false
