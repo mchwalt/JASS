@@ -14,7 +14,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "grain"; m.title = "GRAIN"; m.persistObject = "Grain"; m.enableParamId = "grainOn";
-        m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W12H1;
+        m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W10H1;   // eight cells; W12 was loose (maintainer 2026-09-21)
         m.defaultVisible = false;   // the rack is full; shown from the rack menu like PERC/CHAOS
         m.params = {
             { "grainOn",      "Enabled",  "",      ParamSpec::Kind::Bool, {}, 0.0f },
@@ -37,6 +37,10 @@ namespace Modules
             { "grainAmp",     "Amp",      "AMP",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f, {}, {}, LFOTarget::GrainAmp },
             { "grainPan",     "Pan",      "PAN",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f, {}, {}, LFOTarget::GrainPan },
         };
+        // House rule (maintainer 2026-09-21): the combo comes before the knobs. Display order only —
+        // the params list above stays in its append-only order.
+        m.bodyOrder = { "grainQuant", "grainPos", "grainSpray", "grainSize", "grainDensity",
+                        "grainPitch", "grainAmp", "grainPan" };
         return m;
     }
 }
