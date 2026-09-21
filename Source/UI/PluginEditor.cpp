@@ -2305,6 +2305,16 @@ void SynthyEditor::buildRack()
     {
         auto d = makeModuleDescriptor(Modules::grain());
         greyWhenSynced(d, P::grainDensity, P::grainKey);
+        // The material is the SAMPLER's SET, chosen over there — say so in GRAIN's own header
+        // (maintainer 2026-09-22: "woher sehe ich, welches Sample GRAIN verwendet?"). Same readout
+        // hook as STEP SEQ's step counter; blank when no set is selected.
+        d.headerReadout = [&apvts]
+        {
+            const int idx = (int) *apvts.getRawParameterValue(P::samplerSet);
+            if (const auto* set = SampleBankStore::instance().getSet(idx); set != nullptr)
+                return set->getName();
+            return juce::String();
+        };
         addRackModule(std::move(d));
     }
 
