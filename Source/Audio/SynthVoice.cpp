@@ -271,6 +271,18 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         }
     }
 
+    // ── Filter keytracking ──────────────────────────────────────────────────────────────────────
+    // Fold the played pitch into the cutoff so the timbre stays even across the keyboard. Same
+    // push mechanism as accent above: bake it into baseCutoff and set tActive so applyFxMods writes
+    // it to the strips even with no LFO/matrix on the cutoff. transposeRatio is f(note)/f(C4), so
+    // ratio^amount tracks in octaves — amount 1 = one-for-one, referenced to C4 (ratio 1 there, and
+    // for the note-60 drone, so nothing shifts). It stacks on the accented base (both multiply).
+    if (filterKeytrack > 0.0)
+    {
+        baseCutoff = juce::jlimit (20.0, 20000.0, baseCutoff * std::pow (transposeRatio, filterKeytrack));
+        tActive[(size_t) LFOTarget::FilterCutoff] = true;
+    }
+
     std::array<double, ModMatrixConfig::kNumTargets> modOffset {};   // per-sample summed offsets
     OscModOffsets oscOffset {};                                      // per-sample per-OSC offsets
 

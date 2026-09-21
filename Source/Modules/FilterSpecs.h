@@ -18,6 +18,11 @@ namespace Modules
             { "filterType",   "Type",      "TYPE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Lowpass", "Highpass" } },
             { "filterCutoff", "Cutoff",    "CUTOFF", ParamSpec::Kind::Float, juce::NormalisableRange<float> (20.0f, 20000.0f, 1.0f, 0.3f), 550.0f,  {}, {}, LFOTarget::FilterCutoff },
             { "filterReso",   "Resonance", "RESO",   ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.1f, 10.0f, 0.01f),          0.707f, {}, {}, LFOTarget::FilterResonance },
+            // Keytracking (0..100 %): the cutoff follows the played pitch so the timbre stays even
+            // across the keyboard. 0 = off (a fixed cutoff, the pre-tracking behaviour, so old
+            // presets and the default patch are byte-identical); 100 = the cutoff tracks the note
+            // one-for-one in octaves, referenced to C4 like every generator's FREQ.
+            { "filterTrack",  "Track",     "TRACK",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 100.0f, 1.0f),          0.0f },
         };
         return m;
     }

@@ -10,6 +10,19 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
 
 ## [Unreleased]
 
+## [2026.09.1] – 2026-09-21
+
+### Added
+- **Filter keytracking (TRACK, 0–100 %).** The cutoff follows the played pitch, so a resonant
+  filter keeps the same timbre across the keyboard instead of reading dull low and choked high —
+  standard on the classic monosynths, and the missing piece a resonant bassline needs to speak
+  evenly over two octaves (surfaced by the Los Niños and Roboter sequencer work). 0 = off (a
+  fixed cutoff, exactly as before — old presets and the default patch are byte-identical); 100 =
+  the cutoff tracks note-for-note in octaves, referenced to C4. It rides underneath everything
+  else: accent, LFO and matrix modulation all stack on the tracked cutoff.
+
+## [2026.09.0] – 2026-09-02
+
 ### Added
 - **STEP SEQ and PERC hold up to 768 steps, shown as sixteen 48-step pages (story 16.3).** Two
   songs in a row had hit the same wall: pop music phrases in 2/4/8 bars — 32/64/128

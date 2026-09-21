@@ -74,6 +74,7 @@ public:
     }
     Oscillator& getSubOsc() { return subOsc; }
     int& getSubOctaveRef() { return subOctave; }
+    double& getFilterKeytrackRef() { return filterKeytrack; }   // 0..1, applied to baseCutoff with the note
     bool& getAdsrOnRef() { return adsrOn; }
     bool& getMixModeOnRef() { return mixModeOn; }
     int& getMixSrcARef() { return mixSrcA; }   // Epic 5: RingMod/FM operands
@@ -186,6 +187,7 @@ private:
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};
     double baseCutoff = 5000.0;
+    double filterKeytrack = 0.0;   // 0..1: how far the cutoff follows the played note (set per block)
 
     // Pitch transposition: played note relative to C4 (note 60). 1.0 = no shift.
     // transposeRatio is the TARGET; glideRatio is the smoothed value actually used for
