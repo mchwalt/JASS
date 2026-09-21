@@ -233,6 +233,16 @@ public:
     // never-freed store.
     const SampleZone* currentZone() const noexcept { return active ? zone : nullptr; }
 
+    // The note's transposition for the current zone as a rate factor — f(note)/f(zone root) · tune,
+    // the same `pitchFactor` computeRate() folds into `rate`. GRAIN (Story 17.1) reads it at note-on
+    // so its grains at PITCH 0 sit exactly on the sampler's tape pitch. 1.0 when nothing is picked.
+    double pitchFactorForZone() const noexcept
+    {
+        if (! active || zone == nullptr) return 1.0;
+        const double root = (set != nullptr && set->isMapped()) ? (double) zone->rootKey : (double) rootKey;
+        return lastRatio * std::pow(2.0, (60.0 - root) / 12.0) * zone->tuneRatio;
+    }
+
     // Silence this player because something else in its choke group started: a closed hi-hat over a
     // ringing open one. It FADES — a few milliseconds through the very same release ramp gateOff
     // uses, because a hard stop clicks and that lesson is already paid for (12.4's retrigger

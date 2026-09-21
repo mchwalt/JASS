@@ -77,6 +77,18 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     sampler.trigger(transposeRatio, midiNoteNumber,    // Story 12.1: (re)start the recording at the
                     (int) std::lround(velocity * 127.0f));   // note's rate; note picks the zone (12.2),
                                                              // velocity picks the layer (12.5)
+    // GRAIN (Story 17.1) plays the zone the sampler just picked — whether or not the SAMPLER itself
+    // is audible (trigger runs regardless of samplerOn). Raw channel pointers are safe to keep: the
+    // store never frees. Pitch factor = the sampler's tape transposition, so PITCH 0 is the same note.
+    if (const auto* z = sampler.currentZone(); z != nullptr)
+    {
+        grain.setMaterial(z->getData(0), z->isStereo() ? z->getData(1) : nullptr,
+                          z->getLength(), z->fileSampleRate);
+        grain.setPitchFactor(sampler.pitchFactorForZone());
+        grain.trigger();
+    }
+    else
+        grain.setMaterial(nullptr, nullptr, 0, 44100.0);   // no set / no zone: the cloud stays silent
     // Choke groups (Story 12.7): if the zone that just started declares off_by=N, every OTHER voice
     // sounding a zone with group=N is faded out — the closed hi-hat silencing the open one. Done
     // HERE, at the sample-accurate note-on hook, rather than per block in the processor: quantising
@@ -128,6 +140,7 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
     {
         envelope.reset();
         sampler.reset();   // Story 12.1: hard stop ends the recording too
+        grain.reset();     // Story 17.1: and empties the grain pool
         samplerTailHold = false;
         bypassGate.setCurrentAndTargetValue(0.0f);
         clearCurrentNote();
@@ -593,6 +606,19 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             else
                 addPanned(sm.l, PanSamplerL);
         }
+        {
+            // GRAIN (17.1): the cloud on the same zone, same stereo rule, its own pan pair.
+            const auto gr = grain.nextSample();
+            if (nCh == 1)
+                addPanned(0.5f * (gr.l + gr.r), PanGrainL);
+            else if (sampler.sourceIsStereo())
+            {
+                addPanned(gr.l, PanGrainL);
+                addPanned(gr.r, PanGrainR);
+            }
+            else
+                addPanned(gr.l, PanGrainL);
+        }
 
         // Global "Alle OSC" amplitude (tremolo) — post-mix, same factor on every channel; and the
         // envelope gain (ADSR advanced once above; reused here, not re-advanced — bypass gate when off).
@@ -640,6 +666,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                                       : (gateG <= 0.0f && ! bypassGate.isSmoothing());
         if (voiceIdle)
         {
+            grain.reset();   // 17.1: the envelope is at zero — drop the pool silently, so a later
+                             // note on this voice does not resume stale grains of the old material
             clearCurrentNote();
             noteOn = false;
             break;
