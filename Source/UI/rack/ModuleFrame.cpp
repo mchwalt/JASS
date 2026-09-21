@@ -284,7 +284,8 @@ namespace rack
             readoutLabel = std::make_unique<juce::Label>();
             readoutLabel->setJustificationType (juce::Justification::centred);
             readoutLabel->setInterceptsMouseClicks (false, false);
-            readoutLabel->setTooltip ("Playing step / LEN");
+            readoutLabel->setTooltip (desc.headerReadoutTooltip);
+            readoutLabel->setMinimumHorizontalScale (0.8f);   // squeeze a long set name before clipping it
             addAndMakeVisible (*readoutLabel);
         }
 
@@ -947,8 +948,8 @@ namespace rack
         // Step pages (16.3), left of the header actions: … < 2/4 > FOLLOW [LOAD MIDI] …
         if (followBtn != nullptr)
             followBtn->setBounds (header.removeFromRight (62).reduced (2, 1));
-        if (readoutLabel != nullptr)   // "137/384" right of the pager: 56 px fits "704/704"
-            readoutLabel->setBounds (header.removeFromRight (56).reduced (0, 1));
+        if (readoutLabel != nullptr)   // "137/384" right of the pager: 56 px fits "704/704"; GRAIN asks for 120
+            readoutLabel->setBounds (header.removeFromRight (desc.headerReadoutWidth).reduced (0, 1));
         if (pageNextBtn != nullptr)
             pageNextBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
         if (pageLabel != nullptr)   // 72: "16/16 •12" (16 pages since 2026-09-02) needs the room

@@ -2315,6 +2315,8 @@ void SynthyEditor::buildRack()
                 return set->getName();
             return juce::String();
         };
+        d.headerReadoutWidth   = 120;   // set names ("SalamanderPiano") need more than the step counter's 56
+        d.headerReadoutTooltip = "The SAMPLER set the cloud plays - pick it in the SAMPLER module";
         addRackModule(std::move(d));
     }
 
