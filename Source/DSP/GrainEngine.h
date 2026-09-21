@@ -114,6 +114,12 @@ public:
         return { (float) outL * gain, (float) outR * gain };
     }
 
+    // ── base values for the matrix (SynthVoice captures per block, modulates, restores) ───────
+    double getPosition() const noexcept    { return position; }
+    double getSizeMs() const noexcept      { return sizeMs; }
+    double getLevel() const noexcept       { return level; }
+    double getPitchCenter() const noexcept { return pitchCenter; }
+
     // ── introspection (harness / display) ──────────────────────────────────────────────────────
     int activeGrains() const noexcept
     {

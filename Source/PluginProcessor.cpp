@@ -384,7 +384,8 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      // (auto-disable only undoes an enable WE made) — safe to list.
                                      ID::noiseOn, ID::karplusOn, ID::pitchEnvOn,
                                      ID::compOn, ID::stereoOn, ID::masterOn,
-                                     ID::chaosOn };   // LFO expansion: Chaos X/Y source
+                                     ID::chaosOn,     // LFO expansion: Chaos X/Y source
+                                     ID::grainOn };   // Story 17.1: GRAIN targets
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);

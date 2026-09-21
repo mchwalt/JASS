@@ -196,6 +196,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Epic 8.3 — base values for the full per-module target coverage (captured once, modulated around).
     const double baseWtAmp        = wavetable.getAmplitude();
     const double baseSamplerLevel = sampler.getLevel();   // Story 12.1
+    const double baseGrainPos     = grain.getPosition();  // Story 17.1: the three dimensions + amp
+    const double baseGrainSize    = grain.getSizeMs();
+    const double baseGrainLevel   = grain.getLevel();
+    grain.setPitchCenter(0.0);   // centre is matrix-only: zero unless a routing moves it below
     const double baseWtVoices     = (double) wavetable.getUnisonCount();
     const double baseWtDetune     = wavetable.getDetuneAmount();
     // Feedback-FM completion: self-FM depth on WAVETABLE/SUB (same 0.5 scale as OscFeedback).
@@ -325,7 +329,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const bool panMod = (nCh > 1) && (anyOscPan
                         || tActive[(size_t) LFOTarget::OscPan]      || tActive[(size_t) LFOTarget::SubPan]
                         || tActive[(size_t) LFOTarget::NoisePan]    || tActive[(size_t) LFOTarget::KarplusPan]
-                        || tActive[(size_t) LFOTarget::WavetablePan]);
+                        || tActive[(size_t) LFOTarget::WavetablePan]
+                        || tActive[(size_t) LFOTarget::SamplerPan]  || tActive[(size_t) LFOTarget::GrainPan]);
+                        // SamplerPan was missing here since 12.1 — its branch below only ran when
+                        // ANOTHER pan target was active. Fixed alongside GrainPan (17.1).
     float curGains[kNumPanGenerators][kMaxOutChannels];
     for (int g = 0; g < kNumPanGenerators; ++g)
         for (int c = 0; c < kMaxOutChannels; ++c) curGains[g][c] = panGains[g][c];
@@ -453,6 +460,17 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             noise.setAmplitude(std::clamp(baseNoiseAmp + modOffset[(size_t) LFOTarget::NoiseLevel] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::SamplerLevel])
             sampler.setLevel(std::clamp(baseSamplerLevel + modOffset[(size_t) LFOTarget::SamplerLevel] * 0.5, 0.0, 1.0));
+        // GRAIN (17.1): a new grain reads these at spawn time; grains in flight keep theirs.
+        // POS additive (±half the zone), SIZE exponential (±2 octaves of length), PITCH centre
+        // ±24 semitones (quantised with the spread inside the engine), AMP additive like the others.
+        if (tActive[(size_t) LFOTarget::GrainPosition])
+            grain.setPosition(std::clamp(baseGrainPos + modOffset[(size_t) LFOTarget::GrainPosition] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::GrainSize])
+            grain.setSizeMs(std::clamp(baseGrainSize * std::exp2(modOffset[(size_t) LFOTarget::GrainSize] * 2.0), 5.0, 300.0));
+        if (tActive[(size_t) LFOTarget::GrainPitch])
+            grain.setPitchCenter(modOffset[(size_t) LFOTarget::GrainPitch] * 24.0);
+        if (tActive[(size_t) LFOTarget::GrainAmp])
+            grain.setLevel(std::clamp(baseGrainLevel + modOffset[(size_t) LFOTarget::GrainAmp] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusAmp])
             karplus.setAmplitude(std::clamp(baseKarplusAmp + modOffset[(size_t) LFOTarget::KarplusAmp] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusDamping])
@@ -536,6 +554,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 else if (g == PanWavetable)   p += modOffset[(size_t) LFOTarget::WavetablePan];
                 else if (g == PanSamplerL || g == PanSamplerR)
                                               p += modOffset[(size_t) LFOTarget::SamplerPan];   // both sub-sources move together
+                else if (g == PanGrainL || g == PanGrainR)
+                                              p += modOffset[(size_t) LFOTarget::GrainPan];     // 17.1: same, for the cloud's pair
                 effPan[g] = (float) std::clamp(p, -1.0, 1.0);
                 positionToGains(effPan[g], nCh, curGains[g]);
             }
@@ -680,6 +700,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     wavetable.setFrequency(baseWtFreq);
     wavetable.setPosition(basePos);
     sampler.setLevel(baseSamplerLevel);   // Story 12.1
+    grain.setPosition(baseGrainPos);      // Story 17.1
+    grain.setSizeMs(baseGrainSize);
+    grain.setLevel(baseGrainLevel);
+    grain.setPitchCenter(0.0);
     filter.setCutoff(baseCutoff);
     filter.setResonance(baseReso);
     formant.vowel = baseVowel;

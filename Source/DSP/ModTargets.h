@@ -94,7 +94,16 @@
     /* Feedback-FM completion: self-FM depth on the WAVETABLE and SUB generators, matching the    \
        per-oscillator OscFeedback target that shipped with the OSC FB knob. */                    \
     X(WavetableFeedback, "WavetableFeedback","WT FB",        "wavetableOn")                       \
-    X(SubFeedback,       "SubFeedback",      "Sub FB",       "subOn")
+    X(SubFeedback,       "SubFeedback",      "Sub FB",       "subOn")                             \
+    /* GRAIN (Story 17.1): the cloud's three dimensions + amp + pan, per voice. GrainPitch is the  \
+       CENTRE of the per-grain pitch draw in semitones (the PITCH knob is the spread), so a slow    \
+       source on it with QUANT on walks the cloud up a scale. Applied in SynthVoice; a new grain     \
+       reads the modulated values at spawn time, grains in flight keep theirs. */                   \
+    X(GrainPosition,     "GrainPosition",    "Grain Pos",    "grainOn")                           \
+    X(GrainSize,         "GrainSize",        "Grain Size",   "grainOn")                           \
+    X(GrainPitch,        "GrainPitch",       "Grain Pitch",  "grainOn")                           \
+    X(GrainAmp,          "GrainAmp",         "Grain Amp",    "grainOn")                           \
+    X(GrainPan,          "GrainPan",         "Grain Pan",    "grainOn")
 
 // Off = 0 (slot inactive / no ring). Order == the table above.
 enum class LFOTarget
