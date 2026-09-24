@@ -46,7 +46,14 @@ public:
     void setPosition (double frac) noexcept           { position = std::clamp (frac, 0.0, 1.0); }
     void setSpray (double frac) noexcept              { spray = std::clamp (frac, 0.0, 1.0); }
     void setSizeMs (double ms) noexcept               { sizeMs = std::clamp (ms, 1.0, 2000.0); }
-    void setDensity (double grainsPerSecond) noexcept { density = std::clamp (grainsPerSecond, 0.1, 1000.0); }
+    // A DENS move up must not wait out the period already scheduled at the old rate (1 s at DENS 1,
+    // review 2026-09-24): pull the pending onset in to the new period. Down needs nothing — the
+    // longer period simply starts with the next spawn. KEY mode ignores DENS altogether.
+    void setDensity (double grainsPerSecond) noexcept
+    {
+        density = std::clamp (grainsPerSecond, 0.1, 1000.0);
+        if (! keyMode) nextOnset = std::min (nextOnset, hostSampleRate / density);
+    }
     void setPitchSpread (double semis) noexcept       { pitchSpread = std::clamp (semis, 0.0, 48.0); }
     void setPitchCenter (double semis) noexcept       { pitchCenter = std::clamp (semis, -48.0, 48.0); }
     void setQuant (int q) noexcept                    { quant = std::clamp (q, 0, 4); }
@@ -67,8 +74,10 @@ public:
     // SamplePlayer::computeRate builds, so PITCH 0 + QUANT Off is exactly the sampler's tape pitch.
     void setPitchFactor (double f) noexcept           { pitchFactor = std::clamp (f, 1.0 / 64.0, 64.0); }
 
-    // The played note's absolute frequency (KEY mode: the grain rate). Set at note-on.
-    void setNoteHz (double hz) noexcept               { noteHz = std::clamp (hz, 8.0, 8000.0); }
+    // The played note's absolute frequency (KEY mode: the grain rate). Set at note-on and followed
+    // through GLIDE / SLIDE per sample. The cap covers MIDI 127 (12 544 Hz — an 8 kHz cap left the
+    // top eight keys on one pitch, review 2026-09-24); the length floor of 8 samples holds below it.
+    void setNoteHz (double hz) noexcept               { noteHz = std::clamp (hz, 8.0, 13000.0); }
 
     // ── material (note-on; pointers must outlive the grains — the store guarantees it) ─────────
     void setMaterial (const float* left, const float* right, int frames, double fileSampleRate) noexcept
@@ -79,37 +88,46 @@ public:
         fileRate = fileSampleRate > 1000.0 ? fileSampleRate : 44100.0;
     }
 
+    // Per-voice seed (once, at construction): every voice must draw its own SPRAY / pitch sequence,
+    // or a chord is several sample-identical clouds summing coherently (+6 dB, no thickening).
     void seed (uint32_t s) noexcept                   { rng = (s == 0) ? 0x9E3779B9u : s; }
 
     // ── note lifecycle ─────────────────────────────────────────────────────────────────────────
     // Note-on: the first grain fires on the very next sample (attack on time). Grains still in
     // flight from the previous note on this voice finish naturally — cutting them would click.
-    void trigger() noexcept                           { nextOnset = 0.0; }
+    void trigger() noexcept                           { nextOnset = 0.0; scheduling = true; }
+
+    // Note-off WITHOUT an envelope to shape the tail (ADSR module off): stop starting new grains,
+    // let the sounding ones finish. With the ADSR on this is never called — scheduling runs through
+    // the release like an OSC keeps oscillating, and the envelope shapes the cloud.
+    void stopScheduling() noexcept                    { scheduling = false; }
 
     // Hard stop (voice reset): empties the pool.
     void reset() noexcept
     {
         for (auto& g : grains) g.active = false;
         nextOnset = 0.0;
+        scheduling = true;
     }
-
-    // Scheduling runs for the whole life of the voice — through the ADSR release, like an OSC keeps
-    // oscillating after note-off. The voice's envelope shapes the cloud; nothing to do at note-off.
 
     // ── render ─────────────────────────────────────────────────────────────────────────────────
     Out nextSample() noexcept
     {
-        if (! enabled || matFrames < 8)
-            return { 0.0f, 0.0f };
-
-        // Scheduler: fractional period accumulator, so 44100/30 = 1470.0 grains/s stays exact.
-        // KEY mode: one grain per period of the played note — the rate IS the pitch.
-        nextOnset -= 1.0;
-        if (nextOnset <= 0.0)
+        // Only the SCHEDULER is gated by enable / material / note-off: grains already in flight
+        // carry their own pointers and finish their window regardless (review 2026-09-24 — an
+        // early return here cut the whole cloud on one sample when GRAIN was switched off or a
+        // zone-less note arrived, the very click trigger() promises not to make).
+        if (scheduling && enabled && matFrames >= 8)
         {
-            spawn();
-            nextOnset += hostSampleRate / grainRate();
-            if (nextOnset < 1.0) nextOnset = 1.0;   // never more than one spawn per sample
+            // Scheduler: fractional period accumulator, so 44100/30 = 1470.0 grains/s stays exact.
+            // KEY mode: one grain per period of the played note — the rate IS the pitch.
+            nextOnset -= 1.0;
+            if (nextOnset <= 0.0)
+            {
+                spawn();
+                nextOnset += hostSampleRate / grainRate();
+                if (nextOnset < 1.0) nextOnset = 1.0;   // never more than one spawn per sample
+            }
         }
 
         double outL = 0.0, outR = 0.0;
@@ -254,7 +272,7 @@ private:
     int    matFrames = 0;
     double fileRate = 44100.0, hostSampleRate = 44100.0;
 
-    bool   enabled = false, keyMode = false;
+    bool   enabled = false, keyMode = false, scheduling = true;
     double position = 0.0, spray = 0.1, sizeMs = 60.0, density = 20.0, noteHz = 261.6255653005986;
     double pitchSpread = 0.0, pitchCenter = 0.0, pitchFactor = 1.0, level = 0.5;
     int    quant = 0;

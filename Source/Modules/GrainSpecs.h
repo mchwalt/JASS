@@ -6,7 +6,7 @@
 // one loader, one "File" side channel, one place to pick a sound. A texture generator, not a
 // pitch-shifter (Story 12.3 measured that road and chose STRETCH for it).
 //
-// Params are append-only. Matrix targets (GrainPosition/Size/Pitch/Amp) arrive with the target
+// Params are append-only. Matrix targets (GrainPosition/Size/Pitch/Amp/Pan) arrive with the target
 // table (ModTargets.h) — the modTarget fields below light the knobs' rings once they exist.
 namespace Modules
 {

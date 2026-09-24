@@ -261,7 +261,7 @@ clean-rebuild rule below):
 | `ModDest::kMaxParams` (6) | `Param params[kMaxParams]` **and** the MOD MATRIX `PARAM` param range |
 | `kOscRingSlots` (6) | `rack::LiveModFeed::osc[3][6]` and `ModDest::oscParamSlot` numbering (FREQ=0, AMP=1, DETUNE=2, FB=3, VOICES=4, PAN=5) |
 | `ModTargets::kCount` | `LiveModFeed::byTarget`, `ModMatrixConfig::kNumTargets`, `gMod[]`, per-voice offset arrays |
-| `kNumPanGenerators` (9, `ChannelStrip.h`) | per-voice panner arrays |
+| `kNumPanGenerators` (11, `ChannelStrip.h`) | per-voice panner arrays — OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R, GRAIN L/R |
 
 > ⚠️ **[Clean-rebuild](Glossary.md#clean-rebuild) rule ([ODR](Glossary.md#odr) trap).**
 > These constants size structs that voices embed **by value** in headers.
@@ -269,7 +269,7 @@ clean-rebuild rule below):
 > [TUs](Glossary.md#tu) with old and new layouts →
 > heap corruption / `0xC0000005` at startup. After changing any header-struct
 > size: build with **`/t:Rebuild`**. (Bitten repeatedly: `ModSlot` growth,
-> `kNumPanGenerators` 7→9, stereo `WaveformCapture`.)
+> `kNumPanGenerators` 7→9 and 9→11 (GRAIN), stereo `WaveformCapture`.)
 
 ---
 

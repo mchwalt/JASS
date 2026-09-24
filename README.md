@@ -67,7 +67,9 @@ info** so nothing is hidden and every control explains itself.
   with POS/SPRAY (where in the recording), SIZE (5–300 ms), DENS (grains per
   second) and a per-grain PITCH spread that **QUANT** snaps to a scale relative to
   the played note. Position, size, pitch centre, amp and pan are matrix targets —
-  CHAOS X → POS wanders through a recording. A texture generator, not a
+  CHAOS X → POS wanders through a recording. **KEY** turns the same engine into a
+  formant synth: one grain per period of the played note, so the repetition rate
+  is the pitch and the sample's own timbre stays put. A texture generator, not a
   pitch-shifter (that is SAMPLER + STRETCH).
 
 **Input devices**

@@ -97,8 +97,12 @@ inline void modMatrixAccumulate (const ModSlot* slots, bool matrixOn,
                 // OCTAVES (AMT 1 = 1 octave), so semitone space is simply v*12. Snapped HERE,
                 // per slot BEFORE the sum: two stacked quantized slots stay honest, and an
                 // un-quantized vibrato slot on the same target keeps gliding untouched.
+                // GRAIN PITCH (17.1) is the cloud's centre in semitones at AMT 1 = 24 — the same
+                // snap in its own scale, so a slot QUANT is not a dead control on that routing.
                 if (sl.quant > 0 && sl.target == (int) LFOTarget::Frequency)
                     v = quantizeSemis (v * 12.0, sl.quant) / 12.0;
+                else if (sl.quant > 0 && sl.target == (int) LFOTarget::GrainPitch)
+                    v = quantizeSemis (v * 24.0, sl.quant) / 24.0;
 
                 if (sl.oscIndex >= 0 && sl.oscIndex < 3)   // per-oscillator: only this OSC moves
                 {

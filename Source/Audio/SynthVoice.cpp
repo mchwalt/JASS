@@ -80,12 +80,17 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     // GRAIN (Story 17.1) plays the zone the sampler just picked — whether or not the SAMPLER itself
     // is audible (trigger runs regardless of samplerOn). Raw channel pointers are safe to keep: the
     // store never frees. Pitch factor = the sampler's tape transposition, so PITCH 0 is the same note.
+    // The note-independent part (zone root + tune) is kept; the note's ratio is applied per sample
+    // in renderNextBlock from the glided ratio, so GLIDE and the STEP SEQ's SLIDE move the cloud
+    // like they move the oscillators — in both modes (review 2026-09-24: pitch was frozen at note-on,
+    // and KEY took A440 while the cloud took the sampler's factor).
     if (const auto* z = sampler.currentZone(); z != nullptr)
     {
         grain.setMaterial(z->getData(0), z->isStereo() ? z->getData(1) : nullptr,
                           z->getLength(), z->fileSampleRate);
-        grain.setPitchFactor(sampler.pitchFactorForZone());
-        grain.setNoteHz(juce::MidiMessage::getMidiNoteInHertz(midiNoteNumber));   // 17.2 KEY: rate = note
+        grainZoneFactor = sampler.pitchFactorForZone() / transposeRatio;   // f(C4)/f(zone root) · tune
+        grain.setPitchFactor(grainZoneFactor * transposeRatio);
+        grain.setNoteHz(transposeRatio * kC4Hz);   // 17.2 KEY: rate = note
         grain.trigger();
     }
     else
@@ -133,7 +138,13 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
         // an ADSR-off preset sustain under the tail — the documented trade-off; a sampled
         // instrument is normally the ONLY generator when this matters.
         if (! adsrOn && sampler.isRingingOut())
+        {
             samplerTailHold = true;
+            // 17.1 (review 2026-09-24): nothing shapes the cloud's tail here — without this it kept
+            // spawning at full LEVEL under the sampler's fade and ended on the 10 ms gate as a hard
+            // cut. Stop starting grains; the sounding ones finish their windows.
+            grain.stopScheduling();
+        }
         else
             bypassGate.setTargetValue(0.0f);   // fast fade-out (ADSR-bypass path); frees the voice in ~10 ms
     }
@@ -403,6 +414,9 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // when glide is off). Oscillator frequencies are (re)applied every sample so both
         // the glide and the frequency modulation take effect.
         const double ratio = glideRatio.getNextValue();
+        // GRAIN follows the same glided ratio (both modes; a new grain reads it at spawn time).
+        grain.setPitchFactor(grainZoneFactor * ratio);
+        grain.setNoteHz(ratio * kC4Hz);
 
         // Modulation sources this sample. lfo.process() advances the shared LFO ONCE (its
         // value feeds both the implicit LFO routing and any slot whose source is LFO 1).

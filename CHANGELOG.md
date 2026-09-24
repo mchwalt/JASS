@@ -42,26 +42,54 @@ contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_
   −40 dB at 880 Hz for 20 ms), while at two periods the level stays within ±1.5 dB from 110 to
   880 Hz. A second cap keeps the overlap under the pool size, so the train is never thinned (a
   dropped grain in a periodic train halves the pitch). Off by default; 17.1 presets unchanged.
+  GRAIN's header names the SET it plays — the module has no set selector of its own, and the
+  first question at the instrument was "which sample is this?"; the read-out width is now part of
+  the module descriptor, so a long set name no longer truncates.
 
 - **SAMPLER loads MP3.** JUCE 9.0.2 turns its MP3 decoder on by default, so the only missing piece
   was the file filter: LOAD, FOLDER sets and `.sfz` regions accept `.mp3` next to WAV/AIFF/FLAC.
   Why it matters here: the Roboter drum kit had to be cut from an MP3 by hand and converted first —
-  now the recording goes straight in. One honest limit: MP3 carries encoder padding at the start, so
-  a loop point will not be seamless the way a WAV loop is; use MP3 for one-shots, pads and GRAIN
-  material, keep loops on WAV/FLAC.
+  now the recording goes straight in. Two honest limits: MP3 carries encoder padding at the start,
+  so a loop point will not be seamless the way a PCM loop is; and a variable-bitrate file without
+  a Xing/Info header reports an estimated length, so it may end in a short silent tail (POS near
+  the end or END at 1.0 then reads silence). Use MP3 for one-shots, pads and GRAIN material, keep
+  loops on WAV, AIFF or FLAC.
 
 ### Changed
 - **JUCE 9.0.0 → 9.0.2.** Two patch releases, no API JASS uses changed (the removed
   `getMidiInputSelectorListBox` and the OpenGL image changes do not occur in the code). What they
   bring to JASS: WAV files with a missing final pad byte load again, malformed audio files are
   rejected by the library before our own guards, MP3 decoding is enabled by default (the SAMPLER's
-  file filter does not offer it yet — that is a separate step), VST3 hosting fixes. Verified: full
-  rebuild, startup smoke test, presets load.
+  file filter picks it up above), VST3 hosting fixes. Verified: full rebuild, startup smoke test,
+  presets load.
 
 ### Fixed
 - **Sampler PAN as a matrix target only worked while another PAN target was active.** The
   auto-pan predicate in the voice never listed `SamplerPan` (since 12.1); a routing to SAMPLER PAN
   alone changed nothing. Found while adding GRAIN's pan to the same line.
+- **GRAIN, after the code review of the GRAIN line (2026-09-24).** Six behaviours the review
+  turned up before the release, none of them audible on the demo preset, all of them on a real
+  patch sooner or later:
+  - Every voice drew the *same* random sequence — the per-voice seed the story specified was never
+    wired, so a chord was several sample-identical clouds summing coherently (+6 dB on a doubled
+    note, no thickening). Each voice now has its own stream.
+  - Switching GRAIN off, or playing a note with no zone, cut every sounding grain on one sample —
+    exactly the click the engine's own contract promises not to make. Only the scheduler is gated
+    now; grains in flight finish their window.
+  - The cloud's pitch was frozen at note-on: GLIDE and the STEP SEQ's SLIDE moved every other
+    generator but not the grains, and KEY took the raw MIDI frequency while the cloud took the
+    sampler's transposition. Both modes now follow the voice's glided ratio per sample, like the
+    oscillators.
+  - KEY was out of tune above MIDI 119: the note frequency was capped at 8 kHz, so the top eight
+    keys shared one pitch. The cap now covers the full keyboard.
+  - Turning DENS *up* took effect only after the period already scheduled at the old rate had run
+    out — a full second at DENS 1. The pending onset is pulled in to the new period.
+  - With the ENVELOPE module off and a SAMPLER release, the cloud kept spawning at full level under
+    the sampler's fade and then ended on the 10 ms gate as a hard cut. Note-off now stops starting
+    grains in that case; the sounding ones finish.
+  Also: a MOD MATRIX slot's QUANT now works on a GRAIN → PITCH routing (it snapped FREQ routings
+  only, and sat there as a dead control); the shipped `Grain Cloud` preset carries the KEY field a
+  v10 file is meant to write.
 
 ## [2026.09.1] – 2026-09-21
 

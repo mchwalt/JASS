@@ -76,7 +76,8 @@
     "Pitch": 0.0,
     "Quant": "Major",
     "Amp": 0.7,
-    "Pan": 0.0
+    "Pan": 0.0,
+    "Key": false
   },
   "Chaos": {
     "Enabled": true,

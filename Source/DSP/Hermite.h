@@ -11,6 +11,7 @@
 // must keep its read span inside the buffer for the sound's sake, not for safety.
 inline float hermiteRead (const float* d, int n, double p) noexcept
 {
+    if (d == nullptr || n <= 0) return 0.0f;   // shared header: keep the "never outside" promise for every caller
     p = std::clamp (p, 0.0, (double) (n - 1));
     const int i = (int) p;
     const float f = (float) (p - i);

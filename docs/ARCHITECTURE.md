@@ -260,7 +260,11 @@ Per sample:
    per-voice pool of 32 Hann grains on the zone the sampler picked at note-on,
    own pan pair `PanGrainL/R`; grains per second scheduling, pool-full drops
    the new grain, per-grain pitch drawn uniformly over `ScaleMask.h` degrees;
-   scheduling runs through the release — the voice ADSR shapes the cloud).
+   scheduling runs through the release — the voice ADSR shapes the cloud.
+   KEY, Story 17.2: the grain rate is the played note's frequency and the
+   content is not transposed — pitch-synchronous granular / FOF, the sample's
+   formants stay put; the rate follows the glided ratio per sample like the
+   oscillators do).
 6. Global amplitude tremolo, then the envelope/gate gain.
 7. **Per-channel effect chain** — each output channel owns a full
    `ChannelStrip`, so a left-panned generator also reverberates left:

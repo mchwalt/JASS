@@ -23,6 +23,10 @@ SynthyProcessor::SynthyProcessor()
             voiceRoster.push_back(v);
     for (auto* v : voiceRoster)
         v->setVoicePeers(&voiceRoster);
+    // GRAIN (17.1): one random stream per voice — golden-ratio multiples spread the xorshift seeds
+    // apart, so a chord is several different clouds, not one cloud summed coherently (+6 dB).
+    for (size_t i = 0; i < voiceRoster.size(); ++i)
+        voiceRoster[i]->getGrain().seed(0x9E3779B9u * (uint32_t) (i + 1));
 
     // One-time rebrand of the app-data folder (%AppData%\Synthy -> JASS, *.synthy -> *.jass).
     // MUST run before anything touches jassFolder() (which would create JASS and suppress it).

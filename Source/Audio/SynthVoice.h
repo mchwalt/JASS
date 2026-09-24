@@ -160,6 +160,8 @@ private:
     WavetableOscillator wavetable;
     SamplePlayer sampler;   // Story 12.1: recordings as a generator (stereo via PanSamplerL/R)
     GrainEngine  grain;     // Story 17.1: granular cloud on the sampler's zone (PanGrainL/R)
+    double grainZoneFactor = 1.0;   // f(C4)/f(zone root) · tune, captured at note-on; × glided ratio per sample
+    static constexpr double kC4Hz = 261.6255653005986;   // MIDI 60 — transposeRatio is f(note)/f(C4)
     const std::vector<SynthVoice*>* voicePeers = nullptr;   // 12.7 (see setVoicePeers)
 
     MixMode mixMode = MixMode::RingMod;   // only meaningful when mixModeOn; off => additive

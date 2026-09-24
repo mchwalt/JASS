@@ -39,8 +39,9 @@ namespace ScaleMask
         return 12.0 * oct + (double) s.deg[i];
     }
 
-    // The step whose semitone value is nearest to `semis` (ties go up, like quantizeSemis, whose
-    // octave-wrapped root competes too so 11.6 → 12 rather than 11).
+    // The step whose semitone value is nearest to `semis`. Ties go DOWN (strict `<` keeps the lower
+    // degree) — the same rule as quantizeSemis in ModMatrix.h, whose octave-wrapped root competes
+    // too so 11.6 → 12 rather than 11. Keep the two in step until the deferred merge.
     inline int nearestStep (double semis, int quant) noexcept
     {
         const Scale s = scale (quant);
