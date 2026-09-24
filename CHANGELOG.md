@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 JASS uses **CalVer** versioning: `YYYY.MM.MICRO` (e.g. `2026.07.0`), where `MICRO`
 increments for additional releases within the same month. This is the app/release
 version and is independent of the preset **`FormatVersion`** (an integer schema
-contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
+contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
 
 ## [Unreleased]
 

@@ -40,7 +40,7 @@ nested format on load.
 
 ```jsonc
 {
-  "FormatVersion": 6,
+  "FormatVersion": 10,
   "Name": "Matrix Demo",
   "Modified": false,        // LiveState only: true = unsaved working state (header shows "Current State")
 

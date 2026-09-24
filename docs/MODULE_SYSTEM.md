@@ -108,12 +108,14 @@ display-transform pair). `extraBody` is appended last.
 
 ## 4. Registry (`ModuleRegistry`, `AllModules.h`)
 
-- `Modules::all()` (`AllModules.h`) returns the ordered list of **34 module
-  specs** (~190 APVTS parameters), built fresh on each call:
+- `Modules::all()` (`AllModules.h`) returns the ordered list of **38 module
+  specs** (several thousand APVTS parameters — the STEP SEQ and PERC step
+  arrays dominate), built fresh on each call:
   17 simple modules (filter … pitchEnv), `osc(1..3)`, `crossmod`,
   `lfo(1..4)`, `modMatrix`, `string`, `wavetable`, `adsr`, the three displays,
-  `presetBank`, `sampler` — the last two *appended* after everything else
-  because `all()` order is the APVTS order.
+  then `presetBank`, `sampler`, `stepSeq`, `perc`, `chaos`, `grain` — every
+  later module *appended* after everything else because `all()` order is the
+  APVTS order (append-only keeps old presets valid).
 - `ModuleRegistry.h` declares the three audio-safe entry points
   (`appendAllParameters`, `writeState`, `readState`); `ModuleRegistry.cpp` is
   the **single TU** that includes `AllModules.h` (and thereby the UI headers).
@@ -258,7 +260,7 @@ clean-rebuild rule below):
 
 | Constant | Couples to |
 |---|---|
-| `ModDest::kMaxParams` (6) | `Param params[kMaxParams]` **and** the MOD MATRIX `PARAM` param range |
+| `ModDest::kMaxParams` (7, `ModMatrixCatalog.h`) | `Param params[kMaxParams]` **and** the MOD MATRIX `PARAM` param range |
 | `kOscRingSlots` (6) | `rack::LiveModFeed::osc[3][6]` and `ModDest::oscParamSlot` numbering (FREQ=0, AMP=1, DETUNE=2, FB=3, VOICES=4, PAN=5) |
 | `ModTargets::kCount` | `LiveModFeed::byTarget`, `ModMatrixConfig::kNumTargets`, `gMod[]`, per-voice offset arrays |
 | `kNumPanGenerators` (11, `ChannelStrip.h`) | per-voice panner arrays — OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R, GRAIN L/R |
@@ -277,17 +279,23 @@ clean-rebuild rule below):
 
 Written by `PresetIO::toVar` / read by `PresetIO::applyVar`
 (`Source/Audio/PresetIO.h`); the per-module work is spec-driven
-(`Modules::writeState/readState`). Shape ([FormatVersion](Glossary.md#formatversion) **6**):
+(`Modules::writeState/readState`). Shape ([FormatVersion](Glossary.md#formatversion) **10**;
+the field-by-field contract lives in [`JASS_Preset_Format.md`](JASS_Preset_Format.md)):
 
 ```jsonc
 {
-  "FormatVersion": 6, "Name": "…", "Modified": false,
+  "FormatVersion": 10, "Name": "…", "Modified": false,
   "Filter":  { "Enabled": true, "Type": "Lowpass", "Cutoff": 500.0, "Resonance": 2.5 },
   "Osc1":    { "Enabled": true, "Wave": "Sawtooth", "Freq": 261.63, … },   // numbered objects, not arrays
   "Lfo1":    { … }, … "Lfo4": { … },
-  "ModMatrix": { "On": true, "Slot1Source": "LFO 1", "Slot1Module": "FILTER",
-                 "Slot1Param": 0.0, "Slot1Amount": 0.5, … },               // flattened numbered keys
+  "ModMatrix": { "On": true,
+                 "Slots": [ { "Source": "LFO 1", "Module": "FILTER", "Param": 0,
+                              "ParamName": "CUTOFF", "Amount": 0.5, "Quant": "Off" }, … ] },
+                                                   // v9+: array of slot objects, Off slots omitted,
+                                                   // ParamName is for the reader (ignored on load)
   "Sampler": { "Enabled": false, …, "File": "CH_01" },                     // File injected by PresetIO (by NAME)
+  "StepSeq": { …, "Steps": [ { "Step": 1, … }, … ] },                     // v10: only the used steps
+  "Grain":   { "Enabled": false, …, "Quant": "Off", "Key": false },
   "RackLayout": { … }                                                      // only when non-default
 }
 ```
