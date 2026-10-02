@@ -211,6 +211,54 @@ namespace PresetIO
         return dir;
     }
 
+    // %AppData%\Roaming\JASS\Settings.json — small UI preferences that belong to the INSTALLATION,
+    // not to any preset: today only the folder each file chooser last visited. Flat string map;
+    // a missing file or key reads as empty. Kept separate from PresetBanks.json so neither file
+    // has to learn the other's shape.
+    inline juce::File settingsFile()
+    {
+        return jassFolder().getChildFile("Settings.json");
+    }
+
+    inline juce::String getSetting(const juce::String& key)
+    {
+        if (! settingsFile().existsAsFile()) return {};
+        auto v = juce::JSON::parse(settingsFile().loadFileAsString());
+        if (auto* obj = v.getDynamicObject())
+            return obj->getProperty(key).toString();
+        return {};
+    }
+
+    inline void setSetting(const juce::String& key, const juce::String& value)
+    {
+        juce::var v;
+        if (settingsFile().existsAsFile())
+            v = juce::JSON::parse(settingsFile().loadFileAsString());
+        if (v.getDynamicObject() == nullptr)
+            v = juce::var(new juce::DynamicObject());
+        v.getDynamicObject()->setProperty(key, value);
+        settingsFile().replaceWithText(juce::JSON::toString(v, false));
+    }
+
+    // The folder a file chooser opens in: where the SAME chooser (by key) last picked something,
+    // or `fallback` on the first run / when that folder has gone. The dialogs used to open in the
+    // AppData folder every time, so loading three files from D:\Samples meant navigating there
+    // three times (maintainer 2026-10-02). JUCE passes an explicit start folder straight to the
+    // native dialog, which then ignores Windows' own recent-folder memory — hence our own.
+    inline juce::File lastChooserFolder(const juce::String& key, const juce::File& fallback)
+    {
+        if (key.isNotEmpty())
+            if (auto dir = juce::File(getSetting("chooser." + key)); dir.isDirectory())
+                return dir;
+        return fallback;
+    }
+
+    inline void rememberChooserFolder(const juce::String& key, const juce::File& dir)
+    {
+        if (key.isNotEmpty() && dir.isDirectory())
+            setSetting("chooser." + key, dir.getFullPathName());
+    }
+
     // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav + *.sfz)
     // into %AppData%\JASS\Samples. Same idempotent pattern as seedWavetables below.
     // "<Folder>__<File>" names (Story 12.2 example sets) seed into a SUBFOLDER — binary-data

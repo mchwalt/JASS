@@ -700,24 +700,30 @@ namespace rack
                 auto startDir  = fa->startFolder;
                 auto wildcard  = fa->wildcard;
                 auto pickDir   = fa->pickDirectory;
-                btn->onClick = [this, cb, refreshes, startDir, wildcard, pickDir]
+                auto memKey    = fa->rememberKey;
+                btn->onClick = [this, cb, refreshes, startDir, wildcard, pickDir, memKey]
                 {
                     if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
+                    // Reopen where this chooser last picked; `startDir` is only the first-run default.
                     fileChooser = std::make_unique<juce::FileChooser> (pickDir ? "Select a folder" : "Select a file",
-                                                                       startDir, wildcard);
+                                                                       PresetIO::lastChooserFolder (memKey, startDir),
+                                                                       wildcard);
                     juce::Component::SafePointer<ModuleFrame> self (this);
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode
                             | (pickDir ? juce::FileBrowserComponent::canSelectDirectories
                                        : juce::FileBrowserComponent::canSelectFiles),
-                        [self, cb, refreshes, pickDir] (const juce::FileChooser& fc)
+                        [self, cb, refreshes, pickDir, memKey] (const juce::FileChooser& fc)
                         {
                             if (self == nullptr) return;   // frame destroyed while the dialog was open
                             auto f = fc.getResult();
                             if (cb && (pickDir ? f.isDirectory() : f.existsAsFile()))
                             {
+                                // Remember the PARENT in both cases: for a file that is its folder,
+                                // for a picked set folder it is the place the sibling sets live.
+                                PresetIO::rememberChooserFolder (memKey, f.getParentDirectory());
                                 cb (f);
                                 for (const auto& id : refreshes) self->refreshCombo (id);   // re-list bank combo
                             }

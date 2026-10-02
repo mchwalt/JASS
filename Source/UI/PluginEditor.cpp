@@ -2138,7 +2138,8 @@ void SynthyEditor::buildRack()
                                   pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
                       },
                       { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
-                      PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
+                      PresetIO::wavetablesFolder(), "*.wav",   // first run: the shipped examples folder
+                      /*pickDirectory*/ false, "wavetable" },  // then: wherever LOAD WAV last picked
           Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq),
           Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
           Kmod(P::wavetableFeedback, "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, AMP, PAN)
@@ -2282,12 +2283,13 @@ void SynthyEditor::buildRack()
             setCombo,
             FileAction{ "LOAD", importSource,
                         { juce::String(P::samplerSet) },   // refresh the SET combo after load
-                        PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz" },
+                        PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz",
+                        /*pickDirectory*/ false, "sampler" },   // reopens where LOAD/FOLDER last picked
             // 12.2: import a whole folder as ONE multisample set (mapping derived from filenames
             // "Name_C3.wav" — or from an .sfz found inside the folder).
             FileAction{ "FOLDER", importSource,
                         { juce::String(P::samplerSet) },
-                        PresetIO::samplesFolder(), "*", /*pickDirectory*/ true },
+                        PresetIO::samplesFolder(), "*", /*pickDirectory*/ true, "sampler" },
             Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
             // 12.3: pitch/time decoupling — grouped right beside MODE (both choose the playback
             // regime); renders caption-above like the knobs (review feedback 2026-08-04).

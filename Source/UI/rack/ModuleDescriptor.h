@@ -222,6 +222,9 @@ namespace rack
         juce::String wildcard = "*";              // file filter (e.g. "*.wav")
         bool pickDirectory = false;               // true => choose a FOLDER instead of a file
                                                   // (SAMPLER multisample import, Story 12.2)
+        juce::String rememberKey;                 // non-empty => the chooser reopens where this key
+                                                  // last picked (persisted in Settings.json); the
+                                                  // SAMPLER's LOAD and FOLDER share one key
     };
 
     struct Caption   // static text (AD-4 "Label"); named Caption to avoid clashing with juce::Label

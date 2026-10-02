@@ -64,6 +64,14 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   presets load.
 
 ### Fixed
+- **The SAMPLER's LOAD / FOLDER and WAVETABLE's LOAD WAV dialogs reopen where they last picked.**
+  Every one of them opened in its AppData folder every time, so loading three files from a sample
+  library meant navigating there three times. The cause: JUCE hands an explicit start folder to the
+  native dialog, which then ignores Windows' own recent-folder memory. Each chooser now remembers
+  the folder of its last pick (the SAMPLER's two buttons share one memory, they browse the same
+  material) in a new `Settings.json` beside the preset banks; the AppData folder is only the
+  first-run default, and a folder that has since vanished falls back to it. Preset dialogs are
+  unchanged — they belong in the Presets folder on purpose.
 - **Sampler PAN as a matrix target only worked while another PAN target was active.** The
   auto-pan predicate in the voice never listed `SamplerPan` (since 12.1); a routing to SAMPLER PAN
   alone changed nothing. Found while adding GRAIN's pan to the same line.
