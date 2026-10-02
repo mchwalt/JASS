@@ -23,7 +23,7 @@ JASS stores patches as **JSON** files with the extension `.jass`. The format is
 | Named presets | `%AppData%\Roaming\JASS\Presets\*.jass` |
 | **Live state** | `%AppData%\Roaming\JASS\LiveState.jass` |
 | Loaded WAV wavetables | `%AppData%\Roaming\JASS\Wavetables\*.wav` |
-| Default rack layout | `%AppData%\Roaming\JASS\RackLayout.json` — one `{id, zone, pos, vis, alignR}` per module, the same shape as a preset's `RackLayout` field; what "Reset layout" and the zone ↺ restore. Seeded on first run, rewritten by "Save as default", hand-editable. |
+| Default rack layout | `%AppData%\Roaming\JASS\RackLayout.json` — grouped by zone, `{"GENERATORS": [{id, vis, alignR}, …], …}` in rack order, one module per line; the list order is the position. The same shape as a preset's `RackLayout` field (the flat `{id, zone, pos, vis, alignR}` list from before 2026-10-03 still loads); what "Reset layout" and the zone ↺ restore. Seeded on first run, rewritten by "Save as default", hand-editable. |
 | F-key bank | `%AppData%\Roaming\JASS\PresetBanks.json` — twelve preset names |
 | UI settings | `%AppData%\Roaming\JASS\Settings.json` — flat string map (e.g. the last folder per file chooser) |
 
@@ -63,7 +63,7 @@ nested format on load.
   //   ADSR, PitchEnv, Glide, Arp, Delay, Chorus, Reverb, Karplus, CrossMod, etc.
 
   // Optional. Only present when the rack layout differs from the factory default.
-  "RackLayout": { /* nested, human-readable module positions/visibility */ }
+  "RackLayout": { "GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ], … }   // by zone, in rack order
 }
 ```
 

@@ -10,6 +10,25 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.1] – 2026-10-03
+
+### Changed
+- **`RackLayout.json` is grouped by zone, one module per line.** The file now reads
+  `"GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ]`, zone by zone in rack
+  order, with every zone present; a module's position is its place in the zone's list, so
+  moving a line moves the module, and cutting a line from one zone and pasting it into another
+  moves it there. Why: the flat list — thirty-eight records of five lines each, with the zone
+  and a position number repeated in every one — was hard to read, let alone edit (maintainer
+  2026-10-03: "sehr unübersichtlich"). A preset's `RackLayout` field has the same shape. The old
+  flat `{id, zone, pos, vis, alignR}` list still loads, from presets and from the file; a file in
+  the old shape is rewritten grouped on the next start.
+
+### Fixed
+- **STEP SEQ help no longer says it "replaces" the ARPEGGIATOR.** It does not make the arpeggiator
+  obsolete; the two take the same place as the note source, so only one can run and switching
+  one on switches the other off. The sentence now says that (maintainer 2026-10-03: "das
+  verstehe ich nicht").
+
 ## [2026.10.0] – 2026-10-02
 
 ### Added
