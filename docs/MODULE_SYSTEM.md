@@ -95,7 +95,7 @@ Notes:
 | `type` | `Generator` / `Modulator` / `Processor` — identity/colour tag only. |
 | `zone` | Default rack zone. |
 | `size` | Grid footprint (`SizeClass`). |
-| `defaultVisible` | Factory visibility (e.g. LFO 4 and COMPRESSOR ship hidden). |
+| `defaultVisible` | Factory visibility — only the SEED for `%AppData%\JASS\RackLayout.json`, written on first run; from then on that file is the default layout (2026-10-03). The seed is the Init set: only the modules the header RESET switches on (OSC 1–3, ENVELOPE, the displays, MASTER BUS, KEYBOARD) ship visible. |
 | `alignRight` | Pack right within the zone row (MASTER BUS modules). |
 | `params` | The `ParamSpec` list. |
 | `enabledWhen` / `onReset` / `extraBody` | Hooks for derived enable state, extra reset work, and appended body elements. **Currently unused by every spec** — modules needing them are hand-built in the editor instead, because a static spec cannot capture `apvts`/`processor`. |
@@ -108,12 +108,14 @@ display-transform pair). `extraBody` is appended last.
 
 ## 4. Registry (`ModuleRegistry`, `AllModules.h`)
 
-- `Modules::all()` (`AllModules.h`) returns the ordered list of **34 module
-  specs** (~190 APVTS parameters), built fresh on each call:
+- `Modules::all()` (`AllModules.h`) returns the ordered list of **38 module
+  specs** (several thousand APVTS parameters — the STEP SEQ and PERC step
+  arrays dominate), built fresh on each call:
   17 simple modules (filter … pitchEnv), `osc(1..3)`, `crossmod`,
   `lfo(1..4)`, `modMatrix`, `string`, `wavetable`, `adsr`, the three displays,
-  `presetBank`, `sampler` — the last two *appended* after everything else
-  because `all()` order is the APVTS order.
+  then `presetBank`, `sampler`, `stepSeq`, `perc`, `chaos`, `grain` — every
+  later module *appended* after everything else because `all()` order is the
+  APVTS order (append-only keeps old presets valid).
 - `ModuleRegistry.h` declares the three audio-safe entry points
   (`appendAllParameters`, `writeState`, `readState`); `ModuleRegistry.cpp` is
   the **single TU** that includes `AllModules.h` (and thereby the UI headers).
@@ -258,10 +260,10 @@ clean-rebuild rule below):
 
 | Constant | Couples to |
 |---|---|
-| `ModDest::kMaxParams` (6) | `Param params[kMaxParams]` **and** the MOD MATRIX `PARAM` param range |
+| `ModDest::kMaxParams` (7, `ModMatrixCatalog.h`) | `Param params[kMaxParams]` **and** the MOD MATRIX `PARAM` param range |
 | `kOscRingSlots` (6) | `rack::LiveModFeed::osc[3][6]` and `ModDest::oscParamSlot` numbering (FREQ=0, AMP=1, DETUNE=2, FB=3, VOICES=4, PAN=5) |
 | `ModTargets::kCount` | `LiveModFeed::byTarget`, `ModMatrixConfig::kNumTargets`, `gMod[]`, per-voice offset arrays |
-| `kNumPanGenerators` (9, `ChannelStrip.h`) | per-voice panner arrays |
+| `kNumPanGenerators` (11, `ChannelStrip.h`) | per-voice panner arrays — OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R, GRAIN L/R |
 
 > ⚠️ **[Clean-rebuild](Glossary.md#clean-rebuild) rule ([ODR](Glossary.md#odr) trap).**
 > These constants size structs that voices embed **by value** in headers.
@@ -269,7 +271,7 @@ clean-rebuild rule below):
 > [TUs](Glossary.md#tu) with old and new layouts →
 > heap corruption / `0xC0000005` at startup. After changing any header-struct
 > size: build with **`/t:Rebuild`**. (Bitten repeatedly: `ModSlot` growth,
-> `kNumPanGenerators` 7→9, stereo `WaveformCapture`.)
+> `kNumPanGenerators` 7→9 and 9→11 (GRAIN), stereo `WaveformCapture`.)
 
 ---
 
@@ -277,17 +279,23 @@ clean-rebuild rule below):
 
 Written by `PresetIO::toVar` / read by `PresetIO::applyVar`
 (`Source/Audio/PresetIO.h`); the per-module work is spec-driven
-(`Modules::writeState/readState`). Shape ([FormatVersion](Glossary.md#formatversion) **6**):
+(`Modules::writeState/readState`). Shape ([FormatVersion](Glossary.md#formatversion) **10**;
+the field-by-field contract lives in [`JASS_Preset_Format.md`](JASS_Preset_Format.md)):
 
 ```jsonc
 {
-  "FormatVersion": 6, "Name": "…", "Modified": false,
+  "FormatVersion": 10, "Name": "…", "Modified": false,
   "Filter":  { "Enabled": true, "Type": "Lowpass", "Cutoff": 500.0, "Resonance": 2.5 },
   "Osc1":    { "Enabled": true, "Wave": "Sawtooth", "Freq": 261.63, … },   // numbered objects, not arrays
   "Lfo1":    { … }, … "Lfo4": { … },
-  "ModMatrix": { "On": true, "Slot1Source": "LFO 1", "Slot1Module": "FILTER",
-                 "Slot1Param": 0.0, "Slot1Amount": 0.5, … },               // flattened numbered keys
+  "ModMatrix": { "On": true,
+                 "Slots": [ { "Source": "LFO 1", "Module": "FILTER", "Param": 0,
+                              "ParamName": "CUTOFF", "Amount": 0.5, "Quant": "Off" }, … ] },
+                                                   // v9+: array of slot objects, Off slots omitted,
+                                                   // ParamName is for the reader (ignored on load)
   "Sampler": { "Enabled": false, …, "File": "CH_01" },                     // File injected by PresetIO (by NAME)
+  "StepSeq": { …, "Steps": [ { "Step": 1, … }, … ] },                     // v10: only the used steps
+  "Grain":   { "Enabled": false, …, "Quant": "Off", "Key": false },
   "RackLayout": { … }                                                      // only when non-default
 }
 ```
@@ -369,8 +377,10 @@ Rules:
 6. Help texts `Resources/EN/<id>.md` + `Resources/DE/<id>.md` (CMake
    re-globs; build the help targets with `/t:Rebuild /nodeReuse:false`).
 7. Matrix exposure, PAN slot, zone placement as needed (see §7 and
-   ARCHITECTURE.md §8). Consider `defaultVisible = false` for large modules —
-   a big new module can trigger the global auto-fit downscale.
+   ARCHITECTURE.md §8). A new module ships `defaultVisible = false` unless the
+   Init patch switches it on — the stock rack is the Init set (2026-10-03). An
+   existing `RackLayout.json` does not know the new module, so it keeps this
+   descriptor default there until the player saves a new default.
 8. `CHANGELOG.md`.
 
 ### 10.3 Checklists for the other seams

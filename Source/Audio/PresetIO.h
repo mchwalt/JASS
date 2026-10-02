@@ -141,10 +141,12 @@ namespace PresetIO
         slots[5] = "Kopfkino";          // Kunstkopf/ROOM showcase (Story 10.4): plucks circling the head
         slots[6] = "Sampler Demo";      // SAMPLER showcase (Story 12.1, user-authored)
         slots[7] = "GrandPiano";        // the plain instrument: SplendidPiano set, nothing else on
-        // F9 and F10 are deliberately EMPTY. They held `DAF Bass` and `Drum Pattern`, the two
+        slots[8] = "Grain Cloud";       // 17.1: GRAIN on the EPiano set, CHAOS X → POS, LFO → PITCH centre, QUANT Major
+        // F10 is deliberately EMPTY. F9 and F10 held `DAF Bass` and `Drum Pattern`, the two
         // presets that introduced the STEP SEQ — both retired 2026-08-11: `DAF Beat` plays the same
         // bass figure with PERC underneath it, which is the better demonstration of either, and a
-        // drum map driven through the STEP SEQ was the workaround PERC replaced.
+        // drum map driven through the STEP SEQ was the workaround PERC replaced. F9 was taken by
+        // `Grain Cloud` on 2026-09-21.
         slots[10] = "DAF Beat";         // 16.1: the bass figure with PERC underneath it
         slots[11] = "Los Ninos";        // Liaisons Dangereuses: 24-step polymetric bass over 4/4 PERC
         return slots;
@@ -207,6 +209,76 @@ namespace PresetIO
         auto dir = jassFolder().getChildFile("Samples");
         dir.createDirectory();
         return dir;
+    }
+
+    // %AppData%\Roaming\JASS\Settings.json — small UI preferences that belong to the INSTALLATION,
+    // not to any preset: today only the folder each file chooser last visited. Flat string map;
+    // a missing file or key reads as empty. Kept separate from PresetBanks.json so neither file
+    // has to learn the other's shape.
+    inline juce::File settingsFile()
+    {
+        return jassFolder().getChildFile("Settings.json");
+    }
+
+    inline juce::String getSetting(const juce::String& key)
+    {
+        if (! settingsFile().existsAsFile()) return {};
+        auto v = juce::JSON::parse(settingsFile().loadFileAsString());
+        if (auto* obj = v.getDynamicObject())
+            return obj->getProperty(key).toString();
+        return {};
+    }
+
+    inline void setSetting(const juce::String& key, const juce::String& value)
+    {
+        juce::var v;
+        if (settingsFile().existsAsFile())
+            v = juce::JSON::parse(settingsFile().loadFileAsString());
+        if (v.getDynamicObject() == nullptr)
+            v = juce::var(new juce::DynamicObject());
+        v.getDynamicObject()->setProperty(key, value);
+        settingsFile().replaceWithText(juce::JSON::toString(v, false));
+    }
+
+    // %AppData%\Roaming\JASS\RackLayout.json — the player's DEFAULT rack: one entry per module
+    // {id, zone, pos, vis, alignR}, the same shape a preset's "RackLayout" field has. "Reset
+    // layout" and the zone ↺ restore THIS; a preset's own layout overrides it while that preset
+    // is loaded. Seeded on first run from the descriptor defaults, then edited by hand or via
+    // "Save as default" in the MODULES panel — which modules the stock rack shows must never
+    // need a compiler (maintainer 2026-10-03). Missing file ⇒ empty var (caller seeds it).
+    inline juce::File rackLayoutFile()
+    {
+        return jassFolder().getChildFile("RackLayout.json");
+    }
+
+    inline juce::var loadRackLayout()
+    {
+        if (! rackLayoutFile().existsAsFile()) return {};
+        return juce::JSON::parse(rackLayoutFile().loadFileAsString());
+    }
+
+    inline void saveRackLayout(const juce::var& entries)
+    {
+        rackLayoutFile().replaceWithText(juce::JSON::toString(entries, false));   // pretty, hand-editable
+    }
+
+    // The folder a file chooser opens in: where the SAME chooser (by key) last picked something,
+    // or `fallback` on the first run / when that folder has gone. The dialogs used to open in the
+    // AppData folder every time, so loading three files from D:\Samples meant navigating there
+    // three times (maintainer 2026-10-02). JUCE passes an explicit start folder straight to the
+    // native dialog, which then ignores Windows' own recent-folder memory — hence our own.
+    inline juce::File lastChooserFolder(const juce::String& key, const juce::File& fallback)
+    {
+        if (key.isNotEmpty())
+            if (auto dir = juce::File(getSetting("chooser." + key)); dir.isDirectory())
+                return dir;
+        return fallback;
+    }
+
+    inline void rememberChooserFolder(const juce::String& key, const juce::File& dir)
+    {
+        if (key.isNotEmpty() && dir.isDirectory())
+            setSetting("chooser." + key, dir.getFullPathName());
     }
 
     // First-run seeding of the shipped SAMPLER examples (embedded from Samples/*.wav + *.sfz)

@@ -27,7 +27,7 @@ namespace Modules
         // is an empty drawer, and the point of the layer-B framing is that PERC is not a new
         // category but a second instance of something the rack already has (decision 2026-08-10).
         m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W24U7;   // 16.2: 48-step grid plus one knob row at W24 — approved by eye ("das sah gut aus", 2026-08-31)
-        m.defaultVisible = true;    // maintainer 2026-08-11; see the same note in StepSeqSpecs.h —
+        m.defaultVisible = false;   // 2026-10-03: hidden until switched on (stock rack = Init set). Was visible from 2026-08-11; see the same note in StepSeqSpecs.h —
                                     // a factory-visible module is always in the worst-case height
 
         m.params.push_back ({ "percOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });

@@ -10,6 +10,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "filter"; m.title = "FILTER"; m.persistObject = "Filter"; m.enableParamId = "filterOn";
+        m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Processor;
         m.zone = rack::Zone::Processing;
         m.size = rack::SizeClass::W4H1;

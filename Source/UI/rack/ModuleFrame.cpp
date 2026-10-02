@@ -284,7 +284,8 @@ namespace rack
             readoutLabel = std::make_unique<juce::Label>();
             readoutLabel->setJustificationType (juce::Justification::centred);
             readoutLabel->setInterceptsMouseClicks (false, false);
-            readoutLabel->setTooltip ("Playing step / LEN");
+            readoutLabel->setTooltip (desc.headerReadoutTooltip);
+            readoutLabel->setMinimumHorizontalScale (0.8f);   // squeeze a long set name before clipping it
             addAndMakeVisible (*readoutLabel);
         }
 
@@ -699,24 +700,30 @@ namespace rack
                 auto startDir  = fa->startFolder;
                 auto wildcard  = fa->wildcard;
                 auto pickDir   = fa->pickDirectory;
-                btn->onClick = [this, cb, refreshes, startDir, wildcard, pickDir]
+                auto memKey    = fa->rememberKey;
+                btn->onClick = [this, cb, refreshes, startDir, wildcard, pickDir, memKey]
                 {
                     if (fileChooserActive)   // a dialog is already open — ignore re-entrant clicks
                         return;              // (prevents destroying the in-flight chooser mid-callback)
                     fileChooserActive = true;
+                    // Reopen where this chooser last picked; `startDir` is only the first-run default.
                     fileChooser = std::make_unique<juce::FileChooser> (pickDir ? "Select a folder" : "Select a file",
-                                                                       startDir, wildcard);
+                                                                       PresetIO::lastChooserFolder (memKey, startDir),
+                                                                       wildcard);
                     juce::Component::SafePointer<ModuleFrame> self (this);
                     fileChooser->launchAsync (
                         juce::FileBrowserComponent::openMode
                             | (pickDir ? juce::FileBrowserComponent::canSelectDirectories
                                        : juce::FileBrowserComponent::canSelectFiles),
-                        [self, cb, refreshes, pickDir] (const juce::FileChooser& fc)
+                        [self, cb, refreshes, pickDir, memKey] (const juce::FileChooser& fc)
                         {
                             if (self == nullptr) return;   // frame destroyed while the dialog was open
                             auto f = fc.getResult();
                             if (cb && (pickDir ? f.isDirectory() : f.existsAsFile()))
                             {
+                                // Remember the PARENT in both cases: for a file that is its folder,
+                                // for a picked set folder it is the place the sibling sets live.
+                                PresetIO::rememberChooserFolder (memKey, f.getParentDirectory());
                                 cb (f);
                                 for (const auto& id : refreshes) self->refreshCombo (id);   // re-list bank combo
                             }
@@ -947,8 +954,8 @@ namespace rack
         // Step pages (16.3), left of the header actions: … < 2/4 > FOLLOW [LOAD MIDI] …
         if (followBtn != nullptr)
             followBtn->setBounds (header.removeFromRight (62).reduced (2, 1));
-        if (readoutLabel != nullptr)   // "137/384" right of the pager: 56 px fits "704/704"
-            readoutLabel->setBounds (header.removeFromRight (56).reduced (0, 1));
+        if (readoutLabel != nullptr)   // "137/384" right of the pager: 56 px fits "704/704"; GRAIN asks for 120
+            readoutLabel->setBounds (header.removeFromRight (desc.headerReadoutWidth).reduced (0, 1));
         if (pageNextBtn != nullptr)
             pageNextBtn->setBounds (header.removeFromRight (24).reduced (2, 1));
         if (pageLabel != nullptr)   // 72: "16/16 •12" (16 pages since 2026-09-02) needs the room

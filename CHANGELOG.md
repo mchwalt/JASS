@@ -6,9 +6,108 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 JASS uses **CalVer** versioning: `YYYY.MM.MICRO` (e.g. `2026.07.0`), where `MICRO`
 increments for additional releases within the same month. This is the app/release
 version and is independent of the preset **`FormatVersion`** (an integer schema
-contract — currently `6`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
+contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
 
 ## [Unreleased]
+
+## [2026.10.0] – 2026-10-02
+
+### Added
+- **GRAIN — granular synthesis on the SAMPLER's material (story 17.1).** A new generator module
+  plays whatever SET the SAMPLER holds as a cloud of short grains: **POS / SPRAY** place the grains
+  in the recording and scatter them, **SIZE** (5–300 ms) and **DENS** (grains per second) shape the
+  cloud, **PITCH** transposes each grain at random and **QUANT** snaps that spread to a scale
+  relative to the played note, so the spray becomes a chord instead of a smear. POS, SIZE, PITCH,
+  AMP and PAN are MOD MATRIX targets; the patch it was built for is CHAOS X → POS, a deterministic
+  wander through a recording. The SAMPLER may stay off — its SET is the material, one loader for
+  both. Hidden by default (the rack is full); old presets load bit-identical. It is a texture
+  generator, not a pitch-shifter: story 12.3 measured granular repitching at negative SNR and gave
+  that job to STRETCH — here the artefacts are the sound. Three contracts that came out of
+  measurement: the cloud runs on through the ADSR release, a full grain pool drops the new grain
+  rather than cutting an old one (no clicks — DENS simply saturates), and the level is normalised
+  to stay within ±3 dB over the whole DENS × SIZE range. Ships as the `Grain Cloud` preset on F9.
+- **GRAIN · KEY — pitch-synchronous mode (story 17.2).** With KEY on, one grain fires per period of
+  the played note, so the repetition rate *is* the pitch (FOF / VOSIM) and the grain content is no
+  longer transposed — the sample's own formants stay where they are: a vocal, a bowed string, a
+  bell played chromatically with its timbre intact. DENS is ignored (greyed); SIZE sets the
+  formant width and is capped at two periods of the note, where the measured level stays flat
+  across the keyboard. PITCH and QUANT shift the formant, not the pitch. Off by default; 17.1
+  presets unchanged. GRAIN's header names the SET it plays — the module has no set selector of
+  its own, and the first question at the instrument was "which sample is this?".
+- **SAMPLER loads MP3.** JUCE 9.0.2 enables its MP3 decoder, so LOAD, FOLDER sets and `.sfz`
+  regions accept `.mp3` next to WAV / AIFF / FLAC — a drum kit cut from a recording goes straight
+  in instead of through a converter first. Two limits of the format: encoder padding at the start
+  means a loop point is not seamless the way a PCM loop is, and a variable-bitrate file without a
+  length header may end in a short silent tail. Use MP3 for one-shots, pads and GRAIN material;
+  keep loops on WAV, AIFF or FLAC.
+
+### Changed
+- **Loading a preset shows exactly the patch.** Modules the preset leaves switched off are hidden
+  on load; MASTER BUS, the KEYBOARD and the displays stay as they are, and the header's MODULES
+  menu brings any module back. The rack already had one half of this rule — a module a preset
+  left *on* is revealed, a hidden module is forced silent — and the missing half left every
+  preset reading as twenty modules of which fourteen were off (maintainer's call, 2026-10-02).
+  Start-up is untouched: the LiveState restores the bench as you left it. A stored layout now
+  decides zone, order and alignment; for the patch modules, visibility follows the switch.
+- **RESET in the header is every module's own ↺ pressed at once — and nothing else.** Two kinds
+  of reset used to overlap: the header's RESET set the sound to Init *and* restored the factory
+  rack layout, the zone and MODULES-menu resets restored layouts too. Now the axes are separate.
+  RESET resets content: the Init sound, the STEP SEQ emptied (a bare parameter reset left every
+  step on at the root), WAVETABLE back to its built-ins, the F-key bank back to the demos — the
+  last one now also from the PRESETS module's own ↺. Init now also switches the MOD MATRIX *off*:
+  with every slot empty it does nothing to the sound, and since a module that is on must be
+  visible, an on-but-unused matrix would sit in every Init rack (its parameter default stays on,
+  so presets from before the switch existed keep routing). Which modules stand where is
+  untouched, except that what Init switches on is shown again. The MODULES menu's reset and the zone ↺
+  own the layout, as their help always said.
+- **The default rack is a file, not code: `%AppData%\JASS\RackLayout.json`.** One line per
+  module — zone, position, visible, right-aligned — the same shape a preset's `RackLayout`
+  field has had since 4.3, now complete and on its own. "Reset layout" and the zone ↺ restore
+  *this*; a preset's own layout overrides it while that preset is loaded. The file is written on
+  first run from the shipped defaults and rewritten by the new **Save as default** button in the
+  MODULES panel, or by hand. Why: wanting NOISE on the stock rack must never mean recompiling
+  JASS (maintainer, 2026-10-03) — until now the only place that knowledge lived was a flag per
+  module in the source. The shipped seed is the Init set: only the modules the header RESET
+  switches on (OSC 1–3, ENVELOPE, the displays, MASTER BUS, KEYBOARD) start visible;
+  the fourteen that used to stand there switched off (NOISE, WAVETABLE, STRING, SAMPLER, STEP SEQ,
+  PERC, LFO 1–3, ARPEGGIATOR, FILTER, DISTORTION, WAVEFOLD, CHORUS, DELAY, REVERB) are one
+  MODULES click or one line in the file away. A module added in a later version is not in an
+  older file and simply keeps its shipped default there.
+- **JUCE 9.0.0 → 9.0.2.** No API JASS uses changed. What it brings here: WAV files with a missing
+  final pad byte load again, malformed audio files are rejected by the library before our own
+  guards, the MP3 decoder above, VST3 hosting fixes.
+
+### Fixed
+- **A module the preset does not know stayed on screen.** Loading a preset applied its stored
+  rack layout on top of whatever was showing, so a module added after that preset was saved kept
+  the previous patch's visibility: once `Grain Cloud` had shown GRAIN, `Sampler Demo` and every
+  other older preset showed it too. A preset's layout now starts from the factory layout, so a
+  module it has no entry for falls back to its default — hidden for GRAIN — exactly as a preset
+  with no layout field at all always did.
+- **The SAMPLER's LOAD / FOLDER and WAVETABLE's LOAD WAV dialogs reopen where they last picked.**
+  They opened in their AppData folder every time — JUCE hands the native dialog an explicit start
+  folder, which overrides Windows' own recent-folder memory — so loading three files from a sample
+  library meant navigating there three times. Each chooser now remembers the folder of its last
+  pick in a new `Settings.json` beside the preset banks; the SAMPLER's two buttons share one
+  memory, and a folder that has since vanished falls back to the AppData default. Preset dialogs
+  are unchanged — they belong in the Presets folder on purpose.
+- **Sampler PAN as a matrix target only worked while another PAN target was active.** The
+  auto-pan predicate in the voice never listed `SamplerPan` (since 12.1); a routing to SAMPLER PAN
+  alone changed nothing. Found while adding GRAIN's pan to the same line.
+- **GRAIN, after the code review of the GRAIN line (2026-09-24).** Six behaviours the review
+  turned up before the release — none audible on the demo preset, all of them on a real patch
+  sooner or later:
+  - Every voice drew the *same* random sequence, so a chord was identical clouds summing
+    coherently (+6 dB, no thickening). Each voice now has its own stream.
+  - Switching GRAIN off cut every sounding grain on one sample. Grains in flight now finish.
+  - The cloud's pitch was frozen at note-on; GLIDE and the STEP SEQ's SLIDE passed it by. Both
+    modes now follow the voice's glided pitch like the oscillators.
+  - KEY was out of tune above MIDI 119 (an 8 kHz cap). The cap now covers the full keyboard.
+  - Turning DENS *up* took effect only after the old period had run out — up to a full second.
+  - With the ENVELOPE module off, note-off ended the cloud on the 10 ms gate as a hard cut. It now
+    stops spawning and lets the sounding grains finish.
+  Also: a MOD MATRIX slot's QUANT now works on a GRAIN → PITCH routing (it snapped FREQ routings
+  only), and the shipped `Grain Cloud` preset carries the KEY field a v10 file is meant to write.
 
 ## [2026.09.1] – 2026-09-21
 

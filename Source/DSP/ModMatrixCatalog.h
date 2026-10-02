@@ -68,6 +68,8 @@ namespace ModDest
         { "STEREO",     "stereoOn",     -1, { { "TIME",   LFOTarget::StereoTime }, { "WIDTH", LFOTarget::StereoWidth } }, 2 },
         // APPENDED (Story 12.1): SAMPLER — per-voice like NOISE/KARPLUS.
         { "SAMPLER",    "samplerOn",    -1, { { "AMP",    LFOTarget::SamplerLevel }, { "PAN", LFOTarget::SamplerPan } }, 2 },   // label AMP (generator standard); param INDEX unchanged, so presets are safe
+        // APPENDED (Story 17.1): GRAIN — per-voice like SAMPLER. PITCH here is the draw's CENTRE.
+        { "GRAIN",      "grainOn",      -1, { { "AMP",    LFOTarget::GrainAmp }, { "PAN", LFOTarget::GrainPan }, { "PITCH", LFOTarget::GrainPitch }, { "POS", LFOTarget::GrainPosition }, { "SIZE", LFOTarget::GrainSize } }, 5 },
     };
 
     inline constexpr int kNumModules = (int) (sizeof (modules) / sizeof (modules[0]));

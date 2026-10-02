@@ -23,6 +23,9 @@ JASS stores patches as **JSON** files with the extension `.jass`. The format is
 | Named presets | `%AppData%\Roaming\JASS\Presets\*.jass` |
 | **Live state** | `%AppData%\Roaming\JASS\LiveState.jass` |
 | Loaded WAV wavetables | `%AppData%\Roaming\JASS\Wavetables\*.wav` |
+| Default rack layout | `%AppData%\Roaming\JASS\RackLayout.json` — one `{id, zone, pos, vis, alignR}` per module, the same shape as a preset's `RackLayout` field; what "Reset layout" and the zone ↺ restore. Seeded on first run, rewritten by "Save as default", hand-editable. |
+| F-key bank | `%AppData%\Roaming\JASS\PresetBanks.json` — twelve preset names |
+| UI settings | `%AppData%\Roaming\JASS\Settings.json` — flat string map (e.g. the last folder per file chooser) |
 
 ### LiveState
 The standalone app **auto‑loads** `LiveState.jass` on startup and **auto‑saves**
@@ -40,7 +43,7 @@ nested format on load.
 
 ```jsonc
 {
-  "FormatVersion": 6,
+  "FormatVersion": 10,
   "Name": "Matrix Demo",
   "Modified": false,        // LiveState only: true = unsaved working state (header shows "Current State")
 

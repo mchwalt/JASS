@@ -46,7 +46,7 @@ info** so nothing is hidden and every control explains itself.
   PWM, Spectral) with example WAVs, position morph, **WAV import**, own unison
 - **Noise** — white / pink / brown / blue
 - **Karplus-Strong** — plucked string, played from the keyboard
-- **SAMPLER** — play your own recordings (WAV/AIFF/FLAC, ≤60 s) as a sound source
+- **SAMPLER** — play your own recordings (WAV/AIFF/FLAC/MP3, ≤60 s) as a sound source
   through the whole chain: ROOT-key tape-style transposition, START/END, One-Shot /
   Loop (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED
   (0.25×–4×), stereo files rendered as two placed sub-sources. **Multisampling**:
@@ -63,6 +63,14 @@ info** so nothing is hidden and every control explains itself.
     Sets load in the background, so a library of this size no longer delays
     the start of the app — a patch's own instrument is fetched first and
     selected as soon as it is ready.
+- **GRAIN** — granular synthesis on the SAMPLER's set: a cloud of short grains
+  with POS/SPRAY (where in the recording), SIZE (5–300 ms), DENS (grains per
+  second) and a per-grain PITCH spread that **QUANT** snaps to a scale relative to
+  the played note. Position, size, pitch centre, amp and pan are matrix targets —
+  CHAOS X → POS wanders through a recording. **KEY** turns the same engine into a
+  formant synth: one grain per period of the played note, so the repetition rate
+  is the pitch and the sample's own timbre stays put. A texture generator, not a
+  pitch-shifter (that is SAMPLER + STRETCH).
 
 **Input devices**
 - **On-screen keyboard** — playable with mouse & computer keys

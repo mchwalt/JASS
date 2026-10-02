@@ -20,6 +20,7 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     karplus.setSampleRate(sampleRate);
     wavetable.setSampleRate(sampleRate);
     sampler.setSampleRate(sampleRate);   // Story 12.1
+    grain.setSampleRate(sampleRate);     // Story 17.1
     // Prepare EVERY channel strip's effects (not just strip 0) so a later Stereo-Pan channel is ready
     // (its delay/reverb buffers preallocated) — no allocation ever happens on the audio thread.
     for (auto& s : strips)
@@ -76,6 +77,24 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
     sampler.trigger(transposeRatio, midiNoteNumber,    // Story 12.1: (re)start the recording at the
                     (int) std::lround(velocity * 127.0f));   // note's rate; note picks the zone (12.2),
                                                              // velocity picks the layer (12.5)
+    // GRAIN (Story 17.1) plays the zone the sampler just picked — whether or not the SAMPLER itself
+    // is audible (trigger runs regardless of samplerOn). Raw channel pointers are safe to keep: the
+    // store never frees. Pitch factor = the sampler's tape transposition, so PITCH 0 is the same note.
+    // The note-independent part (zone root + tune) is kept; the note's ratio is applied per sample
+    // in renderNextBlock from the glided ratio, so GLIDE and the STEP SEQ's SLIDE move the cloud
+    // like they move the oscillators — in both modes (review 2026-09-24: pitch was frozen at note-on,
+    // and KEY took A440 while the cloud took the sampler's factor).
+    if (const auto* z = sampler.currentZone(); z != nullptr)
+    {
+        grain.setMaterial(z->getData(0), z->isStereo() ? z->getData(1) : nullptr,
+                          z->getLength(), z->fileSampleRate);
+        grainZoneFactor = sampler.pitchFactorForZone() / transposeRatio;   // f(C4)/f(zone root) · tune
+        grain.setPitchFactor(grainZoneFactor * transposeRatio);
+        grain.setNoteHz(transposeRatio * kC4Hz);   // 17.2 KEY: rate = note
+        grain.trigger();
+    }
+    else
+        grain.setMaterial(nullptr, nullptr, 0, 44100.0);   // no set / no zone: the cloud stays silent
     // Choke groups (Story 12.7): if the zone that just started declares off_by=N, every OTHER voice
     // sounding a zone with group=N is faded out — the closed hi-hat silencing the open one. Done
     // HERE, at the sample-accurate note-on hook, rather than per block in the processor: quantising
@@ -119,7 +138,13 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
         // an ADSR-off preset sustain under the tail — the documented trade-off; a sampled
         // instrument is normally the ONLY generator when this matters.
         if (! adsrOn && sampler.isRingingOut())
+        {
             samplerTailHold = true;
+            // 17.1 (review 2026-09-24): nothing shapes the cloud's tail here — without this it kept
+            // spawning at full LEVEL under the sampler's fade and ended on the 10 ms gate as a hard
+            // cut. Stop starting grains; the sounding ones finish their windows.
+            grain.stopScheduling();
+        }
         else
             bypassGate.setTargetValue(0.0f);   // fast fade-out (ADSR-bypass path); frees the voice in ~10 ms
     }
@@ -127,6 +152,7 @@ void SynthVoice::stopNote(float /*velocity*/, bool allowTailOff)
     {
         envelope.reset();
         sampler.reset();   // Story 12.1: hard stop ends the recording too
+        grain.reset();     // Story 17.1: and empties the grain pool
         samplerTailHold = false;
         bypassGate.setCurrentAndTargetValue(0.0f);
         clearCurrentNote();
@@ -182,6 +208,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     // Epic 8.3 — base values for the full per-module target coverage (captured once, modulated around).
     const double baseWtAmp        = wavetable.getAmplitude();
     const double baseSamplerLevel = sampler.getLevel();   // Story 12.1
+    const double baseGrainPos     = grain.getPosition();  // Story 17.1: the three dimensions + amp
+    const double baseGrainSize    = grain.getSizeMs();
+    const double baseGrainLevel   = grain.getLevel();
+    grain.setPitchCenter(0.0);   // centre is matrix-only: zero unless a routing moves it below
     const double baseWtVoices     = (double) wavetable.getUnisonCount();
     const double baseWtDetune     = wavetable.getDetuneAmount();
     // Feedback-FM completion: self-FM depth on WAVETABLE/SUB (same 0.5 scale as OscFeedback).
@@ -311,7 +341,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     const bool panMod = (nCh > 1) && (anyOscPan
                         || tActive[(size_t) LFOTarget::OscPan]      || tActive[(size_t) LFOTarget::SubPan]
                         || tActive[(size_t) LFOTarget::NoisePan]    || tActive[(size_t) LFOTarget::KarplusPan]
-                        || tActive[(size_t) LFOTarget::WavetablePan]);
+                        || tActive[(size_t) LFOTarget::WavetablePan]
+                        || tActive[(size_t) LFOTarget::SamplerPan]  || tActive[(size_t) LFOTarget::GrainPan]);
+                        // SamplerPan was missing here since 12.1 — its branch below only ran when
+                        // ANOTHER pan target was active. Fixed alongside GrainPan (17.1).
     float curGains[kNumPanGenerators][kMaxOutChannels];
     for (int g = 0; g < kNumPanGenerators; ++g)
         for (int c = 0; c < kMaxOutChannels; ++c) curGains[g][c] = panGains[g][c];
@@ -381,6 +414,9 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // when glide is off). Oscillator frequencies are (re)applied every sample so both
         // the glide and the frequency modulation take effect.
         const double ratio = glideRatio.getNextValue();
+        // GRAIN follows the same glided ratio (both modes; a new grain reads it at spawn time).
+        grain.setPitchFactor(grainZoneFactor * ratio);
+        grain.setNoteHz(ratio * kC4Hz);
 
         // Modulation sources this sample. lfo.process() advances the shared LFO ONCE (its
         // value feeds both the implicit LFO routing and any slot whose source is LFO 1).
@@ -439,6 +475,17 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             noise.setAmplitude(std::clamp(baseNoiseAmp + modOffset[(size_t) LFOTarget::NoiseLevel] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::SamplerLevel])
             sampler.setLevel(std::clamp(baseSamplerLevel + modOffset[(size_t) LFOTarget::SamplerLevel] * 0.5, 0.0, 1.0));
+        // GRAIN (17.1): a new grain reads these at spawn time; grains in flight keep theirs.
+        // POS additive (±half the zone), SIZE exponential (±2 octaves of length), PITCH centre
+        // ±24 semitones (quantised with the spread inside the engine), AMP additive like the others.
+        if (tActive[(size_t) LFOTarget::GrainPosition])
+            grain.setPosition(std::clamp(baseGrainPos + modOffset[(size_t) LFOTarget::GrainPosition] * 0.5, 0.0, 1.0));
+        if (tActive[(size_t) LFOTarget::GrainSize])
+            grain.setSizeMs(std::clamp(baseGrainSize * std::exp2(modOffset[(size_t) LFOTarget::GrainSize] * 2.0), 5.0, 300.0));
+        if (tActive[(size_t) LFOTarget::GrainPitch])
+            grain.setPitchCenter(modOffset[(size_t) LFOTarget::GrainPitch] * 24.0);
+        if (tActive[(size_t) LFOTarget::GrainAmp])
+            grain.setLevel(std::clamp(baseGrainLevel + modOffset[(size_t) LFOTarget::GrainAmp] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusAmp])
             karplus.setAmplitude(std::clamp(baseKarplusAmp + modOffset[(size_t) LFOTarget::KarplusAmp] * 0.5, 0.0, 1.0));
         if (tActive[(size_t) LFOTarget::KarplusDamping])
@@ -522,6 +569,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                 else if (g == PanWavetable)   p += modOffset[(size_t) LFOTarget::WavetablePan];
                 else if (g == PanSamplerL || g == PanSamplerR)
                                               p += modOffset[(size_t) LFOTarget::SamplerPan];   // both sub-sources move together
+                else if (g == PanGrainL || g == PanGrainR)
+                                              p += modOffset[(size_t) LFOTarget::GrainPan];     // 17.1: same, for the cloud's pair
                 effPan[g] = (float) std::clamp(p, -1.0, 1.0);
                 positionToGains(effPan[g], nCh, curGains[g]);
             }
@@ -592,6 +641,19 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
             else
                 addPanned(sm.l, PanSamplerL);
         }
+        {
+            // GRAIN (17.1): the cloud on the same zone, same stereo rule, its own pan pair.
+            const auto gr = grain.nextSample();
+            if (nCh == 1)
+                addPanned(0.5f * (gr.l + gr.r), PanGrainL);
+            else if (sampler.sourceIsStereo())
+            {
+                addPanned(gr.l, PanGrainL);
+                addPanned(gr.r, PanGrainR);
+            }
+            else
+                addPanned(gr.l, PanGrainL);
+        }
 
         // Global "Alle OSC" amplitude (tremolo) — post-mix, same factor on every channel; and the
         // envelope gain (ADSR advanced once above; reused here, not re-advanced — bypass gate when off).
@@ -639,6 +701,8 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
                                       : (gateG <= 0.0f && ! bypassGate.isSmoothing());
         if (voiceIdle)
         {
+            grain.reset();   // 17.1: the envelope is at zero — drop the pool silently, so a later
+                             // note on this voice does not resume stale grains of the old material
             clearCurrentNote();
             noteOn = false;
             break;
@@ -651,6 +715,10 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
     wavetable.setFrequency(baseWtFreq);
     wavetable.setPosition(basePos);
     sampler.setLevel(baseSamplerLevel);   // Story 12.1
+    grain.setPosition(baseGrainPos);      // Story 17.1
+    grain.setSizeMs(baseGrainSize);
+    grain.setLevel(baseGrainLevel);
+    grain.setPitchCenter(0.0);
     filter.setCutoff(baseCutoff);
     filter.setResonance(baseReso);
     formant.vowel = baseVowel;

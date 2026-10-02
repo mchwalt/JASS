@@ -73,8 +73,35 @@ namespace rack
         // The custom layout persists as ONE string property on apvts.state (`kLayoutStateProp`,
         // JSON of layoutToVar). PresetIO mirrors it into the `.synthy` "RackLayout" field;
         // getStateInformation carries it in the DAW state for free. Default layout ⇒ no property.
-        void resetLayout();               // restore descriptor-default layout (touches NO audio param)
-        void reloadLayoutFromState();     // re-apply the persisted layout from apvts.state (after a load)
+        // Restore the DEFAULT layout — the player's own, from %AppData%\JASS\RackLayout.json
+        // (maintainer 2026-10-03: which modules the stock rack shows must be editable without a
+        // compiler); the descriptor flags only seed that file on first run. Touches NO knob. A
+        // module that is ON stays visible whatever the file says ("on ⇒ visible" is the first
+        // rule) — so to keep a module out of the stock rack, Init must leave it off (MOD MATRIX).
+        void resetLayout();
+
+        // --- The default layout as data (2026-10-03) ----------------------------------
+        // The descriptor defaults captured at build are the SEED. The editor hands in the file's
+        // entries (merged by id over the seed: a module the file does not know keeps its
+        // descriptor default, an id the rack does not know is ignored), and asks for the full
+        // list back to write the seed file. "Save as default" adopts the current rack as the
+        // default and reports it, so the editor can write the file.
+        juce::var defaultLayoutToVar() const;
+        void setDefaultLayout (const juce::var& fileEntries);
+        void adoptCurrentAsDefault();
+        std::function<void(const juce::var&)> onDefaultLayoutChanged;
+
+        // The header's RESET (maintainer's model, 2026-10-03): "RESET = every module's own ↺ at
+        // once", and nothing else — the rack's layout is the MODULES menu's business. Runs each
+        // frame's doReset (hidden ones too, so Init is Init), then reveals what is now switched
+        // on (an Init oscillator a preset had hidden must come back, or Init would be silent) and
+        // re-enforces hidden ⇒ silent. The caller sets the params to default first
+        // (processor.resetToDefault) — this adds the per-module extras on top.
+        void resetAllModules();
+        // re-apply the persisted layout from apvts.state. `presetLoad` = an explicit preset load
+        // (not the start-up LiveState restore): the rack then shows exactly the patch — modules
+        // the preset leaves switched off are hidden (hideUnusedModules).
+        void reloadLayoutFromState (bool presetLoad = false);
 
         // Invariant guard: a HIDDEN module must never be audible. Forces every hidden module's
         // enableParam off. Call after any path that may re-enable params under a stale layout
@@ -244,8 +271,16 @@ namespace rack
         // such modules visible WITHOUT touching their enable. Returns true if anything changed.
         bool revealEnabledModules();
 
+        // The other direction, on an explicit preset load only (maintainer 2026-10-02): a module
+        // the preset leaves switched OFF is hidden, so the rack shows the patch and nothing else.
+        // Exempt: the MASTER BUS and INPUT zones (infrastructure, not patch) and visual-only
+        // displays (whether the scope is up is the player's call, no preset's). Returns true if
+        // anything changed.
+        bool hideUnusedModules();
+
         // --- Layout persistence helpers (Story 4.3) ---
-        juce::var layoutToVar() const;                  // model → JSON var (array of {id,zone,pos,vis})
+        static juce::var entriesToVar (const std::vector<RackLayoutEntry>& entries);   // → array of {id,zone,pos,vis,alignR}
+        juce::var layoutToVar() const;                  // model → JSON var
         void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)
         bool isDefaultLayout() const;                   // model == captured defaults?
         void writeLayoutToState();                      // persist to apvts.state (or clear when default)

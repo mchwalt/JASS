@@ -7,6 +7,7 @@ Jeder Platz ist der gleichnamigen Funktionstaste auf deiner Tastatur zugeordnet.
 - Funktionstaste **F1–F12** kurz **tippen** — das belegte Preset lädt sofort, auch während Noten klingen.
 - Oder auf einen Button **klicken**. Ein leerer Platz macht nichts.
 - Der Name des geladenen Presets erscheint wie gewohnt in der Kopfzeile.
+- Das Rack zeigt, was das Preset nutzt: Module, die es ausgeschaltet lässt, werden ausgeblendet. MASTER BUS, KEYBOARD und die Anzeigen bleiben. **MODULES** in der Kopfzeile holt jedes Modul zurück.
 
 **Belegen / ändern**
 
@@ -24,6 +25,6 @@ Die Belegungen sind eine **globale** Einstellung (in `PresetBanks.json` gespeich
 
 Wurde die Preset-Datei eines Platzes umbenannt oder gelöscht, meldet die Taste das einmal und räumt den Platz. Der **DELETE**-Knopf in der Kopfzeile löscht eine Preset-Datei ganz (in den Papierkorb) und räumt ihre Taste gleich mit.
 
-Ab Werk sind **F1–F4 mit den vier Demo-Presets vorbelegt** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). Der **RESET**-Knopf in der Kopfzeile stellt diese Werksbelegung wieder her.
+Ab Werk sind **F1–F4 mit den vier Demo-Presets vorbelegt** (Matrix Demo, Matrix Demo 2, FX Motion, Helikopter). Das **↺** dieses Moduls stellt die Werksbelegung wieder her — ebenso der **RESET** in der Kopfzeile, der alle Module auf einmal zurücksetzt.
 
 **MIDI wohnt am STEP SEQ.** Diese Dialoge behandeln nur ganze Presets (`.jass`). Um nur die Figur des Sequenzers als MIDI-Datei zu laden oder zu speichern, dienen **LOAD MIDI / SAVE MIDI** in der Titelzeile des STEP-SEQ-Moduls.

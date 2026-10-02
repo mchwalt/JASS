@@ -72,6 +72,13 @@ namespace
             addAndMakeVisible (resetBtn);
             resetBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff334155));
             resetBtn.onClick = [this] { rack.resetLayout(); rebuildRows(); repaint(); };
+            // The current rack becomes the default (RackLayout.json) — what "Reset layout" and
+            // the zone ↺ return to from now on (maintainer 2026-10-03).
+            addAndMakeVisible (saveDefaultBtn);
+            saveDefaultBtn.setColour (juce::TextButton::buttonColourId, juce::Colour (0xff334155));
+            saveDefaultBtn.setTooltip (isDE ? "Aktuelles Rack als Standard speichern (RackLayout.json)"
+                                            : "Save the current rack as the default (RackLayout.json)");
+            saveDefaultBtn.onClick = [this] { rack.adoptCurrentAsDefault(); rebuildRows(); repaint(); };
             setSize (kW, listHeight() + kBudgetH + kBtnH);
 
             // Discoverability toast (localized): drag-to-reorder isn't obvious, so after the
@@ -87,8 +94,9 @@ namespace
 
         void resized() override
         {
-            resetBtn.setBounds (juce::Rectangle<int> (0, listHeight() + kBudgetH, getWidth(), kBtnH)
-                                    .reduced (6, 5));
+            auto row = juce::Rectangle<int> (0, listHeight() + kBudgetH, getWidth(), kBtnH).reduced (6, 5);
+            resetBtn.setBounds (row.removeFromLeft (row.getWidth() / 2).withTrimmedRight (3));
+            saveDefaultBtn.setBounds (row.withTrimmedLeft (3));
         }
 
         int listHeight() const { return juce::jmax (kRowH, (int) rows.size() * kRowH); }
@@ -376,6 +384,7 @@ namespace
         const bool  isDE = false;   // budget-line language (the panel is built per language)
         std::vector<Row> rows;
         juce::TextButton resetBtn { "Reset layout" };
+        juce::TextButton saveDefaultBtn { "Save as default" };
         int dragIndex = -1;
 
         // toast state
@@ -581,9 +590,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
 
     addAndMakeVisible(resetBtn);
     resetBtn.setColour(juce::TextButton::buttonColourId, juce::Colour(0xff475569));
+    // RESET = every module's own ↺ pressed at once (maintainer's model, 2026-10-03): the Init
+    // sound, the STEP SEQ emptied, WAVETABLE back to its built-ins, the F-key bank restored
+    // through the PRESETS module's reset. The rack's layout is NOT part of it — that is the
+    // MODULES menu's reset. Clean snapshot AFTER the module resets, so Init reads as Init.
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
-                                resetPresetBank();                          // restore the demo presets on F1..F4
-                                if (rackBody) rackBody->resetLayout(); };   // factory: sound Init + default layout/visibility
+                                if (rackBody) rackBody->resetAllModules();
+                                processor.markPresetClean(); };
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
     addAndMakeVisible(modulesBtn);
@@ -681,6 +694,16 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         // reproduces the factory enable state instead of silencing the oscillators.
         for (int i = 1; i <= 3; ++i)
             rackBody->setFactoryEnableDefault(Parameters::ID::oscOn(i), 1.0f);
+        rackBody->setFactoryEnableDefault(Parameters::ID::modMatrixOn, 0.0f);   // Init: matrix OFF (param default stays 1 for old presets)
+        // The DEFAULT rack is data: %AppData%\JASS\RackLayout.json (2026-10-03). First run seeds
+        // it from the descriptor defaults so it is there to edit; afterwards the file wins, and
+        // "Save as default" in the MODULES panel rewrites it. Done BEFORE the stored layout is
+        // applied, because that is merged on top of the default.
+        if (auto fileLayout = PresetIO::loadRackLayout(); fileLayout.isArray())
+            rackBody->setDefaultLayout(fileLayout);
+        else
+            PresetIO::saveRackLayout(rackBody->defaultLayoutToVar());
+        rackBody->onDefaultLayoutChanged = [](const juce::var& v) { PresetIO::saveRackLayout(v); };
         rackBody->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
     }
 
@@ -1085,11 +1108,11 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
 
     loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
     setPresetName(f.getFileNameWithoutExtension());
-    if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3);
-                                                       // this can still adjust enable params
-                                                       // (enforceHiddenDisabled forces hidden
-                                                       // modules off — e.g. the now-hidden-by-
-                                                       // default COMPRESSOR).
+    if (rackBody) rackBody->reloadLayoutFromState (/*presetLoad*/ true);
+                                                       // reflect the loaded layout (Story 4.3) and
+                                                       // show exactly the patch: modules the preset
+                                                       // leaves off are hidden, hidden modules are
+                                                       // forced off (enforceHiddenDisabled).
     processor.markPresetClean();   // snapshot the SETTLED state AFTER layout enforcement, so a
                                    // freshly loaded preset reads as clean (not "Current State").
 
@@ -2036,10 +2059,12 @@ void SynthyEditor::buildRack()
 
     auto add = [&](Rack::Zone zone, SizeClass sc, ModuleType type, juce::String title,
                    juce::String enableParam, std::vector<BodyElement> body,
-                   std::function<void()> onReset = {}, bool visualOnly = false)
+                   std::function<void()> onReset = {}, bool visualOnly = false,
+                   bool defaultVisible = true)
     {
         ModuleDescriptor d;
         d.sizeClass = sc; d.type = type; d.visualOnly = visualOnly;
+        d.defaultVisible = defaultVisible;   // false = hidden until switched on (stock rack = Init set)
         // Stable slug from the title (e.g. "OSC 1" -> "osc1") — the RackLayout key for
         // show/hide + drag-drop (AD-10). Derived once here so every module gets one.
         d.id = title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
@@ -2078,8 +2103,10 @@ void SynthyEditor::buildRack()
         panel->setAllAssignments(presetSlots);
         panel->onLoadSlot   = [this](int i) { triggerPresetSlot(i); };
         panel->onAssignSlot = [this](int i) { assignPresetSlot(i); };
+        // The module's ↺ restores the factory F-key bank — the bank is this module's content,
+        // and the header RESET reaches it through the sum of all module resets.
         add(Rack::Zone::MasterBus, SizeClass::W8H1, ModuleType::Processor, "PRESETS",
-            P::presetBankOn, { Display{ panel, 8 } }, [] {});
+            P::presetBankOn, { Display{ panel, 8 } }, [this] { resetPresetBank(); });
     }
 
     addRackModule(makeModuleDescriptor(Modules::compressor()));
@@ -2119,7 +2146,8 @@ void SynthyEditor::buildRack()
           K(P::karplusFreq, "FREQ"),
           K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
           K(P::karplusAmp, "AMP"),   // AMP·PAN grouped last as the output stage (rack-wide convention)
-          Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) });   // Epic 10: stereo placement + auto-pan target
+          Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) },   // Epic 10: stereo placement + auto-pan target
+        {}, /*visualOnly*/ false, /*defaultVisible*/ false);     // hidden until switched on (2026-10-03)
     // BANK: item index == store index == param value, so the combo must bypass the
     // ComboBoxAttachment (indexIsValue). With the attachment, 6 items were spread over the
     // full 0..63 range: "Digital" wrote 13, "Vocal" 38 … and getBank() clamped every one of
@@ -2138,13 +2166,15 @@ void SynthyEditor::buildRack()
                                   pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
                       },
                       { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
-                      PresetIO::wavetablesFolder(), "*.wav" },   // open in the shipped examples folder
+                      PresetIO::wavetablesFolder(), "*.wav",   // first run: the shipped examples folder
+                      /*pickDirectory*/ false, "wavetable" },  // then: wherever LOAD WAV last picked
           Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq),
           Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
           Kmod(P::wavetableFeedback, "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, AMP, PAN)
           Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),   // AMP·PAN grouped last as the output stage (rack-wide convention)
           Kmod(P::wavetablePan, "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
-        [] { WavetableBankStore::instance().resetToBuiltIns(); });   // ↺ drops user-loaded banks → back to the standard list
+        [] { WavetableBankStore::instance().resetToBuiltIns(); },    // ↺ drops user-loaded banks → back to the standard list
+        /*visualOnly*/ false, /*defaultVisible*/ false);             // hidden until switched on (2026-10-03)
     // SAMPLER (Story 12.1) — recordings as a generator: dynamic SET combo over the session's
     // SampleBankStore + LOAD (which COPIES the file into %AppData%\JASS\Samples so presets can
     // re-resolve it by name). Hand-built body like WAVETABLE; default-HIDDEN like COMPRESSOR
@@ -2154,7 +2184,8 @@ void SynthyEditor::buildRack()
         d.sizeClass = SizeClass::W12H1; d.type = ModuleType::Generator;
         d.id = "sampler"; d.title = "SAMPLER";
         d.defaultZone = Rack::Zone::Generators;
-        d.defaultVisible = true;    // visible from the start (user decision) — but disabled until switched on
+        d.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set
+                                    // (maintainer 2026-10-03; visible from the start before)
         d.enableParam = P::samplerOn;
         // SET selects a STORE INDEX: bind by item index (indexIsValue), NOT via ComboBoxAttachment —
         // that maps item positions across the whole 0..31 range and lands on the wrong sample
@@ -2282,12 +2313,13 @@ void SynthyEditor::buildRack()
             setCombo,
             FileAction{ "LOAD", importSource,
                         { juce::String(P::samplerSet) },   // refresh the SET combo after load
-                        PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz" },
+                        PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz",
+                        /*pickDirectory*/ false, "sampler" },   // reopens where LOAD/FOLDER last picked
             // 12.2: import a whole folder as ONE multisample set (mapping derived from filenames
             // "Name_C3.wav" — or from an .sfz found inside the folder).
             FileAction{ "FOLDER", importSource,
                         { juce::String(P::samplerSet) },
-                        PresetIO::samplesFolder(), "*", /*pickDirectory*/ true },
+                        PresetIO::samplesFolder(), "*", /*pickDirectory*/ true, "sampler" },
             Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
             // 12.3: pitch/time decoupling — grouped right beside MODE (both choose the playback
             // regime); renders caption-above like the knobs (review feedback 2026-08-04).
@@ -2297,6 +2329,26 @@ void SynthyEditor::buildRack()
             relKnob,
             Kmod(P::samplerLevel, "AMP", ModTarget::SamplerLevel),   // renamed from LEVEL (generator standard)
             Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
+        addRackModule(std::move(d));
+    }
+    // GRAIN (Story 17.1) — spec-driven, right after the SAMPLER whose SET it plays. Hidden by
+    // default (the rack is full); the rack menu shows it. 17.2: with KEY on the grain rate is the
+    // played note, so DENS greys out — same path as an LFO's RATE under Tempo-Sync (Bool reads 0/1).
+    {
+        auto d = makeModuleDescriptor(Modules::grain());
+        greyWhenSynced(d, P::grainDensity, P::grainKey);
+        // The material is the SAMPLER's SET, chosen over there — say so in GRAIN's own header
+        // (maintainer 2026-09-22: "woher sehe ich, welches Sample GRAIN verwendet?"). Same readout
+        // hook as STEP SEQ's step counter; blank when no set is selected.
+        d.headerReadout = [&apvts]
+        {
+            const int idx = (int) *apvts.getRawParameterValue(P::samplerSet);
+            if (const auto* set = SampleBankStore::instance().getSet(idx); set != nullptr)
+                return set->getName();
+            return juce::String();
+        };
+        d.headerReadoutWidth   = 120;   // set names ("SalamanderPiano") need more than the step counter's 56
+        d.headerReadoutTooltip = "The SAMPLER set the cloud plays - pick it in the SAMPLER module";
         addRackModule(std::move(d));
     }
 
@@ -2575,6 +2627,8 @@ void SynthyEditor::buildRack()
         d.sizeClass = SizeClass::W30U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
         d.enableParam = P::modMatrixOn;
+        d.defaultVisible = false;   // seed for RackLayout.json: Init switches the matrix OFF (2026-10-03). This
+                                    // descriptor is hand-built, so the flag in ModMatrixSpecs.h does not reach it.
 
         const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
         juce::StringArray modItems;

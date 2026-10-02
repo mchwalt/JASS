@@ -8,6 +8,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "reverb"; m.title = "REVERB"; m.persistObject = "Reverb"; m.enableParamId = "reverbOn";
+        m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W3H1;
         m.params = {
             { "reverbOn",   "Enabled",  "",     ParamSpec::Kind::Bool },

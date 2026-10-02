@@ -222,6 +222,9 @@ namespace rack
         juce::String wildcard = "*";              // file filter (e.g. "*.wav")
         bool pickDirectory = false;               // true => choose a FOLDER instead of a file
                                                   // (SAMPLER multisample import, Story 12.2)
+        juce::String rememberKey;                 // non-empty => the chooser reopens where this key
+                                                  // last picked (persisted in Settings.json); the
+                                                  // SAMPLER's LOAD and FOLDER share one key
     };
 
     struct Caption   // static text (AD-4 "Label"); named Caption to avoid clashing with juce::Label
@@ -359,6 +362,10 @@ namespace rack
         // steps the playing-page dot alone no longer says where in the figure the playhead is.
         // Empty string = nothing playing, the label goes blank. Editor-injected.
         std::function<juce::String()> headerReadout;
+        // Width and tooltip of that read-out. 56 px fits "704/704"; GRAIN shows a set NAME
+        // ("SalamanderPiano") and asks for more (maintainer 2026-09-22: longer names were cut off).
+        int          headerReadoutWidth   = 56;
+        juce::String headerReadoutTooltip = "Playing step / LEN";
 
         // Collapsible display (story 16.2, first slice — maintainer 2026-08-31): with a title
         // set, the header carries a latch that folds the module's Display cells away and

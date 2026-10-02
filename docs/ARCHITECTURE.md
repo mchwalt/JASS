@@ -256,7 +256,15 @@ Per sample:
    root — is picked per voice at note-on, Story 12.2; the optional STRETCH
    mode decouples pitch from time via a per-voice vendored Signalsmith
    Stretch instance — configured in `prepareToPlay`, allocation-free in
-   `process` — Story 12.3).
+   `process` — Story 12.3) → **GRAIN** (`DSP/GrainEngine.h`, Story 17.1: a
+   per-voice pool of 32 Hann grains on the zone the sampler picked at note-on,
+   own pan pair `PanGrainL/R`; grains per second scheduling, pool-full drops
+   the new grain, per-grain pitch drawn uniformly over `ScaleMask.h` degrees;
+   scheduling runs through the release — the voice ADSR shapes the cloud.
+   KEY, Story 17.2: the grain rate is the played note's frequency and the
+   content is not transposed — pitch-synchronous granular / FOF, the sample's
+   formants stay put; the rate follows the glided ratio per sample like the
+   oscillators do).
 6. Global amplitude tremolo, then the envelope/gate gain.
 7. **Per-channel effect chain** — each output channel owns a full
    `ChannelStrip`, so a left-panned generator also reverberates left:
@@ -268,7 +276,7 @@ Per sample:
 
 **[`DSP/ChannelStrip.h`](Glossary.md#channelstrip)** is the channel-agnostic voice bus:
 `kMaxOutChannels = 2` (a later surround phase raises it),
-`kNumPanGenerators = 9` (OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R),
+`kNumPanGenerators = 11` (OSC 1–3, SUB, NOISE, KARPLUS, WAVETABLE, SAMPLER L/R, GRAIN L/R),
 `positionToGains()` returns 1.0 for mono (byte-identical legacy path) or
 equal-power cos/sin for stereo. The voice's legacy single-channel FX members
 are reference aliases onto `strips[0]`, so all pre-stereo code paths still
@@ -479,7 +487,28 @@ is the one packing path, also used for `preferredHeight()`.
 Two invariants keep audio and visibility consistent:
 `enforceHiddenDisabled()` (a hidden module must never be audible) and
 `revealEnabledModules()` (a module a loaded preset left enabled must be
-visible).
+visible). On an explicit preset load — not the start-up LiveState restore —
+`hideUnusedModules()` adds the converse: a module the preset leaves switched
+off is hidden, so the rack shows exactly the patch. Exempt are the MASTER BUS
+and INPUT zones and the visual-only displays, whose visibility stays the
+player's choice. A stored `RackLayout` therefore decides zone, order and
+alignment; for the patch modules visibility follows the enable.
+
+Resets live on two separate axes (maintainer's model, 2026-10-03). *Content*:
+a module's ↺ (`ModuleFrame::doReset`) and the header's RESET, which is every
+module's ↺ at once (`Rack::resetAllModules` after `resetToDefault`) and does
+not touch the layout beyond revealing what Init switches on. *Arrangement*:
+the MODULES menu's reset (`resetLayout`) and the zone ↺ (`resetZone`), which
+restore the *default layout* (the zone ↺ also the factory enable state) —
+never knob values. The default layout is data, not code:
+`%AppData%\JASS\RackLayout.json`, one `{id, zone, pos, vis, alignR}` per
+module. The descriptor `defaultVisible` flags only seed that file on first run
+(`Rack::defaultLayoutToVar`); afterwards the editor merges the file over the
+seed by id (`Rack::setDefaultLayout`), so a module the file predates keeps its
+descriptor default, and "Save as default" in the MODULES panel adopts the
+current rack (`Rack::adoptCurrentAsDefault` → `onDefaultLayoutChanged` →
+file). Which modules the stock rack shows is therefore editable without a
+compiler (maintainer's rule, 2026-10-03).
 
 ### 7.2 ModuleFrame & descriptors
 

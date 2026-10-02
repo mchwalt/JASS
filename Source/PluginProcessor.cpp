@@ -23,6 +23,10 @@ SynthyProcessor::SynthyProcessor()
             voiceRoster.push_back(v);
     for (auto* v : voiceRoster)
         v->setVoicePeers(&voiceRoster);
+    // GRAIN (17.1): one random stream per voice — golden-ratio multiples spread the xorshift seeds
+    // apart, so a chord is several different clouds, not one cloud summed coherently (+6 dB).
+    for (size_t i = 0; i < voiceRoster.size(); ++i)
+        voiceRoster[i]->getGrain().seed(0x9E3779B9u * (uint32_t) (i + 1));
 
     // One-time rebrand of the app-data folder (%AppData%\Synthy -> JASS, *.synthy -> *.jass).
     // MUST run before anything touches jassFolder() (which would create JASS and suppress it).
@@ -384,7 +388,8 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      // (auto-disable only undoes an enable WE made) — safe to list.
                                      ID::noiseOn, ID::karplusOn, ID::pitchEnvOn,
                                      ID::compOn, ID::stereoOn, ID::masterOn,
-                                     ID::chaosOn };   // LFO expansion: Chaos X/Y source
+                                     ID::chaosOn,     // LFO expansion: Chaos X/Y source
+                                     ID::grainOn };   // Story 17.1: GRAIN targets
     for (const auto& id : managed)
     {
         auto* p = apvts.getParameter(id);
@@ -736,6 +741,13 @@ void SynthyProcessor::resetToDefault()
         if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
             oscOn->setValueNotifyingHost(1.0f);
 
+    // MOD MATRIX off in Init (maintainer 2026-10-03): with every slot empty it does nothing to
+    // the sound, and a module that is on must be visible — so an on-but-unused matrix would sit
+    // in every Init rack. Its PARAM default stays 1 on purpose: presets from before the enable
+    // existed carry no "ModMatrixOn" and must keep routing (missing ⇒ default, AD-11 pattern).
+    if (auto* mm = apvts.getParameter(Parameters::ID::modMatrixOn))
+        mm->setValueNotifyingHost(0.0f);
+
     autoPlayEnabled.store(true);
     currentPresetName = "Init";
     markPresetClean();
@@ -1003,6 +1015,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getLFOs(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),
                                      voice->getSampler(), samplerMasterFrac,   // Story 12.1 (+ loop clock)
+                                     voice->getGrain(),                         // Story 17.1
                                      voice->getMixMode(),
                                      voice->getSubOsc(), voice->getSubOctaveRef(),
                                      voice->getAdsrOnRef(), voice->getMixModeOnRef(),

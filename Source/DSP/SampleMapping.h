@@ -82,7 +82,10 @@ namespace SampleMapping
     // Audio extensions the sampler accepts everywhere (LOAD dialog, folder scan, preload).
     // FLAC decodes natively via juce::AudioFormatManager::registerBasicFormats — added so the
     // big free .sfz libraries (Salamander, Splendid Grand, ...) load without conversion.
-    inline constexpr const char* kAudioWildcard = "*.wav;*.aif;*.aiff;*.flac";
+    // MP3 since JUCE 9.0.2 (its decoder is on by default; registerBasicFormats picks it up). Fine
+    // for one-shots, pads and GRAIN material; a loop point will not be seamless — MP3 carries encoder
+    // padding at the start — so loops stay on WAV/FLAC. The help says so.
+    inline constexpr const char* kAudioWildcard = "*.wav;*.aif;*.aiff;*.flac;*.mp3";
 
     // Derive lo/hi for entries that only carry a root (folder convention): sort by root, split
     // halfway between neighbours, outermost zones extend to 0/127. Duplicate roots: first wins.
