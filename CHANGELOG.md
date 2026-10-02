@@ -10,6 +10,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.0] – 2026-10-02
+
 ### Added
 - **GRAIN — granular synthesis on the SAMPLER's material (story 17.1).** A new generator module
   plays whatever SET the SAMPLER holds as a cloud of short grains: **POS / SPRAY** say where in the
