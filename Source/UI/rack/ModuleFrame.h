@@ -67,12 +67,16 @@ namespace rack
         SizeClass maxSizeClass() const noexcept { return desc.sizeClass; }
         std::function<void()> onFootprintChanged;
 
+        // The module's own reset (the header ↺): every body-owned param to its factory default,
+        // the paged step families on every page, then the descriptor's onReset extra. Public so
+        // the header RESET can be exactly "every module's ↺ at once" (Rack::resetAllModules).
+        void doReset();
+
     private:
         void applyCollapsed();   // show/hide the Display cells + re-flow this frame's body
         void timerCallback() override;
         void buildHeader();
         void buildBody();
-        void doReset();
 
         // Step pages (16.3): tear the body down and rebuild it against the shown page's params —
         // by construction every attachment, corner switch, alt slider and predicate rebinds

@@ -240,6 +240,28 @@ namespace PresetIO
         settingsFile().replaceWithText(juce::JSON::toString(v, false));
     }
 
+    // %AppData%\Roaming\JASS\RackLayout.json — the player's DEFAULT rack: one entry per module
+    // {id, zone, pos, vis, alignR}, the same shape a preset's "RackLayout" field has. "Reset
+    // layout" and the zone ↺ restore THIS; a preset's own layout overrides it while that preset
+    // is loaded. Seeded on first run from the descriptor defaults, then edited by hand or via
+    // "Save as default" in the MODULES panel — which modules the stock rack shows must never
+    // need a compiler (maintainer 2026-10-03). Missing file ⇒ empty var (caller seeds it).
+    inline juce::File rackLayoutFile()
+    {
+        return jassFolder().getChildFile("RackLayout.json");
+    }
+
+    inline juce::var loadRackLayout()
+    {
+        if (! rackLayoutFile().existsAsFile()) return {};
+        return juce::JSON::parse(rackLayoutFile().loadFileAsString());
+    }
+
+    inline void saveRackLayout(const juce::var& entries)
+    {
+        rackLayoutFile().replaceWithText(juce::JSON::toString(entries, false));   // pretty, hand-editable
+    }
+
     // The folder a file chooser opens in: where the SAME chooser (by key) last picked something,
     // or `fallback` on the first run / when that folder has gone. The dialogs used to open in the
     // AppData folder every time, so loading three files from D:\Samples meant navigating there

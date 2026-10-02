@@ -22,7 +22,7 @@ namespace Modules
         // fit scale 0.79 → 0.85). W5 packs no better, so 6 is the point where narrowing stops
         // paying and only starts squeezing the two combos.
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W6H1;
-        m.defaultVisible = (i <= 3);   // LFO 1..3 visible by default; LFO 4 hidden (show via MODULES)
+        m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03; LFO 1..3 were visible before)
         m.params = {
             { p + "On",      "Enabled",  "",       ParamSpec::Kind::Bool },
             { p + "Wave",    "Waveform", "WAVE",   ParamSpec::Kind::Choice, {}, 0.0f, { "Sine", "Triangle", "Square", "Sawtooth", "S&H", "One-Shot" } },   // append-only (index == LFOWaveform)

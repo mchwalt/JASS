@@ -5,5 +5,5 @@ Die Anzeigen — den Klang sehen, ohne ihn zu verändern.
 
 **Gruppenkopf-Bedienelemente**
 - **Enable** — friert alle sichtbaren Anzeigen dieser Gruppe ein / schaltet sie an.
-- **Reset** (Kreispfeil) — stellt die *Standard-Auswahl* dieser Gruppe wieder her (welche Anzeigen sichtbar sind, deren Reihenfolge und Zone). Reglerwerte bleiben unverändert.
+- **Reset** (Kreispfeil) — stellt diese Gruppe auf dein **Standard-Layout** zurück (`RackLayout.json` im JASS-Ordner — **Save as default** im MODULES-Dialog schreibt es). Reglerwerte bleiben unverändert.
 - **Info** (eingekreistes i) — diese Hilfe.

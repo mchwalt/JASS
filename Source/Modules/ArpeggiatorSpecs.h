@@ -8,6 +8,7 @@ namespace Modules
     {
         ModuleSpec m;
         m.id = "arpeggiator"; m.title = "ARPEGGIATOR"; m.persistObject = "Arp"; m.enableParamId = "arpOn";
+        m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W6H1;
         m.params = {
             { "arpOn",      "Enabled", "",     ParamSpec::Kind::Bool },

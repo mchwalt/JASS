@@ -49,6 +49,30 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   preset reading as twenty modules of which fourteen were off (maintainer's call, 2026-10-02).
   Start-up is untouched: the LiveState restores the bench as you left it. A stored layout now
   decides zone, order and alignment; for the patch modules, visibility follows the switch.
+- **RESET in the header is every module's own ↺ pressed at once — and nothing else.** Two kinds
+  of reset used to overlap: the header's RESET set the sound to Init *and* restored the factory
+  rack layout, the zone and MODULES-menu resets restored layouts too. Now the axes are separate.
+  RESET resets content: the Init sound, the STEP SEQ emptied (a bare parameter reset left every
+  step on at the root), WAVETABLE back to its built-ins, the F-key bank back to the demos — the
+  last one now also from the PRESETS module's own ↺. Init now also switches the MOD MATRIX *off*:
+  with every slot empty it does nothing to the sound, and since a module that is on must be
+  visible, an on-but-unused matrix would sit in every Init rack (its parameter default stays on,
+  so presets from before the switch existed keep routing). Which modules stand where is
+  untouched, except that what Init switches on is shown again. The MODULES menu's reset and the zone ↺
+  own the layout, as their help always said.
+- **The default rack is a file, not code: `%AppData%\JASS\RackLayout.json`.** One line per
+  module — zone, position, visible, right-aligned — the same shape a preset's `RackLayout`
+  field has had since 4.3, now complete and on its own. "Reset layout" and the zone ↺ restore
+  *this*; a preset's own layout overrides it while that preset is loaded. The file is written on
+  first run from the shipped defaults and rewritten by the new **Save as default** button in the
+  MODULES panel, or by hand. Why: wanting NOISE on the stock rack must never mean recompiling
+  JASS (maintainer, 2026-10-03) — until now the only place that knowledge lived was a flag per
+  module in the source. The shipped seed is the Init set: only the modules the header RESET
+  switches on (OSC 1–3, ENVELOPE, the displays, MASTER BUS, KEYBOARD) start visible;
+  the fourteen that used to stand there switched off (NOISE, WAVETABLE, STRING, SAMPLER, STEP SEQ,
+  PERC, LFO 1–3, ARPEGGIATOR, FILTER, DISTORTION, WAVEFOLD, CHORUS, DELAY, REVERB) are one
+  MODULES click or one line in the file away. A module added in a later version is not in an
+  older file and simply keeps its shipped default there.
 - **JUCE 9.0.0 → 9.0.2.** No API JASS uses changed. What it brings here: WAV files with a missing
   final pad byte load again, malformed audio files are rejected by the library before our own
   guards, the MP3 decoder above, VST3 hosting fixes.

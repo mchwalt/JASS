@@ -95,7 +95,7 @@ Notes:
 | `type` | `Generator` / `Modulator` / `Processor` — identity/colour tag only. |
 | `zone` | Default rack zone. |
 | `size` | Grid footprint (`SizeClass`). |
-| `defaultVisible` | Factory visibility (e.g. LFO 4 and COMPRESSOR ship hidden). |
+| `defaultVisible` | Factory visibility — only the SEED for `%AppData%\JASS\RackLayout.json`, written on first run; from then on that file is the default layout (2026-10-03). The seed is the Init set: only the modules the header RESET switches on (OSC 1–3, ENVELOPE, the displays, MASTER BUS, KEYBOARD) ship visible. |
 | `alignRight` | Pack right within the zone row (MASTER BUS modules). |
 | `params` | The `ParamSpec` list. |
 | `enabledWhen` / `onReset` / `extraBody` | Hooks for derived enable state, extra reset work, and appended body elements. **Currently unused by every spec** — modules needing them are hand-built in the editor instead, because a static spec cannot capture `apvts`/`processor`. |
@@ -377,8 +377,10 @@ Rules:
 6. Help texts `Resources/EN/<id>.md` + `Resources/DE/<id>.md` (CMake
    re-globs; build the help targets with `/t:Rebuild /nodeReuse:false`).
 7. Matrix exposure, PAN slot, zone placement as needed (see §7 and
-   ARCHITECTURE.md §8). Consider `defaultVisible = false` for large modules —
-   a big new module can trigger the global auto-fit downscale.
+   ARCHITECTURE.md §8). A new module ships `defaultVisible = false` unless the
+   Init patch switches it on — the stock rack is the Init set (2026-10-03). An
+   existing `RackLayout.json` does not know the new module, so it keeps this
+   descriptor default there until the player saves a new default.
 8. `CHANGELOG.md`.
 
 ### 10.3 Checklists for the other seams

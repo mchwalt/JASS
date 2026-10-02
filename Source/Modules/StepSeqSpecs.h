@@ -41,7 +41,7 @@ namespace Modules
         // (Rack::maxHeight), so the display-fit scale must accommodate it whether or not it is on
         // screen — the whole rack draws about a fifth smaller than it would with STEP SEQ and PERC
         // hidden. Story 7.4 bought most of that back by shortening the two-row modules.
-        m.defaultVisible = true;
+        m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
 
         m.params.push_back ({ "seqOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 

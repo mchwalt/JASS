@@ -494,6 +494,22 @@ and INPUT zones and the visual-only displays, whose visibility stays the
 player's choice. A stored `RackLayout` therefore decides zone, order and
 alignment; for the patch modules visibility follows the enable.
 
+Resets live on two separate axes (maintainer's model, 2026-10-03). *Content*:
+a module's ↺ (`ModuleFrame::doReset`) and the header's RESET, which is every
+module's ↺ at once (`Rack::resetAllModules` after `resetToDefault`) and does
+not touch the layout beyond revealing what Init switches on. *Arrangement*:
+the MODULES menu's reset (`resetLayout`) and the zone ↺ (`resetZone`), which
+restore the *default layout* (the zone ↺ also the factory enable state) —
+never knob values. The default layout is data, not code:
+`%AppData%\JASS\RackLayout.json`, one `{id, zone, pos, vis, alignR}` per
+module. The descriptor `defaultVisible` flags only seed that file on first run
+(`Rack::defaultLayoutToVar`); afterwards the editor merges the file over the
+seed by id (`Rack::setDefaultLayout`), so a module the file predates keeps its
+descriptor default, and "Save as default" in the MODULES panel adopts the
+current rack (`Rack::adoptCurrentAsDefault` → `onDefaultLayoutChanged` →
+file). Which modules the stock rack shows is therefore editable without a
+compiler (maintainer's rule, 2026-10-03).
+
 ### 7.2 ModuleFrame & descriptors
 
 [`ModuleFrame`](Glossary.md#moduleframe) renders one

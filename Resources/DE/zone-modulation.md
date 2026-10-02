@@ -10,5 +10,5 @@ Bewegung — Quellen, die andere Parameter über die Zeit verändern.
 
 **Gruppenkopf-Bedienelemente**
 - **Enable** — schaltet alle sichtbaren Module dieser Gruppe auf einmal an/in Bypass.
-- **Reset** (Kreispfeil) — stellt die *Standard-Auswahl* dieser Gruppe wieder her (welche Module sichtbar sind, deren Reihenfolge und Zone). Reglerwerte bleiben unverändert.
+- **Reset** (Kreispfeil) — stellt diese Gruppe auf dein **Standard-Layout** zurück (`RackLayout.json` im JASS-Ordner — **Save as default** im MODULES-Dialog schreibt es). Reglerwerte bleiben unverändert.
 - **Info** (eingekreistes i) — diese Hilfe.

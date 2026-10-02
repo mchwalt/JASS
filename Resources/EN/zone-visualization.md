@@ -5,5 +5,5 @@ The meters — see the sound, they never change it.
 
 **Group header controls**
 - **Enable** — freezes/enables every visible display in this group at once.
-- **Reset** (circular arrow) — restores this group's *default module selection* (which displays are shown, their order and zone). It does not change any knob values.
+- **Reset** (circular arrow) — puts this group back to your **default layout** (`RackLayout.json` in the JASS folder — **Save as default** in the MODULES panel writes it). It does not change any knob values.
 - **Info** (circled i) — this help.

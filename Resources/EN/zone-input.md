@@ -5,5 +5,5 @@ Playing input — how notes get into the synth.
 
 **Group header controls**
 - **Enable** — dims/enables every visible module in this group at once.
-- **Reset** (circular arrow) — restores this group's *default module selection* (which modules are shown, their order and zone). It does not change any knob values.
+- **Reset** (circular arrow) — puts this group back to your **default layout** (`RackLayout.json` in the JASS folder — **Save as default** in the MODULES panel writes it). It does not change any knob values.
 - **Info** (circled i) — this help.

@@ -741,6 +741,13 @@ void SynthyProcessor::resetToDefault()
         if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
             oscOn->setValueNotifyingHost(1.0f);
 
+    // MOD MATRIX off in Init (maintainer 2026-10-03): with every slot empty it does nothing to
+    // the sound, and a module that is on must be visible — so an on-but-unused matrix would sit
+    // in every Init rack. Its PARAM default stays 1 on purpose: presets from before the enable
+    // existed carry no "ModMatrixOn" and must keep routing (missing ⇒ default, AD-11 pattern).
+    if (auto* mm = apvts.getParameter(Parameters::ID::modMatrixOn))
+        mm->setValueNotifyingHost(0.0f);
+
     autoPlayEnabled.store(true);
     currentPresetName = "Init";
     markPresetClean();

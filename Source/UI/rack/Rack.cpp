@@ -381,10 +381,10 @@ namespace rack
         return Zone::Generators;
     }
 
-    juce::var Rack::layoutToVar() const
+    juce::var Rack::entriesToVar (const std::vector<RackLayoutEntry>& entries)
     {
         juce::Array<juce::var> arr;
-        for (const auto& e : layoutModel)
+        for (const auto& e : entries)
         {
             auto* o = new juce::DynamicObject();
             o->setProperty ("id",   e.id);
@@ -395,6 +395,40 @@ namespace rack
             arr.add (juce::var (o));
         }
         return arr;
+    }
+
+    juce::var Rack::layoutToVar() const        { return entriesToVar (layoutModel); }
+    juce::var Rack::defaultLayoutToVar() const { return entriesToVar (defaultLayout); }
+
+    void Rack::setDefaultLayout (const juce::var& fileEntries)
+    {
+        // Merge the file over the descriptor seed, by id. A module the file predates keeps its
+        // descriptor default (so a new module needs no hand edit to appear in the file's world);
+        // an id the rack no longer has is ignored. The current model follows: this runs at
+        // build time, before any stored layout is applied on top (reloadLayoutFromState).
+        if (auto* arr = fileEntries.getArray())
+            for (const auto& item : *arr)
+            {
+                const auto id = item.getProperty ("id", {}).toString();
+                for (auto& d : defaultLayout)
+                    if (d.id == id)
+                    {
+                        d.zone       = zoneFromName (item.getProperty ("zone", zoneName (d.zone)).toString());
+                        d.position   = (int)  item.getProperty ("pos",    d.position);
+                        d.visible    = (bool) item.getProperty ("vis",    d.visible);
+                        d.alignRight = (bool) item.getProperty ("alignR", d.alignRight);
+                        break;
+                    }
+            }
+        layoutModel = defaultLayout;
+        relayout();
+    }
+
+    void Rack::adoptCurrentAsDefault()
+    {
+        defaultLayout = layoutModel;   // what is on screen now IS the default from here on
+        writeLayoutToState();          // model == default ⇒ the state property clears
+        if (onDefaultLayoutChanged) onDefaultLayoutChanged (defaultLayoutToVar());
     }
 
     void Rack::applyLayoutVar (const juce::var& v)
@@ -457,11 +491,35 @@ namespace rack
 
     void Rack::resetLayout()
     {
-        layoutModel = defaultLayout;   // restore factory zones + order + visibility
+        layoutModel = defaultLayout;   // the player's default (RackLayout.json; descriptor seed)
+        revealEnabledModules();        // on ⇒ visible outranks the file (first rule of the rack)
         relayout();
         writeLayoutToState();          // now default ⇒ clears the property
         enforceHiddenDisabled();       // factory-hidden modules must be silent (invariant)
         if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::resetAllModules()
+    {
+        // Every module's own ↺, visible or not: the body-derived param family, the paged steps
+        // (STEP SEQ ends up EMPTY, where a bare params-to-default leaves every step on at the
+        // root), and the extras (WAVETABLE drops user banks, the scope its time-base, PRESETS
+        // its F-key bank). Enables are not touched by doReset — the caller's resetToDefault
+        // has already put them at Init (OSC 1..3 on).
+        for (auto* f : frames)
+            if (f != nullptr)
+                f->doReset();
+
+        // Layout untouched — except that what Init switched on must be visible (invariant), so a
+        // preset that had hidden the oscillators does not leave RESET sounding like nothing.
+        if (revealEnabledModules())
+        {
+            relayout();
+            writeLayoutToState();
+            if (onLayoutChanged) onLayoutChanged();
+        }
+        enforceHiddenDisabled();
+        syncZoneHeaderToggles();
     }
 
     void Rack::reloadLayoutFromState (bool presetLoad)
@@ -475,11 +533,13 @@ namespace rack
             relayout();
             if (onLayoutChanged) onLayoutChanged();
         }
-        // BEFORE enforcing the hidden⇒silent invariant: reveal any module the preset left enabled
-        // but that the layout hides (e.g. a preset using the default-hidden COMPRESSOR). Otherwise
-        // enforceHiddenDisabled would silence it and the user would never see it was in the patch.
-        // On a preset load the reverse holds too: what the preset leaves off goes away, so the
-        // rack reads as the patch. Not at start-up — the LiveState restores the bench as left.
+        // BEFORE enforcing the hidden⇒silent invariant: reveal any module that is ON but that the
+        // layout hides (e.g. a preset using the default-hidden COMPRESSOR). "On ⇒ visible" is the
+        // first rule and outranks any layout, the player's default file included (maintainer
+        // 2026-10-03) — a module the file hides must therefore be OFF to stay hidden, which is why
+        // Init switches the MOD MATRIX off. On a preset load the reverse holds too: what the preset
+        // leaves off goes away, so the rack reads as the patch. Not at start-up — the LiveState
+        // restores the bench as left.
         bool changed = revealEnabledModules();
         if (presetLoad)
             changed = hideUnusedModules() || changed;
