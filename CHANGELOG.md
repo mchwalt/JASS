@@ -14,92 +14,63 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ### Added
 - **GRAIN — granular synthesis on the SAMPLER's material (story 17.1).** A new generator module
-  plays whatever SET the SAMPLER holds as a cloud of short grains: **POS / SPRAY** say where in the
-  recording the grains start and how far they scatter, **SIZE** (5–300 ms) how long each one is,
-  **DENS** how many per second, **PITCH** how far each grain is transposed at random — and
-  **QUANT** snaps every grain to a scale relative to the played note, so the spray becomes a
-  melody instead of a smear. POS, SIZE, PITCH (there: the centre of the cloud), AMP and PAN are
-  MOD MATRIX targets; the patch this was built for is CHAOS X → POS, a deterministic wander
-  through a recording. The SAMPLER may stay off — its SET is the material, one loader for both —
-  and both may sound at once. Hidden by default (the rack is full); old presets load bit-identical.
-  Why a texture generator and not a pitch-shifter: story 12.3 measured a naive granular repitcher
-  at negative SNR and chose STRETCH for that job — here the artefacts are the sound, and SPRAY
-  breaks the periodic combing that made them ugly there. Design points that came out of review
-  and measurement: scheduling runs through the ADSR release (a staccato tap into a long release
-  leaves a full cloud, not two orphan grains); a full grain pool drops the new grain instead of
-  cutting an old one (no clicks — DENS simply saturates at 32 / SIZE); per-grain pitches are drawn
-  uniformly over scale *degrees*, not rounded from semitones (rounding would favour the degrees
-  next to a three-semitone gap); and the loudness follows 1/√overlap plus the Hann window's own
-  power, measured on tonal and loop material to stay within ±3 dB across the whole DENS × SIZE
-  range. SPRAY 0 at high DENS is the classic pitch-synchronous regime — the density becomes the
-  pitch and combs a tonal source — kept as a sound, not "fixed".
-- **GRAIN · KEY — pitch-synchronous mode (story 17.2).** The measurement above showed the cloud
-  turning into a tone when identical grains repeat at a fixed rate; two reviewers read that as a
-  second personality of the same engine, and it is: with KEY on, one grain fires per period of the
-  played note, so the repetition rate *is* the pitch (FOF / VOSIM), and the grain content is no
-  longer transposed by the key — the sample's own formants stay where they are. A vocal, a bowed
-  string, a bell played chromatically with its timbre intact. DENS is ignored (greyed). SIZE acts
-  up to two periods of the note: measured on the EPiano sample, a longer grain resolves the
-  source's own partials and the note's harmonics fall between them (−15 dB at 440 Hz for 10 ms,
-  −40 dB at 880 Hz for 20 ms), while at two periods the level stays within ±1.5 dB from 110 to
-  880 Hz. A second cap keeps the overlap under the pool size, so the train is never thinned (a
-  dropped grain in a periodic train halves the pitch). Off by default; 17.1 presets unchanged.
-  GRAIN's header names the SET it plays — the module has no set selector of its own, and the
-  first question at the instrument was "which sample is this?"; the read-out width is now part of
-  the module descriptor, so a long set name no longer truncates.
-
-- **SAMPLER loads MP3.** JUCE 9.0.2 turns its MP3 decoder on by default, so the only missing piece
-  was the file filter: LOAD, FOLDER sets and `.sfz` regions accept `.mp3` next to WAV/AIFF/FLAC.
-  Why it matters here: the Roboter drum kit had to be cut from an MP3 by hand and converted first —
-  now the recording goes straight in. Two honest limits: MP3 carries encoder padding at the start,
-  so a loop point will not be seamless the way a PCM loop is; and a variable-bitrate file without
-  a Xing/Info header reports an estimated length, so it may end in a short silent tail (POS near
-  the end or END at 1.0 then reads silence). Use MP3 for one-shots, pads and GRAIN material, keep
-  loops on WAV, AIFF or FLAC.
+  plays whatever SET the SAMPLER holds as a cloud of short grains: **POS / SPRAY** place the grains
+  in the recording and scatter them, **SIZE** (5–300 ms) and **DENS** (grains per second) shape the
+  cloud, **PITCH** transposes each grain at random and **QUANT** snaps that spread to a scale
+  relative to the played note, so the spray becomes a chord instead of a smear. POS, SIZE, PITCH,
+  AMP and PAN are MOD MATRIX targets; the patch it was built for is CHAOS X → POS, a deterministic
+  wander through a recording. The SAMPLER may stay off — its SET is the material, one loader for
+  both. Hidden by default (the rack is full); old presets load bit-identical. It is a texture
+  generator, not a pitch-shifter: story 12.3 measured granular repitching at negative SNR and gave
+  that job to STRETCH — here the artefacts are the sound. Three contracts that came out of
+  measurement: the cloud runs on through the ADSR release, a full grain pool drops the new grain
+  rather than cutting an old one (no clicks — DENS simply saturates), and the level is normalised
+  to stay within ±3 dB over the whole DENS × SIZE range. Ships as the `Grain Cloud` preset on F9.
+- **GRAIN · KEY — pitch-synchronous mode (story 17.2).** With KEY on, one grain fires per period of
+  the played note, so the repetition rate *is* the pitch (FOF / VOSIM) and the grain content is no
+  longer transposed — the sample's own formants stay where they are: a vocal, a bowed string, a
+  bell played chromatically with its timbre intact. DENS is ignored (greyed); SIZE sets the
+  formant width and is capped at two periods of the note, where the measured level stays flat
+  across the keyboard. PITCH and QUANT shift the formant, not the pitch. Off by default; 17.1
+  presets unchanged. GRAIN's header names the SET it plays — the module has no set selector of
+  its own, and the first question at the instrument was "which sample is this?".
+- **SAMPLER loads MP3.** JUCE 9.0.2 enables its MP3 decoder, so LOAD, FOLDER sets and `.sfz`
+  regions accept `.mp3` next to WAV / AIFF / FLAC — a drum kit cut from a recording goes straight
+  in instead of through a converter first. Two limits of the format: encoder padding at the start
+  means a loop point is not seamless the way a PCM loop is, and a variable-bitrate file without a
+  length header may end in a short silent tail. Use MP3 for one-shots, pads and GRAIN material;
+  keep loops on WAV, AIFF or FLAC.
 
 ### Changed
-- **JUCE 9.0.0 → 9.0.2.** Two patch releases, no API JASS uses changed (the removed
-  `getMidiInputSelectorListBox` and the OpenGL image changes do not occur in the code). What they
-  bring to JASS: WAV files with a missing final pad byte load again, malformed audio files are
-  rejected by the library before our own guards, MP3 decoding is enabled by default (the SAMPLER's
-  file filter picks it up above), VST3 hosting fixes. Verified: full rebuild, startup smoke test,
-  presets load.
+- **JUCE 9.0.0 → 9.0.2.** No API JASS uses changed. What it brings here: WAV files with a missing
+  final pad byte load again, malformed audio files are rejected by the library before our own
+  guards, the MP3 decoder above, VST3 hosting fixes.
 
 ### Fixed
 - **The SAMPLER's LOAD / FOLDER and WAVETABLE's LOAD WAV dialogs reopen where they last picked.**
-  Every one of them opened in its AppData folder every time, so loading three files from a sample
-  library meant navigating there three times. The cause: JUCE hands an explicit start folder to the
-  native dialog, which then ignores Windows' own recent-folder memory. Each chooser now remembers
-  the folder of its last pick (the SAMPLER's two buttons share one memory, they browse the same
-  material) in a new `Settings.json` beside the preset banks; the AppData folder is only the
-  first-run default, and a folder that has since vanished falls back to it. Preset dialogs are
-  unchanged — they belong in the Presets folder on purpose.
+  They opened in their AppData folder every time — JUCE hands the native dialog an explicit start
+  folder, which overrides Windows' own recent-folder memory — so loading three files from a sample
+  library meant navigating there three times. Each chooser now remembers the folder of its last
+  pick in a new `Settings.json` beside the preset banks; the SAMPLER's two buttons share one
+  memory, and a folder that has since vanished falls back to the AppData default. Preset dialogs
+  are unchanged — they belong in the Presets folder on purpose.
 - **Sampler PAN as a matrix target only worked while another PAN target was active.** The
   auto-pan predicate in the voice never listed `SamplerPan` (since 12.1); a routing to SAMPLER PAN
   alone changed nothing. Found while adding GRAIN's pan to the same line.
 - **GRAIN, after the code review of the GRAIN line (2026-09-24).** Six behaviours the review
-  turned up before the release, none of them audible on the demo preset, all of them on a real
-  patch sooner or later:
-  - Every voice drew the *same* random sequence — the per-voice seed the story specified was never
-    wired, so a chord was several sample-identical clouds summing coherently (+6 dB on a doubled
-    note, no thickening). Each voice now has its own stream.
-  - Switching GRAIN off, or playing a note with no zone, cut every sounding grain on one sample —
-    exactly the click the engine's own contract promises not to make. Only the scheduler is gated
-    now; grains in flight finish their window.
-  - The cloud's pitch was frozen at note-on: GLIDE and the STEP SEQ's SLIDE moved every other
-    generator but not the grains, and KEY took the raw MIDI frequency while the cloud took the
-    sampler's transposition. Both modes now follow the voice's glided ratio per sample, like the
-    oscillators.
-  - KEY was out of tune above MIDI 119: the note frequency was capped at 8 kHz, so the top eight
-    keys shared one pitch. The cap now covers the full keyboard.
-  - Turning DENS *up* took effect only after the period already scheduled at the old rate had run
-    out — a full second at DENS 1. The pending onset is pulled in to the new period.
-  - With the ENVELOPE module off and a SAMPLER release, the cloud kept spawning at full level under
-    the sampler's fade and then ended on the 10 ms gate as a hard cut. Note-off now stops starting
-    grains in that case; the sounding ones finish.
+  turned up before the release — none audible on the demo preset, all of them on a real patch
+  sooner or later:
+  - Every voice drew the *same* random sequence, so a chord was identical clouds summing
+    coherently (+6 dB, no thickening). Each voice now has its own stream.
+  - Switching GRAIN off cut every sounding grain on one sample. Grains in flight now finish.
+  - The cloud's pitch was frozen at note-on; GLIDE and the STEP SEQ's SLIDE passed it by. Both
+    modes now follow the voice's glided pitch like the oscillators.
+  - KEY was out of tune above MIDI 119 (an 8 kHz cap). The cap now covers the full keyboard.
+  - Turning DENS *up* took effect only after the old period had run out — up to a full second.
+  - With the ENVELOPE module off, note-off ended the cloud on the 10 ms gate as a hard cut. It now
+    stops spawning and lets the sounding grains finish.
   Also: a MOD MATRIX slot's QUANT now works on a GRAIN → PITCH routing (it snapped FREQ routings
-  only, and sat there as a dead control); the shipped `Grain Cloud` preset carries the KEY field a
-  v10 file is meant to write.
+  only), and the shipped `Grain Cloud` preset carries the KEY field a v10 file is meant to write.
 
 ## [2026.09.1] – 2026-09-21
 
