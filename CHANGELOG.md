@@ -47,6 +47,12 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   guards, the MP3 decoder above, VST3 hosting fixes.
 
 ### Fixed
+- **A module the preset does not know stayed on screen.** Loading a preset applied its stored
+  rack layout on top of whatever was showing, so a module added after that preset was saved kept
+  the previous patch's visibility: once `Grain Cloud` had shown GRAIN, `Sampler Demo` and every
+  other older preset showed it too. A preset's layout now starts from the factory layout, so a
+  module it has no entry for falls back to its default — hidden for GRAIN — exactly as a preset
+  with no layout field at all always did.
 - **The SAMPLER's LOAD / FOLDER and WAVETABLE's LOAD WAV dialogs reopen where they last picked.**
   They opened in their AppData folder every time — JUCE hands the native dialog an explicit start
   folder, which overrides Windows' own recent-folder memory — so loading three files from a sample

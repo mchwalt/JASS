@@ -400,8 +400,14 @@ namespace rack
     void Rack::applyLayoutVar (const juce::var& v)
     {
         // Restore from persisted layout: set zone/position/visible by id. Unknown ids are
-        // ignored; modules absent from the data keep their default. NO enable coupling and NO
-        // write-back here — this is the load path (enables come from their own params).
+        // ignored; modules absent from the data get their FACTORY default. NO enable coupling
+        // and NO write-back here — this is the load path (enables come from their own params).
+        // Start from the stock layout, not from whatever is on screen: a module added after a
+        // preset was saved (GRAIN, 17.1) has no entry in that preset, and without this reset it
+        // kept the visibility the PREVIOUS patch left behind — once `Grain Cloud` had shown it,
+        // `Sampler Demo` and every other older preset showed it too (maintainer 2026-10-02).
+        // A preset with no layout at all already took this route (reloadLayoutFromState).
+        layoutModel = defaultLayout;
         if (auto* arr = v.getArray())
         {
             for (const auto& item : *arr)
