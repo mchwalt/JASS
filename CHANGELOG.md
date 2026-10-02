@@ -10,6 +10,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.1] – 2026-10-03
+
 ### Changed
 - **`RackLayout.json` is grouped by zone, one module per line.** The file now reads
   `"GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ]`, zone by zone in rack
