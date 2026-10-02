@@ -487,7 +487,12 @@ is the one packing path, also used for `preferredHeight()`.
 Two invariants keep audio and visibility consistent:
 `enforceHiddenDisabled()` (a hidden module must never be audible) and
 `revealEnabledModules()` (a module a loaded preset left enabled must be
-visible).
+visible). On an explicit preset load — not the start-up LiveState restore —
+`hideUnusedModules()` adds the converse: a module the preset leaves switched
+off is hidden, so the rack shows exactly the patch. Exempt are the MASTER BUS
+and INPUT zones and the visual-only displays, whose visibility stays the
+player's choice. A stored `RackLayout` therefore decides zone, order and
+alignment; for the patch modules visibility follows the enable.
 
 ### 7.2 ModuleFrame & descriptors
 

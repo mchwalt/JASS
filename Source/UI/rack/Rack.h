@@ -74,7 +74,10 @@ namespace rack
         // JSON of layoutToVar). PresetIO mirrors it into the `.synthy` "RackLayout" field;
         // getStateInformation carries it in the DAW state for free. Default layout ⇒ no property.
         void resetLayout();               // restore descriptor-default layout (touches NO audio param)
-        void reloadLayoutFromState();     // re-apply the persisted layout from apvts.state (after a load)
+        // re-apply the persisted layout from apvts.state. `presetLoad` = an explicit preset load
+        // (not the start-up LiveState restore): the rack then shows exactly the patch — modules
+        // the preset leaves switched off are hidden (hideUnusedModules).
+        void reloadLayoutFromState (bool presetLoad = false);
 
         // Invariant guard: a HIDDEN module must never be audible. Forces every hidden module's
         // enableParam off. Call after any path that may re-enable params under a stale layout
@@ -243,6 +246,13 @@ namespace rack
         // a preset that uses a default-hidden module (e.g. COMPRESSOR) has no custom layout. Marks
         // such modules visible WITHOUT touching their enable. Returns true if anything changed.
         bool revealEnabledModules();
+
+        // The other direction, on an explicit preset load only (maintainer 2026-10-02): a module
+        // the preset leaves switched OFF is hidden, so the rack shows the patch and nothing else.
+        // Exempt: the MASTER BUS and INPUT zones (infrastructure, not patch) and visual-only
+        // displays (whether the scope is up is the player's call, no preset's). Returns true if
+        // anything changed.
+        bool hideUnusedModules();
 
         // --- Layout persistence helpers (Story 4.3) ---
         juce::var layoutToVar() const;                  // model → JSON var (array of {id,zone,pos,vis})

@@ -1085,11 +1085,11 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
 
     loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
     setPresetName(f.getFileNameWithoutExtension());
-    if (rackBody) rackBody->reloadLayoutFromState();   // reflect the loaded layout (Story 4.3);
-                                                       // this can still adjust enable params
-                                                       // (enforceHiddenDisabled forces hidden
-                                                       // modules off — e.g. the now-hidden-by-
-                                                       // default COMPRESSOR).
+    if (rackBody) rackBody->reloadLayoutFromState (/*presetLoad*/ true);
+                                                       // reflect the loaded layout (Story 4.3) and
+                                                       // show exactly the patch: modules the preset
+                                                       // leaves off are hidden, hidden modules are
+                                                       // forced off (enforceHiddenDisabled).
     processor.markPresetClean();   // snapshot the SETTLED state AFTER layout enforcement, so a
                                    // freshly loaded preset reads as clean (not "Current State").
 

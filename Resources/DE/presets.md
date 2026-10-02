@@ -7,6 +7,7 @@ Jeder Platz ist der gleichnamigen Funktionstaste auf deiner Tastatur zugeordnet.
 - Funktionstaste **F1–F12** kurz **tippen** — das belegte Preset lädt sofort, auch während Noten klingen.
 - Oder auf einen Button **klicken**. Ein leerer Platz macht nichts.
 - Der Name des geladenen Presets erscheint wie gewohnt in der Kopfzeile.
+- Das Rack zeigt, was das Preset nutzt: Module, die es ausgeschaltet lässt, werden ausgeblendet. MASTER BUS, KEYBOARD und die Anzeigen bleiben. **MODULES** in der Kopfzeile holt jedes Modul zurück.
 
 **Belegen / ändern**
 

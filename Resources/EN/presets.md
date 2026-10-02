@@ -7,6 +7,7 @@ Each slot maps to the matching function key on your keyboard.
 - **Tap** a function key **F1–F12** — the assigned preset loads instantly, even while notes are sounding.
 - Or **click** a button. An empty slot does nothing.
 - The loaded preset's name appears in the header, as usual.
+- The rack shows what the preset uses: modules it leaves switched off are hidden. MASTER BUS, KEYBOARD and the displays stay. **MODULES** in the header brings any module back.
 
 **Assign / change a slot**
 

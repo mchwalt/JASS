@@ -42,6 +42,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   keep loops on WAV, AIFF or FLAC.
 
 ### Changed
+- **Loading a preset shows exactly the patch.** Modules the preset leaves switched off are hidden
+  on load; MASTER BUS, the KEYBOARD and the displays stay as they are, and the header's MODULES
+  menu brings any module back. The rack already had one half of this rule — a module a preset
+  left *on* is revealed, a hidden module is forced silent — and the missing half left every
+  preset reading as twenty modules of which fourteen were off (maintainer's call, 2026-10-02).
+  Start-up is untouched: the LiveState restores the bench as you left it. A stored layout now
+  decides zone, order and alignment; for the patch modules, visibility follows the switch.
 - **JUCE 9.0.0 → 9.0.2.** No API JASS uses changed. What it brings here: WAV files with a missing
   final pad byte load again, malformed audio files are rejected by the library before our own
   guards, the MP3 decoder above, VST3 hosting fixes.

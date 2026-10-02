@@ -464,7 +464,7 @@ namespace rack
         if (onLayoutChanged) onLayoutChanged();
     }
 
-    void Rack::reloadLayoutFromState()
+    void Rack::reloadLayoutFromState (bool presetLoad)
     {
         const auto s = apvts.state.getProperty (juce::Identifier (kLayoutStateProp)).toString();
         if (s.isNotEmpty())
@@ -478,13 +478,37 @@ namespace rack
         // BEFORE enforcing the hidden⇒silent invariant: reveal any module the preset left enabled
         // but that the layout hides (e.g. a preset using the default-hidden COMPRESSOR). Otherwise
         // enforceHiddenDisabled would silence it and the user would never see it was in the patch.
-        if (revealEnabledModules())
+        // On a preset load the reverse holds too: what the preset leaves off goes away, so the
+        // rack reads as the patch. Not at start-up — the LiveState restores the bench as left.
+        bool changed = revealEnabledModules();
+        if (presetLoad)
+            changed = hideUnusedModules() || changed;
+        if (changed)
         {
             relayout();
             writeLayoutToState();
             if (onLayoutChanged) onLayoutChanged();
         }
         enforceHiddenDisabled();   // any STILL-hidden module ⇒ silent (invariant)
+    }
+
+    bool Rack::hideUnusedModules()
+    {
+        bool changed = false;
+        for (auto& e : layoutModel)
+        {
+            if (! e.visible) continue;
+            if (e.zone == Zone::MasterBus || e.zone == Zone::Input) continue;   // infrastructure, not patch
+            if (isVisualOnly (e.id)) continue;                                   // the player's scope, not the preset's
+            if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
+            {
+                const auto pid = p->frame->enableParamId();
+                if (pid.isEmpty()) continue;   // nothing to read — leave it (no such module today)
+                if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() <= 0.5f)
+                { e.visible = false; changed = true; }   // off ⇒ hidden (the enable is already off)
+            }
+        }
+        return changed;
     }
 
     void Rack::enforceHiddenDisabled()
