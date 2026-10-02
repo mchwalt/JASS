@@ -381,20 +381,86 @@ namespace rack
         return Zone::Generators;
     }
 
-    juce::var Rack::entriesToVar (const std::vector<RackLayoutEntry>& entries)
+    juce::var Rack::entriesToVar (const std::vector<RackLayoutEntry>& entries) const
     {
-        juce::Array<juce::var> arr;
-        for (const auto& e : entries)
+        // Grouped by zone (maintainer 2026-10-03: the flat list of 38 five-line records was hard
+        // to read): one object keyed by zone name in render order, each an array of
+        // {id, vis, alignR} in zone order. The array index IS the position, so moving a line
+        // moves the module and a line cut from one zone and pasted into another moves it there.
+        // Every zone is written, empty or not, so a hand edit can see where a module may go.
+        auto* root = new juce::DynamicObject();
+        auto zonesWritten = zoneOrder;
+        for (const auto& e : entries)   // a zone outside the render order still gets written
+            if (std::find (zonesWritten.begin(), zonesWritten.end(), e.zone) == zonesWritten.end())
+                zonesWritten.push_back (e.zone);
+        for (auto zone : zonesWritten)
         {
-            auto* o = new juce::DynamicObject();
-            o->setProperty ("id",   e.id);
-            o->setProperty ("zone", zoneName (e.zone));
-            o->setProperty ("pos",  e.position);
-            o->setProperty ("vis",  e.visible);
-            o->setProperty ("alignR", e.alignRight);
-            arr.add (juce::var (o));
+            std::vector<const RackLayoutEntry*> es;
+            for (const auto& e : entries)
+                if (e.zone == zone) es.push_back (&e);
+            std::stable_sort (es.begin(), es.end(),
+                              [] (const RackLayoutEntry* a, const RackLayoutEntry* b)
+                              { return a->position < b->position; });
+            juce::Array<juce::var> arr;
+            for (const auto* e : es)
+            {
+                auto* o = new juce::DynamicObject();
+                o->setProperty ("id",     e->id);
+                o->setProperty ("vis",    e->visible);
+                o->setProperty ("alignR", e->alignRight);
+                arr.add (juce::var (o));
+            }
+            root->setProperty (zoneName (zone), arr);
         }
-        return arr;
+        return juce::var (root);
+    }
+
+    void Rack::forEachLayoutItem (const juce::var& v, const std::function<void (const LayoutItem&)>& fn)
+    {
+        // Both shapes read, append-only: the grouped object (2026-10-03) and the flat array
+        // ({id, zone, pos, vis, alignR}) every preset and RackLayout.json before it carried.
+        // A field the data does not have stays void, so the caller keeps its current value.
+        if (auto* obj = v.getDynamicObject())
+        {
+            for (const auto& prop : obj->getProperties())
+                if (auto* arr = prop.value.getArray())
+                    for (int i = 0; i < arr->size(); ++i)
+                    {
+                        const auto& item = arr->getReference (i);
+                        LayoutItem it;
+                        it.id     = item.getProperty ("id", {}).toString();
+                        it.zone   = prop.name.toString();
+                        it.pos    = i;
+                        it.vis    = item.getProperty ("vis", {});
+                        it.alignR = item.getProperty ("alignR", {});
+                        if (it.id.isNotEmpty()) fn (it);
+                    }
+            return;
+        }
+        if (auto* arr = v.getArray())
+            for (const auto& item : *arr)
+            {
+                LayoutItem it;
+                it.id     = item.getProperty ("id", {}).toString();
+                it.zone   = item.getProperty ("zone", {}).toString();
+                it.pos    = item.getProperty ("pos", {});
+                it.vis    = item.getProperty ("vis", {});
+                it.alignR = item.getProperty ("alignR", {});
+                if (it.id.isNotEmpty()) fn (it);
+            }
+    }
+
+    void Rack::mergeLayoutItem (std::vector<RackLayoutEntry>& into, const LayoutItem& it)
+    {
+        for (auto& e : into)
+            if (e.id == it.id)
+            {
+                if (it.zone.isNotEmpty())  e.zone       = zoneFromName (it.zone);
+                if (! it.pos.isVoid())     e.position   = (int)  it.pos;
+                if (! it.vis.isVoid())     e.visible    = (bool) it.vis;
+                if (! it.alignR.isVoid())  e.alignRight = (bool) it.alignR;
+                return;
+            }
     }
 
     juce::var Rack::layoutToVar() const        { return entriesToVar (layoutModel); }
@@ -406,20 +472,7 @@ namespace rack
         // descriptor default (so a new module needs no hand edit to appear in the file's world);
         // an id the rack no longer has is ignored. The current model follows: this runs at
         // build time, before any stored layout is applied on top (reloadLayoutFromState).
-        if (auto* arr = fileEntries.getArray())
-            for (const auto& item : *arr)
-            {
-                const auto id = item.getProperty ("id", {}).toString();
-                for (auto& d : defaultLayout)
-                    if (d.id == id)
-                    {
-                        d.zone       = zoneFromName (item.getProperty ("zone", zoneName (d.zone)).toString());
-                        d.position   = (int)  item.getProperty ("pos",    d.position);
-                        d.visible    = (bool) item.getProperty ("vis",    d.visible);
-                        d.alignRight = (bool) item.getProperty ("alignR", d.alignRight);
-                        break;
-                    }
-            }
+        forEachLayoutItem (fileEntries, [this] (const LayoutItem& it) { mergeLayoutItem (defaultLayout, it); });
         layoutModel = defaultLayout;
         relayout();
     }
@@ -442,23 +495,7 @@ namespace rack
         // `Sampler Demo` and every other older preset showed it too (maintainer 2026-10-02).
         // A preset with no layout at all already took this route (reloadLayoutFromState).
         layoutModel = defaultLayout;
-        if (auto* arr = v.getArray())
-        {
-            for (const auto& item : *arr)
-            {
-                const auto id = item.getProperty ("id", {}).toString();
-                if (id.isEmpty()) continue;
-                for (auto& e : layoutModel)
-                    if (e.id == id)
-                    {
-                        e.zone       = zoneFromName (item.getProperty ("zone", {}).toString());
-                        e.position   = (int)  item.getProperty ("pos", e.position);
-                        e.visible    = (bool) item.getProperty ("vis", e.visible);
-                        e.alignRight = (bool) item.getProperty ("alignR", e.alignRight);
-                        break;
-                    }
-            }
-        }
+        forEachLayoutItem (v, [this] (const LayoutItem& it) { mergeLayoutItem (layoutModel, it); });
         relayout();
         if (onLayoutChanged) onLayoutChanged();
     }

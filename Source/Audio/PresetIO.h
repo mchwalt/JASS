@@ -240,8 +240,10 @@ namespace PresetIO
         settingsFile().replaceWithText(juce::JSON::toString(v, false));
     }
 
-    // %AppData%\Roaming\JASS\RackLayout.json — the player's DEFAULT rack: one entry per module
-    // {id, zone, pos, vis, alignR}, the same shape a preset's "RackLayout" field has. "Reset
+    // %AppData%\Roaming\JASS\RackLayout.json — the player's DEFAULT rack, grouped by zone:
+    // {"ZONE": [{id, vis, alignR}, …], …} in rack order, one module per line, the array order
+    // being the position — the same shape a preset's "RackLayout" field has (the flat
+    // {id, zone, pos, vis, alignR} array from before 2026-10-03 still loads). "Reset
     // layout" and the zone ↺ restore THIS; a preset's own layout overrides it while that preset
     // is loaded. Seeded on first run from the descriptor defaults, then edited by hand or via
     // "Save as default" in the MODULES panel — which modules the stock rack shows must never
@@ -257,9 +259,38 @@ namespace PresetIO
         return juce::JSON::parse(rackLayoutFile().loadFileAsString());
     }
 
-    inline void saveRackLayout(const juce::var& entries)
+    // One module per line, its attributes comma-separated (maintainer 2026-10-03): JUCE's pretty
+    // printer gives every attribute a line of its own, which made 38 modules a 266-line scroll.
+    // Valid JSON throughout, so loading stays a plain JSON::parse.
+    inline juce::String rackLayoutText(const juce::var& layout)
     {
-        rackLayoutFile().replaceWithText(juce::JSON::toString(entries, false));   // pretty, hand-editable
+        auto* obj = layout.getDynamicObject();
+        if (obj == nullptr)
+            return juce::JSON::toString(layout, false);   // legacy array shape: pretty-printed
+        juce::String s("{\n");
+        bool firstZone = true;
+        for (const auto& zone : obj->getProperties())
+        {
+            if (! firstZone) s << ",\n";
+            firstZone = false;
+            s << "  " << juce::JSON::toString(juce::var(zone.name.toString()), true) << ": [";
+            if (auto* arr = zone.value.getArray(); arr != nullptr && ! arr->isEmpty())
+            {
+                s << "\n";
+                for (int i = 0; i < arr->size(); ++i)
+                    s << "    " << juce::JSON::toString(arr->getReference(i), true)
+                      << (i + 1 < arr->size() ? ",\n" : "\n");
+                s << "  ";
+            }
+            s << "]";
+        }
+        s << "\n}\n";
+        return s;
+    }
+
+    inline void saveRackLayout(const juce::var& layout)
+    {
+        rackLayoutFile().replaceWithText(rackLayoutText(layout));   // hand-editable
     }
 
     // The folder a file chooser opens in: where the SAME chooser (by key) last picked something,

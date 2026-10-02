@@ -501,8 +501,10 @@ not touch the layout beyond revealing what Init switches on. *Arrangement*:
 the MODULES menu's reset (`resetLayout`) and the zone ↺ (`resetZone`), which
 restore the *default layout* (the zone ↺ also the factory enable state) —
 never knob values. The default layout is data, not code:
-`%AppData%\JASS\RackLayout.json`, one `{id, zone, pos, vis, alignR}` per
-module. The descriptor `defaultVisible` flags only seed that file on first run
+`%AppData%\JASS\RackLayout.json`, grouped by zone — `{"GENERATORS":
+[{id, vis, alignR}, …], …}` in rack order, one module per line, the list order
+being the position (the flat `{id, zone, pos, vis, alignR}` list from before
+2026-10-03 still loads). The descriptor `defaultVisible` flags only seed that file on first run
 (`Rack::defaultLayoutToVar`); afterwards the editor merges the file over the
 seed by id (`Rack::setDefaultLayout`), so a module the file predates keeps its
 descriptor default, and "Save as default" in the MODULES panel adopts the

@@ -3,6 +3,8 @@
 #include <vector>
 #include <utility>
 #include <map>
+#include <functional>
+#include <algorithm>
 #include "ModuleDescriptor.h"
 #include "ModuleFrame.h"
 #include "SynthyLookAndFeel.h"
@@ -279,7 +281,12 @@ namespace rack
         bool hideUnusedModules();
 
         // --- Layout persistence helpers (Story 4.3) ---
-        static juce::var entriesToVar (const std::vector<RackLayoutEntry>& entries);   // → array of {id,zone,pos,vis,alignR}
+        // One item of persisted layout data in either shape (grouped object or legacy array);
+        // a void field means "not in the data" and leaves the entry's current value alone.
+        struct LayoutItem { juce::String id, zone; juce::var pos, vis, alignR; };
+        juce::var entriesToVar (const std::vector<RackLayoutEntry>& entries) const;   // → {"ZONE": [{id,vis,alignR}, …], …} in render order
+        static void forEachLayoutItem (const juce::var& v, const std::function<void (const LayoutItem&)>& fn);
+        static void mergeLayoutItem (std::vector<RackLayoutEntry>& into, const LayoutItem& it);   // by id; unknown ids ignored
         juce::var layoutToVar() const;                  // model → JSON var
         void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)
         bool isDefaultLayout() const;                   // model == captured defaults?

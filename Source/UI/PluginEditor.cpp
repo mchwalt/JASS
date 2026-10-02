@@ -699,8 +699,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         // it from the descriptor defaults so it is there to edit; afterwards the file wins, and
         // "Save as default" in the MODULES panel rewrites it. Done BEFORE the stored layout is
         // applied, because that is merged on top of the default.
-        if (auto fileLayout = PresetIO::loadRackLayout(); fileLayout.isArray())
+        if (auto fileLayout = PresetIO::loadRackLayout();
+            fileLayout.isArray() || fileLayout.getDynamicObject() != nullptr)
+        {
             rackBody->setDefaultLayout(fileLayout);
+            if (fileLayout.isArray())   // the flat list from before 2026-10-03: rewrite it grouped by zone, once
+                PresetIO::saveRackLayout(rackBody->defaultLayoutToVar());
+        }
         else
             PresetIO::saveRackLayout(rackBody->defaultLayoutToVar());
         rackBody->onDefaultLayoutChanged = [](const juce::var& v) { PresetIO::saveRackLayout(v); };

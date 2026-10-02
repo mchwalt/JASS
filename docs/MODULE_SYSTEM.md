@@ -296,7 +296,7 @@ the field-by-field contract lives in [`JASS_Preset_Format.md`](JASS_Preset_Forma
   "Sampler": { "Enabled": false, …, "File": "CH_01" },                     // File injected by PresetIO (by NAME)
   "StepSeq": { …, "Steps": [ { "Step": 1, … }, … ] },                     // v10: only the used steps
   "Grain":   { "Enabled": false, …, "Quant": "Off", "Key": false },
-  "RackLayout": { … }                                                      // only when non-default
+  "RackLayout": { "GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ], … }   // only when non-default; by zone
 }
 ```
 
