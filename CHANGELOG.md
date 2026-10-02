@@ -10,6 +10,12 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+### Fixed
+- **STEP SEQ help no longer says it "replaces" the ARPEGGIATOR.** It does not make the arpeggiator
+  obsolete; the two take the same place as the note source, so only one can run and switching
+  one on switches the other off. The sentence now says that (maintainer 2026-10-03: "das
+  verstehe ich nicht").
+
 ## [2026.10.0] – 2026-10-02
 
 ### Added
