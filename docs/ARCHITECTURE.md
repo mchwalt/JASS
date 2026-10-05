@@ -27,7 +27,8 @@ JASS is a polyphonic software synthesizer written in **C++20** on
 **[JUCE 9](Glossary.md#juce)** (vendored as a Git
 [submodule](Glossary.md#submodule)). It builds as a
 **[Standalone](Glossary.md#standalone)** app (primary target) and a
-**[VST3](Glossary.md#vst3)** plugin (experimental) from a single CMake project.
+**[VST3](Glossary.md#vst3)** plugin (validated in a DAW host 2026-10-05, Story 3.4;
+see AD-13) from a single CMake project.
 
 Key characteristics:
 
@@ -577,7 +578,7 @@ its viewport only if it is still taller than the window.
 
 The formal architecture spine lives at
 `_bmad-output/planning-artifacts/architecture/architecture-JASS-2026-06-28/ARCHITECTURE-SPINE.md`
-(AD-1…AD-12). One-line summaries:
+(AD-1…AD-13). One-line summaries:
 
 | AD | Decision |
 |---|---|
@@ -593,6 +594,36 @@ The formal architecture spine lives at
 | AD-10 | `RackLayout` model (id/zone/position/visible) is the single source of placement truth; customization is a reorderable list panel |
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
 | AD-12 | Width fixed (1920 px), height auto-fits the visible rack; the display-fit scale comes from the may-appear worst case, with a floor of 1:1 physical pixels |
+| AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS stays a monotimbral instrument; several voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
+
+### AD-13 in more detail (decided 2026-10-05)
+
+- **What was rejected.** (a) Parts inside one JASS: N engines behind one APVTS, prefixed
+  parameter ids, a part selector in a 1920 px rack, a global ARP/SEQ/PERC/GLIDE made per-part.
+  (b) JASS as a plugin host: a small DAW of our own (scanning, editor windows, latency, routing).
+  Both buy with the simplicity of JASS what a DAW already has.
+- **What was chosen.** JASS renders as a VST3 instrument; a DAW owns tracks, mixer, song, tempo
+  and transport. Validated in the Tracktion Engine DemoRunner and in Waveform 14 (two instances on
+  two tracks, host tempo, edit round-trip, host-side mute). Waveform runs on Windows and, since
+  September 2026, Linux, where its Pro features are free. Fallback if Waveform ever blocks: the
+  engine is GPL and a thin JUCE front end of our own loads the same `.tracktionedit` files.
+- **MASTER in a host.** Rendered as a disabled, locked module. The engine ignores `masterOn`
+  (always on) and `masterVol` (unity), the tempo is the host tempo, and the `MasterVol` /
+  `MasterTempo` mod targets are dead. The stored parameters are untouched, so the same patch
+  keeps its mute, level and tempo in the standalone. Consequences accepted: a quiet patch comes in
+  at full level in the host (the track fader is the one level); VOL tremolo is a standalone-only
+  effect (route the LFO to the generator amplitudes instead).
+- **The plugin family.** The present `JASS.vst3` (the whole rack) is a transitional build. The
+  target is a set of small, single-purpose instruments cut from the same sources, each its own
+  CMake plugin target with its own plugin id, name and module set, so a track reads like a
+  hardware rack: one box, one job. The append-only contract applies per plugin id. Two candidate
+  first cuts: a **drum machine** from PERC + its kit store + the PERC grid (PERC already runs
+  beside the voice straight onto the bus; nothing in it touches the voice, so it is the cheapest
+  clean cut); and a **sequenced bass** from OSC 1 + SUB + FILTER + ADSR + GLIDE + DISTORTION +
+  STEP SEQ (the DAF line). Names are open; **JASS** is reserved for the standalone.
+- **Sequencers stay in the instrument** for now (STEP SEQ, PERC, ARP): their feel, accent,
+  slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
+  option, not a plan.
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.
