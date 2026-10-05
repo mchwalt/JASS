@@ -10,6 +10,19 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+### Changed
+- **In a DAW the MASTER module is off and locked (VST3).** It renders dimmed with its enable,
+  reset, VOL and TEMPO inert, and the engine runs at unity level with mute ignored and the tempo
+  taken from the host; the MasterVol/MasterTempo modulation targets do nothing there. Why: in a
+  host, mute, level and tempo belong to the track and the project (maintainer 2026-10-05: "ein
+  Mute mache ich ja auch über die DAW"), and a knob that looks live but does nothing is a trap.
+  The stored values are untouched, so the same patch keeps its mute, level and tempo in the
+  standalone; the standalone itself is unchanged. Two consequences by design: a quiet patch
+  arrives at full level in the host (the track fader is the one level, so all instances are
+  level-matched), and VOL tremolo is a standalone-only effect (route the LFO to the generator
+  amplitudes instead). Part of AD-13: multitimbral JASS is several plugin instances on several
+  DAW tracks, not a host inside JASS.
+
 ## [2026.10.1] – 2026-10-03
 
 ### Changed

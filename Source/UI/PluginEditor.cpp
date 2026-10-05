@@ -689,6 +689,11 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     if (rackBody)
     {
         rackBody->onLayoutChanged = [this] { refitHeight(); };
+        // AD-13 (Story 18.1): in a DAW the host owns mute, level and tempo — MASTER renders locked
+        // + dimmed; its stored params stay as they are for the standalone.
+        if (processor.isHostedByDaw())
+            if (auto* master = rackBody->moduleById ("master"))
+                master->lockForHost();
         // Tell the rack which enable params ship "on" in the Init patch despite a declared
         // default of 0 (mirrors SynthyProcessor::resetToDefault): OSC 1..3. A zone RESET then
         // reproduces the factory enable state instead of silencing the oscillators.

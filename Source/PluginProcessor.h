@@ -109,6 +109,11 @@ public:
     // Is a latched figure running? (SPACE stops it — the editor needs to know whether there is
     // anything to stop before it falls through to the Karplus pluck.)
     bool isSeqLatched() const { return seqLatchedRoot.load() >= 0; }
+
+    // True when a DAW hosts us (VST3). The host then owns mute, level and tempo, and the MASTER
+    // module is shown locked + dimmed in the rack (AD-13, Story 18.1): masterOn/masterVol are
+    // ignored, the tempo is the host's, and the MasterVol/MasterTempo mod targets are dead.
+    bool isHostedByDaw() const noexcept { return wrapperType != wrapperType_Standalone; }
     int  getSeqLatchRoot() const { return seqLatchedRoot.load(); }   // -1 when not latched
     // Stop the latched figure. Clearing the root is enough: the next block sees nothing playing,
     // releases the sounding note and re-arms the pattern at step 0, exactly as letting go of the

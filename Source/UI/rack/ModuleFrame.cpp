@@ -153,6 +153,24 @@ namespace rack
 
     ModuleFrame::~ModuleFrame() { stopTimer(); }
 
+    void ModuleFrame::lockForHost()
+    {
+        hostLocked = true;
+        if (enableBtn != nullptr)
+        {
+            enableBtn->setEnabled (false);
+            enableBtn->setInterceptsMouseClicks (false, false);
+        }
+        resetBtn.setEnabled (false);
+        for (auto& cell : cells)
+        {
+            if (cell.widget != nullptr) cell.widget->setEnabled (false);
+            if (cell.toggle != nullptr) cell.toggle->setEnabled (false);
+        }
+        dimmed = true;
+        repaint();
+    }
+
     void ModuleFrame::buildHeader()
     {
         titleLabel.setText (desc.title, juce::dontSendNotification);

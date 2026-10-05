@@ -938,8 +938,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
     }
     // MASTER · TEMPO — wobble the Tempo-Sync BPM so synced LFOs/delay drift around the beat (applied
-    // to the resolved tempo, host or internal, ±40 BPM at full modulation).
-    syncBpm = juce::jlimit(40.0, 250.0, syncBpm + gMod[(size_t) LFOTarget::MasterTempo] * 90.0);
+    // to the resolved tempo, ±40 BPM at full modulation). Standalone only: in a DAW the MASTER
+    // module is off (AD-13, Story 18.1) — the host's tempo is the tempo, its mod target is dead.
+    if (! isHostedByDaw())
+        syncBpm = juce::jlimit(40.0, 250.0, syncBpm + gMod[(size_t) LFOTarget::MasterTempo] * 90.0);
 
     // Per-LFO effective rate (Tempo-Sync resolved once per block; Free => raw RATE knob).
     double lfoRateHz[kNumLFOs];
@@ -1415,9 +1417,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Master volume — gated by masterOn (Story 2.4): off => silent output. Base + MOD MATRIX offset,
     // applied as a per-block RAMP (prev→cur) so LFO-modulated VOL doesn't zipper.
+    // In a DAW the MASTER module is off (AD-13, Story 18.1): unity gain, mute ignored, VOL mod
+    // dead — the track fader is the one level and the host's mute is the mute. The stored params
+    // stay untouched so the same patch keeps its VOL/mute in the standalone.
     const bool  masterOn   = *apvts.getRawParameterValue(Parameters::ID::masterOn) > 0.5f;
     const float masterVol  = juce::jlimit(0.0f, 1.0f, (float) (apvts.getRawParameterValue(Parameters::ID::masterVol)->load() + gMod[(size_t) LFOTarget::MasterVol] * 1.0));
-    const float masterGain = masterOn ? masterVol : 0.0f;
+    const float masterGain = isHostedByDaw() ? 1.0f : (masterOn ? masterVol : 0.0f);
     buffer.applyGainRamp(0, buffer.getNumSamples(), prevMasterGain, masterGain);
     prevMasterGain = masterGain;
 
