@@ -1,7 +1,6 @@
 # Faithful Python port of StepSequencer / PercSequencer clocks + the processor PERC transport block.
 # Checks that a STOP/release re-sync lands figure step 0 and drum step 0 on the same sample
 # (found the drum-clock drift of 2026-10-11). Run: python -I tools/sim/resync_clocks.py
-# STOP/release re-sync lands figure step 0 and drum step 0 on the same sample.
 import random
 
 class Seq:
