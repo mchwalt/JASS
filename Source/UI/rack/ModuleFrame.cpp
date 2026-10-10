@@ -28,6 +28,29 @@ namespace rack
                      (double) r.skew, r.symmetricSkew };
         }
 
+        // The GATE knob's travel vs. the stored gate (maintainer 2026-10-11: reaching TIE without
+        // Shift). The STORE keeps the 15.7 contract — 5..100 %, 101 = TIE, 102 = SLIDE — but on the
+        // KNOB the two names are BANDS of kGateBand positions each above 100, so a plain turn
+        // lands on them instead of skipping the single tick 101 was. Store → knob puts the value
+        // in the middle of its band; knob → store collapses the band back to 101 / 102.
+        constexpr int kGateBand = 5;
+        constexpr int kGateKnobMax = 100 + 2 * kGateBand;   // 110: 101..105 = TIE, 106..110 = SLIDE
+
+        inline int gateKnobToValue (double knob) noexcept
+        {
+            const int v = juce::roundToInt (knob);
+            if (v <= 100)               return juce::jmax (StepPattern::kGateMin, v);
+            if (v <= 100 + kGateBand)   return StepPattern::kGateTie;
+            return StepPattern::kGateSlide;
+        }
+
+        inline double gateValueToKnob (int value) noexcept
+        {
+            if (value >= StepPattern::kGateSlide) return 100 + kGateBand + (kGateBand + 1) / 2;   // 108
+            if (value == StepPattern::kGateTie)   return 100 + (kGateBand + 1) / 2;               // 103
+            return (double) juce::jlimit (StepPattern::kGateMin, 100, value);
+        }
+
         // Three-state step switch (15.2): a click cycles OFF (rest) → ON → ACCENTED → OFF — the
         // TR-909's second-press gesture — over TWO bool parameters (the step's on/off and its
         // accent). ParameterAttachments keep it repainting on preset/host changes WITHOUT firing
@@ -652,9 +675,9 @@ namespace rack
                     g->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 14);
                     if (altPattern)
                     {
-                        g->setRange ((double) StepPattern::kGateMin, (double) StepPattern::kGateMax, 1.0);
-                        g->setValue ((double) fig->gate (absStep), juce::dontSendNotification);
-                        g->onValueChange = [g, fig, absStep] { fig->setGate (absStep, juce::roundToInt (g->getValue())); };
+                        g->setRange ((double) StepPattern::kGateMin, (double) kGateKnobMax, 1.0);   // TIE / SLIDE as bands
+                        g->setValue (gateValueToKnob (fig->gate (absStep)), juce::dontSendNotification);
+                        g->onValueChange = [g, fig, absStep] { fig->setGate (absStep, gateKnobToValue (g->getValue())); };
                         g->setDoubleClickReturnValue (false, 0.0);
                         // NO double-click-to-baseline on the gate row (maintainer 2026-10-10): with the
                         // gate PREVIEW, clicking a knob to hear the length is the row's main gesture, and
@@ -678,12 +701,21 @@ namespace rack
                     }
                     if (k->altTextFromValue)
                     {
-                        g->textFromValueFunction = k->altTextFromValue;
-                        g->valueFromTextFunction = k->altValueFromText
+                        // The editor's read-out and parser speak STORE values (5..102); a pattern
+                        // cell's knob travels 5..110 (TIE / SLIDE bands), so translate at the edge.
+                        std::function<juce::String (double)> text = k->altTextFromValue;
+                        std::function<double (const juce::String&)> parse = k->altValueFromText
                             ? k->altValueFromText
                             : [] (const juce::String& t) { return t.getDoubleValue(); };
+                        if (altPattern)
+                        {
+                            text  = [f = k->altTextFromValue] (double v) { return f ((double) gateKnobToValue (v)); };
+                            parse = [f = parse] (const juce::String& t) { return gateValueToKnob (juce::roundToInt (f (t))); };
+                        }
+                        g->textFromValueFunction = text;
+                        g->valueFromTextFunction = parse;
                         g->updateText();
-                        g->tooltipFromValue = k->altTextFromValue;
+                        g->tooltipFromValue = text;
                         g->refreshTooltip();
                     }
                     if (k->altAudition)
@@ -695,7 +727,7 @@ namespace rack
                         // too. Nothing to release afterwards — the gate decides when it stops.
                         g->onDragEnd = [g, s, aud = k->altAudition]
                         {
-                            aud (juce::roundToInt (g->getValue()), (int) s->getValue(), true);
+                            aud (gateKnobToValue (g->getValue()), (int) s->getValue(), true);
                         };
                     }
                     else if (k->audition)
@@ -1555,7 +1587,7 @@ namespace rack
             }
             if (c.gate != nullptr)
             {
-                c.gate->setValue ((double) fig->gate (c.step), juce::dontSendNotification);
+                c.gate->setValue (gateValueToKnob (fig->gate (c.step)), juce::dontSendNotification);
                 c.gate->refreshTooltip();
             }
             if (c.sw != nullptr)

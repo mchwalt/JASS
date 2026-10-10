@@ -28,7 +28,9 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   ist immer gleich lang gehalten"); a first cut re-sounded it on every tick of a drag, which only
   machine-gunned the note. The gate row has no double-click-to-loaded-value: clicking to hear is
   its main gesture, and two such clicks counted as a double-click reset the gate to the preset's
-  value.
+  value. TIE and SLIDE are now bands of five knob positions each above 100 %, so a plain turn
+  lands on them (TIE used to be a single tick between 100 % and SLIDE, reachable only with Shift
+  — maintainer 2026-10-11: "ohne Shift … wäre natürlich geiler"). Stored values are unchanged.
 
 ### Changed
 - **In a DAW the MASTER module is off and locked (VST3).** It renders dimmed with its enable,
