@@ -1149,10 +1149,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
             if (requantize)
             {
-                // Restart at step 0, quantised to the drum clock resolved above. The release goes
-                // into `kept` — the buffer the synth actually receives (see the comment up top).
-                stepSeq.releaseAll(kept, 1);
-                stepSeq.reset();
+                // Restart at step 0, quantised to the drum clock resolved above — LEGATO: the note
+                // that is sounding is kept and step 0 takes it over like a TIE boundary, so the
+                // bass does not dip while it falls back in step with the drums (maintainer
+                // 2026-10-11). A preset load (the other caller) has no voice sounding, so the
+                // takeover finds nothing and the entry is a plain note-on, as before.
+                stepSeq.restartLegato();
                 if (perc.enabled)
                     stepSeq.setStartDelay(perc.samplesToPatternStart());
             }

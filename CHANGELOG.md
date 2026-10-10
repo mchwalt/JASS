@@ -26,7 +26,9 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   drum downbeat while it is held. The drums (re)starting — STOP released, or PERC switched on —
   is a downbeat: a running STEP SEQ figure re-enters on it, so bass and beat are back in step
   without touching a key (maintainer 2026-10-11: "wie schaffe ich es PERC und STEP SEQ wieder
-  zu synchronisieren"). Why: PERC runs the moment it is switched on, while STEP SEQ
+  zu synchronisieren"). The re-entry is legato: the note that is sounding is carried into step 1
+  the way a TIE carries it, retuned if the pitch differs, so the bass does not dip while it
+  falls back into step (a first cut released and re-struck it: "eine kleine Tonunterbrechung"). Why: PERC runs the moment it is switched on, while STEP SEQ
   waits for the first key, so editing a beat meant editing against the beat (maintainer
   2026-10-10: "gibt es eine intelligente Art, PERC zum Editieren zeitweise stoppen zu koennen?").
   A hand on the transport, not a parameter: it is not saved with the patch.

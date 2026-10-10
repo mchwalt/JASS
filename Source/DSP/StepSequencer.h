@@ -80,6 +80,22 @@ public:
         numLegato = 0;
     }
 
+    // Restart at step 0 WITHOUT a hole (maintainer 2026-10-11: the re-sync to the drums left "eine
+    // kleine Tonunterbrechung"): the sounding note is kept and the boundary is treated exactly
+    // like a TIE — step 0 takes the voice over (retuned if its pitch differs, otherwise simply
+    // continued), no note-off, no new attack. A rest on step 0 still ends the note, as a rest
+    // does. With nothing sounding this is a plain reset. Pair with setStartDelay to hold the note
+    // through a wait for the drums' downbeat.
+    void restartLegato()
+    {
+        sampleCounter = 0;
+        stepIndex = 0;
+        gateCountdown = -1;
+        numLegato = 0;
+        tiePending = (soundingNote >= 0);
+        tieIsSlide = false;
+    }
+
     // Release whatever the pattern left sounding (switched off, or the last key let go).
     void releaseAll (juce::MidiBuffer& out, int channel, int sampleOffset = 0)
     {
