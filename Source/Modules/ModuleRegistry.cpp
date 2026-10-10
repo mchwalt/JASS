@@ -23,9 +23,30 @@ namespace Modules
             if (x.zone != y.zone) return (int) x.zone < (int) y.zone;
             return x.title.compareIgnoreCase (y.title) < 0;
         });
+        // ...and Cubase lists VST3 units by their NUMERIC id, not by index — and JUCE derives
+        // that id from the group id string (hashCode & 0x7fffffff), so a sorted group order
+        // alone still showed Cubase a hash-ordered folder list (maintainer 2026-10-11: "OSC 1,
+        // SUB, OSC 2, OSC 3"). Give the k-th group an id whose hash lands in the k-th of n
+        // ascending bands: "<module id>#<suffix>", the suffix searched upwards until it fits
+        // (about n tries each, once at construction). A group id names nothing persistent —
+        // units carry no state and no project refers to them — so it is free to be ugly.
+        const int n = (int) mods.size();
+        const juce::int64 band = (juce::int64) 0x7fffffff / (juce::int64) juce::jmax (1, n);
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
-        for (const auto& m : mods)
-            layout.add (makeModuleParameterGroup (m.id, m.title, m.params));
+        for (int k = 0; k < n; ++k)
+        {
+            const auto& m = mods[(size_t) k];
+            const juce::int64 lo = 1 + (juce::int64) k * band;   // 1: never kRootUnitId (0)
+            const juce::int64 hi = (juce::int64) (k + 1) * band;
+            juce::String gid = m.id;
+            for (int suffix = 0; suffix < 100000; ++suffix)
+            {
+                const juce::String candidate = m.id + "#" + juce::String (suffix);
+                const juce::int64 h = (juce::int64) (candidate.hashCode() & 0x7fffffff);
+                if (h >= lo && h < hi) { gid = candidate; break; }
+            }
+            layout.add (makeModuleParameterGroup (gid, m.title, m.params));
+        }
         return layout;
     }
 

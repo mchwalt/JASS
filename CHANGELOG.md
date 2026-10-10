@@ -96,7 +96,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   order (GENERATORS, MODULATION, PROCESSING, VISUALIZATION, MASTER BUS, INPUT) and
   alphabetically within a zone, instead of the order the modules happened to be added to the
   project over time (maintainer in Cubase 2026-10-10: "warum sind die Parameter unsortiert?").
-  Safe to change: VST3 parameter ids are hashes of the id strings, so projects keep loading.
+  Cubase in particular orders the folders by their numeric unit id, which JUCE hashes from the
+  group's id string — so each group now gets an id whose hash falls into its slot of the
+  sorted order, and the folders come out in rack order there too (maintainer 2026-10-11: "OSC 1,
+  SUB, OSC 2, OSC 3"). Safe to change: VST3 parameter ids are hashes of the parameter id
+  strings, untouched, so projects keep loading. The order of the parameters INSIDE a folder is
+  the host's: Cubase sorts them by parameter id, and those ids cannot change without breaking
+  every saved project.
 
 ## [2026.10.1] – 2026-10-03
 

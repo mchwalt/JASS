@@ -420,7 +420,9 @@ light only the targeted oscillator's knob.
 - **VST3 parameter view** (2026-10-10): one unit per rack module
   (`AudioProcessorParameterGroup`, id = module id, name = module title), the
   units ordered by rack zone and then title (`Modules::createParameterLayout`;
-  the specs' registration order in `all()` is unaffected);
+  the specs' registration order in `all()` is unaffected — and since Cubase
+  orders units by their numeric id, which JUCE hashes from the group id, each
+  group id carries a `#<n>` suffix chosen so the hashes ascend in that order);
   parameter names are `"<title> <hostName|uiLabel|persistKey>"`; the internal
   LFO `Target` is registered **not automatable**. The sequencer patterns are no
   parameters at all since 18.5 (AD-14): the STEP SEQ figure and the PERC grid
