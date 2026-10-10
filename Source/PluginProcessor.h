@@ -137,6 +137,13 @@ public:
     // Sound one PERC lane once — the grid plays a step as it is placed. Message thread → audio
     // thread through one atomic; the block consumes it.
     void auditionPercLane (int lane) { percAuditionLane.store (lane); }
+    // STOP latch in the PERC header (maintainer 2026-10-10: a way to pause the drums while
+    // editing the grid). Held = the pattern stands still and the playhead goes out; the module
+    // stays on, the kit stays loaded, and a grid click still sounds its lane. Releasing it
+    // starts the pattern on step 1 (the falling-edge reset in processBlock does that). Runtime
+    // state like COPY, not a parameter: it is a hand on the transport, not part of the patch.
+    void holdPerc (bool hold) { percHeld.store (hold); }
+    bool isPercHeld() const   { return percHeld.load(); }
 
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
@@ -242,6 +249,7 @@ private:
                                               // replaced a still-running one (no edge to rise on)
     std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
+    std::atomic<bool> percHeld { false };     // STOP latch: pattern paused, see holdPerc
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
     // index still points at whatever set sits there, and playing a random one — a drum loop, a
     // piano — is worse than playing nothing (maintainer heard exactly that, 2026-08-11).

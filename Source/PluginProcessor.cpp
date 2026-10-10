@@ -1047,9 +1047,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // PREVIOUS patch's drum state and skipped the quantisation (bass permanently off the
         // beat). Kit, levels and rendering stay below; only the clock moves up here.
         {
-            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
+            // STOP (header latch) counts as "not running" here on purpose: the clock stands, the
+            // playhead goes out, and the STEP SEQ does not wait for a drum downbeat that will not
+            // come. Rendering below still runs, so a grid click can sound its lane while held.
+            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f && ! percHeld.load();
             if (! percOn && perc.enabled)
-                perc.reset();      // switched off ⇒ the next start is a downbeat, not where it stopped
+                perc.reset();      // switched off or held ⇒ the next start is a downbeat, not where it stopped
             perc.enabled = percOn;
             perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);
             const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);

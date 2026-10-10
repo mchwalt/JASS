@@ -2547,6 +2547,12 @@ void SynthyEditor::buildRack()
         // Step duplication (maintainer 2026-08-30, "3. bitte" = both): COPY latches a
         // column-stamp mode on the grid; x2 appends the pattern behind itself. Visible header
         // buttons, no context menu — the house rule.
+        // STOP (maintainer 2026-10-10): PERC runs the moment it is on, unlike STEP SEQ which waits
+        // for a key — so editing a beat meant editing against the beat. A latch, like COPY: held,
+        // the pattern stands still (clicks still sound their lane); released, it starts on step 1.
+        d.headerActions.push_back({ "STOP",
+                                    "Hold the pattern while you edit (clicks still sound); release = start on step 1",
+                                    {}, [this](bool on) { processor.holdPerc(on); } });
         d.headerActions.push_back({ "COPY",
                                     "Copy a step column: click the source, then every target (right-click re-picks)",
                                     {}, [grid](bool on) { grid->setCopyMode(on); } });
