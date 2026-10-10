@@ -10,6 +10,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.2] – 2026-10-11
+
 ### Added
 - **JASS carries an icon and its identity.** The standalone and the VST3 now embed an icon (the
   rack's ground with the name and three small modules in the zone colours) and the usual file
