@@ -27,7 +27,8 @@ JASS is a polyphonic software synthesizer written in **C++20** on
 **[JUCE 9](Glossary.md#juce)** (vendored as a Git
 [submodule](Glossary.md#submodule)). It builds as a
 **[Standalone](Glossary.md#standalone)** app (primary target) and a
-**[VST3](Glossary.md#vst3)** plugin (experimental) from a single CMake project.
+**[VST3](Glossary.md#vst3)** plugin (validated in a DAW host 2026-10-05, Story 3.4;
+see AD-13) from a single CMake project.
 
 Key characteristics:
 
@@ -90,7 +91,7 @@ The rules that keep this true:
 - **`Modules/ModuleSpec.h` is the UI half** — the only spec header that pulls
   in `UI/rack/ModuleDescriptor.h`.
 - **`Modules/ModuleRegistry.h`** exposes audio-safe declarations only
-  (`appendAllParameters`, `writeState`, `readState`). Its definition in
+  (`createParameterLayout`, `writeState`, `readState`). Its definition in
   `ModuleRegistry.cpp` is the *single* translation unit that includes
   `AllModules.h` (and therefore the UI headers). `Parameters.h` and
   `PresetIO.h` include only the registry header.
@@ -104,7 +105,7 @@ The rules that keep this true:
 
 | Generated from module specs | Hand-written |
 |---|---|
-| APVTS parameter layout (`createLayout()` is one call: `Modules::appendAllParameters`) | DSP `process()` of every module (`Source/DSP/`) |
+| APVTS parameter layout (`createLayout()` is one call: `Modules::createParameterLayout`, one parameter group per module) | DSP `process()` of every module (`Source/DSP/`) |
 | Rack UI descriptors (`makeModuleDescriptor`) | Param → DSP wiring (`Parameters::applyToVoice`) |
 | Nested `.jass` persistence (`Modules::writeState/readState`) | ~9 modules with editor-bound UI bodies (see MODULE_SYSTEM.md §6) |
 
@@ -416,6 +417,21 @@ light only the targeted oscillator's knob.
 - **VST3 state**: `getStateInformation` = `copyState → XML → binary`;
   `setStateInformation` first runs the idempotent XML migration for pre-v5
   matrix parameters, then `replaceState` + `markPresetClean`.
+- **VST3 parameter view** (2026-10-10): one unit per rack module
+  (`AudioProcessorParameterGroup`, id = module id, name = module title), the
+  units ordered by rack zone and then title (`Modules::createParameterLayout`;
+  the specs' registration order in `all()` is unaffected — and since Cubase
+  orders units by their numeric id, which JUCE hashes from the group id, each
+  group id carries a `#<n>` suffix chosen so the hashes ascend in that order);
+  parameter names are `"<title> <hostName|uiLabel|persistKey>"`; the internal
+  LFO `Target` is registered **not automatable**. The sequencer patterns are no
+  parameters at all since 18.5 (AD-14): the STEP SEQ figure and the PERC grid
+  live in `PatternStore` and ride in the DAW state as one `<StepPattern>` /
+  `<PercPattern>` element each; `setStateInformation` folds a pre-18.5
+  project's cell parameters into the store once. A host sees ~150 parameters. VST3 parameter ids are hashes of the APVTS ids and
+  unchanged, so edits saved with earlier builds keep loading. Whether a host
+  hides non-automatable parameters or shows units as folders is the host's
+  call (Cubase does both; Bitwig flattens the list).
 - **Preset format**: nested JSON per module,
   [`PresetIO::kFormatVersion = 6`](Glossary.md#formatversion),
   load = *factory-reset everything first, then layer the file on top* —
@@ -577,7 +593,7 @@ its viewport only if it is still taller than the window.
 
 The formal architecture spine lives at
 `_bmad-output/planning-artifacts/architecture/architecture-JASS-2026-06-28/ARCHITECTURE-SPINE.md`
-(AD-1…AD-12). One-line summaries:
+(AD-1…AD-14). One-line summaries:
 
 | AD | Decision |
 |---|---|
@@ -593,6 +609,83 @@ The formal architecture spine lives at
 | AD-10 | `RackLayout` model (id/zone/position/visible) is the single source of placement truth; customization is a reorderable list panel |
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
 | AD-12 | Width fixed (1920 px), height auto-fits the visible rack; the display-fit scale comes from the may-appear worst case, with a floor of 1:1 physical pixels |
+| AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS stays a monotimbral instrument; several voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
+
+| AD-14 | **Sequencer patterns are content, not parameters.** The STEP SEQ figure (768 × pitch/on/accent/gate) and the PERC grid (4 × 192) leave the APVTS and live in a `PatternStore` the engine reads lock-free; a host sees ~150 parameters, not ~4000. Presets, DAW state and LiveState carry the patterns as data blocks; the rack binds step knobs and grid cells to the store, not to parameters |
+
+### AD-13 in more detail (decided 2026-10-05)
+
+- **What was rejected.** (a) Parts inside one JASS: N engines behind one APVTS, prefixed
+  parameter ids, a part selector in a 1920 px rack, a global ARP/SEQ/PERC/GLIDE made per-part.
+  (b) JASS as a plugin host: a small DAW of our own (scanning, editor windows, latency, routing).
+  Both buy with the simplicity of JASS what a DAW already has.
+- **What was chosen.** JASS renders as a VST3 instrument; a DAW owns tracks, mixer, song, tempo
+  and transport. Validated in the Tracktion Engine DemoRunner and in Waveform 14 (two instances on
+  two tracks, host tempo, edit round-trip, host-side mute). Waveform runs on Windows and, since
+  September 2026, Linux, where its Pro features are free. Fallback if Waveform ever blocks: the
+  engine is GPL and a thin JUCE front end of our own loads the same `.tracktionedit` files.
+- **MASTER in a host.** Rendered as a disabled, locked module. The engine ignores `masterOn`
+  (always on) and `masterVol` (unity), the tempo is the host tempo, and the `MasterVol` /
+  `MasterTempo` mod targets are dead. The stored parameters are untouched, so the same patch
+  keeps its mute, level and tempo in the standalone. Consequences accepted: a quiet patch comes in
+  at full level in the host (the track fader is the one level); VOL tremolo is a standalone-only
+  effect (route the LFO to the generator amplitudes instead).
+- **The plugin family.** The present `JASS.vst3` (the whole rack) is a transitional build. The
+  target is a set of small, single-purpose instruments cut from the same sources, each its own
+  CMake plugin target with its own plugin id, name and module set, so a track reads like a
+  hardware rack: one box, one job. The append-only contract applies per plugin id. Two candidate
+  first cuts: a **drum machine** from PERC + its kit store + the PERC grid (PERC already runs
+  beside the voice straight onto the bus; nothing in it touches the voice, so it is the cheapest
+  clean cut); and a **sequenced bass** from OSC 1 + SUB + FILTER + ADSR + GLIDE + DISTORTION +
+  STEP SEQ (the DAF line). Names are open; **JASS** is reserved for the standalone.
+- **Sequencers stay in the instrument** for now (STEP SEQ, PERC, ARP): their feel, accent,
+  slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
+  option, not a plan.
+
+### AD-14 in more detail (decided 2026-10-10, Story 18.5)
+
+- **The problem.** Every cell of the two sequencer grids is an APVTS parameter: 768 × 4 for
+  STEP SEQ, 4 × 192 for PERC — 3840 of JASS's ~4000 parameters. In the standalone that is
+  invisible; in a DAW it is the parameter list. Story 18.4 named the cells and flagged them
+  not automatable; Bitwig then hides them, Cubase does not (it honours only the VST3 `hidden`
+  flag, which JUCE 9 never sets). The maintainer's verdict on the list: the cells are not
+  parameters of an instrument at all — a pattern is what you *write into* the instrument, the
+  way a 303 keeps its pattern in memory and its knobs on the panel.
+- **What was chosen.** A `PatternStore` owned by the processor: fixed-size arrays of
+  `std::atomic<int8_t>` / `std::atomic<uint8_t>` per cell, so the audio thread reads exactly
+  what it reads today (one atomic load per used cell per block, no lock, no allocation), and
+  the message thread writes cells directly. The grids are no longer parameters: the host sees
+  the ~150 knobs, switches and combos, grouped by module (18.4), and nothing else.
+- **What was rejected.** (a) Keeping the cells as parameters and patching the JUCE VST3
+  wrapper to set `kIsHidden`: a patch against a submodule, re-applied on every JUCE bump, and
+  the cells would still be parameters in every other format and in the family cuts. (b) A
+  second, private APVTS on a dummy `AudioProcessor` that hosts the cells (keeps every
+  attachment and spec untouched): two value trees with one id space, a processor that is not
+  one, and the "content, not parameter" idea only true at the host boundary. (c) Leaving it:
+  Cubase lists 3840 cells inside two folders, and every family cut (AD-13) inherits them.
+- **Persistence.** Presets already carry the figure as data (`StepSeq.Steps` array since v7,
+  `Perc.Lanes` strings since v9); `PresetIO` reads and writes the store instead of parameters,
+  and the flat pre-v7/pre-v9 keys get a small legacy reader of their own. The DAW state and the
+  LiveState hold the patterns as two properties on `apvts.state` (the `rackLayout` precedent:
+  a property on the tree travels through `copyState`/`replaceState` and through the LiveState
+  file for free). A project saved by an earlier build still carries the cells as `<PARAM>`
+  elements; `setStateInformation` folds them into the store once, gated on their presence,
+  idempotent — the AD-11 migration pattern. No `FormatVersion` bump: the preset file does not
+  change shape.
+- **Rack binding.** AD-6 said all bindings live in `ModuleFrame`; it still holds. The frame
+  gains a second binding kind next to the APVTS attachments: a `PatternCell` source (get, set,
+  change-notify) for the step knob, its corner switch (on → accented), its GATE alt row and the
+  PERC grid cells. Paging (16.3) becomes index arithmetic on the store instead of string
+  arithmetic on parameter ids. The editor hooks (audition, cursor, playhead, note read-out)
+  already work on absolute step indices and keep their shape.
+- **Behaviour that changes with it.** RANDOM no longer scrambles the figure — it randomised
+  every parameter, cells included, which nobody asked for; it now leaves the pattern alone.
+  Module ↺ and the header RESET clear the pattern explicitly (an `onReset` on both modules)
+  instead of through the parameter loop. The preset-modified flag compares the store too.
+  MIDI import/export (`SeqMidiIO`) and the latch read the store.
+- **Why now.** AD-13's family cuts start from PERC (a drum machine) and from STEP SEQ (a
+  sequenced bass); a cut inherits whatever the pattern is. Cutting with the pattern as content
+  gives every cut the same small, honest parameter list from day one.
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.

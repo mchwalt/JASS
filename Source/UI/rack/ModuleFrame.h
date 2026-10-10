@@ -42,6 +42,13 @@ namespace rack
         // visibility to enable (hide ⇒ disable, show ⇒ enable once; Story 4.2).
         const juce::String& enableParamId() const noexcept { return desc.enableParam; }
 
+        // Lock this module for a DAW host (AD-13, Story 18.1 — MASTER in the VST3): it renders as
+        // a disabled module — body dimmed, every control and the header enable/reset switched off,
+        // no mod rings — and the Rack's zone Enable skips it. The params underneath stay untouched
+        // (the host ignores them; the standalone still reads them from the same patch). One-way.
+        void lockForHost();
+        bool isHostLocked() const noexcept { return hostLocked; }
+
         // A module that only DRAWS (scope, spectrum): hiding it changes nothing you can hear, so
         // the rack may take it at its word — see ModuleDescriptor::visualOnly.
         bool isVisualOnly() const noexcept { return desc.visualOnly; }
@@ -111,6 +118,7 @@ namespace rack
         // Absent signals are treated as "on", so a module with neither is always-on.
         bool moduleEnabled() const
         {
+            if (hostLocked) return false;   // AD-13: a host-locked module is off whatever its params say
             const bool paramOn   = (enableValue == nullptr) || enableValue->load() >= 0.5f;
             const bool derivedOn = ! desc.enabledWhen || desc.enabledWhen();
             return paramOn && derivedOn;
@@ -145,6 +153,7 @@ namespace rack
 
         std::atomic<float>* enableValue = nullptr;   // raw value of the enable param (nullptr => always-on)
         bool dimmed = false;
+        bool hostLocked = false;   // lockForHost() — see there
 
         // --- live-feed targets (Story 1.4) ---
         // Knobs carrying a modTarget: their ring is animated by updateLiveFeed when the
@@ -181,6 +190,17 @@ namespace rack
         // and both views share them.
         struct AltKnob { SynthySlider* main; SynthySlider* alt; };
         std::vector<AltKnob> altKnobs;
+
+        // Pattern cells (AD-14, 18.5): a step knob bound to desc.stepPattern instead of a
+        // parameter — the pitch slider, the gate alt slider (may be null) and the corner switch,
+        // for ABSOLUTE step `step` (page applied at build time). Writes go straight to the store
+        // from the widgets' callbacks; the timer polls the store's revision and, on a change
+        // (preset load, MIDI import, keyboard recording, reset), pushes the values back into the
+        // widgets without notification — the poll-and-resync the attachments used to do.
+        struct PatternCell { SynthySlider* pitch; SynthySlider* gate; juce::Button* sw; int step; };
+        std::vector<PatternCell> patternCells;
+        uint32_t lastPatternRevision = 0;
+        void syncPatternCells();   // store → widgets, silently
         std::unique_ptr<juce::TextButton> altRowBtn;   // header latch; only when altRowTitle set
         juce::OwnedArray<juce::TextButton> actionBtns; // header one-shot actions (15.8), see desc.headerActions
         std::unique_ptr<juce::TextButton> collapseBtn; // display fold latch (16.2); only when collapseTitle set

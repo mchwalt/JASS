@@ -689,6 +689,11 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     if (rackBody)
     {
         rackBody->onLayoutChanged = [this] { refitHeight(); };
+        // AD-13 (Story 18.1): in a DAW the host owns mute, level and tempo — MASTER renders locked
+        // + dimmed; its stored params stay as they are for the standalone.
+        if (processor.isHostedByDaw())
+            if (auto* master = rackBody->moduleById ("master"))
+                master->lockForHost();
         // Tell the rack which enable params ship "on" in the Init patch despite a declared
         // default of 0 (mirrors SynthyProcessor::resetToDefault): OSC 1..3. A zone RESET then
         // reproduces the factory enable state instead of silencing the oscillators.
@@ -1194,20 +1199,19 @@ void SynthyEditor::chooseMidiExport()
 // PERC's x2 (maintainer 2026-08-30): append the pattern behind itself and double LEN — the
 // classic drum-machine "same bar again, then vary the copy". Capped at kMaxSteps; short of the
 // cap it copies what still fits (a partial doubling beats a dead button), at the cap it does
-// nothing. Plain parameter writes, so undo/preset/LiveState all see it like hand edits.
+// nothing. Cells go to the PatternStore (AD-14), LEN is still a parameter.
 void SynthyEditor::doublePercPattern()
 {
     namespace P = Parameters::ID;
     auto& a = processor.getAPVTS();
+    auto& grid = processor.getPatterns().perc;
     const int len    = (int) *a.getRawParameterValue(P::percLength);
     const int newLen = juce::jmin(2 * len, (int) PercSequencer::kMaxSteps);
     if (newLen <= len)
         return;
-    for (int l = 1; l <= PercSequencer::kLanes; ++l)
-        for (int s = 1; s + len <= newLen; ++s)
-            if (auto* src = a.getParameter(P::percStep(l, s)))
-                if (auto* dst = a.getParameter(P::percStep(l, s + len)))
-                    dst->setValueNotifyingHost(src->getValue() > 0.5f ? 1.0f : 0.0f);
+    for (int l = 0; l < PercSequencer::kLanes; ++l)
+        for (int s = 0; s + len < newLen; ++s)
+            grid.set(l, s + len, grid.get(l, s));
     if (auto* lp = a.getParameter(P::percLength))
         lp->setValueNotifyingHost(lp->convertTo0to1((float) newLen));
 }
@@ -1493,6 +1497,24 @@ void SynthyEditor::auditionStep(int semitones, bool sounding, bool accented)
                           // drag end, and a hanging note is worse than a short one
 }
 
+// The GATE row's preview (maintainer 2026-10-10: turning a gate knob sounded a note of always the
+// same length, so the value could not be judged by ear). The step's pitch is played for gate% of
+// the step length the processor last resolved (SYNC against the tempo, or RATE) — the length the
+// figure itself will give the note. TIE and SLIDE have no second step to run into here, so they
+// sound as one full step. Always a fresh attack: hearing the length means hearing it end.
+void SynthyEditor::auditionStepGated(int semitones, bool accented, int gate)
+{
+    if (auditionNote >= 0)   // re-trigger: a note still sounding would just be extended
+    {
+        processor.getKeyboardState().noteOff(SynthyProcessor::kAuditionChannel, auditionNote, 0.0f);
+        auditionNote = -1;
+    }
+    auditionStep(semitones, true, accented);
+    const double frac  = gate >= StepPattern::kGateTie ? 1.0 : juce::jlimit(5, 100, gate) / 100.0;
+    const double hold  = frac * juce::jmax(0.02, processor.getSeqStepSeconds());
+    auditionTicks = juce::jmax(1, juce::roundToInt(hold * 30.0));   // the timer runs at 30 Hz
+}
+
 // --- Writing a figure by playing it (Story 15.4) -------------------------------------------------
 // The cursor is the step the next played note lands in. It is UI state only: no parameter, nothing
 // persisted (AC9). Setting it also arms the processor, which then stops looking for a root note —
@@ -1553,17 +1575,13 @@ void SynthyEditor::seqWriteNote(int midiNote)
 {
     if (seqCursor < 0 || seqCursor >= StepSequencer::kMaxSteps)
         return;
-    namespace P = Parameters::ID;
-    auto& apvts     = processor.getAPVTS();
-    const int step  = seqCursor + 1;                                       // params are 1-based
+    auto& fig       = processor.getPatterns().step;   // the figure is content (AD-14)
     const int semis = juce::jlimit(-24, 24, midiNote - seqPitchReference());
 
-    if (auto* p = apvts.getParameter(P::seqPitch(step)))
-        p->setValueNotifyingHost(p->convertTo0to1((float) semis));
+    fig.setPitch(seqCursor, semis);
     // A written step is not a rest (AC3) — a figure entered by playing must sound without a
     // second pass over 32 switches.
-    if (auto* on = apvts.getParameter(P::seqStep(step)))
-        on->setValueNotifyingHost(1.0f);
+    fig.setOn(seqCursor, true);
 
     auditionStep(semis, true);   // hear what was just written, through 15.3's one preview path
     seqAdvanceCursor();
@@ -1577,8 +1595,7 @@ void SynthyEditor::seqSkipStep()
 {
     if (seqCursor < 0)
         return;
-    if (auto* on = processor.getAPVTS().getParameter(Parameters::ID::seqStep(seqCursor + 1)))
-        on->setValueNotifyingHost(0.0f);
+    processor.getPatterns().step.setOn(seqCursor, false);
     seqAdvanceCursor();
 }
 
@@ -1658,8 +1675,7 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         {
             const int prev = seqCursor - 1;
             seqSetCursor(prev);
-            if (auto* on = processor.getAPVTS().getParameter(Parameters::ID::seqStep(prev + 1)))
-                on->setValueNotifyingHost(0.0f);
+            processor.getPatterns().step.setOn(prev, false);
         }
         return true;
     }
@@ -2404,13 +2420,15 @@ void SynthyEditor::buildRack()
         // so touching it moves the write cursor there (AC7) and the ring marks where the next played
         // note will land. Both hooks are UI state the spec cannot express — only the editor owns the
         // cursor, the keyboard state and the current octave.
+        // The step cells are PATTERN cells (AD-14): Knob::patternStep says which step of page A
+        // the cell shows; the frame binds the knob, the three-state corner switch and the GATE
+        // alt row to PatternStore::step itself, so nothing here names a parameter.
+        d.stepPattern = &processor.getPatterns().step;
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
-                if (k->paramId.startsWith("seqPitch"))
+                if (k->patternStep >= 0)
                 {
-                    const int step = k->paramId.substring(8).getIntValue();   // 1-based, page A
-                    k->toggleParamId = "seqStep" + k->paramId.substring(8);
-                    k->accentParamId = "seqAcc"  + k->paramId.substring(8);   // 15.2: third switch state
+                    const int step = k->patternStep + 1;   // 1-based, page A
                     // Step pages (16.3): this CELL shows step `step` OF THE SHOWN PAGE — the frame
                     // rebinds its params per page, and these editor hooks translate themselves
                     // through the same shared page state, so cell 7 on page C selects, marks and
@@ -2420,8 +2438,7 @@ void SynthyEditor::buildRack()
                     {
                         if (sounding) seqSetCursor(absStep() - 1);   // a click selects, exactly as 15.3 sounds
                         // An accented step previews HOT (15.2) — the same velocity the figure plays.
-                        const bool acc = *processor.getAPVTS().getRawParameterValue(
-                                             Parameters::ID::seqAcc(absStep())) > 0.5f;
+                        const bool acc = processor.getPatterns().step.accent(absStep() - 1);
                         auditionStep(semis, sounding, acc);
                     };
                     k->highlightWhen = [this, absStep] { return seqCursor == absStep() - 1; };
@@ -2447,10 +2464,18 @@ void SynthyEditor::buildRack()
                              + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape
                     };
                     // …and give the knob its SECOND meaning (15.7): the per-step gate. The GATE
-                    // header latch flips the row; the value is one continuum — 5..100 % of the
-                    // step, then TIE (held through, next step takes over without a retrigger)
-                    // and SLIDE (the same, gliding — the 303). Read-out spells the two names.
-                    k->altParamId = "seqSGate" + k->paramId.substring(8);
+                    // header latch flips the row (the frame builds the alt slider on the pattern
+                    // cell's gate); the value is one continuum — 5..100 % of the step, then TIE
+                    // (held through, next step takes over without a retrigger) and SLIDE (the
+                    // same, gliding — the 303). Read-out spells the two names.
+                    // ...and hear the gate while turning it: the step at exactly that length.
+                    k->altAudition = [this, absStep](int gate, int semis, bool sounding)
+                    {
+                        if (! sounding) return;
+                        seqSetCursor(absStep() - 1);   // a touch selects, as on the pitch row
+                        const bool acc = processor.getPatterns().step.accent(absStep() - 1);
+                        auditionStepGated(semis, acc, gate);
+                    };
                     k->altTextFromValue = [](double v)
                     {
                         const int gv = juce::roundToInt(v);
@@ -2475,14 +2500,13 @@ void SynthyEditor::buildRack()
         // control of its own. doReset() writes the defaults first and calls this after.
         d.onReset = [this] { seqSetCursor(0); };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
-        // 16.2: the red line after step LEN — "where does the figure end", at a glance.
-        d.lenMarkerStepPrefix  = "seqPitch";
+        // 16.2: the red line after step LEN — "where does the figure end", at a glance. The
+        // marker cells are the pattern cells (no prefix needed since AD-14).
         d.lenMarkerLengthParam = P::seqLength;
         // Step pages (16.3): the 48 knobs are a window onto kMaxSteps; A/B/C/D + FOLLOW in the
         // header. State lives HERE (the cursor, the timer's auto-flip and these hooks share it).
         d.paging.pageCount     = StepSequencer::kMaxSteps / StepSequencer::kPageSteps;
-        d.paging.stepsPerPage  = StepSequencer::kPageSteps;
-        d.paging.pagedPrefixes = { "seqPitch" };
+        d.paging.stepsPerPage  = StepSequencer::kPageSteps;   // pattern cells page by index (AD-14)
         d.paging.getPage       = [this] { return seqShownPage; };
         d.paging.setPage       = [this](int p) { setSeqPage(p, true); };
         d.paging.playingPage   = [this] { return seqPlayingPage(); };
@@ -2518,9 +2542,12 @@ void SynthyEditor::buildRack()
     // grid's 62 px cell), and the KIT list is dynamic, exactly like the SAMPLER's SET.
     {
         auto d = makeModuleDescriptor(Modules::perc());
-        auto* grid = new PercGrid(apvts,
+        auto* grid = new PercGrid(apvts, processor.getPatterns().perc,
                                   [this] { return processor.getPercStep(); },
                                   [this](int lane) { processor.auditionPercLane(lane); });
+        // Module ↺ clears the grid too (AD-14): the cells are no parameters, so the frame's
+        // parameter reset cannot reach them — and a reset that keeps the beat is no reset.
+        d.onReset = [this] { processor.getPatterns().perc.clear(); };
         rackOwned.add(grid);   // typed pointer kept: the COPY latch below talks to PercGrid itself
         percGrid = grid;       // 16.3: page flips push their window offset into the grid
         // Step pages (16.3): same A/B/C/D + FOLLOW as STEP SEQ. No paged body cells here — the
@@ -2540,6 +2567,12 @@ void SynthyEditor::buildRack()
         // Step duplication (maintainer 2026-08-30, "3. bitte" = both): COPY latches a
         // column-stamp mode on the grid; x2 appends the pattern behind itself. Visible header
         // buttons, no context menu — the house rule.
+        // STOP (maintainer 2026-10-10): PERC runs the moment it is on, unlike STEP SEQ which waits
+        // for a key — so editing a beat meant editing against the beat. A latch, like COPY: held,
+        // the pattern stands still (clicks still sound their lane); released, it starts on step 1.
+        d.headerActions.push_back({ "STOP",
+                                    "Hold the pattern while you edit (clicks still sound); release = start on step 1",
+                                    {}, [this](bool on) { processor.holdPerc(on); } });
         d.headerActions.push_back({ "COPY",
                                     "Copy a step column: click the source, then every target (right-click re-picks)",
                                     {}, [grid](bool on) { grid->setCopyMode(on); } });

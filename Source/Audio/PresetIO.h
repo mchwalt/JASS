@@ -5,6 +5,7 @@
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "../DSP/ModMatrixCatalog.h"     // v9 "Slots": generated ParamName (the catalog is dependency-free by design)
 #include "../DSP/StepSequencer.h"        // kMaxSteps — the Steps array length (48 since 16.2)
+#include "PatternStore.h"                // AD-14: the PERC grid is content, read/written here via a hook
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 #include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
 #include "Samples.h"       // embedded shipped SAMPLER examples (Story 12.1)
@@ -475,6 +476,13 @@ namespace PresetIO
     // Unset (plugin build without the hook, tests): loads behave as before.
     inline std::function<void(bool)> setPresetLoading;
 
+    // AD-14 (Story 18.5): the sequencer patterns are content, not parameters, so they do not come
+    // through the APVTS this file is handed. The processor points this at its PatternStore; toVar
+    // writes the PERC rows and the STEP SEQ steps from it and applyVar fills it. Unset (tests): the
+    // rows are written empty and a loaded pattern is dropped — the same "hook not set" stance as
+    // the latch root above.
+    inline PatternStore* patterns = nullptr;
+
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
     inline void preloadSamples(std::function<bool()> shouldAbort = {})
@@ -641,64 +649,47 @@ namespace PresetIO
         if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
         {
             const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
-            // Only the USED steps are written (16 pages would be ~750 "Off C3" lines in every
-            // file otherwise — these files are read by eye). Used = up to LEN, extended to the
-            // last step that differs from factory default so material parked beyond the LEN line
-            // survives the round-trip. The reader has always tolerated a short array: it factory-
-            // resets first, so a missing step IS the default.
-            int used = juce::jlimit(1, (int) StepSequencer::kMaxSteps,
+            // The figure comes from the PatternStore (AD-14), not from parameters. Only the USED
+            // steps are written (16 pages would be ~750 "Off C3" lines in every file otherwise —
+            // these files are read by eye). Used = up to LEN, extended to the last step that
+            // differs from factory default (OFF, pitch 0, plain, gate 100) so material parked
+            // beyond the LEN line survives the round-trip. The reader has always tolerated a
+            // short array: it factory-resets first, so a missing step IS the default.
+            const StepPattern* fig = patterns != nullptr ? &patterns->step : nullptr;
+            int used = juce::jlimit(1, (int) StepPattern::kMaxSteps,
                                     (int) *a.getRawParameterValue(ID::seqLength));
-            // A step's FACTORY DEFAULT is OFF (a rest), pitch 0, no accent, gate 100. Extend past
-            // LEN only for cells that DIFFER from that — so parked material (an ON step or a set
-            // pitch/accent/gate) survives while the empty tail is dropped.
-            auto stepIsDefault = [&a](int s)
-            {
-                return *a.getRawParameterValue(ID::seqStep(s)) < 0.5f
-                    && (int) *a.getRawParameterValue(ID::seqPitch(s)) == 0
-                    &&       *a.getRawParameterValue(ID::seqAcc(s)) < 0.5f
-                    && (int) *a.getRawParameterValue(ID::seqSGate(s)) == 100;
-            };
-            for (int s = StepSequencer::kMaxSteps; s > used; --s)
-                if (! stepIsDefault(s)) { used = s; break; }
+            if (fig != nullptr)
+                used = juce::jmax(used, fig->lastUsed() + 1);
             // …rounded UP to a full 16-step bar (maintainer 2026-09-02, the Laufindex formula
             // "(LEN/16)*16 + 16" with integer division): the array always ends on a bar
             // boundary, so the last bar reads complete instead of stopping mid-line. A LEN
             // already on the boundary gains nothing — at most 15 rest lines are added.
-            used = juce::jmin((int) StepSequencer::kMaxSteps, ((used + 15) / 16) * 16);
+            used = juce::jmin((int) StepPattern::kMaxSteps, ((used + 15) / 16) * 16);
             juce::Array<juce::var> steps;
             for (int s = 1; s <= used; ++s)
             {
+                const int q = s - 1;   // the store is 0-based
                 auto* st = new juce::DynamicObject();
                 // "Step" — the running index, FIRST so every line of the file says where it is
                 // (maintainer 2026-09-02: nobody counts 384 objects by eye while paging through
                 // a preset). Orientation only: the loader reads by POSITION and ignores this,
                 // exactly as it ignores "Name" — the two can never disagree with the music.
                 st->setProperty("Step", s);
-                const int note = juce::jlimit(0, 127, ref + (int) *a.getRawParameterValue(ID::seqPitch(s)));
-                st->setProperty("On",   *a.getRawParameterValue(ID::seqStep(s)) > 0.5f);
+                const int note = juce::jlimit(0, 127, ref + (fig != nullptr ? fig->pitch(q) : 0));
+                st->setProperty("On",   fig != nullptr && fig->on(q));
                 st->setProperty("Note", note);
                 st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
                 // Written even when false/100 (v10): a field the file omits forces the reader to
                 // know the default by heart — the maintainer reads these files. Loaders still
                 // treat a missing field as the default, so older terse files load unchanged.
-                st->setProperty("Accent", *a.getRawParameterValue(ID::seqAcc(s)) > 0.5f);
+                st->setProperty("Accent", fig != nullptr && fig->accent(q));
                 // v8 (15.7): the step's gate — a percent of the step, or the two values past the
                 // top of that continuum (100 = exactly the pre-15.7 behaviour).
-                const int sg = (int) *a.getRawParameterValue(ID::seqSGate(s));
-                if      (sg >= 102) st->setProperty("Gate", "SLIDE");
-                else if (sg == 101) st->setProperty("Gate", "TIE");
-                else                st->setProperty("Gate", sg);
+                const int sg = fig != nullptr ? fig->gate(q) : StepPattern::kGateDefault;
+                if      (sg >= StepPattern::kGateSlide) st->setProperty("Gate", "SLIDE");
+                else if (sg == StepPattern::kGateTie)   st->setProperty("Gate", "TIE");
+                else                                    st->setProperty("Gate", sg);
                 steps.add(juce::var(st));
-            }
-            // The spec pass wrote flat keys for ALL kMaxSteps — remove every one of them, not
-            // just the `used` range, or the trimmed tail leaks into the file as a flat-key
-            // desert (maintainer caught Pitch385..Gate768 flat, 2026-09-02).
-            for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)
-            {
-                mod->removeProperty("Pitch"  + juce::String(s));
-                mod->removeProperty("Step"   + juce::String(s));
-                mod->removeProperty("Accent" + juce::String(s));
-                mod->removeProperty("Gate"   + juce::String(s));   // numbered only — the GLOBAL "Gate" stays
             }
             mod->setProperty("Steps", juce::var(steps));
         }
@@ -711,18 +702,17 @@ namespace PresetIO
         // '.' = rest, exactly the row the PERC grid shows.
         if (auto* mod = root->getProperty("Perc").getDynamicObject())
         {
-            int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
+            int nLanes = 0;   // counted, not assumed — the spec is the single source
             while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
-            while (mod->hasProperty("Step1_" + juce::String(nSteps + 1))) ++nSteps;
-            // Only the used cells are written (same cure as the STEP SEQ array above — 16 pages
-            // would be four 768-dot rows in every file): up to LENGTH, extended to the last hit
-            // in any lane so hits parked beyond it survive. All rows share one width — the grid
-            // alignment is what makes the file readable. Reading pads with rests, as ever.
-            int used = juce::jlimit(1, juce::jmax(1, nSteps), (int) mod->getProperty("Length"));
-            for (int l = 1; l <= nLanes; ++l)
-                for (int s = nSteps; s > used; --s)
-                    if ((bool) mod->getProperty("Step" + juce::String(l) + "_" + juce::String(s)))
-                    { used = s; break; }
+            // The rows come from the PatternStore (AD-14), not from parameters. Only the used
+            // cells are written (same cure as the STEP SEQ array above — 16 pages would be four
+            // 768-dot rows in every file): up to LENGTH, extended to the last hit in any lane so
+            // hits parked beyond it survive. All rows share one width — the grid alignment is
+            // what makes the file readable. Reading pads with rests, as ever.
+            const PercPattern* grid = patterns != nullptr ? &patterns->perc : nullptr;
+            int used = juce::jlimit(1, (int) PercPattern::kMaxSteps, (int) mod->getProperty("Length"));
+            if (grid != nullptr)
+                used = juce::jmax(used, grid->lastHit() + 1);
             juce::Array<juce::var> lanes;
             for (int l = 1; l <= nLanes; ++l)
             {
@@ -734,16 +724,12 @@ namespace PresetIO
                     ln->setProperty("Name", gm);
                 ln->setProperty("Amp", mod->getProperty("Amp" + L));
                 ln->setProperty("Pan", mod->getProperty("Pan" + L));
-                juce::String steps;
-                for (int s = 1; s <= used; ++s)
-                    steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
-                ln->setProperty("Steps", steps);
+                ln->setProperty("Steps", grid != nullptr ? grid->laneString(l - 1, used)
+                                                         : juce::String::repeatedString(".", used));
                 lanes.add(juce::var(ln));
                 mod->removeProperty("Note" + L);
                 mod->removeProperty("Amp" + L);
                 mod->removeProperty("Pan" + L);
-                for (int s = 1; s <= nSteps; ++s)
-                    mod->removeProperty("Step" + L + "_" + juce::String(s));
             }
             mod->setProperty("Lanes", juce::var(lanes));
         }
@@ -1009,42 +995,56 @@ namespace PresetIO
         for (auto* p : a.processor.getParameters())
             p->setValueNotifyingHost(p->getDefaultValue());
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
+        if (patterns) { patterns->perc.clear(); patterns->step.clear(); }   // AD-14: part of the snapshot too
 
         Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
 
-        // STEP SEQ steps from the v7 ARRAY (see toVar) — decoded AFTER the spec pass, which read
-        // the flat v6 Pitch1/Step1… keys if the file still carries them (a v7 file does not, so
-        // the spec pass left the factory defaults standing). The absolute "Note" minus the file's
-        // latch root (C3 = 48 when none) restores the engine's offset; "Name" is readability only
-        // and deliberately ignored — the number is canonical.
+        // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
+        // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when
+        // none) restores the engine's offset; "Name" is readability only and deliberately
+        // ignored — the number is canonical. A pre-v7 file carries flat Pitch<n>/Step<n> keys —
+        // until 18.5 the spec pass read those as parameters; now this is their one reader.
         if (auto* seq = v["StepSeq"].getDynamicObject())
+        {
+            const int ref = seq->hasProperty("LatchRoot")
+                                ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
+            StepPattern* fig = patterns != nullptr ? &patterns->step : nullptr;
             if (auto* steps = seq->getProperty("Steps").getArray())
             {
-                const int ref = seq->hasProperty("LatchRoot")
-                                    ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
-                auto setRaw = [&a](const juce::String& id, float raw)
-                {
-                    if (auto* p = a.getParameter(id))
-                        p->setValueNotifyingHost(p->convertTo0to1(raw));
-                };
-                for (int s = 0; s < juce::jmin((int) StepSequencer::kMaxSteps, steps->size()); ++s)
+                for (int s = 0; fig != nullptr && s < juce::jmin((int) StepPattern::kMaxSteps, steps->size()); ++s)
                 {
                     const auto& st = steps->getReference(s);
                     if (! st.isObject()) continue;
-                    setRaw(ID::seqStep (s + 1), (bool) st["On"] ? 1.0f : 0.0f);
-                    setRaw(ID::seqPitch(s + 1), (float) juce::jlimit(-24, 24, (int) st["Note"] - ref));
-                    setRaw(ID::seqAcc  (s + 1), (bool) st["Accent"] ? 1.0f : 0.0f);
+                    fig->setOn    (s, (bool) st["On"]);
+                    fig->setPitch (s, juce::jlimit(StepPattern::kPitchMin, StepPattern::kPitchMax, (int) st["Note"] - ref));
+                    fig->setAccent(s, (bool) st["Accent"]);
                     // v8 gate (15.7): a number is a percent, the two names are the top of the
                     // continuum; missing (every v7 file) ⇒ 100 = the pre-15.7 behaviour.
-                    int sg = 100;
+                    int sg = StepPattern::kGateDefault;
                     if (const auto gv = st["Gate"]; gv.isString())
-                        sg = gv.toString().equalsIgnoreCase("SLIDE") ? 102
-                           : gv.toString().equalsIgnoreCase("TIE")   ? 101 : 100;
+                        sg = gv.toString().equalsIgnoreCase("SLIDE") ? StepPattern::kGateSlide
+                           : gv.toString().equalsIgnoreCase("TIE")   ? StepPattern::kGateTie : StepPattern::kGateDefault;
                     else if (gv.isInt() || gv.isInt64() || gv.isDouble())
-                        sg = juce::jlimit(5, 100, (int) gv);
-                    setRaw(ID::seqSGate(s + 1), (float) sg);
+                        sg = juce::jlimit(StepPattern::kGateMin, 100, (int) gv);
+                    fig->setGate(s, sg);
                 }
             }
+            else if (fig != nullptr)
+            {
+                // Pre-v7 flat keys: "Pitch<n>" (offset), "Step<n>" (on), and — from the short
+                // window between 15.2 and v7 — "Accent<n>" / "Gate<n>". Keys are contiguous from 1.
+                for (int s = 1; s <= StepPattern::kMaxSteps; ++s)
+                {
+                    const juce::Identifier kp ("Pitch" + juce::String(s)), ko ("Step" + juce::String(s)),
+                                           ka ("Accent" + juce::String(s)), kg ("Gate" + juce::String(s));
+                    if (! seq->hasProperty(kp) && ! seq->hasProperty(ko)) break;
+                    if (seq->hasProperty(kp)) fig->setPitch (s - 1, (int) seq->getProperty(kp));
+                    if (seq->hasProperty(ko)) fig->setOn    (s - 1, (bool) seq->getProperty(ko));
+                    if (seq->hasProperty(ka)) fig->setAccent(s - 1, (bool) seq->getProperty(ka));
+                    if (seq->hasProperty(kg)) fig->setGate  (s - 1, (int) seq->getProperty(kg));
+                }
+            }
+        }
 
         // PERC "Lanes" / MOD MATRIX "Slots" from the v9 ARRAYS (see toVar): rebuild the flat keys
         // the spec pass understands and run it again on just that one module — so the mapping
@@ -1059,6 +1059,7 @@ namespace PresetIO
                 Modules::readState(a, juce::var(rt));
             };
             if (auto* mod = v["Perc"].getDynamicObject())
+            {
                 if (auto* lanes = mod->getProperty("Lanes").getArray())
                 {
                     auto* flat = new juce::DynamicObject();
@@ -1071,13 +1072,27 @@ namespace PresetIO
                         flat->setProperty("Amp"  + L, ln["Amp"]);
                         if (! ln["Pan"].isVoid())
                             flat->setProperty("Pan" + L, ln["Pan"]);   // omitted = centred (default)
-                        const juce::String steps = ln["Steps"].toString();
-                        for (int s = 0; s < steps.length(); ++s)
-                            flat->setProperty("Step" + L + "_" + juce::String(s + 1),
-                                              steps[s] == 'X' || steps[s] == 'x');
+                        // The row goes to the PatternStore (AD-14), not through the spec pass:
+                        // the cells are no parameters any more.
+                        if (patterns)
+                            patterns->perc.setLaneString(l, ln["Steps"].toString());
                     }
                     respell("Perc", flat);
                 }
+                else if (patterns)
+                {
+                    // Pre-v9 file: the grid as flat "Step<lane>_<step>" keys. Until 18.5 the spec
+                    // pass read them as parameters; now this is their one reader. Files of that
+                    // age hold at most 48 steps, but the loop takes whatever is there.
+                    for (int l = 1; l <= PercPattern::kLanes; ++l)
+                        for (int s = 1; s <= PercPattern::kMaxSteps; ++s)
+                        {
+                            const juce::Identifier key ("Step" + juce::String(l) + "_" + juce::String(s));
+                            if (! mod->hasProperty(key)) break;   // keys are contiguous from 1
+                            patterns->perc.set(l - 1, s - 1, (bool) mod->getProperty(key));
+                        }
+                }
+            }
             if (auto* mod = v["ModMatrix"].getDynamicObject())
                 if (auto* slots = mod->getProperty("Slots").getArray())
                 {

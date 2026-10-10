@@ -81,6 +81,16 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
         for (const auto& id : m.bodyOrder)
         {
             if (id.isEmpty()) { d.body.push_back (rack::Caption { {} }); continue; }
+            // "step:<n>" (AD-14): a PATTERN cell — a knob bound to PatternStore::step, no
+            // parameter behind it. Captioned with its number, like the step knobs always were.
+            if (id.startsWith ("step:"))
+            {
+                const int n = id.substring (5).getIntValue();
+                rack::Knob k { {}, juce::String (n) };
+                k.patternStep = n - 1;
+                d.body.push_back (k);
+                continue;
+            }
             for (const auto& p : m.params)
                 if (p.id == id) { emit (p); break; }
         }

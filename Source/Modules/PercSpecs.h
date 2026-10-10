@@ -97,32 +97,14 @@ namespace Modules
                                   ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.01f), 0.0f });
         }
 
-        // The grid itself: 4 lanes x 48 steps of Bool, all showInBody = false. They claim no cell —
-        // the PercGrid component paints them and writes them straight to the APVTS.
-        // REGISTRATION order is append-only: the shipped 4x32 block stays exactly as it was,
-        // steps 33..48 of every lane follow BEHIND it (16.2) — a naive kMaxSteps loop would have
-        // spliced lane 1's new steps in front of lane 2's old ones and shifted every index.
-        auto stepParam = [&m] (int l, int s)
-        {
-            ParamSpec step { "percStep" + juce::String (l) + "_" + juce::String (s),
-                             "Step" + juce::String (l) + "_" + juce::String (s), "",
-                             ParamSpec::Kind::Bool, {}, 0.0f };
-            step.showInBody = false;
-            m.params.push_back (step);
-        };
-        for (int l = 1; l <= PercSequencer::kLanes; ++l)
-            for (int s = 1; s <= 32; ++s)
-                stepParam (l, s);
-        // 16.2's block: lanes × steps 33..48. FROZEN at 48 — extending ITS loop bound would splice
-        // lane 1's new steps in front of lane 2's 33..48 and shift every shipped index (the same
-        // trap 16.2 documented). New steps go in their own block below.
-        for (int l = 1; l <= PercSequencer::kLanes; ++l)
-            for (int s = 33; s <= 48; ++s)
-                stepParam (l, s);
-        // 16.3's block: lanes × steps 49..kMaxSteps, appended BEHIND everything shipped.
-        for (int l = 1; l <= PercSequencer::kLanes; ++l)
-            for (int s = 49; s <= PercSequencer::kMaxSteps; ++s)
-                stepParam (l, s);
+        // The grid itself is NOT here (AD-14, Story 18.5). Its 4 x 768 cells were Bool params
+        // from 16.1 to 18.4 — registered in three append-only blocks (1..32, 33..48, 49..768) so
+        // old DAW state kept its indices — and that is exactly what put 3072 "PERC Lane 2 Step
+        // 17" entries into every DAW's parameter list. A pattern is content: the cells live in
+        // PatternStore::perc, PercGrid paints and writes that, PresetIO writes the preset's
+        // `Lanes[].Steps` rows from it, and the DAW state carries it as one XML element. Removing
+        // the params does not break the append-only contract for the REST: VST3 ids are hashes of
+        // the id strings, so every remaining parameter keeps its id.
         return m;
     }
 }

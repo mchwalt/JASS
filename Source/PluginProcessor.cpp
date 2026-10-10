@@ -56,6 +56,7 @@ SynthyProcessor::SynthyProcessor()
     // A preset is a post-coupling snapshot: while one is applied, the parameter couplings stay
     // silent and their auto-enable memories are dropped (see setPresetLoading in the header).
     PresetIO::setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
+    PresetIO::patterns          = &patterns;   // AD-14: the PERC grid is read/written through here
 
     PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
     PresetIO::applySeqLatchRoot = [this] (int note)
@@ -736,6 +737,8 @@ void SynthyProcessor::resetToDefault()
     // the auto-play drone now drives the whole stack.
     for (auto* p : getParameters())
         p->setValueNotifyingHost(p->getDefaultValue());
+    patterns.perc.clear();   // AD-14: the patterns are no parameters, so the loop above cannot reach them
+    patterns.step.clear();
 
     for (int i = 1; i <= 3; ++i)
         if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
@@ -760,6 +763,9 @@ void SynthyProcessor::markPresetClean()
     cleanSnapshot.clear();
     for (auto* p : getParameters())
         cleanSnapshot.push_back(p->getValue());
+    cleanPercRevision = patterns.perc.revision.load();   // AD-14: a changed cell is a change too
+    patterns.step.markClean();                            // ...and the figure's double-click baseline
+    cleanStepRevision = patterns.step.revision.load();
 }
 
 bool SynthyProcessor::isPresetModified() const
@@ -767,6 +773,9 @@ bool SynthyProcessor::isPresetModified() const
     auto& params = getParameters();
     if (cleanSnapshot.size() != (size_t) params.size())
         return true;   // no baseline (e.g. restored as a modified working state)
+    if (patterns.perc.revision.load() != cleanPercRevision
+        || patterns.step.revision.load() != cleanStepRevision)
+        return true;   // a pattern cell changed since the baseline (AD-14)
     for (int i = 0; i < params.size(); ++i)
         if (std::abs(params[i]->getValue() - cleanSnapshot[(size_t) i]) > 1.0e-6f)
             return true;
@@ -938,8 +947,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
     }
     // MASTER · TEMPO — wobble the Tempo-Sync BPM so synced LFOs/delay drift around the beat (applied
-    // to the resolved tempo, host or internal, ±40 BPM at full modulation).
-    syncBpm = juce::jlimit(40.0, 250.0, syncBpm + gMod[(size_t) LFOTarget::MasterTempo] * 90.0);
+    // to the resolved tempo, ±40 BPM at full modulation). Standalone only: in a DAW the MASTER
+    // module is off (AD-13, Story 18.1) — the host's tempo is the tempo, its mod target is dead.
+    if (! isHostedByDaw())
+        syncBpm = juce::jlimit(40.0, 250.0, syncBpm + gMod[(size_t) LFOTarget::MasterTempo] * 90.0);
 
     // Per-LFO effective rate (Tempo-Sync resolved once per block; Free => raw RATE knob).
     double lfoRateHz[kNumLFOs];
@@ -1040,9 +1051,33 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // PREVIOUS patch's drum state and skipped the quantisation (bass permanently off the
         // beat). Kit, levels and rendering stay below; only the clock moves up here.
         {
-            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f;
+            // STOP (header latch) counts as "not running" here on purpose: the clock stands, the
+            // playhead goes out, and the STEP SEQ does not wait for a drum downbeat that will not
+            // come. Rendering below still runs, so a grid click can sound its lane while held.
+            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f && ! percHeld.load();
             if (! percOn && perc.enabled)
-                perc.reset();      // switched off ⇒ the next start is a downbeat, not where it stopped
+                perc.reset();      // switched off or held ⇒ the next start is a downbeat, not where it stopped
+            // The drums (re)starting IS a downbeat (maintainer 2026-10-11: after STOP, or after
+            // switching PERC on, the bass ran on out of step). With a figure RUNNING, both wait
+            // for the figure's next step boundary: the running bass step finishes, then figure
+            // (legato, step 0 takes the voice over like a TIE) and drums start on the same sample.
+            // An immediate jump cut the running step short — the "rhythmischer Ruck". With no
+            // figure running the drums start now, and a figure entered later quantises to them.
+            if (percOn && ! perc.enabled)
+            {
+                // Reset on the RISING edge as well: PercSequencer advances its sample counter even
+                // while disabled (the lanes keep rendering), so the falling-edge reset above had
+                // drifted by the length of the hold — step 0 then fired up to one step late, and
+                // the drums came in a fraction of a step behind the bass (maintainer 2026-10-11:
+                // "um einen halben Takt (einen Step?) verschoben"; found with a sample simulation).
+                perc.reset();
+                if (stepSeq.enabled && stepSeq.playingStep() >= 0)
+                {
+                    const int wait = stepSeq.samplesToNextStep();
+                    perc.setStartDelay(wait);
+                    stepSeq.restartLegatoIn(wait);
+                }
+            }
             perc.enabled = percOn;
             perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);
             const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);
@@ -1065,16 +1100,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                       ? SyncDivision::delaySeconds(syncBpm, sdiv)
                                       : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::seqRate));
             stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
+            seqStepSecondsDisplay.store(stepSeq.stepSeconds);   // the GATE preview's time base (editor)
             // Only the playable range is copied: playback clamps to `length` with the same bound,
             // so steps beyond it are never read — and at kMaxSteps 768 (16 pages) copying the full
             // arrays would be ~3000 atomic loads per block for a 16-step figure.
             const int seqUsed = juce::jlimit(1, (int) StepSequencer::kMaxSteps, stepSeq.length);
-            for (int s = 0; s < seqUsed; ++s)
+            for (int s = 0; s < seqUsed; ++s)   // AD-14: from the PatternStore, one relaxed load per cell
             {
-                stepSeq.pitch [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
-                stepSeq.on    [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
-                stepSeq.accent[(size_t) s] =       *apvts.getRawParameterValue(ID::seqAcc  (s + 1)) > 0.5f;   // 15.2
-                stepSeq.sgate [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqSGate(s + 1));          // 15.7
+                stepSeq.pitch [(size_t) s] = patterns.step.pitch (s);
+                stepSeq.on    [(size_t) s] = patterns.step.on    (s);
+                stepSeq.accent[(size_t) s] = patterns.step.accent(s);   // 15.2
+                stepSeq.sgate [(size_t) s] = patterns.step.gate  (s);   // 15.7
             }
 
             // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16
@@ -1128,10 +1164,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
             if (requantize)
             {
-                // Restart at step 0, quantised to the drum clock resolved above. The release goes
-                // into `kept` — the buffer the synth actually receives (see the comment up top).
-                stepSeq.releaseAll(kept, 1);
-                stepSeq.reset();
+                // Restart at step 0, quantised to the drum clock resolved above — LEGATO: the note
+                // that is sounding is kept and step 0 takes it over like a TIE boundary, so the
+                // bass does not dip while it falls back in step with the drums (maintainer
+                // 2026-10-11). A preset load (the other caller) has no voice sounding, so the
+                // takeover finds nothing and the entry is a plain note-on, as before.
+                stepSeq.restartLegato();
                 if (perc.enabled)
                     stepSeq.setStartDelay(perc.samplesToPatternStart());
             }
@@ -1331,8 +1369,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // never read, so they are not copied either (16 pages would be ~3000 loads per block).
             if (percOn)
                 for (int s = 0, n = juce::jlimit(1, (int) PercSequencer::kMaxSteps, perc.length); s < n; ++s)
-                    perc.on[(size_t) l][(size_t) s] =
-                        *apvts.getRawParameterValue(ID::percStep(l + 1, s + 1)) > 0.5f;
+                    perc.on[(size_t) l][(size_t) s] = patterns.perc.get(l, s);   // AD-14: one relaxed load per cell
         }
         // A step just placed in the grid sounds once, whether or not the pattern is running.
         if (const int lane = percAuditionLane.exchange(-1); lane >= 0)
@@ -1415,9 +1452,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Master volume — gated by masterOn (Story 2.4): off => silent output. Base + MOD MATRIX offset,
     // applied as a per-block RAMP (prev→cur) so LFO-modulated VOL doesn't zipper.
+    // In a DAW the MASTER module is off (AD-13, Story 18.1): unity gain, mute ignored, VOL mod
+    // dead — the track fader is the one level and the host's mute is the mute. The stored params
+    // stay untouched so the same patch keeps its VOL/mute in the standalone.
     const bool  masterOn   = *apvts.getRawParameterValue(Parameters::ID::masterOn) > 0.5f;
     const float masterVol  = juce::jlimit(0.0f, 1.0f, (float) (apvts.getRawParameterValue(Parameters::ID::masterVol)->load() + gMod[(size_t) LFOTarget::MasterVol] * 1.0));
-    const float masterGain = masterOn ? masterVol : 0.0f;
+    const float masterGain = isHostedByDaw() ? 1.0f : (masterOn ? masterVol : 0.0f);
     buffer.applyGainRamp(0, buffer.getNumSamples(), prevMasterGain, masterGain);
     prevMasterGain = masterGain;
 
@@ -1438,6 +1478,8 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
+    patterns.perc.writeXml(*xml);   // AD-14: the patterns ride along as ONE element each, not thousands of PARAMs
+    patterns.step.writeXml(*xml);
     copyXmlToBinary(*xml, destData);
 }
 
@@ -1464,6 +1506,82 @@ namespace
             pEl->setAttribute ("id", ID::modSlotParam  (n)); pEl->setAttribute ("value", (double) mp.param);
         }
     }
+
+    // 18.4→18.5 DAW-state migration (AD-14): a host project saved while the PERC grid cells were
+    // parameters carries them as <PARAM id="percStep<lane>_<step>" value="0|1">. Fold every one
+    // into the PatternStore and drop the element, so the tree handed to replaceState holds
+    // parameters that still exist. Gated on their presence — a state saved by this build has
+    // none (it carries a <PercPattern> element instead, read after this) — and idempotent.
+    // Returns true when anything was folded, so the caller knows the grid is already set.
+    // (The STEP SEQ twin below does the same for seqPitch<n> / seqStep<n> / seqAcc<n> / seqSGate<n>.)
+    bool migrateLegacyPercXml (juce::XmlElement& state, PercPattern& grid)
+    {
+        bool found = false;
+        for (auto* el = state.getFirstChildElement(); el != nullptr;)
+        {
+            auto* next = el->getNextElement();
+            if (el->hasTagName ("PARAM"))
+            {
+                const juce::String id = el->getStringAttribute ("id");
+                if (id.startsWith (Parameters::ID::percStepLegacyPrefix))
+                {
+                    const int us = id.indexOfChar ('_');
+                    if (us > 0)
+                    {
+                        if (! found) { grid.clear(); found = true; }   // the old state is complete
+                        const int lane = id.substring ((int) std::strlen (Parameters::ID::percStepLegacyPrefix), us).getIntValue();
+                        const int step = id.substring (us + 1).getIntValue();
+                        grid.set (lane - 1, step - 1, el->getDoubleAttribute ("value") > 0.5);
+                    }
+                    state.removeChildElement (el, true);
+                }
+            }
+            el = next;
+        }
+        return found;
+    }
+
+    bool migrateLegacyStepXml (juce::XmlElement& state, StepPattern& fig)
+    {
+        using namespace Parameters;
+        bool found = false;
+        auto numberAfter = [] (const juce::String& id, const char* prefix) -> int
+        {
+            if (! id.startsWith (prefix)) return -1;
+            const juce::String tail = id.substring ((int) std::strlen (prefix));
+            return tail.isNotEmpty() && tail.containsOnly ("0123456789") ? tail.getIntValue() : -1;
+        };
+        for (auto* el = state.getFirstChildElement(); el != nullptr;)
+        {
+            auto* next = el->getNextElement();
+            if (el->hasTagName ("PARAM"))
+            {
+                const juce::String id = el->getStringAttribute ("id");
+                const double value = el->getDoubleAttribute ("value");
+                int n = -1;
+                enum { None, Pitch, On, Acc, Gate } kind = None;
+                if      ((n = numberAfter (id, ID::seqSGateLegacyPrefix)) > 0) kind = Gate;    // before seqStep: "seqS…" vs "seqStep"
+                else if ((n = numberAfter (id, ID::seqPitchLegacyPrefix)) > 0) kind = Pitch;
+                else if ((n = numberAfter (id, ID::seqStepLegacyPrefix))  > 0) kind = On;
+                else if ((n = numberAfter (id, ID::seqAccLegacyPrefix))   > 0) kind = Acc;
+                if (kind != None)
+                {
+                    if (! found) { fig.clear(); found = true; }   // the old state is complete
+                    switch (kind)
+                    {
+                        case Pitch: fig.setPitch  (n - 1, (int) value);  break;
+                        case On:    fig.setOn     (n - 1, value > 0.5);  break;
+                        case Acc:   fig.setAccent (n - 1, value > 0.5);  break;
+                        case Gate:  fig.setGate   (n - 1, (int) value);  break;
+                        default: break;
+                    }
+                    state.removeChildElement (el, true);
+                }
+            }
+            el = next;
+        }
+        return found;
+    }
 }
 
 void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
@@ -1472,6 +1590,15 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
         migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
+        // AD-14: the patterns. A pre-18.5 project carries them as parameters (folded in here), a
+        // current one as <PercPattern> / <StepPattern> elements; a state with neither is an empty
+        // pattern — a DAW state is a complete snapshot, exactly like a preset.
+        const bool foldedPerc = migrateLegacyPercXml(*xml, patterns.perc);
+        if (! patterns.perc.readXml(*xml) && ! foldedPerc)
+            patterns.perc.clear();
+        const bool foldedStep = migrateLegacyStepXml(*xml, patterns.step);
+        if (! patterns.step.readXml(*xml) && ! foldedStep)
+            patterns.step.clear();
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
         // The just-restored state IS the clean baseline: snapshot it so a freshly loaded host
         // project does not spuriously report "modified" (isPresetModified compares to this).

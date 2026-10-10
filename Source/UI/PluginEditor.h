@@ -302,6 +302,9 @@ private:
     // semitones, so it needs a reference — seqPitchReference(): the LATCHED root while a figure is
     // running (what you click is what the loop plays), otherwise the computer keyboard's current C.
     void auditionStep (int semitones, bool sounding, bool accented = false);
+    // GATE preview: sound the step for gate% of the current step length (TIE / SLIDE = one full
+    // step), re-triggering on every call so a scrubbed gate is heard length by length.
+    void auditionStepGated (int semitones, bool accented, int gate);
     int  seqPitchReference() const;   // the root a step offset actually sounds against (15.6)
     int  seqRefShown  = -1;   // last reference the note boxes were texted with (timer re-texts)
     int auditionNote  = -1;   // MIDI note currently previewing, or -1

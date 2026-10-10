@@ -246,14 +246,16 @@ namespace SeqMidiIO
         // Write the figure — inside the preset-loading bracket (PR #60): couplings silent,
         // voices killed on both edges, so half-applied steps never sound.
         if (PresetIO::setPresetLoading) PresetIO::setPresetLoading (true);
-        for (int s = 1; s <= StepSequencer::kMaxSteps; ++s)   // full reset first: import replaces the WHOLE figure
-        {
-            const int q = s - 1;
-            setRaw (a, Parameters::ID::seqStep  (s), on.count (q)    ? 1.0f : 0.0f);
-            setRaw (a, Parameters::ID::seqPitch (s), on.count (q)    ? (float) pitch[q] : 0.0f);
-            setRaw (a, Parameters::ID::seqAcc   (s), acc.count (q) && acc[q] ? 1.0f : 0.0f);
-            setRaw (a, Parameters::ID::seqSGate (s), gate.count (q)  ? (float) gate[q] : 100.0f);
-        }
+        // The figure lives in the PatternStore (AD-14), reached through PresetIO's hook. Full
+        // reset first: import replaces the WHOLE figure.
+        if (auto* fig = PresetIO::patterns != nullptr ? &PresetIO::patterns->step : nullptr)
+            for (int q = 0; q < StepPattern::kMaxSteps; ++q)
+            {
+                fig->setOn     (q, on.count (q) > 0);
+                fig->setPitch  (q, on.count (q) ? pitch[q] : 0);
+                fig->setAccent (q, acc.count (q) && acc[q]);
+                fig->setGate   (q, gate.count (q) ? gate[q] : StepPattern::kGateDefault);
+            }
         setRaw (a, Parameters::ID::seqLength, (float) period);
         setRaw (a, Parameters::ID::seqSync, 5.0f);    // "1/16" — the contract's grid
         setRaw (a, Parameters::ID::seqGate, 1.0f);    // measured percents assume an unscaled gate
@@ -299,10 +301,14 @@ namespace SeqMidiIO
             seq.addEvent (juce::MidiMessage::tempoMetaEvent ((int) std::llround (60.0e6 / bpm)), 0.0);
         }
 
-        auto stepOn    = [&] (int s) { return raw (Parameters::ID::seqStep  (s + 1)) > 0.5f; };
-        auto stepNote  = [&] (int s) { return juce::jlimit (0, 127, root + (int) raw (Parameters::ID::seqPitch (s + 1))); };
-        auto stepAcc   = [&] (int s) { return raw (Parameters::ID::seqAcc   (s + 1)) > 0.5f; };
-        auto stepGate  = [&] (int s) { return (int) raw (Parameters::ID::seqSGate (s + 1)); };
+        // The figure lives in the PatternStore (AD-14); without the hook there is nothing to export.
+        const StepPattern* fig = PresetIO::patterns != nullptr ? &PresetIO::patterns->step : nullptr;
+        if (fig == nullptr)
+            return false;
+        auto stepOn    = [fig] (int s) { return fig->on (s); };
+        auto stepNote  = [fig, root] (int s) { return juce::jlimit (0, 127, root + fig->pitch (s)); };
+        auto stepAcc   = [fig] (int s) { return fig->accent (s); };
+        auto stepGate  = [fig] (int s) { return fig->gate (s); };
 
         bool wroteNote = false;
         int s = 0;

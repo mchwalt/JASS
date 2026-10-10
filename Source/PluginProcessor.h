@@ -10,6 +10,7 @@
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"   // Story 15.1
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
+#include "Audio/PatternStore.h"  // AD-14 (18.5): the sequencer patterns — content, not parameters
 #include "DSP/ChaosLorenz.h"     // LFO expansion — global Lorenz mod source (Chaos X/Y)
 #include <vector>
 #include <map>
@@ -92,10 +93,18 @@ public:
 
     // Which step PERC is on, for the grid's playhead (Story 16.1). Plain atomic read.
     int getPercStep() const { return percStepDisplay.load(); }
+    // The sequencer patterns (AD-14): the grid writes cells here from the message thread, the
+    // audio thread reads them per block. Not parameters — a DAW never sees them as such.
+    PatternStore&       getPatterns()       noexcept { return patterns; }
+    const PatternStore& getPatterns() const noexcept { return patterns; }
     // MIDI note the STEP SEQ is sounding, or -1. For the on-screen keyboard only (see seqNoteDisplay).
     int getSeqNote() const { return seqNoteDisplay.load(); }
     // Step the STEP SEQ is on (0-based), or -1. Drives the module's playhead, like PERC's grid.
     int getSeqStep() const { return seqStepDisplay.load(); }
+    // One step's length in seconds as last resolved (SYNC against the tempo, or RATE). The GATE
+    // preview plays a step for gate% of this, so what you hear while turning is what the figure
+    // will play (maintainer 2026-10-10: the preview held every note the same length).
+    double getSeqStepSeconds() const { return seqStepSecondsDisplay.load(); }
 
     // Move the LATCHED sequencer root (see seqLatchedRoot). The pattern keeps running after the key
     // is released, so an octave shift has no held note left to move — the editor sends the ±12 here
@@ -109,6 +118,11 @@ public:
     // Is a latched figure running? (SPACE stops it — the editor needs to know whether there is
     // anything to stop before it falls through to the Karplus pluck.)
     bool isSeqLatched() const { return seqLatchedRoot.load() >= 0; }
+
+    // True when a DAW hosts us (VST3). The host then owns mute, level and tempo, and the MASTER
+    // module is shown locked + dimmed in the rack (AD-13, Story 18.1): masterOn/masterVol are
+    // ignored, the tempo is the host's, and the MasterVol/MasterTempo mod targets are dead.
+    bool isHostedByDaw() const noexcept { return wrapperType != wrapperType_Standalone; }
     int  getSeqLatchRoot() const { return seqLatchedRoot.load(); }   // -1 when not latched
     // Stop the latched figure. Clearing the root is enough: the next block sees nothing playing,
     // releases the sounding note and re-arms the pattern at step 0, exactly as letting go of the
@@ -127,6 +141,13 @@ public:
     // Sound one PERC lane once — the grid plays a step as it is placed. Message thread → audio
     // thread through one atomic; the block consumes it.
     void auditionPercLane (int lane) { percAuditionLane.store (lane); }
+    // STOP latch in the PERC header (maintainer 2026-10-10: a way to pause the drums while
+    // editing the grid). Held = the pattern stands still and the playhead goes out; the module
+    // stays on, the kit stays loaded, and a grid click still sounds its lane. Releasing it
+    // starts the pattern on step 1 (the falling-edge reset in processBlock does that). Runtime
+    // state like COPY, not a parameter: it is a hand on the transport, not part of the patch.
+    void holdPerc (bool hold) { percHeld.store (hold); }
+    bool isPercHeld() const   { return percHeld.load(); }
 
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
@@ -220,6 +241,7 @@ private:
     // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
     // be dragged through the patch's filter and effects. See PercSequencer.h.
     PercSequencer perc;
+    PatternStore patterns;   // AD-14 (18.5): the PERC grid and the STEP SEQ figure
     bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
                                   // entry can be quantised to the drum pattern (16.1 AC6)
     std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)
@@ -230,7 +252,9 @@ private:
                                               // the rising-edge logic cannot see a latch that
                                               // replaced a still-running one (no edge to rise on)
     std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
+    std::atomic<double> seqStepSecondsDisplay { 0.125 };   // see getSeqStepSeconds
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
+    std::atomic<bool> percHeld { false };     // STOP latch: pattern paused, see holdPerc
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT
     // index still points at whatever set sits there, and playing a random one — a drum loop, a
     // piano — is worse than playing nothing (maintainer heard exactly that, 2026-08-11).
@@ -268,6 +292,8 @@ private:
     juce::String currentPresetName { "Init" };   // restored from LiveState on start
     std::atomic<bool> liveDirty { false };
     std::vector<float> cleanSnapshot;             // param values at last load/save (empty = "modified")
+    uint32_t cleanPercRevision = 0;               // PatternStore::perc revision at the same moment (AD-14)
+    uint32_t cleanStepRevision = 0;               // ...and PatternStore::step's
     void timerCallback() override;
     void valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&) override { liveDirty = true; }
     void saveLiveState();

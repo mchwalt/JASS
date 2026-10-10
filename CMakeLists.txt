@@ -17,8 +17,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(JUCE)
 
+# Identity a host and the Windows file properties show (maintainer 2026-10-11: "Icon und die
+# ueblichen Informationen wie Autor, Copyright, Version"). COMPANY_NAME is the VST3 vendor and
+# the exe/DLL CompanyName; COMPANY_COPYRIGHT lands in LegalCopyright; the icon PNGs become the
+# exe/DLL icon (juceaide builds the .ico). The plugin IDs (manufacturer + plugin code) are
+# untouched, so hosts keep recognising JASS in saved projects. The version is project(VERSION)
+# above, CalVer.
 juce_add_plugin(JASS
-    COMPANY_NAME "JASSProject"
+    COMPANY_NAME "Michael Walter"
+    COMPANY_COPYRIGHT "Copyright (C) 2026 Michael Walter. Licensed under the AGPL-3.0."
+    COMPANY_WEBSITE "https://github.com/mchwalt/JASS"
+    BUNDLE_ID "com.mchwalt.jass"
+    DESCRIPTION "JASS - a modular synth rack with step sequencer and drum grid"
+    ICON_BIG   "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icon/jass_512.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icon/jass_64.png"
     PLUGIN_MANUFACTURER_CODE Synt
     PLUGIN_CODE Syn1
     FORMATS Standalone VST3
@@ -112,6 +124,11 @@ target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
+    # VST3 has no MIDI CC events, so JUCE emulates them with 16 x 130 parameters ("MIDI CC 0|1" ...)
+    # that Cubase lists in full. JASS reads no controller, no pitch wheel and no aftertouch
+    # (pitchWheelMoved is empty by design), so the 2080 entries buy nothing and go (2026-10-10,
+    # maintainer in Cubase: hundreds of MIDI entries next to the rack modules).
+    JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0
     _USE_MATH_DEFINES
 )
 

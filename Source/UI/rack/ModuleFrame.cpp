@@ -2,6 +2,7 @@
 #include "../HelpTextStore.h"
 #include "../../DSP/ModMatrixCatalog.h"   // ModDest::oscParamSlot — per-OSC ring routing
 #include "../../Audio/PresetIO.h"         // presetBaseline01 — double-click = the preset's value
+#include "../../Audio/PatternStore.h"     // StepPattern — what a pattern cell binds to (AD-14)
 
 namespace rack
 {
@@ -27,38 +28,44 @@ namespace rack
                      (double) r.skew, r.symmetricSkew };
         }
 
+        // The GATE knob's travel vs. the stored gate (maintainer 2026-10-11: reaching TIE without
+        // Shift). The STORE keeps the 15.7 contract — 5..100 %, 101 = TIE, 102 = SLIDE — but on the
+        // KNOB the two names are BANDS of kGateBand positions each above 100, so a plain turn
+        // lands on them instead of skipping the single tick 101 was. Store → knob puts the value
+        // in the middle of its band; knob → store collapses the band back to 101 / 102.
+        constexpr int kGateBand = 5;
+        constexpr int kGateKnobMax = 100 + 2 * kGateBand;   // 110: 101..105 = TIE, 106..110 = SLIDE
+
+        inline int gateKnobToValue (double knob) noexcept
+        {
+            const int v = juce::roundToInt (knob);
+            if (v <= 100)               return juce::jmax (StepPattern::kGateMin, v);
+            if (v <= 100 + kGateBand)   return StepPattern::kGateTie;
+            return StepPattern::kGateSlide;
+        }
+
+        inline double gateValueToKnob (int value) noexcept
+        {
+            if (value >= StepPattern::kGateSlide) return 100 + kGateBand + (kGateBand + 1) / 2;   // 108
+            if (value == StepPattern::kGateTie)   return 100 + (kGateBand + 1) / 2;               // 103
+            return (double) juce::jlimit (StepPattern::kGateMin, 100, value);
+        }
+
         // Three-state step switch (15.2): a click cycles OFF (rest) → ON → ACCENTED → OFF — the
         // TR-909's second-press gesture — over TWO bool parameters (the step's on/off and its
         // accent). ParameterAttachments keep it repainting on preset/host changes WITHOUT firing
         // the cycle: only a real mouse click advances the state (the #56 lesson — a loader replay
         // must never read as a gesture). Drawn by hand so the third state fits the checkbox look:
         // empty = rest, tick = on, filled + tick = accented.
-        class StepSwitch : public juce::Button
+        // The three-state glyph (off → on → accented) shared by both switch kinds below: the
+        // parameter-bound StepSwitch (any module that declares toggleParamId + accentParamId)
+        // and the PatternStepSwitch of a pattern cell (AD-14), whose state lives in the store.
+        class StepSwitchBase : public juce::Button
         {
         public:
-            StepSwitch (juce::AudioProcessorValueTreeState& state,
-                        const juce::String& onId, const juce::String& accId)
-                : juce::Button ({}),
-                  onValue  (state.getRawParameterValue (onId)),
-                  accValue (state.getRawParameterValue (accId)),
-                  onAtt  (*state.getParameter (onId),  [this] (float) { repaint(); }),
-                  accAtt (*state.getParameter (accId), [this] (float) { repaint(); })
-            {
-            }
-
-            bool isOn()       const { return onValue  != nullptr && onValue->load()  > 0.5f; }
-            bool isAccented() const { return accValue != nullptr && accValue->load() > 0.5f; }
-
-            void clicked() override
-            {
-                // Complete gestures, so a host records single automation events. The accent is
-                // written FIRST on the way up (on+accent land as one audible state change) and
-                // cleared first on the way out.
-                const bool on = isOn(), acc = isAccented();
-                if (! on)       { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (1.0f); }
-                else if (! acc) { accAtt.setValueAsCompleteGesture (1.0f); }
-                else            { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (0.0f); }
-            }
+            StepSwitchBase() : juce::Button ({}) {}
+            virtual bool isOn()       const = 0;
+            virtual bool isAccented() const = 0;
 
             // The drawn box keeps the button's ORIGINAL size; the bounds around it are a larger
             // hit target (the little box was too small to aim at — maintainer 2026-08-26). The
@@ -90,11 +97,62 @@ namespace rack
                     g.strokePath (p, juce::PathStrokeType (1.6f));
                 }
             }
+        };
+
+        class StepSwitch : public StepSwitchBase
+        {
+        public:
+            StepSwitch (juce::AudioProcessorValueTreeState& state,
+                        const juce::String& onId, const juce::String& accId)
+                : onValue  (state.getRawParameterValue (onId)),
+                  accValue (state.getRawParameterValue (accId)),
+                  onAtt  (*state.getParameter (onId),  [this] (float) { repaint(); }),
+                  accAtt (*state.getParameter (accId), [this] (float) { repaint(); })
+            {
+            }
+
+            bool isOn()       const override { return onValue  != nullptr && onValue->load()  > 0.5f; }
+            bool isAccented() const override { return accValue != nullptr && accValue->load() > 0.5f; }
+
+            void clicked() override
+            {
+                // Complete gestures, so a host records single automation events. The accent is
+                // written FIRST on the way up (on+accent land as one audible state change) and
+                // cleared first on the way out.
+                const bool on = isOn(), acc = isAccented();
+                if (! on)       { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (1.0f); }
+                else if (! acc) { accAtt.setValueAsCompleteGesture (1.0f); }
+                else            { accAtt.setValueAsCompleteGesture (0.0f); onAtt.setValueAsCompleteGesture (0.0f); }
+            }
 
         private:
             std::atomic<float>* onValue;
             std::atomic<float>* accValue;
             juce::ParameterAttachment onAtt, accAtt;
+        };
+
+        // The pattern cell's switch (AD-14): same gesture, state in the StepPattern. No
+        // attachment — the frame's timer repaints it when the store's revision moves.
+        class PatternStepSwitch : public StepSwitchBase
+        {
+        public:
+            PatternStepSwitch (StepPattern& p, int absStep) : fig (p), step (absStep) {}
+
+            bool isOn()       const override { return fig.on (step); }
+            bool isAccented() const override { return fig.accent (step); }
+
+            void clicked() override
+            {
+                const bool on = isOn(), acc = isAccented();
+                if (! on)       { fig.setAccent (step, false); fig.setOn (step, true); }
+                else if (! acc) { fig.setAccent (step, true); }
+                else            { fig.setAccent (step, false); fig.setOn (step, false); }
+                repaint();
+            }
+
+        private:
+            StepPattern& fig;
+            int step;
         };
     }
 
@@ -153,6 +211,24 @@ namespace rack
 
     ModuleFrame::~ModuleFrame() { stopTimer(); }
 
+    void ModuleFrame::lockForHost()
+    {
+        hostLocked = true;
+        if (enableBtn != nullptr)
+        {
+            enableBtn->setEnabled (false);
+            enableBtn->setInterceptsMouseClicks (false, false);
+        }
+        resetBtn.setEnabled (false);
+        for (auto& cell : cells)
+        {
+            if (cell.widget != nullptr) cell.widget->setEnabled (false);
+            if (cell.toggle != nullptr) cell.toggle->setEnabled (false);
+        }
+        dimmed = true;
+        repaint();
+    }
+
     void ModuleFrame::buildHeader()
     {
         titleLabel.setText (desc.title, juce::dontSendNotification);
@@ -187,7 +263,7 @@ namespace rack
         const bool hasResettableParams = std::any_of (desc.body.begin(), desc.body.end(),
             [] (const BodyElement& el)
             {
-                if (auto* k = std::get_if<Knob>   (&el)) return k->paramId.isNotEmpty();
+                if (auto* k = std::get_if<Knob>   (&el)) return k->paramId.isNotEmpty() || k->patternStep >= 0;
                 if (auto* c = std::get_if<Combo>  (&el)) return c->paramId.isNotEmpty();
                 if (auto* t = std::get_if<Toggle> (&el)) return t->paramId.isNotEmpty();
                 return false;
@@ -344,11 +420,13 @@ namespace rack
                 // page D are built by literally the same code.
                 Knob pagedCopy;
                 const Knob* k = k0;
-                if (idIsPaged (k0->paramId))
+                // A pattern cell (AD-14) pages by INDEX: no id arithmetic, only its caption moves.
+                const bool patternCell = (k0->patternStep >= 0 && desc.stepPattern != nullptr);
+                if (idIsPaged (k0->paramId) || (patternCell && desc.paging.pageCount > 1))
                 {
                     hasPagedCells = true;
                     pagedCopy = *k0;
-                    pagedCopy.paramId = pagedId (pagedCopy.paramId);
+                    if (pagedCopy.paramId.isNotEmpty())       pagedCopy.paramId       = pagedId (pagedCopy.paramId);
                     if (pagedCopy.toggleParamId.isNotEmpty()) pagedCopy.toggleParamId = pagedId (pagedCopy.toggleParamId);
                     if (pagedCopy.accentParamId.isNotEmpty()) pagedCopy.accentParamId = pagedId (pagedCopy.accentParamId);
                     if (pagedCopy.altParamId.isNotEmpty())    pagedCopy.altParamId    = pagedId (pagedCopy.altParamId);
@@ -359,6 +437,12 @@ namespace rack
                                                         + builtPage * desc.paging.stepsPerPage);
                     k = &pagedCopy;
                 }
+                // The ABSOLUTE step this cell edits (pattern cells only; -1 otherwise).
+                const int absStep = patternCell ? k0->patternStep + builtPage * juce::jmax (0, desc.paging.stepsPerPage) : -1;
+                StepPattern* const fig = patternCell ? desc.stepPattern : nullptr;
+                SynthySlider* gateSlider = nullptr;   // the pattern cell's alt-row slider, if built
+                juce::Button* cornerSw   = nullptr;   // ...and its corner switch
+
                 auto* s = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
                 s->setKnobDiameter (knobD);
                 if (k->coarseStep > 0) s->setCoarseStep (k->coarseStep);   // LEN: 8s bare, 1s shifted
@@ -398,6 +482,18 @@ namespace rack
                     if (auto* raw = apvts.getRawParameterValue (id))
                         s->setValue ((double) raw->load(), juce::dontSendNotification);
                     xformKnobs.push_back ({ s, id, k->toDisplay, k->fromDisplay });
+                }
+                else if (patternCell)
+                {
+                    // Pattern cell (AD-14): the knob IS the step's pitch. Writes go to the store
+                    // from onValueChange (a real gesture or a typed value); the store → knob
+                    // direction is syncPatternCells, driven by the timer on a revision change.
+                    s->setRange ((double) StepPattern::kPitchMin, (double) StepPattern::kPitchMax, 1.0);
+                    s->setValue ((double) fig->pitch (absStep), juce::dontSendNotification);
+                    s->onValueChange = [s, fig, absStep] { fig->setPitch (absStep, juce::roundToInt (s->getValue())); };
+                    s->setDoubleClickReturnValue (false, 0.0);   // same rack-wide rule as below
+                    // Double-click = the figure as loaded (the store keeps that baseline).
+                    s->presetBaseline = [fig, absStep]() -> double { return (double) fig->baselinePitch (absStep); };
                 }
                 else
                 {
@@ -452,7 +548,8 @@ namespace rack
 
                 // Pattern-length marker (16.2): remember the step-knob cells in figure order —
                 // bodyOrder lists them musically, so index LEN-1 IS the figure's last step.
-                if (desc.lenMarkerStepPrefix.isNotEmpty() && k->paramId.startsWith (desc.lenMarkerStepPrefix))
+                if (desc.lenMarkerLengthParam.isNotEmpty()
+                    && (patternCell || (desc.lenMarkerStepPrefix.isNotEmpty() && k->paramId.startsWith (desc.lenMarkerStepPrefix))))
                     markerCells.push_back ((int) cells.size() - 1);
 
                 // Mode-dependent knob (e.g. STEREO WIDTH/TIME outside Pseudo-Stereo): the timer
@@ -476,10 +573,15 @@ namespace rack
                 // predicate is built HERE from the parameter, so no editor injection is needed.
                 // dimOnly: a rest keeps its pitch (the SPACE rule), so the knob stays draggable
                 // while off — dial in (and audition) a rest's note without re-enabling it first.
-                if (k->toggleParamId.isNotEmpty())
+                if (k->toggleParamId.isNotEmpty() || patternCell)
                 {
                     juce::Button* tb;
-                    if (k->accentParamId.isNotEmpty())
+                    if (patternCell)
+                    {
+                        // The pattern cell's switch reads and writes the store (AD-14).
+                        tb = static_cast<juce::Button*> (ownedWidgets.add (new PatternStepSwitch (*fig, absStep)));
+                    }
+                    else if (k->accentParamId.isNotEmpty())
                     {
                         // Three-state switch (15.2): off → on → accented, one gesture per click.
                         tb = static_cast<juce::Button*> (ownedWidgets.add (
@@ -495,7 +597,11 @@ namespace rack
                     tb->setWantsKeyboardFocus (false);   // never steal focus from the on-screen keyboard
                     addAndMakeVisible (*tb);
                     cells.back().toggle = tb;
-                    if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
+                    cornerSw = tb;
+                    if (patternCell)
+                        condKnobs.push_back ({ s, cells.back().caption,
+                                               [fig, absStep] { return fig->on (absStep); }, true });
+                    else if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
                         condKnobs.push_back ({ s, cells.back().caption,
                                                [v] { return v->load() > 0.5f; }, true });
 
@@ -512,11 +618,12 @@ namespace rack
                     // not getToggleState — the StepSwitch never sets its Button toggle state.
                     if (k->audition)
                     {
-                        auto* onRaw = apvts.getRawParameterValue (k->toggleParamId);
-                        tb->onClick = [tb, s, onRaw, aud = k->audition]
+                        auto* onRaw = patternCell ? nullptr : apvts.getRawParameterValue (k->toggleParamId);
+                        tb->onClick = [tb, s, onRaw, fig, absStep, aud = k->audition]
                         {
-                            if (onRaw != nullptr && onRaw->load() > 0.5f
-                                && (tb->isMouseButtonDown (true) || tb->isMouseOver (true)))
+                            const bool on = fig != nullptr ? fig->on (absStep)
+                                                           : (onRaw != nullptr && onRaw->load() > 0.5f);
+                            if (on && (tb->isMouseButtonDown (true) || tb->isMouseOver (true)))
                                 aud ((int) s->getValue(), true);
                         };
                     }
@@ -560,33 +667,70 @@ namespace rack
                 // with the step — but its read-out comes from altTextFromValue ("36%" / "TIE" /
                 // "SLIDE") and its audition replays the STEP'S PITCH (the main slider holds the
                 // semitones), so a gate edit is heard on the note it phrases.
-                if (k->altParamId.isNotEmpty() && apvts.getParameter (k->altParamId) != nullptr)
+                const bool altPattern = patternCell && desc.altRowTitle.isNotEmpty();   // the cell's GATE (AD-14)
+                if (altPattern || (k->altParamId.isNotEmpty() && apvts.getParameter (k->altParamId) != nullptr))
                 {
                     auto* g = static_cast<SynthySlider*> (ownedWidgets.add (new SynthySlider()));
                     g->setKnobDiameter (knobD);
                     g->setTextBoxStyle (juce::Slider::TextBoxBelow, false, 60, 14);
-                    sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-                        apvts, k->altParamId, *g));
-                    g->setDoubleClickReturnValue (false, 0.0);
-                    g->presetBaseline = [&a = apvts, id = k->altParamId]() -> double
+                    if (altPattern)
                     {
-                        if (PresetIO::presetBaseline01)
-                            if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
-                                if (auto* p = a.getParameter (id))
-                                    return (double) p->convertFrom0to1 (v01);
-                        return std::numeric_limits<double>::quiet_NaN();
-                    };
+                        g->setRange ((double) StepPattern::kGateMin, (double) kGateKnobMax, 1.0);   // TIE / SLIDE as bands
+                        g->setValue (gateValueToKnob (fig->gate (absStep)), juce::dontSendNotification);
+                        g->onValueChange = [g, fig, absStep] { fig->setGate (absStep, gateKnobToValue (g->getValue())); };
+                        g->setDoubleClickReturnValue (false, 0.0);
+                        // NO double-click-to-baseline on the gate row (maintainer 2026-10-10): with the
+                        // gate PREVIEW, clicking a knob to hear the length is the row's main gesture, and
+                        // two such clicks counted as a double-click reset the gate to the loaded value
+                        // ("springt irgendwann auf 100 %"). presetBaseline stays unset ⇒ nothing fires.
+                        gateSlider = g;
+                    }
+                    else
+                    {
+                        sliderAtt.push_back (std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
+                            apvts, k->altParamId, *g));
+                        g->setDoubleClickReturnValue (false, 0.0);
+                        g->presetBaseline = [&a = apvts, id = k->altParamId]() -> double
+                        {
+                            if (PresetIO::presetBaseline01)
+                                if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                                    if (auto* p = a.getParameter (id))
+                                        return (double) p->convertFrom0to1 (v01);
+                            return std::numeric_limits<double>::quiet_NaN();
+                        };
+                    }
                     if (k->altTextFromValue)
                     {
-                        g->textFromValueFunction = k->altTextFromValue;
-                        g->valueFromTextFunction = k->altValueFromText
+                        // The editor's read-out and parser speak STORE values (5..102); a pattern
+                        // cell's knob travels 5..110 (TIE / SLIDE bands), so translate at the edge.
+                        std::function<juce::String (double)> text = k->altTextFromValue;
+                        std::function<double (const juce::String&)> parse = k->altValueFromText
                             ? k->altValueFromText
                             : [] (const juce::String& t) { return t.getDoubleValue(); };
+                        if (altPattern)
+                        {
+                            text  = [f = k->altTextFromValue] (double v) { return f ((double) gateKnobToValue (v)); };
+                            parse = [f = parse] (const juce::String& t) { return gateValueToKnob (juce::roundToInt (f (t))); };
+                        }
+                        g->textFromValueFunction = text;
+                        g->valueFromTextFunction = parse;
                         g->updateText();
-                        g->tooltipFromValue = k->altTextFromValue;
+                        g->tooltipFromValue = text;
                         g->refreshTooltip();
                     }
-                    if (k->audition)
+                    if (k->altAudition)
+                    {
+                        // The GATE preview sounds ONCE, on release, with the final value: a length
+                        // is judged by hearing it end, so re-sounding it on every tick of a drag
+                        // only machine-gunned the note (maintainer 2026-10-10: "beim Drehen des
+                        // Wertes nicht staendig Toene"). A plain click (press + release) plays it
+                        // too. Nothing to release afterwards — the gate decides when it stops.
+                        g->onDragEnd = [g, s, aud = k->altAudition]
+                        {
+                            aud (gateKnobToValue (g->getValue()), (int) s->getValue(), true);
+                        };
+                    }
+                    else if (k->audition)
                     {
                         auto movedG = std::make_shared<bool> (false);
                         g->onValueChange = [g, s, movedG, aud = k->audition,
@@ -606,7 +750,9 @@ namespace rack
                         };
                         g->onDragEnd = [movedG, aud = k->audition] { if (*movedG) aud (0, false); };
                     }
-                    if (k->toggleParamId.isNotEmpty())
+                    if (patternCell)
+                        condKnobs.push_back ({ g, nullptr, [fig, absStep] { return fig->on (absStep); }, true });
+                    else if (k->toggleParamId.isNotEmpty())
                         if (auto* v = apvts.getRawParameterValue (k->toggleParamId))
                             condKnobs.push_back ({ g, nullptr, [v] { return v->load() > 0.5f; }, true });
                     addChildComponent (*g);   // hidden until the row toggle flips (applyAltRow)
@@ -614,6 +760,11 @@ namespace rack
                         tb->toFront (false);   // the corner switch overlaps the cell — keep it clickable above g
                     altKnobs.push_back ({ s, g });
                 }
+
+                // Pattern cell (AD-14): remember the widgets so the timer can resync them from the
+                // store (preset load, MIDI import, keyboard recording, reset).
+                if (patternCell)
+                    patternCells.push_back ({ s, gateSlider, cornerSw, absStep });
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
@@ -803,6 +954,7 @@ namespace rack
         xformKnobs.clear();
         condKnobs.clear();
         altKnobs.clear();
+        patternCells.clear();
         dynCombos.clear();
         indexValueCombos.clear();
         comboValues.clear();
@@ -886,6 +1038,11 @@ namespace rack
             else if (auto* c = std::get_if<Combo>  (&el)) resetId (c->paramId);
             else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
         }
+
+        // Pattern cells (AD-14): the figure is content, not parameters — cleared as one block,
+        // every page at once ("empties the pattern", the button's own words).
+        if (desc.stepPattern != nullptr && ! patternCells.empty())
+            desc.stepPattern->clear();
 
         // Step pages (16.3): the body lists one page — reset the SAME family on every other page
         // too. Each id carries a trailing step number; shift it by page*stepsPerPage.
@@ -1329,6 +1486,14 @@ namespace rack
             updatePageButtons();
         }
 
+        // Pattern cells (AD-14): one integer compare per tick; on a change push the store into
+        // the widgets. Our own edits bump the revision too, but land on equal values (no-ops).
+        if (desc.stepPattern != nullptr && ! patternCells.empty())
+        {
+            const auto rev = desc.stepPattern->revision.load (std::memory_order_relaxed);
+            if (rev != lastPatternRevision) { lastPatternRevision = rev; syncPatternCells(); }
+        }
+
         // Live position read-out: poll the hook, re-text only on change (same discipline as
         // the page label — a Label::setText per tick would repaint the header at timer rate).
         if (readoutLabel != nullptr)
@@ -1407,6 +1572,27 @@ namespace rack
             enableBtn->setToggleState (en, juce::dontSendNotification);
         const bool off = ! en;
         if (off != dimmed) { dimmed = off; repaint(); }
+    }
+
+    void ModuleFrame::syncPatternCells()
+    {
+        auto* fig = desc.stepPattern;
+        if (fig == nullptr) return;
+        for (auto& c : patternCells)
+        {
+            if (c.pitch != nullptr)
+            {
+                c.pitch->setValue ((double) fig->pitch (c.step), juce::dontSendNotification);
+                c.pitch->refreshTooltip();
+            }
+            if (c.gate != nullptr)
+            {
+                c.gate->setValue (gateValueToKnob (fig->gate (c.step)), juce::dontSendNotification);
+                c.gate->refreshTooltip();
+            }
+            if (c.sw != nullptr)
+                c.sw->repaint();
+        }
     }
 
     void ModuleFrame::applyAltRow()

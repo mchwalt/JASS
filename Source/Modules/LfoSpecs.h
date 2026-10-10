@@ -35,6 +35,7 @@ namespace Modules
             { p + "Depth",   "Depth",    "DEPTH",  ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f },
         };
         m.params[2].showInBody = false;   // TARGET: internal only, no rack control
+        m.params[2].automatable = false;  // ...and no automation lane in a DAW either
         return m;
     }
 }

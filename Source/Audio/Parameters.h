@@ -116,12 +116,14 @@ namespace Parameters
         constexpr const char* seqLength = "seqLength";
         constexpr const char* seqGate   = "seqGate";     // ONE note length for the whole pattern
         constexpr const char* seqAccent = "seqAccent";   // ACCENT depth: what an accented step does (15.2)
-        // 16.3: the counts ARE kMaxSteps — one source of truth, no drifting literal. (The caches
-        // are static arrays of that size, built once on the message thread via warmIndexedIds.)
-        JASS_INDEXED_ID (seqPitch, StepSequencer::kMaxSteps, "seqPitch", "")
-        JASS_INDEXED_ID (seqStep,  StepSequencer::kMaxSteps, "seqStep",  "")   // per-step on/off (off = rest)
-        JASS_INDEXED_ID (seqAcc,   StepSequencer::kMaxSteps, "seqAcc",   "")   // per-step accent flag (15.2)
-        JASS_INDEXED_ID (seqSGate, StepSequencer::kMaxSteps, "seqSGate", "")   // per-step gate 5..100 %, 101=TIE, 102=SLIDE (15.7)
+        // The step cells (seqPitch<n> / seqStep<n> / seqAcc<n> / seqSGate<n>) are NO LONGER
+        // parameters (AD-14, Story 18.5 stage 2): they live in PatternStore::step. A DAW state
+        // saved before that still carries them as <PARAM> elements, folded in once by
+        // PluginProcessor::setStateInformation under these prefixes.
+        constexpr const char* seqPitchLegacyPrefix = "seqPitch";
+        constexpr const char* seqStepLegacyPrefix  = "seqStep";
+        constexpr const char* seqAccLegacyPrefix   = "seqAcc";
+        constexpr const char* seqSGateLegacyPrefix = "seqSGate";
 
         // PERC (Story 16.1) — four percussion tracks rendered straight to the master bus. The step
         // grid is one indexed id PER LANE (a 2-D index would have to build a String on the audio
@@ -135,21 +137,10 @@ namespace Parameters
         JASS_INDEXED_ID (percNote,  4, "percNote",  "")   // which instrument of the kit a lane fires
         JASS_INDEXED_ID (percLevel, 4, "percLevel", "")
         JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
-        JASS_INDEXED_ID (percStep1, PercSequencer::kMaxSteps, "percStep1_", "")
-        JASS_INDEXED_ID (percStep2, PercSequencer::kMaxSteps, "percStep2_", "")
-        JASS_INDEXED_ID (percStep3, PercSequencer::kMaxSteps, "percStep3_", "")
-        JASS_INDEXED_ID (percStep4, PercSequencer::kMaxSteps, "percStep4_", "")
-        // Lane (1..4) + step (1..48) -> id. Audio thread safe: pure array lookups, no String built.
-        inline const juce::String& percStep (int lane, int step)
-        {
-            switch (juce::jlimit (1, 4, lane))
-            {
-                case 1:  return percStep1 (step);
-                case 2:  return percStep2 (step);
-                case 3:  return percStep3 (step);
-                default: return percStep4 (step);
-            }
-        }
+        // The grid cells (percStep<lane>_<step>) are NO LONGER parameters (AD-14, Story 18.5):
+        // they live in PatternStore::perc. A DAW state saved before 18.5 still carries them as
+        // <PARAM> elements; PluginProcessor::setStateInformation folds those into the store once.
+        constexpr const char* percStepLegacyPrefix = "percStep";   // "percStep2_17" = lane 2, step 17
 
         // Portamento / glide (append-only)
         constexpr const char* glideOn   = "glideOn";
@@ -315,11 +306,9 @@ namespace Parameters
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
-            for (int i = 1; i <= StepSequencer::kMaxSteps; ++i) { seqPitch(i); seqStep(i); seqAcc(i); seqSGate(i); }
+            // (The STEP SEQ cells are no parameters since 18.5 — nothing to warm for them.)
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
-            // Full kMaxSteps since 16.3 — this loop had stayed at 32 through 16.2, so the first
-            // audio-thread touch of percStep 33..48 took the one-time static-init lock. Fixed.
-            for (int i = 1; i <= PercSequencer::kMaxSteps; ++i) { percStep1(i); percStep2(i); percStep3(i); percStep4(i); }
+            // (The PERC grid cells are no parameters since 18.5 — nothing to warm for them.)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
                 { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); modSlotQuant(n); }
         }
@@ -327,14 +316,11 @@ namespace Parameters
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
-        std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-
         // ALL modules are spec-driven now: every APVTS parameter comes from a ModuleSpec
-        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/MODULE_SYSTEM.md.
-        // The DSP wiring in applyToVoice + PresetIO still read the ID:: strings (unchanged ids).
-        Modules::appendAllParameters(params);
-
-        return { params.begin(), params.end() };
+        // (Source/Modules/*Specs.h, gathered by Modules::all()), one parameter group per module.
+        // See docs/MODULE_SYSTEM.md. The DSP wiring in applyToVoice + PresetIO still read the
+        // ID:: strings (unchanged ids).
+        return Modules::createParameterLayout();
     }
 
     // Apply all parameters to a voice

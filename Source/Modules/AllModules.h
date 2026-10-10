@@ -46,7 +46,10 @@ namespace Modules
             delay(), reverb(), arpeggiator(), glide(), pitchEnv(),
             osc(1), osc(2), osc(3), crossmod(), lfo(1), lfo(2), lfo(3), lfo(4), modMatrix(),
             string(), wavetable(), adsr(), oscilloscope(), spectrum(), keyboard(),
-            presetBank(),   // appended LAST: keeps APVTS param order append-only (UI order comes from buildRack)
+            // Registration order below is the ORDER THE SPECS ARE WALKED (preset read/write); the
+            // host-facing APVTS order is sorted by zone + title in createParameterLayout (18.5) —
+            // VST3 ids are hashes of the id strings, so neither order is an index contract.
+            presetBank(),   // appended LAST (historical: kept the APVTS order append-only; UI order comes from buildRack)
             sampler(),      // Story 12.1 — appended after presetBank for the same reason
             stepSeq(),      // Story 15.1 — appended last, same append-only reason
             perc(),         // Story 16.1 — ditto (140 params; append-only keeps old presets valid)

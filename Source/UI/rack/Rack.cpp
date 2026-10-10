@@ -134,6 +134,7 @@ namespace rack
             if (e.zone != zone || ! e.visible) continue;
             const auto* p = placedById (e.id);
             if (p == nullptr || p->frame == nullptr) continue;
+            if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
             const auto pid = p->frame->enableParamId();
             if (pid.isEmpty()) continue;
             ++enableable;
@@ -159,6 +160,7 @@ namespace rack
                 if (e.zone != zone || ! e.visible) continue;
                 const auto* p = placedById (e.id);
                 if (p == nullptr || p->frame == nullptr) continue;
+                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
                 const auto pid = p->frame->enableParamId();
                 if (pid.isEmpty()) continue;
                 if (auto* param = apvts.getParameter (pid))
@@ -176,6 +178,7 @@ namespace rack
                 if (e.zone != zone || ! e.visible) continue;
                 const auto* p = placedById (e.id);
                 if (p == nullptr || p->frame == nullptr) continue;
+                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
                 const auto pid = p->frame->enableParamId();
                 if (pid.isEmpty()) continue;
                 if (auto* param = apvts.getParameter (pid))
@@ -221,6 +224,7 @@ namespace rack
             if (e.zone != zone || ! e.visible) continue;
             const auto* p = placedById (e.id);
             if (p == nullptr || p->frame == nullptr) continue;
+            if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
             const auto pid = p->frame->enableParamId();
             if (pid.isEmpty()) continue;
             if (auto* param = apvts.getParameter (pid))
@@ -315,6 +319,7 @@ namespace rack
         //          defaults to disabled, so re-showing it must leave it disabled.
         if (const auto* p = placedById (id); p != nullptr && p->frame != nullptr)
         {
+            if (p->frame->isHostLocked()) return;   // AD-13: the host owns this one (never write its enable)
             const auto pid = p->frame->enableParamId();
             if (pid.isNotEmpty())
                 if (auto* param = apvts.getParameter (pid))
@@ -599,6 +604,7 @@ namespace rack
             if (isVisualOnly (e.id)) continue;                                   // the player's scope, not the preset's
             if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
             {
+                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
                 const auto pid = p->frame->enableParamId();
                 if (pid.isEmpty()) continue;   // nothing to read — leave it (no such module today)
                 if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() <= 0.5f)
@@ -631,6 +637,7 @@ namespace rack
             if (! e.visible && ! isVisualOnly (e.id))
                 if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
                 {
+                    if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
                     const auto pid = p->frame->enableParamId();
                     if (pid.isNotEmpty())
                         if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() > 0.5f)

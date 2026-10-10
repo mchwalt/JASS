@@ -7,6 +7,8 @@
 #include "../SynthySlider.h"   // KnobSize
 #include "../../DSP/ModTargets.h"   // LFOTarget = the shared modulation-target vocabulary (dependency-free)
 
+struct StepPattern;   // Audio/PatternStore.h — the STEP SEQ figure a pattern cell binds to (AD-14)
+
 // The unified-rack UI is data-driven (see ARCHITECTURE-SPINE AD-1/AD-4): every
 // module is a ModuleDescriptor, not a bespoke component. This header defines ONLY
 // the data model + the size-class table + slot accounting. Rendering lives in
@@ -154,6 +156,19 @@ namespace rack
         juce::String altParamId;
         std::function<juce::String (double value)>       altTextFromValue;   // alt row's read-out
         std::function<double (const juce::String& text)> altValueFromText;   // ...and its inverse
+        // Optional preview hook for the ALT row (the per-step GATE): called with (altValue,
+        // mainValue, true) on every user-driven change of the alt slider. Without it the alt
+        // slider falls back to `audition` with the main value — a held note, which says nothing
+        // about a length. The editor sounds the step for exactly that gate (maintainer
+        // 2026-10-10). No release call: the gate itself ends the preview.
+        std::function<void (int altValue, int mainValue, bool sounding)> altAudition;
+
+        // PATTERN cell (AD-14, 18.5): >= 0 ⇒ this knob is step `patternStep` (0-based, page A) of
+        // the module's StepPattern (ModuleDescriptor::stepPattern) and has NO parameter: the
+        // frame binds the knob to the step's pitch, builds the three-state corner switch on its
+        // on/accent and — with altRowTitle set — the alt slider on its gate, all reading and
+        // writing the store. Pages add page*stepsPerPage to the index. paramId stays empty.
+        int patternStep = -1;
     };
 
     struct Combo
@@ -356,6 +371,10 @@ namespace rack
             std::function<void(bool)> setFollow;          // re-latch jumps to the playing page
         };
         StepPaging paging;
+
+        // The figure the module's pattern cells (Knob::patternStep) bind to (AD-14). Editor-
+        // injected (the processor owns the store); nullptr = the module has no pattern cells.
+        StepPattern* stepPattern = nullptr;
 
         // Optional LIVE POSITION read-out in the header ("Laufindex", maintainer 2026-09-02):
         // polled in the frame timer beside the pager. STEP SEQ feeds it "step/LEN" — at 768

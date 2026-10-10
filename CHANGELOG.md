@@ -10,6 +10,107 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.2] – 2026-10-11
+
+### Added
+- **JASS carries an icon and its identity.** The standalone and the VST3 now embed an icon (the
+  rack's ground with the name and three small modules in the zone colours) and the usual file
+  properties: vendor Michael Walter, copyright with the AGPL-3.0 licence, the project URL and
+  the CalVer version. A DAW's plug-in manager shows the same vendor, URL and version from the
+  VST3 module info. The plugin's manufacturer and plugin codes are unchanged, so projects keep
+  recognising JASS; only the vendor string a host groups by changes from "JASSProject". The icon
+  is rendered by `tools/make_icon.ps1`, so it can be regenerated from source (maintainer
+  2026-10-11: "JASS sollte als VST3 Plugin auch ein Icon und die üblichen Informationen
+  mitbringen").
+- **STOP latch in the PERC title bar.** Held, the drum pattern stands still and the playhead
+  goes out; a grid click still sounds its lane, so a beat can be written in silence and checked
+  hit by hit. Releasing it starts the pattern on step 1, and the STEP SEQ does not wait for a
+  drum downbeat while it is held. The drums (re)starting — STOP released, or PERC switched on —
+  is a downbeat: a running STEP SEQ figure re-enters on it, so bass and beat are back in step
+  without touching a key (maintainer 2026-10-11: "wie schaffe ich es PERC und STEP SEQ wieder
+  zu synchronisieren"). The re-entry waits for the figure's next step boundary: the running bass
+  step finishes, then figure and drums start on step 1 on the same sample, and the note that is
+  sounding is carried into step 1 the way a TIE carries it, retuned if the pitch differs. So the
+  bass neither dips nor stumbles while it falls back into step (a first cut released and
+  re-struck it — "eine kleine Tonunterbrechung" — and a second jumped mid-step — "ein
+  rhythmischer Ruck"). Also fixed on the way: the drum clock kept counting while PERC was off
+  or held, so a restart fired its first step up to one step late and the drums sat a fraction
+  of a step behind the bass until the next preset load ("um einen halben Takt verschoben"). Why: PERC runs the moment it is switched on, while STEP SEQ
+  waits for the first key, so editing a beat meant editing against the beat (maintainer
+  2026-10-10: "gibt es eine intelligente Art, PERC zum Editieren zeitweise stoppen zu koennen?").
+  A hand on the transport, not a parameter: it is not saved with the patch.
+- **The GATE row previews the length.** Releasing a step's gate knob (after a turn, or a plain
+  click) sounds the step once for exactly that gate — percent of the current step length, TIE
+  and SLIDE as one full step. Before, the GATE row borrowed the pitch row's preview, a held note
+  of always the same length, which said nothing about the value (maintainer 2026-10-10: "der Ton
+  ist immer gleich lang gehalten"); a first cut re-sounded it on every tick of a drag, which only
+  machine-gunned the note. The gate row has no double-click-to-loaded-value: clicking to hear is
+  its main gesture, and two such clicks counted as a double-click reset the gate to the preset's
+  value. TIE and SLIDE are now bands of five knob positions each above 100 %, so a plain turn
+  lands on them (TIE used to be a single tick between 100 % and SLIDE, reachable only with Shift
+  — maintainer 2026-10-11: "ohne Shift … wäre natürlich geiler"). Stored values are unchanged.
+
+### Changed
+- **In a DAW the MASTER module is off and locked (VST3).** It renders dimmed with its enable,
+  reset, VOL and TEMPO inert, and the engine runs at unity level with mute ignored and the tempo
+  taken from the host; the MasterVol/MasterTempo modulation targets do nothing there. Why: in a
+  host, mute, level and tempo belong to the track and the project (maintainer 2026-10-05: "ein
+  Mute mache ich ja auch über die DAW"), and a knob that looks live but does nothing is a trap.
+  The stored values are untouched, so the same patch keeps its mute, level and tempo in the
+  standalone; the standalone itself is unchanged. Two consequences by design: a quiet patch
+  arrives at full level in the host (the track fader is the one level, so all instances are
+  level-matched), and VOL tremolo is a standalone-only effect (route the LFO to the generator
+  amplitudes instead). Part of AD-13: multitimbral JASS is several plugin instances on several
+  DAW tracks, not a host inside JASS.
+- **The DAW's parameter list is grouped by module, readable, and no longer offers a lane for
+  every sequencer cell (VST3).** Each rack module is now a VST3 unit (a folder in hosts that show
+  units), and the names read `FILTER Cutoff`, `STEP SEQ Step 17 Pitch`, `PERC Lane 2 Step 17`
+  and `MOD MATRIX Slot 3 SRC` where they used to read `STEP SEQ 17`, `PERC Step2_17` and eight
+  identical `MOD MATRIX SRC`. The 3072 STEP SEQ and 768 PERC grid cells are registered as not
+  automatable: they still travel in the plugin state, the DAW just gets no automation lane for
+  them. Why: Bitwig showed one flat list of several thousand entries, most of them unnamed grid
+  cells, with the sixty knobs worth automating buried in between (maintainer 2026-10-10:
+  "unbrauchbar und auch falsch"). Parameter ids are unchanged, so edits saved with earlier builds
+  keep loading. Whether a host hides non-automatable parameters or shows units as folders is the
+  host's call: Bitwig 6.1 hides the cells but keeps the list flat (checked 2026-10-10), which is
+  why the module title stays as a prefix in every name.
+- **No more "MIDI CC" parameters in the DAW (VST3).** VST3 has no MIDI CC events, so JUCE
+  emulates them with 16 x 130 parameters named `MIDI CC 0|1` and so on; Cubase lists all 2080 of
+  them next to the rack modules. JASS reads no controller, no pitch wheel and no aftertouch, so
+  the emulation is now switched off and the entries are gone (maintainer 2026-10-10 in Cubase:
+  "hunderte von Midi Noteneintraegen"). Nothing JASS reacts to has changed.
+- **The PERC grid is no longer a set of parameters (AD-14, Story 18.5 stage 1).** Its 4 x 768
+  cells live in the instrument's pattern memory, not in the parameter tree, so a DAW's list
+  shows PERC's knobs and nothing else. Presets keep their shape (the `Lanes[].Steps` rows),
+  the LiveState too, and a DAW project saved by an earlier build opens with its grid intact
+  (the old cell parameters are folded in once). Two consequences by design: RANDOM leaves the
+  drum pattern alone (it used to scramble it along with every other parameter), and the PERC
+  module's own reset now empties the grid as well as its knobs. Why: a pattern is content you
+  write into the instrument, not a control the DAW automates; the flag of 18.4 hid the cells in
+  Bitwig but not in Cubase, and the coming single-purpose instruments cut from JASS inherit
+  whatever the pattern is (maintainer 2026-10-10: "das Thema muessen wir ordentlich loesen").
+- **The STEP SEQ figure is no longer a set of parameters either (AD-14, Story 18.5 stage 2).**
+  Its 768 steps — pitch, on/off, accent and gate, 3072 cells — live in the same pattern memory
+  as the drum grid, so a DAW now sees JASS's knobs, switches and combos and nothing else: about
+  150 parameters, grouped by module, instead of some 4000. In the rack nothing moves: the step
+  knobs, the corner switch (off, on, accented), the GATE row, the pages, the LEN line, the write
+  cursor, keyboard recording, audition and the playhead all work as before, and double-click on
+  a step still restores it as the preset loaded it. Presets keep their shape (the `Steps`
+  array), the LiveState and MIDI import/export too, and a DAW project saved by an earlier build
+  opens with its figure intact (the old cell parameters are folded in once). As for the drum
+  grid: RANDOM leaves the figure alone, and the module reset empties it on every page.
+- **The DAW's module folders are sorted like the rack.** Parameter groups now come in rack-zone
+  order (GENERATORS, MODULATION, PROCESSING, VISUALIZATION, MASTER BUS, INPUT) and
+  alphabetically within a zone, instead of the order the modules happened to be added to the
+  project over time (maintainer in Cubase 2026-10-10: "warum sind die Parameter unsortiert?").
+  Cubase in particular orders the folders by their numeric unit id, which JUCE hashes from the
+  group's id string — so each group now gets an id whose hash falls into its slot of the
+  sorted order, and the folders come out in rack order there too (maintainer 2026-10-11: "OSC 1,
+  SUB, OSC 2, OSC 3"). Safe to change: VST3 parameter ids are hashes of the parameter id
+  strings, untouched, so projects keep loading. The order of the parameters INSIDE a folder is
+  the host's: Cubase sorts them by parameter id, and those ids cannot change without breaking
+  every saved project.
+
 ## [2026.10.1] – 2026-10-03
 
 ### Changed

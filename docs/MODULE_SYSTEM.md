@@ -21,7 +21,9 @@ A synth module (FILTER, LFO 2, SAMPLER, …) is declared **once**, in a
 system *generates*:
 
 1. the **[APVTS](Glossary.md#apvts) parameter layout** — `Parameters::createLayout()` is one call:
-   `Modules::appendAllParameters(params)`;
+   `Modules::createParameterLayout()`, one parameter *group* per module (the
+   VST3 wrapper exports a group as a unit, so a DAW that honours units shows
+   the rack's modules as folders);
 2. the **rack UI descriptor** — `makeModuleDescriptor(spec)` builds the
    module's body from its parameters;
 3. the **nested [`.jass`](Glossary.md#jass-format) persistence** — `Modules::writeState/readState` walk
@@ -64,21 +66,41 @@ init, so the order matters):
 | 9 | `LFOTarget modTarget` | `Off` ⇒ no live [mod ring](Glossary.md#mod-ring) on this knob. |
 | 10 | `bool freqDisplay` | Knob shows the *played* frequency (base × note ratio) with write-back through the inverse. |
 | 11 | `bool showInBody` | `false` ⇒ APVTS param exists but no rack control (hidden LFO `Target`, SUB `Octave`, SAMPLER `Set`). |
+| 12 | `juce::String legacyPersistKey` | Renamed key: the old name is still *read* as a fallback, writes use `persistKey`. Set by name after the brace init. |
+| 13 | `juce::String hostName` | Name in the DAW's parameter list; empty ⇒ `uiLabel`, else `persistKey`. For captions that only mean something inside the rack: a step knob captioned `"17"` becomes `"Step 17 Pitch"`, a matrix row's `"SRC"` becomes `"Slot 3 SRC"`. Set by name. |
+| 14 | `bool automatable` | `false` ⇒ exported **without** `kCanAutomate`. The value still travels in the plugin state; the DAW just offers no automation lane. Used for the internal LFO `Target`. Set by name. |
+
+**Pattern cells (AD-14).** The STEP SEQ figure and the PERC grid are *content*, not
+parameters: they live in `Source/Audio/PatternStore.h` (`StepPattern`, `PercPattern` —
+arrays of atomics the audio thread reads per block, a `revision` counter the UI polls).
+A `bodyOrder` entry `"step:<n>"` emits a `rack::Knob` with `patternStep = n-1` and no
+`paramId`; `ModuleFrame` binds that knob (pitch), its three-state corner switch (on /
+accent) and — with `altRowTitle` set — its alt slider (gate) to
+`ModuleDescriptor::stepPattern`, which the editor points at the processor's store. The
+PERC grid is a custom `Display` that paints and writes `PercPattern` directly. Presets
+carry the patterns as the `Steps` array and the `Lanes[].Steps` rows (unchanged shape),
+the DAW state as one `<StepPattern>` / `<PercPattern>` element each.
 
 Generators:
 
 - `makeParameter(spec, namePrefix)` maps `Kind` →
   `AudioParameterBool/Choice/Int/Float`. Every ID gets
   `juce::ParameterID(id, 1)`. The display name is
-  `"<module title> <uiLabel|persistKey>"` — cosmetic only; state matches by ID.
-- `appendModuleParameters(params, namePrefix, out)` — the loop used by the
-  registry.
+  `"<module title> <hostName|uiLabel|persistKey>"` (`hostParameterName`) —
+  cosmetic only; state matches by ID. The title prefix stays even though the
+  module is also the VST3 unit: a host that flattens the list (Bitwig) must
+  still tell `FILTER Resonance` from `FORMANT Resonance`.
+- `makeModuleParameterGroup(groupId, title, params)` — one
+  `AudioProcessorParameterGroup` per module (id = module id, name = title),
+  children in registration order; the registry adds one per module to the
+  layout. The flat `getParameters()` order is therefore unchanged.
 
 Notes:
 
-- There is **no `legacyKey`** field (the concept doc proposed one). Legacy
-  flat presets are handled by a one-time conversion in
-  `PresetIO::applyVarFlatLegacy`, not by a permanent fallback.
+- `legacyPersistKey` is **not** the `legacyKey` the concept doc proposed: it
+  only covers a *renamed* key inside the nested format. Legacy flat presets
+  are handled by a one-time conversion in `PresetIO::applyVarFlatLegacy`, not
+  by a permanent fallback.
 - `indexIsValue` is **not** a `ParamSpec` field — it lives on `rack::Combo`
   ([§5](#5-descriptor--rendering-pipeline)), so a purely spec-driven module
   cannot have an index-is-value combo; those are editor-built.
@@ -117,7 +139,7 @@ display-transform pair). `extraBody` is appended last.
   later module *appended* after everything else because `all()` order is the
   APVTS order (append-only keeps old presets valid).
 - `ModuleRegistry.h` declares the three audio-safe entry points
-  (`appendAllParameters`, `writeState`, `readState`); `ModuleRegistry.cpp` is
+  (`createParameterLayout`, `writeState`, `readState`); `ModuleRegistry.cpp` is
   the **single TU** that includes `AllModules.h` (and thereby the UI headers).
   `Parameters.h`/`PresetIO.h` include only the registry header — this is what
   keeps the audio layer UI-free.

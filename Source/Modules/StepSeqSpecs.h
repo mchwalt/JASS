@@ -45,50 +45,24 @@ namespace Modules
 
         m.params.push_back ({ "seqOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 
-        // Each step contributes FOUR params: the pitch knob, its on/off, its ACCENT (15.2), and
-        // its GATE (15.7). The two switches are declared with showInBody = false — they must not
-        // claim a grid cell; the editor pins them into the corner of the knob as ONE three-state
-        // switch (ModuleDescriptor::Knob::toggleParamId + accentParamId: off → on → accented, the
-        // TR-909's second-press gesture). The gate is showInBody = false too: it shares the pitch
-        // knob's CELL via the ROW toggle (Knob::altParamId) — the BeatStep's "the knob row cycles
-        // its meaning" gesture, so 32 gates cost no rack space either.
-        auto pitchParam = [&m] (int s)
-        {
-            m.params.push_back ({ "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
-                                  juce::String (s), ParamSpec::Kind::Int,
-                                  juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f });
-            // Default OFF (2026-09-02): a fresh figure is an EMPTY grid you fill, like every
-            // hardware step sequencer and like PERC — Reset "empties the pattern" (its own words)
-            // instead of lighting all 768 cells on the root. Safe against old presets: every one
-            // stores its playing steps explicitly (up to LEN), so a missing step never sounded.
-            ParamSpec on { "seqStep" + juce::String (s), "Step" + juce::String (s), "",
-                           ParamSpec::Kind::Bool, {}, 0.0f };
-            on.showInBody = false;
-            m.params.push_back (on);
-            ParamSpec acc { "seqAcc" + juce::String (s), "Accent" + juce::String (s), "",
-                            ParamSpec::Kind::Bool, {}, 0.0f };   // plain is the default — old figures unchanged
-            acc.showInBody = false;
-            m.params.push_back (acc);
-            // 15.7: per-step gate as ONE continuum (the BeatStep model): 5..100 = percent of the
-            // step (scaled by the global GATE), 101 = TIE (held through the boundary, the next
-            // step takes over without a retrigger), 102 = SLIDE (like TIE, but the pitch glides —
-            // the 303). Default 100 ⇒ exactly the pre-15.7 behaviour, so old figures are untouched.
-            ParamSpec sg { "seqSGate" + juce::String (s), "Gate" + juce::String (s), "",
-                           ParamSpec::Kind::Int,
-                           juce::NormalisableRange<float> (5.0f, 102.0f, 1.0f), 100.0f };
-            sg.showInBody = false;
-            m.params.push_back (sg);
-        };
-        // ---- REGISTRATION order: exactly as shipped through 15.7, then 33..48 appended --------
-        // (steps 1..16, SYNC, RATE, steps 17..32, LEN, GATE, ACCENT — do not reorder!)
-        for (int s = 1; s <= 16; ++s) pitchParam (s);
+        // The STEPS are NOT parameters (AD-14, Story 18.5 stage 2). From 15.1 to 18.4 each step
+        // contributed FOUR params (pitch, on/off, ACCENT, GATE) — 3072 of them — registered in
+        // append-only blocks so old DAW state kept its indices, and that is precisely what every
+        // DAW listed. A figure is content: the cells live in PatternStore::step, the rack binds
+        // the step knobs to it (ModuleDescriptor::Knob::patternStep — pitch knob, the three-state
+        // corner switch off → on → accented, and the GATE alt row all read and write the store),
+        // PresetIO writes the preset's `Steps` array from it, and the DAW state carries it as one
+        // XML element. The step cells of the BODY are declared in bodyOrder below as "step:<n>".
+        // Removing the params keeps the append-only contract for the REST: VST3 ids are hashes of
+        // the id strings, so every remaining parameter keeps its id.
+        //
+        // ---- REGISTRATION order of what remains: SYNC, RATE, LEN, GATE, ACCENT (do not reorder!)
         // SYNC is fed VERBATIM from SyncDivision::kNames, as DELAY and the LFOs do; retyping that
         // list is how this project has produced combo-index bugs twice. Default "1/8": the measured
         // reference runs eighths at 156 BPM (192.3 ms per step against a measured 192.0).
         m.params.push_back ({ "seqSync", "SyncDiv", "SYNC", ParamSpec::Kind::Choice, {}, 4.0f, SyncDivision::kNames });
         m.params.push_back ({ "seqRate", "Rate", "RATE", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.5f, 32.0f, 0.1f), 5.2f });   // steps/s when SYNC = Free
-        for (int s = 17; s <= 32; ++s) pitchParam (s);
         m.params.push_back ({ "seqLength", "Length", "LEN", ParamSpec::Kind::Int,
                               juce::NormalisableRange<float> (1.0f, (float) StepSequencer::kMaxSteps, 1.0f),
                               16.0f });   // default 16: one bar of eighths, the common case
@@ -100,17 +74,15 @@ namespace Modules
         // no accents anyway, so the audible default only greets NEW figures.
         m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
-        // 16.2: steps 33..48 — REGISTERED here at the end (append-only), DISPLAYED in place below.
-        // 16.3 simply lets the same tail run on to kMaxSteps: 33..48 keep the indices they shipped
-        // with, 49..192 follow behind them. (Single lane — no PERC-style interleaving trap here.)
-        for (int s = 33; s <= StepSequencer::kMaxSteps; ++s) pitchParam (s);
 
         // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
-        // The body shows ONE PAGE (kPageSteps knobs); ModuleFrame rebinds these cells to the
-        // shown page's params (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
-        for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
+        // The body shows ONE PAGE (kPageSteps knobs); "step:<n>" is a pattern cell (a knob bound
+        // to PatternStore::step, not to a parameter — makeModuleDescriptor turns it into a Knob
+        // with patternStep = n-1). ModuleFrame rebinds these cells to the shown page's steps
+        // (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
+        for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate" });
-        for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("seqPitch" + juce::String (s));
+        for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent" });
         return m;
     }

@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include "../Audio/Parameters.h"
+#include "../Audio/PatternStore.h"   // AD-14: the cells live here, not in the APVTS
 #include "../DSP/PercSequencer.h"
 
 // The PERC step field (Story 16.1): 4 lanes x 32 steps, PAINTED rather than built from components.
@@ -9,11 +10,11 @@
 // its standard size, and 128 cells at that width would make the module six rack units tall. A step
 // is a box, not a knob — at ~30 px the whole field fits one unit. So this is a Display element (the
 // route the on-screen keyboard takes) that draws the switches and hit-tests clicks, writing the
-// APVTS parameters directly. No child components: 128 ToggleButtons would cost more in layout and
-// repaint than the four rows of rectangles they would draw.
-//
-// Reading the params back every frame (rather than caching) is what makes a preset load, a host
-// automation move and an undo all show up without a notification path of their own.
+// cells straight into the PatternStore (AD-14; they were APVTS parameters until 18.5). No child
+// components: 128 ToggleButtons would cost more in layout and repaint than the four rows of
+// rectangles they would draw.
+// Reading the cells back every frame (rather than caching) is what makes a preset load and a DAW
+// state restore show up without a notification path of their own.
 // What to call the instrument a lane fires (Story 16.1, decision B: the NOTE knob reads out a name
 // instead of a number). Three sources, best first:
 //   1. the ZONE's own name — the sample's filename stem, kept since 16.1 ("Kick", "SnareRim").
@@ -63,9 +64,9 @@ class PercGrid : public juce::Component, private juce::Timer
 {
 public:
     // playhead: which step is sounding right now (-1 = not running), polled from the processor.
-    PercGrid (juce::AudioProcessorValueTreeState& s, std::function<int()> playheadSource,
+    PercGrid (juce::AudioProcessorValueTreeState& s, PercPattern& cells, std::function<int()> playheadSource,
               std::function<void (int lane)> auditionLane)
-        : apvts (s), playhead (std::move (playheadSource)), audition (std::move (auditionLane))
+        : apvts (s), pattern (cells), playhead (std::move (playheadSource)), audition (std::move (auditionLane))
     {
         startTimerHz (30);
     }
@@ -141,7 +142,7 @@ public:
                 auto cell = juce::Rectangle<float> (r.getX() + vi * cw,
                                                     r.getY() + (l + 1) * ch,
                                                     cw, ch).reduced (1.5f);
-                const bool on  = *apvts.getRawParameterValue (Parameters::ID::percStep (l + 1, s + 1)) > 0.5f;
+                const bool on  = pattern.get (l, s);
                 // Steps beyond LEN are drawn but dimmed: the pattern is still there, it just does
                 // not play — the same honesty the greyed-out knobs elsewhere in the rack carry.
                 const bool live = s < len;
@@ -224,10 +225,8 @@ private:
         }
         if (s == copySource)
             return;
-        for (int l = 1; l <= PercSequencer::kLanes; ++l)
-            if (auto* src = apvts.getParameter (Parameters::ID::percStep (l, copySource + 1)))
-                if (auto* dst = apvts.getParameter (Parameters::ID::percStep (l, s + 1)))
-                    dst->setValueNotifyingHost (src->getValue() > 0.5f ? 1.0f : 0.0f);
+        for (int l = 0; l < PercSequencer::kLanes; ++l)
+            pattern.set (l, s, pattern.get (l, copySource));
         repaint();
     }
 
@@ -244,10 +243,6 @@ private:
         if (vi < 0 || vi >= PercSequencer::kPageSteps || s >= PercSequencer::kMaxSteps
             || l < 0 || l >= PercSequencer::kLanes)
             return;
-        auto* param = apvts.getParameter (Parameters::ID::percStep (l + 1, s + 1));
-        if (param == nullptr)
-            return;
-
         // One preview per CELL, not per mouse event — otherwise holding the button still would
         // machine-gun the sample, and a drag would fire it per pixel.
         const int cell = l * PercSequencer::kMaxSteps + s;
@@ -258,15 +253,16 @@ private:
         // "what is on this one?" is as common as placing it, and the answer costs nothing.
         if (value && newCell && audition)
             audition (l);
-        if ((param->getValue() > 0.5f) == value)
+        if (pattern.get (l, s) == value)
             return;   // nothing to write — the preview above has already happened
-        param->setValueNotifyingHost (value ? 1.0f : 0.0f);
+        pattern.set (l, s, value);
         repaint();
     }
 
     void timerCallback() override { repaint(); }
 
-    juce::AudioProcessorValueTreeState& apvts;
+    juce::AudioProcessorValueTreeState& apvts;   // KIT, NOTE, AMP, LEN — the knobs, still parameters
+    PercPattern& pattern;                        // the cells (AD-14)
     std::function<int()> playhead;
     std::function<void (int lane)> audition;
     int lastCell = -1;   // lane*kMaxSteps+step the pointer last previewed (one sound per cell)

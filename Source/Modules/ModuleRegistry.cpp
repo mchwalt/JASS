@@ -5,10 +5,55 @@
 // only .params is read here, so pulling the UI headers into this one TU is harmless.
 namespace Modules
 {
-    void appendAllParameters (std::vector<std::unique_ptr<juce::RangedAudioParameter>>& out)
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
-        for (const auto& m : all())
-            appendModuleParameters (m.params, m.title, out);
+        // One group per module. Group ids are the module ids, which are unique by construction
+        // (the rack layout is keyed by them).
+        //
+        // ORDER: by rack zone (GENERATORS, MODULATION, PROCESSING, VISUALIZATION, MASTER BUS,
+        // INPUT), then by title — so a DAW's folder list reads like the rack and not like the
+        // project's history (maintainer in Cubase, 2026-10-10: "warum sind die Parameter
+        // unsortiert?"). all() keeps its registration order for the preset reader/writer, which
+        // walks the specs; the APVTS order is free to differ: VST3 parameter ids are hashes of
+        // the id strings (JUCE_FORCE_USE_LEGACY_PARAM_IDS is off), the state tree matches by id,
+        // and the processor's per-run snapshots index getParameters() consistently within a run.
+        auto mods = all();
+        std::stable_sort (mods.begin(), mods.end(), [] (const ModuleSpec& x, const ModuleSpec& y)
+        {
+            if (x.zone != y.zone) return (int) x.zone < (int) y.zone;
+            return x.title.compareIgnoreCase (y.title) < 0;
+        });
+        // ...and Cubase lists VST3 units by their NUMERIC id, not by index — and JUCE derives
+        // that id from the group id string (hashCode & 0x7fffffff), so a sorted group order
+        // alone still showed Cubase a hash-ordered folder list (maintainer 2026-10-11: "OSC 1,
+        // SUB, OSC 2, OSC 3"). Give the k-th group an id whose hash lands in the k-th of n
+        // ascending bands: "<n>#<module id>", the number searched upwards until it fits. The
+        // number goes in FRONT on purpose: juce::String::hashCode is 31*h + c per character, so a
+        // varying PREFIX is multiplied through by 31^len(id) and sweeps the whole range, while a
+        // varying suffix only nudged the last few digits and never left its narrow stripe —
+        // the first cut (suffix) found no fit for most modules and silently fell back to the
+        // plain id, so Cubase still showed hash order. ~130 tries at worst, once at construction.
+        // A group id names nothing persistent — units carry no state and no project refers to
+        // them — so it is free to be ugly.
+        const int n = (int) mods.size();
+        const juce::int64 band = (juce::int64) 0x7fffffff / (juce::int64) juce::jmax (1, n);
+        juce::AudioProcessorValueTreeState::ParameterLayout layout;
+        for (int k = 0; k < n; ++k)
+        {
+            const auto& m = mods[(size_t) k];
+            const juce::int64 lo = 1 + (juce::int64) k * band;   // 1: never kRootUnitId (0)
+            const juce::int64 hi = (juce::int64) (k + 1) * band;
+            juce::String gid = m.id;   // last resort only — see the search below
+            for (int suffix = 0; suffix < 100000; ++suffix)
+            {
+                const juce::String candidate = juce::String (suffix) + "#" + m.id;
+                const juce::int64 h = (juce::int64) (candidate.hashCode() & 0x7fffffff);
+                if (h >= lo && h < hi) { gid = candidate; break; }
+            }
+            jassert (gid != m.id);   // a band without a fit would put this module out of order in Cubase
+            layout.add (makeModuleParameterGroup (gid, m.title, m.params));
+        }
+        return layout;
     }
 
     // Parameters live as float32; casting one straight to double drags its binary error into the
