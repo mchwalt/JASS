@@ -688,16 +688,12 @@ namespace rack
                     }
                     if (k->altAudition)
                     {
-                        // The GATE preview: every real change re-sounds the step for the new
-                        // length (a drag scrubs lengths the way the pitch knob scrubs the scale).
-                        // Nothing to release at drag end — the gate decides when it stops.
-                        g->onValueChange = [g, s, aud = k->altAudition, prev = std::move (g->onValueChange)]
-                        {
-                            if (prev) prev();
-                            if (g->isMouseButtonDown (true) || g->isMouseOver (true))
-                                aud (juce::roundToInt (g->getValue()), (int) s->getValue(), true);
-                        };
-                        g->onDragStart = [g, s, aud = k->altAudition]
+                        // The GATE preview sounds ONCE, on release, with the final value: a length
+                        // is judged by hearing it end, so re-sounding it on every tick of a drag
+                        // only machine-gunned the note (maintainer 2026-10-10: "beim Drehen des
+                        // Wertes nicht staendig Toene"). A plain click (press + release) plays it
+                        // too. Nothing to release afterwards — the gate decides when it stops.
+                        g->onDragEnd = [g, s, aud = k->altAudition]
                         {
                             aud (juce::roundToInt (g->getValue()), (int) s->getValue(), true);
                         };
