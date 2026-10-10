@@ -14,7 +14,10 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 - **STOP latch in the PERC title bar.** Held, the drum pattern stands still and the playhead
   goes out; a grid click still sounds its lane, so a beat can be written in silence and checked
   hit by hit. Releasing it starts the pattern on step 1, and the STEP SEQ does not wait for a
-  drum downbeat while it is held. Why: PERC runs the moment it is switched on, while STEP SEQ
+  drum downbeat while it is held. The drums (re)starting — STOP released, or PERC switched on —
+  is a downbeat: a running STEP SEQ figure re-enters on it, so bass and beat are back in step
+  without touching a key (maintainer 2026-10-11: "wie schaffe ich es PERC und STEP SEQ wieder
+  zu synchronisieren"). Why: PERC runs the moment it is switched on, while STEP SEQ
   waits for the first key, so editing a beat meant editing against the beat (maintainer
   2026-10-10: "gibt es eine intelligente Art, PERC zum Editieren zeitweise stoppen zu koennen?").
   A hand on the transport, not a parameter: it is not saved with the patch.
