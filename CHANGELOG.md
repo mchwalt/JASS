@@ -34,6 +34,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   keep loading. Whether a host hides non-automatable parameters or shows units as folders is the
   host's call: Bitwig 6.1 hides the cells but keeps the list flat (checked 2026-10-10), which is
   why the module title stays as a prefix in every name.
+- **No more "MIDI CC" parameters in the DAW (VST3).** VST3 has no MIDI CC events, so JUCE
+  emulates them with 16 x 130 parameters named `MIDI CC 0|1` and so on; Cubase lists all 2080 of
+  them next to the rack modules. JASS reads no controller, no pitch wheel and no aftertouch, so
+  the emulation is now switched off and the entries are gone (maintainer 2026-10-10 in Cubase:
+  "hunderte von Midi Noteneintraegen"). Nothing JASS reacts to has changed.
 
 ## [2026.10.1] – 2026-10-03
 

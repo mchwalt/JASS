@@ -112,6 +112,11 @@ target_compile_definitions(JASS PUBLIC
     JUCE_WEB_BROWSER=0
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
+    # VST3 has no MIDI CC events, so JUCE emulates them with 16 x 130 parameters ("MIDI CC 0|1" ...)
+    # that Cubase lists in full. JASS reads no controller, no pitch wheel and no aftertouch
+    # (pitchWheelMoved is empty by design), so the 2080 entries buy nothing and go (2026-10-10,
+    # maintainer in Cubase: hundreds of MIDI entries next to the rack modules).
+    JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0
     _USE_MATH_DEFINES
 )
 
