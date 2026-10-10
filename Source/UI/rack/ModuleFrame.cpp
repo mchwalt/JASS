@@ -656,7 +656,10 @@ namespace rack
                         g->setValue ((double) fig->gate (absStep), juce::dontSendNotification);
                         g->onValueChange = [g, fig, absStep] { fig->setGate (absStep, juce::roundToInt (g->getValue())); };
                         g->setDoubleClickReturnValue (false, 0.0);
-                        g->presetBaseline = [fig, absStep]() -> double { return (double) fig->baselineGate (absStep); };
+                        // NO double-click-to-baseline on the gate row (maintainer 2026-10-10): with the
+                        // gate PREVIEW, clicking a knob to hear the length is the row's main gesture, and
+                        // two such clicks counted as a double-click reset the gate to the loaded value
+                        // ("springt irgendwann auf 100 %"). presetBaseline stays unset ⇒ nothing fires.
                         gateSlider = g;
                     }
                     else

@@ -22,7 +22,9 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   exactly that gate — percent of the current step length, TIE and SLIDE as one full step — with
   a fresh attack on every change, so a scrubbed gate is heard length by length. Before, the GATE
   row borrowed the pitch row's preview, a held note of always the same length, which said nothing
-  about the value (maintainer 2026-10-10: "der Ton ist immer gleich lang gehalten").
+  about the value (maintainer 2026-10-10: "der Ton ist immer gleich lang gehalten"). The gate
+  row has no double-click-to-loaded-value: clicking to hear is its main gesture, and two such
+  clicks counted as a double-click reset the gate to the preset's value.
 
 ### Changed
 - **In a DAW the MASTER module is off and locked (VST3).** It renders dimmed with its enable,
