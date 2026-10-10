@@ -73,6 +73,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   array), the LiveState and MIDI import/export too, and a DAW project saved by an earlier build
   opens with its figure intact (the old cell parameters are folded in once). As for the drum
   grid: RANDOM leaves the figure alone, and the module reset empties it on every page.
+- **The DAW's module folders are sorted like the rack.** Parameter groups now come in rack-zone
+  order (GENERATORS, MODULATION, PROCESSING, VISUALIZATION, MASTER BUS, INPUT) and
+  alphabetically within a zone, instead of the order the modules happened to be added to the
+  project over time (maintainer in Cubase 2026-10-10: "warum sind die Parameter unsortiert?").
+  Safe to change: VST3 parameter ids are hashes of the id strings, so projects keep loading.
 
 ## [2026.10.1] – 2026-10-03
 

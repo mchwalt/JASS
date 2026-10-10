@@ -418,7 +418,9 @@ light only the targeted oscillator's knob.
   `setStateInformation` first runs the idempotent XML migration for pre-v5
   matrix parameters, then `replaceState` + `markPresetClean`.
 - **VST3 parameter view** (2026-10-10): one unit per rack module
-  (`AudioProcessorParameterGroup`, id = module id, name = module title);
+  (`AudioProcessorParameterGroup`, id = module id, name = module title), the
+  units ordered by rack zone and then title (`Modules::createParameterLayout`;
+  the specs' registration order in `all()` is unaffected);
   parameter names are `"<title> <hostName|uiLabel|persistKey>"`; the internal
   LFO `Target` is registered **not automatable**. The sequencer patterns are no
   parameters at all since 18.5 (AD-14): the STEP SEQ figure and the PERC grid

@@ -7,10 +7,24 @@ namespace Modules
 {
     juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
-        // One group per module, in registration order (append-only, see all()). Group ids are the
-        // module ids, which are unique by construction (the rack layout is keyed by them).
+        // One group per module. Group ids are the module ids, which are unique by construction
+        // (the rack layout is keyed by them).
+        //
+        // ORDER: by rack zone (GENERATORS, MODULATION, PROCESSING, VISUALIZATION, MASTER BUS,
+        // INPUT), then by title — so a DAW's folder list reads like the rack and not like the
+        // project's history (maintainer in Cubase, 2026-10-10: "warum sind die Parameter
+        // unsortiert?"). all() keeps its registration order for the preset reader/writer, which
+        // walks the specs; the APVTS order is free to differ: VST3 parameter ids are hashes of
+        // the id strings (JUCE_FORCE_USE_LEGACY_PARAM_IDS is off), the state tree matches by id,
+        // and the processor's per-run snapshots index getParameters() consistently within a run.
+        auto mods = all();
+        std::stable_sort (mods.begin(), mods.end(), [] (const ModuleSpec& x, const ModuleSpec& y)
+        {
+            if (x.zone != y.zone) return (int) x.zone < (int) y.zone;
+            return x.title.compareIgnoreCase (y.title) < 0;
+        });
         juce::AudioProcessorValueTreeState::ParameterLayout layout;
-        for (const auto& m : all())
+        for (const auto& m : mods)
             layout.add (makeModuleParameterGroup (m.id, m.title, m.params));
         return layout;
     }
