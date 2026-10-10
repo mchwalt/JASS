@@ -1063,11 +1063,20 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // (legato, step 0 takes the voice over like a TIE) and drums start on the same sample.
             // An immediate jump cut the running step short — the "rhythmischer Ruck". With no
             // figure running the drums start now, and a figure entered later quantises to them.
-            if (percOn && ! perc.enabled && stepSeq.enabled && stepSeq.playingStep() >= 0)
+            if (percOn && ! perc.enabled)
             {
-                const int wait = stepSeq.samplesToNextStep();
-                perc.setStartDelay(wait);
-                stepSeq.restartLegatoIn(wait);
+                // Reset on the RISING edge as well: PercSequencer advances its sample counter even
+                // while disabled (the lanes keep rendering), so the falling-edge reset above had
+                // drifted by the length of the hold — step 0 then fired up to one step late, and
+                // the drums came in a fraction of a step behind the bass (maintainer 2026-10-11:
+                // "um einen halben Takt (einen Step?) verschoben"; found with a sample simulation).
+                perc.reset();
+                if (stepSeq.enabled && stepSeq.playingStep() >= 0)
+                {
+                    const int wait = stepSeq.samplesToNextStep();
+                    perc.setStartDelay(wait);
+                    stepSeq.restartLegatoIn(wait);
+                }
             }
             perc.enabled = percOn;
             perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);

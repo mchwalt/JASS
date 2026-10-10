@@ -31,7 +31,9 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   sounding is carried into step 1 the way a TIE carries it, retuned if the pitch differs. So the
   bass neither dips nor stumbles while it falls back into step (a first cut released and
   re-struck it — "eine kleine Tonunterbrechung" — and a second jumped mid-step — "ein
-  rhythmischer Ruck"). Why: PERC runs the moment it is switched on, while STEP SEQ
+  rhythmischer Ruck"). Also fixed on the way: the drum clock kept counting while PERC was off
+  or held, so a restart fired its first step up to one step late and the drums sat a fraction
+  of a step behind the bass until the next preset load ("um einen halben Takt verschoben"). Why: PERC runs the moment it is switched on, while STEP SEQ
   waits for the first key, so editing a beat meant editing against the beat (maintainer
   2026-10-10: "gibt es eine intelligente Art, PERC zum Editieren zeitweise stoppen zu koennen?").
   A hand on the transport, not a parameter: it is not saved with the patch.
