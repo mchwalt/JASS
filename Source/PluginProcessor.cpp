@@ -1058,11 +1058,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (! percOn && perc.enabled)
                 perc.reset();      // switched off or held ⇒ the next start is a downbeat, not where it stopped
             // The drums (re)starting IS a downbeat (maintainer 2026-10-11: after STOP, or after
-            // switching PERC on, the bass ran on out of step): a running figure re-enters on it.
-            // seqRequantize is consumed by the STEP SEQ block below in this same call, where the
-            // just-reset drum clock reports step 0 "now" — both start on the same sample.
-            if (percOn && ! perc.enabled)
-                seqRequantize.store(true);
+            // switching PERC on, the bass ran on out of step). With a figure RUNNING, both wait
+            // for the figure's next step boundary: the running bass step finishes, then figure
+            // (legato, step 0 takes the voice over like a TIE) and drums start on the same sample.
+            // An immediate jump cut the running step short — the "rhythmischer Ruck". With no
+            // figure running the drums start now, and a figure entered later quantises to them.
+            if (percOn && ! perc.enabled && stepSeq.enabled && stepSeq.playingStep() >= 0)
+            {
+                const int wait = stepSeq.samplesToNextStep();
+                perc.setStartDelay(wait);
+                stepSeq.restartLegatoIn(wait);
+            }
             perc.enabled = percOn;
             perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);
             const int pdiv = (int) *apvts.getRawParameterValue(ID::percSync);

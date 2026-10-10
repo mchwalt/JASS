@@ -67,7 +67,14 @@ public:
         sampleCounter = 0;
         stepIndex = 0;
         litStep   = -1;
+        startDelay = 0;
     }
+
+    // Hold the clock for `samples` before step 0 fires (the lanes still render, so a tail or a
+    // grid preview is heard). The processor uses it when the drums (re)start under a RUNNING
+    // figure: both wait for the figure's next step boundary and start step 0 together — the
+    // running bass step finishes instead of being cut (maintainer 2026-10-11: "rhythmischer Ruck").
+    void setStartDelay (int samples) { startDelay = juce::jmax (0, samples); }
 
     // The kit. Handed in per block like the SAMPLER's set, so switching kits (or one arriving from
     // the background loader) simply takes effect — SamplePlayer::setSource is a no-op when unchanged.
@@ -87,7 +94,7 @@ public:
         const int interval = stepInterval();
         const int toBoundary   = (sampleCounter == 0) ? 0 : interval - sampleCounter;
         const int stepsToWrap  = (steps - stepIndex % steps) % steps;
-        return toBoundary + stepsToWrap * interval;
+        return startDelay + toBoundary + stepsToWrap * interval;   // a pending start counts too
     }
 
     int currentStep() const noexcept { return stepIndex; }
@@ -145,26 +152,33 @@ public:
             // The clock only runs while the module is on (its switch IS the transport). The render
             // below runs either way, so a hit previewed from the grid — or the tail of one still
             // ringing when the module was switched off — is still heard.
-            if (enabled && sampleCounter == 0)
+            if (startDelay > 0)
             {
-                const int s = stepIndex % steps;
-                litStep = s;
-                for (int l = 0; l < kLanes; ++l)
-                    if (on[(size_t) l][(size_t) s])
-                    {
-                        const int n = juce::jlimit (0, 127, note[(size_t) l]);
-                        lanes[(size_t) l].setLevel (level[(size_t) l] * amp * kAmpScale);
-                        // Velocity 127, not the sequencer's 100: an SFZ tracks velocity per the spec
-                        // default, so 100 costs 4.2 dB for nothing (the `Drum Pattern` preset had to
-                        // compensate exactly that). Balance belongs on the LEVEL knob, where one can
-                        // see it.
-                        lanes[(size_t) l].trigger (ratioFor (n), n, 127);
-                        chokeFrom (l);   // 12.7: a closed hat silences the open one on its own lane
-                    }
-                stepIndex = (stepIndex + 1) % steps;
+                --startDelay;   // waiting for the figure's boundary: the clock holds, the lanes render
             }
-            if (++sampleCounter >= interval)
-                sampleCounter = 0;
+            else
+            {
+                if (enabled && sampleCounter == 0)
+                {
+                    const int s = stepIndex % steps;
+                    litStep = s;
+                    for (int l = 0; l < kLanes; ++l)
+                        if (on[(size_t) l][(size_t) s])
+                        {
+                            const int n = juce::jlimit (0, 127, note[(size_t) l]);
+                            lanes[(size_t) l].setLevel (level[(size_t) l] * amp * kAmpScale);
+                            // Velocity 127, not the sequencer's 100: an SFZ tracks velocity per the spec
+                            // default, so 100 costs 4.2 dB for nothing (the `Drum Pattern` preset had to
+                            // compensate exactly that). Balance belongs on the LEVEL knob, where one can
+                            // see it.
+                            lanes[(size_t) l].trigger (ratioFor (n), n, 127);
+                            chokeFrom (l);   // 12.7: a closed hat silences the open one on its own lane
+                        }
+                    stepIndex = (stepIndex + 1) % steps;
+                }
+                if (++sampleCounter >= interval)
+                    sampleCounter = 0;
+            }
 
             for (int l = 0; l < kLanes; ++l)
             {
@@ -196,6 +210,7 @@ private:
     std::array<SamplePlayer, kLanes> lanes;
     double sampleRate = 44100.0;
     int    sampleCounter = 0;
+    int    startDelay = 0;   // samples still to wait before step 0 (setStartDelay)
     int    stepIndex = 0;
     int    litStep = -1;   // step sounding right now (playhead); stepIndex is already the next one
     bool   haveSet = false;

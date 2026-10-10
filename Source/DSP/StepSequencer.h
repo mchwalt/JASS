@@ -78,6 +78,7 @@ public:
         gateCountdown = -1;
         tiePending = false;
         numLegato = 0;
+        pendingRestart = -1;
     }
 
     // Restart at step 0 WITHOUT a hole (maintainer 2026-10-11: the re-sync to the drums left "eine
@@ -94,6 +95,21 @@ public:
         numLegato = 0;
         tiePending = (soundingNote >= 0);
         tieIsSlide = false;
+        pendingRestart = -1;
+    }
+
+    // The same restart, but AT the figure's next step boundary (`samples` from the start of the
+    // next block, see samplesToNextStep): the running step finishes, then step 0 takes over —
+    // no cut-off step, no hole. The drums are given the same number of samples to wait, so both
+    // land on one sample (maintainer 2026-10-11: the immediate jump left "einen rhythmischen Ruck").
+    void restartLegatoIn (int samples) { pendingRestart = juce::jmax (0, samples); }
+
+    // Samples from the start of the next block to the figure's next step boundary (0 = the
+    // boundary is the block's first sample).
+    int samplesToNextStep() const noexcept
+    {
+        const int interval = juce::jmax (1, (int) (sampleRate * juce::jmax (0.01, stepSeconds)));
+        return sampleCounter == 0 ? 0 : interval - sampleCounter;
     }
 
     // Release whatever the pattern left sounding (switched off, or the last key let go).
@@ -130,6 +146,7 @@ public:
             stepIndex = 0;
             litStep   = -1;   // nothing running => no playhead
             startDelay = 0;   // a new entry gets a fresh quantisation, not the last one's leftover
+            pendingRestart = -1;
             return;
         }
 
@@ -145,6 +162,24 @@ public:
                 --startDelay;
                 continue;
             }
+
+            // Scheduled legato restart (restartLegatoIn): at this sample the figure jumps to step
+            // 0, and the boundary code below fires it. The note still sounding is handed over
+            // like a TIE (no note-off here — the gate countdown is dropped before it can fire).
+            if (pendingRestart == 0)
+            {
+                pendingRestart = -1;
+                stepIndex = 0;
+                sampleCounter = 0;
+                if (soundingNote >= 0)
+                {
+                    tiePending = true;
+                    tieIsSlide = false;
+                    gateCountdown = -1;
+                }
+            }
+            else if (pendingRestart > 0)
+                --pendingRestart;
 
             // Gate expiry: release the sounding note. At gate 1.0 the countdown reaches the step
             // boundary, where the note-on below is emitted FIRST (same sample) — so a legato
@@ -260,4 +295,5 @@ private:
     std::array<Legato, 8> legato {};   // takeovers this block (fixed size — RT, one per boundary)
     int    numLegato = 0;
     int    startDelay = 0;   // samples still to wait before the first step (quantised entry, 16.1)
+    int    pendingRestart = -1;   // samples until a scheduled legato restart (-1 = none), see restartLegatoIn
 };
