@@ -1079,6 +1079,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                       ? SyncDivision::delaySeconds(syncBpm, sdiv)
                                       : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::seqRate));
             stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
+            seqStepSecondsDisplay.store(stepSeq.stepSeconds);   // the GATE preview's time base (editor)
             // Only the playable range is copied: playback clamps to `length` with the same bound,
             // so steps beyond it are never read — and at kMaxSteps 768 (16 pages) copying the full
             // arrays would be ~3000 atomic loads per block for a 16-step figure.

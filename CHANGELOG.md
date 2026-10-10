@@ -18,6 +18,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   waits for the first key, so editing a beat meant editing against the beat (maintainer
   2026-10-10: "gibt es eine intelligente Art, PERC zum Editieren zeitweise stoppen zu koennen?").
   A hand on the transport, not a parameter: it is not saved with the patch.
+- **The GATE row previews the length.** Turning a step's gate knob now sounds the step for
+  exactly that gate — percent of the current step length, TIE and SLIDE as one full step — with
+  a fresh attack on every change, so a scrubbed gate is heard length by length. Before, the GATE
+  row borrowed the pitch row's preview, a held note of always the same length, which said nothing
+  about the value (maintainer 2026-10-10: "der Ton ist immer gleich lang gehalten").
 
 ### Changed
 - **In a DAW the MASTER module is off and locked (VST3).** It renders dimmed with its enable,

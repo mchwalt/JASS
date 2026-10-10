@@ -683,7 +683,23 @@ namespace rack
                         g->tooltipFromValue = k->altTextFromValue;
                         g->refreshTooltip();
                     }
-                    if (k->audition)
+                    if (k->altAudition)
+                    {
+                        // The GATE preview: every real change re-sounds the step for the new
+                        // length (a drag scrubs lengths the way the pitch knob scrubs the scale).
+                        // Nothing to release at drag end — the gate decides when it stops.
+                        g->onValueChange = [g, s, aud = k->altAudition, prev = std::move (g->onValueChange)]
+                        {
+                            if (prev) prev();
+                            if (g->isMouseButtonDown (true) || g->isMouseOver (true))
+                                aud (juce::roundToInt (g->getValue()), (int) s->getValue(), true);
+                        };
+                        g->onDragStart = [g, s, aud = k->altAudition]
+                        {
+                            aud (juce::roundToInt (g->getValue()), (int) s->getValue(), true);
+                        };
+                    }
+                    else if (k->audition)
                     {
                         auto movedG = std::make_shared<bool> (false);
                         g->onValueChange = [g, s, movedG, aud = k->audition,

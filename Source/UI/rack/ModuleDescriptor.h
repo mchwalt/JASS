@@ -156,6 +156,12 @@ namespace rack
         juce::String altParamId;
         std::function<juce::String (double value)>       altTextFromValue;   // alt row's read-out
         std::function<double (const juce::String& text)> altValueFromText;   // ...and its inverse
+        // Optional preview hook for the ALT row (the per-step GATE): called with (altValue,
+        // mainValue, true) on every user-driven change of the alt slider. Without it the alt
+        // slider falls back to `audition` with the main value — a held note, which says nothing
+        // about a length. The editor sounds the step for exactly that gate (maintainer
+        // 2026-10-10). No release call: the gate itself ends the preview.
+        std::function<void (int altValue, int mainValue, bool sounding)> altAudition;
 
         // PATTERN cell (AD-14, 18.5): >= 0 ⇒ this knob is step `patternStep` (0-based, page A) of
         // the module's StepPattern (ModuleDescriptor::stepPattern) and has NO parameter: the

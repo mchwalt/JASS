@@ -101,6 +101,10 @@ public:
     int getSeqNote() const { return seqNoteDisplay.load(); }
     // Step the STEP SEQ is on (0-based), or -1. Drives the module's playhead, like PERC's grid.
     int getSeqStep() const { return seqStepDisplay.load(); }
+    // One step's length in seconds as last resolved (SYNC against the tempo, or RATE). The GATE
+    // preview plays a step for gate% of this, so what you hear while turning is what the figure
+    // will play (maintainer 2026-10-10: the preview held every note the same length).
+    double getSeqStepSeconds() const { return seqStepSecondsDisplay.load(); }
 
     // Move the LATCHED sequencer root (see seqLatchedRoot). The pattern keeps running after the key
     // is released, so an octave shift has no held note left to move — the editor sends the ±12 here
@@ -248,6 +252,7 @@ private:
                                               // the rising-edge logic cannot see a latch that
                                               // replaced a still-running one (no edge to rise on)
     std::atomic<int> seqStepDisplay { -1 };   // step the pattern is on, for the module's playhead
+    std::atomic<double> seqStepSecondsDisplay { 0.125 };   // see getSeqStepSeconds
     std::atomic<int> percAuditionLane { -1 }; // grid click => sound this lane once (consumed per block)
     std::atomic<bool> percHeld { false };     // STOP latch: pattern paused, see holdPerc
     // True while a preset's kit is still being fetched. PERC stays SILENT until it lands: the KIT

@@ -1497,6 +1497,24 @@ void SynthyEditor::auditionStep(int semitones, bool sounding, bool accented)
                           // drag end, and a hanging note is worse than a short one
 }
 
+// The GATE row's preview (maintainer 2026-10-10: turning a gate knob sounded a note of always the
+// same length, so the value could not be judged by ear). The step's pitch is played for gate% of
+// the step length the processor last resolved (SYNC against the tempo, or RATE) — the length the
+// figure itself will give the note. TIE and SLIDE have no second step to run into here, so they
+// sound as one full step. Always a fresh attack: hearing the length means hearing it end.
+void SynthyEditor::auditionStepGated(int semitones, bool accented, int gate)
+{
+    if (auditionNote >= 0)   // re-trigger: a note still sounding would just be extended
+    {
+        processor.getKeyboardState().noteOff(SynthyProcessor::kAuditionChannel, auditionNote, 0.0f);
+        auditionNote = -1;
+    }
+    auditionStep(semitones, true, accented);
+    const double frac  = gate >= StepPattern::kGateTie ? 1.0 : juce::jlimit(5, 100, gate) / 100.0;
+    const double hold  = frac * juce::jmax(0.02, processor.getSeqStepSeconds());
+    auditionTicks = juce::jmax(1, juce::roundToInt(hold * 30.0));   // the timer runs at 30 Hz
+}
+
 // --- Writing a figure by playing it (Story 15.4) -------------------------------------------------
 // The cursor is the step the next played note lands in. It is UI state only: no parameter, nothing
 // persisted (AC9). Setting it also arms the processor, which then stops looking for a root note —
@@ -2450,6 +2468,14 @@ void SynthyEditor::buildRack()
                     // cell's gate); the value is one continuum — 5..100 % of the step, then TIE
                     // (held through, next step takes over without a retrigger) and SLIDE (the
                     // same, gliding — the 303). Read-out spells the two names.
+                    // ...and hear the gate while turning it: the step at exactly that length.
+                    k->altAudition = [this, absStep](int gate, int semis, bool sounding)
+                    {
+                        if (! sounding) return;
+                        seqSetCursor(absStep() - 1);   // a touch selects, as on the pitch row
+                        const bool acc = processor.getPatterns().step.accent(absStep() - 1);
+                        auditionStepGated(semis, acc, gate);
+                    };
                     k->altTextFromValue = [](double v)
                     {
                         const int gv = juce::roundToInt(v);
