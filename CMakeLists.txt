@@ -17,8 +17,20 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 add_subdirectory(JUCE)
 
+# Identity a host and the Windows file properties show (maintainer 2026-10-11: "Icon und die
+# ueblichen Informationen wie Autor, Copyright, Version"). COMPANY_NAME is the VST3 vendor and
+# the exe/DLL CompanyName; COMPANY_COPYRIGHT lands in LegalCopyright; the icon PNGs become the
+# exe/DLL icon (juceaide builds the .ico). The plugin IDs (manufacturer + plugin code) are
+# untouched, so hosts keep recognising JASS in saved projects. The version is project(VERSION)
+# above, CalVer.
 juce_add_plugin(JASS
-    COMPANY_NAME "JASSProject"
+    COMPANY_NAME "Michael Walter"
+    COMPANY_COPYRIGHT "Copyright (C) 2026 Michael Walter. Licensed under the AGPL-3.0."
+    COMPANY_WEBSITE "https://github.com/mchwalt/JASS"
+    BUNDLE_ID "com.mchwalt.jass"
+    DESCRIPTION "JASS - a modular synth rack with step sequencer and drum grid"
+    ICON_BIG   "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icon/jass_512.png"
+    ICON_SMALL "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Icon/jass_64.png"
     PLUGIN_MANUFACTURER_CODE Synt
     PLUGIN_CODE Syn1
     FORMATS Standalone VST3

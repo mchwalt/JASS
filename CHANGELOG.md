@@ -11,6 +11,15 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Added
+- **JASS carries an icon and its identity.** The standalone and the VST3 now embed an icon (the
+  rack's ground with the name and three small modules in the zone colours) and the usual file
+  properties: vendor Michael Walter, copyright with the AGPL-3.0 licence, the project URL and
+  the CalVer version. A DAW's plug-in manager shows the same vendor, URL and version from the
+  VST3 module info. The plugin's manufacturer and plugin codes are unchanged, so projects keep
+  recognising JASS; only the vendor string a host groups by changes from "JASSProject". The icon
+  is rendered by `tools/make_icon.ps1`, so it can be regenerated from source (maintainer
+  2026-10-11: "JASS sollte als VST3 Plugin auch ein Icon und die üblichen Informationen
+  mitbringen").
 - **STOP latch in the PERC title bar.** Held, the drum pattern stands still and the playhead
   goes out; a grid click still sounds its lane, so a beat can be written in silence and checked
   hit by hit. Releasing it starts the pattern on step 1, and the STEP SEQ does not wait for a
