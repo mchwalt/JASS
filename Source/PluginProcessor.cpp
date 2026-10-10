@@ -875,7 +875,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Drone note 60 (C4) while auto-play is armed and a source is on. The user
     // playing a key clears autoPlayEnabled (see handleNoteOn) → drone steps aside.
-    bool wantDrone = autoPlayEnabled.load() && (mask != 0);
+    // NEVER in a DAW (AD-13, 2026-10-11): an instrument on a track sounds when the track sends
+    // notes, not by itself — and the drone kept one voice with its whole per-voice effect chain
+    // rendering in every idle instance (maintainer in Waveform: "ein laufender JASS beansprucht
+    // 100% CPU"). The standalone keeps it: there the drone is how a patch is auditioned.
+    bool wantDrone = ! isHostedByDaw() && autoPlayEnabled.load() && (mask != 0);
     bool droneJustTriggered = false;
     if (wantDrone && !autoNoteOn)
     {

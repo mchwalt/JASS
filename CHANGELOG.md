@@ -10,6 +10,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+### Fixed
+- **No auto-play drone in a DAW.** The C4 that the standalone sounds while nothing is played
+  also ran inside every plugin instance, keeping a voice with its whole per-voice effect chain
+  rendering in idle instances. An instrument on a track sounds when the track sends notes
+  (AD-13); the standalone keeps the drone, where it is how a patch is auditioned. Found while
+  looking into Waveform's CPU read-out for an idle JASS (maintainer 2026-10-11).
+
 ## [2026.10.2] – 2026-10-11
 
 ### Added
