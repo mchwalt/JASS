@@ -22,6 +22,17 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   level-matched), and VOL tremolo is a standalone-only effect (route the LFO to the generator
   amplitudes instead). Part of AD-13: multitimbral JASS is several plugin instances on several
   DAW tracks, not a host inside JASS.
+- **The DAW's parameter list is grouped by module, readable, and no longer offers a lane for
+  every sequencer cell (VST3).** Each rack module is now a VST3 unit (a folder in hosts that show
+  units), and the names read `FILTER Cutoff`, `STEP SEQ Step 17 Pitch`, `PERC Lane 2 Step 17`
+  and `MOD MATRIX Slot 3 SRC` where they used to read `STEP SEQ 17`, `PERC Step2_17` and eight
+  identical `MOD MATRIX SRC`. The 3072 STEP SEQ and 768 PERC grid cells are registered as not
+  automatable: they still travel in the plugin state, the DAW just gets no automation lane for
+  them. Why: Bitwig showed one flat list of several thousand entries, most of them unnamed grid
+  cells, with the sixty knobs worth automating buried in between (maintainer 2026-10-10:
+  "unbrauchbar und auch falsch"). Parameter ids are unchanged, so edits saved with earlier builds
+  keep loading. Whether a host hides non-automatable parameters is the host's call (Cubase does;
+  Bitwig to be seen).
 
 ## [2026.10.1] – 2026-10-03
 

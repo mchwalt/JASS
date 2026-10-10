@@ -102,12 +102,16 @@ namespace Modules
         // REGISTRATION order is append-only: the shipped 4x32 block stays exactly as it was,
         // steps 33..48 of every lane follow BEHIND it (16.2) — a naive kMaxSteps loop would have
         // spliced lane 1's new steps in front of lane 2's old ones and shifted every index.
+        // Not automatable, named for the DAW: 768 grid cells are authored in the grid, and
+        // "PERC Step2_17" said nothing — "PERC Lane 2 Step 17" does.
         auto stepParam = [&m] (int l, int s)
         {
             ParamSpec step { "percStep" + juce::String (l) + "_" + juce::String (s),
                              "Step" + juce::String (l) + "_" + juce::String (s), "",
                              ParamSpec::Kind::Bool, {}, 0.0f };
             step.showInBody = false;
+            step.hostName = "Lane " + juce::String (l) + " Step " + juce::String (s);
+            step.automatable = false;
             m.params.push_back (step);
         };
         for (int l = 1; l <= PercSequencer::kLanes; ++l)

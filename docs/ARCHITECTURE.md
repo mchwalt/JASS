@@ -91,7 +91,7 @@ The rules that keep this true:
 - **`Modules/ModuleSpec.h` is the UI half** — the only spec header that pulls
   in `UI/rack/ModuleDescriptor.h`.
 - **`Modules/ModuleRegistry.h`** exposes audio-safe declarations only
-  (`appendAllParameters`, `writeState`, `readState`). Its definition in
+  (`createParameterLayout`, `writeState`, `readState`). Its definition in
   `ModuleRegistry.cpp` is the *single* translation unit that includes
   `AllModules.h` (and therefore the UI headers). `Parameters.h` and
   `PresetIO.h` include only the registry header.
@@ -105,7 +105,7 @@ The rules that keep this true:
 
 | Generated from module specs | Hand-written |
 |---|---|
-| APVTS parameter layout (`createLayout()` is one call: `Modules::appendAllParameters`) | DSP `process()` of every module (`Source/DSP/`) |
+| APVTS parameter layout (`createLayout()` is one call: `Modules::createParameterLayout`, one parameter group per module) | DSP `process()` of every module (`Source/DSP/`) |
 | Rack UI descriptors (`makeModuleDescriptor`) | Param → DSP wiring (`Parameters::applyToVoice`) |
 | Nested `.jass` persistence (`Modules::writeState/readState`) | ~9 modules with editor-bound UI bodies (see MODULE_SYSTEM.md §6) |
 
@@ -417,6 +417,15 @@ light only the targeted oscillator's knob.
 - **VST3 state**: `getStateInformation` = `copyState → XML → binary`;
   `setStateInformation` first runs the idempotent XML migration for pre-v5
   matrix parameters, then `replaceState` + `markPresetClean`.
+- **VST3 parameter view** (2026-10-10): one unit per rack module
+  (`AudioProcessorParameterGroup`, id = module id, name = module title);
+  parameter names are `"<title> <hostName|uiLabel|persistKey>"`; the sequencer
+  grid cells (STEP SEQ 768 × 4, PERC 4 × 192) and the internal LFO `Target` are
+  registered **not automatable**, so a host offers no lanes for them while the
+  state still carries them. VST3 parameter ids are hashes of the APVTS ids and
+  unchanged, so edits saved with earlier builds keep loading. Whether a host
+  hides non-automatable parameters or shows units as folders is the host's
+  call (Cubase does both; Bitwig flattens the list).
 - **Preset format**: nested JSON per module,
   [`PresetIO::kFormatVersion = 6`](Glossary.md#formatversion),
   load = *factory-reset everything first, then layer the file on top* —

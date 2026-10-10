@@ -5,10 +5,14 @@
 // only .params is read here, so pulling the UI headers into this one TU is harmless.
 namespace Modules
 {
-    void appendAllParameters (std::vector<std::unique_ptr<juce::RangedAudioParameter>>& out)
+    juce::AudioProcessorValueTreeState::ParameterLayout createParameterLayout()
     {
+        // One group per module, in registration order (append-only, see all()). Group ids are the
+        // module ids, which are unique by construction (the rack layout is keyed by them).
+        juce::AudioProcessorValueTreeState::ParameterLayout layout;
         for (const auto& m : all())
-            appendModuleParameters (m.params, m.title, out);
+            layout.add (makeModuleParameterGroup (m.id, m.title, m.params));
+        return layout;
     }
 
     // Parameters live as float32; casting one straight to double drags its binary error into the

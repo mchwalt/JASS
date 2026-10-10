@@ -52,22 +52,29 @@ namespace Modules
         // TR-909's second-press gesture). The gate is showInBody = false too: it shares the pitch
         // knob's CELL via the ROW toggle (Knob::altParamId) — the BeatStep's "the knob row cycles
         // its meaning" gesture, so 32 gates cost no rack space either.
+        // All four are hostName'd and NOT automatable: the knob's caption is the bare step number
+        // (meaningful under the knob, meaningless as "STEP SEQ 17" in a DAW list), and a figure
+        // is authored in the grid, not drawn as 3072 automation lanes. The values still travel
+        // in the plugin state; only the lanes are gone.
         auto pitchParam = [&m] (int s)
         {
-            m.params.push_back ({ "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
-                                  juce::String (s), ParamSpec::Kind::Int,
-                                  juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f });
+            const juce::String step = "Step " + juce::String (s) + " ";
+            ParamSpec pitch { "seqPitch" + juce::String (s), "Pitch" + juce::String (s),
+                              juce::String (s), ParamSpec::Kind::Int,
+                              juce::NormalisableRange<float> (-24.0f, 24.0f, 1.0f), 0.0f };
+            pitch.hostName = step + "Pitch"; pitch.automatable = false;
+            m.params.push_back (pitch);
             // Default OFF (2026-09-02): a fresh figure is an EMPTY grid you fill, like every
             // hardware step sequencer and like PERC — Reset "empties the pattern" (its own words)
             // instead of lighting all 768 cells on the root. Safe against old presets: every one
             // stores its playing steps explicitly (up to LEN), so a missing step never sounded.
             ParamSpec on { "seqStep" + juce::String (s), "Step" + juce::String (s), "",
                            ParamSpec::Kind::Bool, {}, 0.0f };
-            on.showInBody = false;
+            on.showInBody = false; on.hostName = step + "On"; on.automatable = false;
             m.params.push_back (on);
             ParamSpec acc { "seqAcc" + juce::String (s), "Accent" + juce::String (s), "",
                             ParamSpec::Kind::Bool, {}, 0.0f };   // plain is the default — old figures unchanged
-            acc.showInBody = false;
+            acc.showInBody = false; acc.hostName = step + "Accent"; acc.automatable = false;
             m.params.push_back (acc);
             // 15.7: per-step gate as ONE continuum (the BeatStep model): 5..100 = percent of the
             // step (scaled by the global GATE), 101 = TIE (held through the boundary, the next
@@ -76,7 +83,7 @@ namespace Modules
             ParamSpec sg { "seqSGate" + juce::String (s), "Gate" + juce::String (s), "",
                            ParamSpec::Kind::Int,
                            juce::NormalisableRange<float> (5.0f, 102.0f, 1.0f), 100.0f };
-            sg.showInBody = false;
+            sg.showInBody = false; sg.hostName = step + "Gate"; sg.automatable = false;
             m.params.push_back (sg);
         };
         // ---- REGISTRATION order: exactly as shipped through 15.7, then 33..48 appended --------

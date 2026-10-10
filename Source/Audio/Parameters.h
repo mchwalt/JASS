@@ -327,14 +327,11 @@ namespace Parameters
 
     inline juce::AudioProcessorValueTreeState::ParameterLayout createLayout()
     {
-        std::vector<std::unique_ptr<juce::RangedAudioParameter>> params;
-
         // ALL modules are spec-driven now: every APVTS parameter comes from a ModuleSpec
-        // (Source/Modules/*Specs.h, gathered by Modules::all()). See docs/MODULE_SYSTEM.md.
-        // The DSP wiring in applyToVoice + PresetIO still read the ID:: strings (unchanged ids).
-        Modules::appendAllParameters(params);
-
-        return { params.begin(), params.end() };
+        // (Source/Modules/*Specs.h, gathered by Modules::all()), one parameter group per module.
+        // See docs/MODULE_SYSTEM.md. The DSP wiring in applyToVoice + PresetIO still read the
+        // ID:: strings (unchanged ids).
+        return Modules::createParameterLayout();
     }
 
     // Apply all parameters to a voice
