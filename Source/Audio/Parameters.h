@@ -116,12 +116,14 @@ namespace Parameters
         constexpr const char* seqLength = "seqLength";
         constexpr const char* seqGate   = "seqGate";     // ONE note length for the whole pattern
         constexpr const char* seqAccent = "seqAccent";   // ACCENT depth: what an accented step does (15.2)
-        // 16.3: the counts ARE kMaxSteps — one source of truth, no drifting literal. (The caches
-        // are static arrays of that size, built once on the message thread via warmIndexedIds.)
-        JASS_INDEXED_ID (seqPitch, StepSequencer::kMaxSteps, "seqPitch", "")
-        JASS_INDEXED_ID (seqStep,  StepSequencer::kMaxSteps, "seqStep",  "")   // per-step on/off (off = rest)
-        JASS_INDEXED_ID (seqAcc,   StepSequencer::kMaxSteps, "seqAcc",   "")   // per-step accent flag (15.2)
-        JASS_INDEXED_ID (seqSGate, StepSequencer::kMaxSteps, "seqSGate", "")   // per-step gate 5..100 %, 101=TIE, 102=SLIDE (15.7)
+        // The step cells (seqPitch<n> / seqStep<n> / seqAcc<n> / seqSGate<n>) are NO LONGER
+        // parameters (AD-14, Story 18.5 stage 2): they live in PatternStore::step. A DAW state
+        // saved before that still carries them as <PARAM> elements, folded in once by
+        // PluginProcessor::setStateInformation under these prefixes.
+        constexpr const char* seqPitchLegacyPrefix = "seqPitch";
+        constexpr const char* seqStepLegacyPrefix  = "seqStep";
+        constexpr const char* seqAccLegacyPrefix   = "seqAcc";
+        constexpr const char* seqSGateLegacyPrefix = "seqSGate";
 
         // PERC (Story 16.1) — four percussion tracks rendered straight to the master bus. The step
         // grid is one indexed id PER LANE (a 2-D index would have to build a String on the audio
@@ -304,7 +306,7 @@ namespace Parameters
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
-            for (int i = 1; i <= StepSequencer::kMaxSteps; ++i) { seqPitch(i); seqStep(i); seqAcc(i); seqSGate(i); }
+            // (The STEP SEQ cells are no parameters since 18.5 — nothing to warm for them.)
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
             // (The PERC grid cells are no parameters since 18.5 — nothing to warm for them.)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)

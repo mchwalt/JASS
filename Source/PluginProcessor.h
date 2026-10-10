@@ -237,7 +237,7 @@ private:
     // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
     // be dragged through the patch's filter and effects. See PercSequencer.h.
     PercSequencer perc;
-    PatternStore patterns;   // AD-14 (18.5): the PERC grid (stage 1); STEP SEQ follows in stage 2
+    PatternStore patterns;   // AD-14 (18.5): the PERC grid and the STEP SEQ figure
     bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
                                   // entry can be quantised to the drum pattern (16.1 AC6)
     std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)
@@ -288,6 +288,7 @@ private:
     std::atomic<bool> liveDirty { false };
     std::vector<float> cleanSnapshot;             // param values at last load/save (empty = "modified")
     uint32_t cleanPercRevision = 0;               // PatternStore::perc revision at the same moment (AD-14)
+    uint32_t cleanStepRevision = 0;               // ...and PatternStore::step's
     void timerCallback() override;
     void valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&) override { liveDirty = true; }
     void saveLiveState();

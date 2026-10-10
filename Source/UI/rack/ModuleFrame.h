@@ -190,6 +190,17 @@ namespace rack
         // and both views share them.
         struct AltKnob { SynthySlider* main; SynthySlider* alt; };
         std::vector<AltKnob> altKnobs;
+
+        // Pattern cells (AD-14, 18.5): a step knob bound to desc.stepPattern instead of a
+        // parameter — the pitch slider, the gate alt slider (may be null) and the corner switch,
+        // for ABSOLUTE step `step` (page applied at build time). Writes go straight to the store
+        // from the widgets' callbacks; the timer polls the store's revision and, on a change
+        // (preset load, MIDI import, keyboard recording, reset), pushes the values back into the
+        // widgets without notification — the poll-and-resync the attachments used to do.
+        struct PatternCell { SynthySlider* pitch; SynthySlider* gate; juce::Button* sw; int step; };
+        std::vector<PatternCell> patternCells;
+        uint32_t lastPatternRevision = 0;
+        void syncPatternCells();   // store → widgets, silently
         std::unique_ptr<juce::TextButton> altRowBtn;   // header latch; only when altRowTitle set
         juce::OwnedArray<juce::TextButton> actionBtns; // header one-shot actions (15.8), see desc.headerActions
         std::unique_ptr<juce::TextButton> collapseBtn; // display fold latch (16.2); only when collapseTitle set

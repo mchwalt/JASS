@@ -58,7 +58,16 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   write into the instrument, not a control the DAW automates; the flag of 18.4 hid the cells in
   Bitwig but not in Cubase, and the coming single-purpose instruments cut from JASS inherit
   whatever the pattern is (maintainer 2026-10-10: "das Thema muessen wir ordentlich loesen").
-  STEP SEQ follows in stage 2.
+- **The STEP SEQ figure is no longer a set of parameters either (AD-14, Story 18.5 stage 2).**
+  Its 768 steps — pitch, on/off, accent and gate, 3072 cells — live in the same pattern memory
+  as the drum grid, so a DAW now sees JASS's knobs, switches and combos and nothing else: about
+  150 parameters, grouped by module, instead of some 4000. In the rack nothing moves: the step
+  knobs, the corner switch (off, on, accented), the GATE row, the pages, the LEN line, the write
+  cursor, keyboard recording, audition and the playhead all work as before, and double-click on
+  a step still restores it as the preset loaded it. Presets keep their shape (the `Steps`
+  array), the LiveState and MIDI import/export too, and a DAW project saved by an earlier build
+  opens with its figure intact (the old cell parameters are folded in once). As for the drum
+  grid: RANDOM leaves the figure alone, and the module reset empties it on every page.
 
 ## [2026.10.1] – 2026-10-03
 

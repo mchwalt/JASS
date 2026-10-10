@@ -737,7 +737,8 @@ void SynthyProcessor::resetToDefault()
     // the auto-play drone now drives the whole stack.
     for (auto* p : getParameters())
         p->setValueNotifyingHost(p->getDefaultValue());
-    patterns.perc.clear();   // AD-14: the grid is no parameter, so the loop above cannot reach it
+    patterns.perc.clear();   // AD-14: the patterns are no parameters, so the loop above cannot reach them
+    patterns.step.clear();
 
     for (int i = 1; i <= 3; ++i)
         if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
@@ -763,6 +764,8 @@ void SynthyProcessor::markPresetClean()
     for (auto* p : getParameters())
         cleanSnapshot.push_back(p->getValue());
     cleanPercRevision = patterns.perc.revision.load();   // AD-14: a changed cell is a change too
+    patterns.step.markClean();                            // ...and the figure's double-click baseline
+    cleanStepRevision = patterns.step.revision.load();
 }
 
 bool SynthyProcessor::isPresetModified() const
@@ -770,8 +773,9 @@ bool SynthyProcessor::isPresetModified() const
     auto& params = getParameters();
     if (cleanSnapshot.size() != (size_t) params.size())
         return true;   // no baseline (e.g. restored as a modified working state)
-    if (patterns.perc.revision.load() != cleanPercRevision)
-        return true;   // a grid cell changed since the baseline (AD-14)
+    if (patterns.perc.revision.load() != cleanPercRevision
+        || patterns.step.revision.load() != cleanStepRevision)
+        return true;   // a pattern cell changed since the baseline (AD-14)
     for (int i = 0; i < params.size(); ++i)
         if (std::abs(params[i]->getValue() - cleanSnapshot[(size_t) i]) > 1.0e-6f)
             return true;
@@ -1079,12 +1083,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // so steps beyond it are never read — and at kMaxSteps 768 (16 pages) copying the full
             // arrays would be ~3000 atomic loads per block for a 16-step figure.
             const int seqUsed = juce::jlimit(1, (int) StepSequencer::kMaxSteps, stepSeq.length);
-            for (int s = 0; s < seqUsed; ++s)
+            for (int s = 0; s < seqUsed; ++s)   // AD-14: from the PatternStore, one relaxed load per cell
             {
-                stepSeq.pitch [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqPitch(s + 1));
-                stepSeq.on    [(size_t) s] =       *apvts.getRawParameterValue(ID::seqStep (s + 1)) > 0.5f;
-                stepSeq.accent[(size_t) s] =       *apvts.getRawParameterValue(ID::seqAcc  (s + 1)) > 0.5f;   // 15.2
-                stepSeq.sgate [(size_t) s] = (int) *apvts.getRawParameterValue(ID::seqSGate(s + 1));          // 15.7
+                stepSeq.pitch [(size_t) s] = patterns.step.pitch (s);
+                stepSeq.on    [(size_t) s] = patterns.step.on    (s);
+                stepSeq.accent[(size_t) s] = patterns.step.accent(s);   // 15.2
+                stepSeq.sgate [(size_t) s] = patterns.step.gate  (s);   // 15.7
             }
 
             // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16
@@ -1450,7 +1454,8 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
-    patterns.perc.writeXml(*xml);   // AD-14: the grid rides along as ONE element, not 3072 PARAMs
+    patterns.perc.writeXml(*xml);   // AD-14: the patterns ride along as ONE element each, not thousands of PARAMs
+    patterns.step.writeXml(*xml);
     copyXmlToBinary(*xml, destData);
 }
 
@@ -1484,6 +1489,7 @@ namespace
     // parameters that still exist. Gated on their presence — a state saved by this build has
     // none (it carries a <PercPattern> element instead, read after this) — and idempotent.
     // Returns true when anything was folded, so the caller knows the grid is already set.
+    // (The STEP SEQ twin below does the same for seqPitch<n> / seqStep<n> / seqAcc<n> / seqSGate<n>.)
     bool migrateLegacyPercXml (juce::XmlElement& state, PercPattern& grid)
     {
         bool found = false;
@@ -1510,6 +1516,48 @@ namespace
         }
         return found;
     }
+
+    bool migrateLegacyStepXml (juce::XmlElement& state, StepPattern& fig)
+    {
+        using namespace Parameters;
+        bool found = false;
+        auto numberAfter = [] (const juce::String& id, const char* prefix) -> int
+        {
+            if (! id.startsWith (prefix)) return -1;
+            const juce::String tail = id.substring ((int) std::strlen (prefix));
+            return tail.isNotEmpty() && tail.containsOnly ("0123456789") ? tail.getIntValue() : -1;
+        };
+        for (auto* el = state.getFirstChildElement(); el != nullptr;)
+        {
+            auto* next = el->getNextElement();
+            if (el->hasTagName ("PARAM"))
+            {
+                const juce::String id = el->getStringAttribute ("id");
+                const double value = el->getDoubleAttribute ("value");
+                int n = -1;
+                enum { None, Pitch, On, Acc, Gate } kind = None;
+                if      ((n = numberAfter (id, ID::seqSGateLegacyPrefix)) > 0) kind = Gate;    // before seqStep: "seqS…" vs "seqStep"
+                else if ((n = numberAfter (id, ID::seqPitchLegacyPrefix)) > 0) kind = Pitch;
+                else if ((n = numberAfter (id, ID::seqStepLegacyPrefix))  > 0) kind = On;
+                else if ((n = numberAfter (id, ID::seqAccLegacyPrefix))   > 0) kind = Acc;
+                if (kind != None)
+                {
+                    if (! found) { fig.clear(); found = true; }   // the old state is complete
+                    switch (kind)
+                    {
+                        case Pitch: fig.setPitch  (n - 1, (int) value);  break;
+                        case On:    fig.setOn     (n - 1, value > 0.5);  break;
+                        case Acc:   fig.setAccent (n - 1, value > 0.5);  break;
+                        case Gate:  fig.setGate   (n - 1, (int) value);  break;
+                        default: break;
+                    }
+                    state.removeChildElement (el, true);
+                }
+            }
+            el = next;
+        }
+        return found;
+    }
 }
 
 void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
@@ -1518,12 +1566,15 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
         migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
-        // AD-14: the PERC grid. A pre-18.5 project carries it as parameters (folded in here), a
-        // current one as a <PercPattern> element; a state with neither is an empty grid — a DAW
-        // state is a complete snapshot, exactly like a preset.
-        const bool folded = migrateLegacyPercXml(*xml, patterns.perc);
-        if (! patterns.perc.readXml(*xml) && ! folded)
+        // AD-14: the patterns. A pre-18.5 project carries them as parameters (folded in here), a
+        // current one as <PercPattern> / <StepPattern> elements; a state with neither is an empty
+        // pattern — a DAW state is a complete snapshot, exactly like a preset.
+        const bool foldedPerc = migrateLegacyPercXml(*xml, patterns.perc);
+        if (! patterns.perc.readXml(*xml) && ! foldedPerc)
             patterns.perc.clear();
+        const bool foldedStep = migrateLegacyStepXml(*xml, patterns.step);
+        if (! patterns.step.readXml(*xml) && ! foldedStep)
+            patterns.step.clear();
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
         // The just-restored state IS the clean baseline: snapshot it so a freshly loaded host
         // project does not spuriously report "modified" (isPresetModified compares to this).
