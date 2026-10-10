@@ -587,7 +587,7 @@ its viewport only if it is still taller than the window.
 
 The formal architecture spine lives at
 `_bmad-output/planning-artifacts/architecture/architecture-JASS-2026-06-28/ARCHITECTURE-SPINE.md`
-(AD-1…AD-13). One-line summaries:
+(AD-1…AD-14). One-line summaries:
 
 | AD | Decision |
 |---|---|
@@ -604,6 +604,8 @@ The formal architecture spine lives at
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
 | AD-12 | Width fixed (1920 px), height auto-fits the visible rack; the display-fit scale comes from the may-appear worst case, with a floor of 1:1 physical pixels |
 | AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS stays a monotimbral instrument; several voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
+
+| AD-14 | **Sequencer patterns are content, not parameters.** The STEP SEQ figure (768 × pitch/on/accent/gate) and the PERC grid (4 × 192) leave the APVTS and live in a `PatternStore` the engine reads lock-free; a host sees ~150 parameters, not ~4000. Presets, DAW state and LiveState carry the patterns as data blocks; the rack binds step knobs and grid cells to the store, not to parameters |
 
 ### AD-13 in more detail (decided 2026-10-05)
 
@@ -633,6 +635,51 @@ The formal architecture spine lives at
 - **Sequencers stay in the instrument** for now (STEP SEQ, PERC, ARP): their feel, accent,
   slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
   option, not a plan.
+
+### AD-14 in more detail (decided 2026-10-10, Story 18.5)
+
+- **The problem.** Every cell of the two sequencer grids is an APVTS parameter: 768 × 4 for
+  STEP SEQ, 4 × 192 for PERC — 3840 of JASS's ~4000 parameters. In the standalone that is
+  invisible; in a DAW it is the parameter list. Story 18.4 named the cells and flagged them
+  not automatable; Bitwig then hides them, Cubase does not (it honours only the VST3 `hidden`
+  flag, which JUCE 9 never sets). The maintainer's verdict on the list: the cells are not
+  parameters of an instrument at all — a pattern is what you *write into* the instrument, the
+  way a 303 keeps its pattern in memory and its knobs on the panel.
+- **What was chosen.** A `PatternStore` owned by the processor: fixed-size arrays of
+  `std::atomic<int8_t>` / `std::atomic<uint8_t>` per cell, so the audio thread reads exactly
+  what it reads today (one atomic load per used cell per block, no lock, no allocation), and
+  the message thread writes cells directly. The grids are no longer parameters: the host sees
+  the ~150 knobs, switches and combos, grouped by module (18.4), and nothing else.
+- **What was rejected.** (a) Keeping the cells as parameters and patching the JUCE VST3
+  wrapper to set `kIsHidden`: a patch against a submodule, re-applied on every JUCE bump, and
+  the cells would still be parameters in every other format and in the family cuts. (b) A
+  second, private APVTS on a dummy `AudioProcessor` that hosts the cells (keeps every
+  attachment and spec untouched): two value trees with one id space, a processor that is not
+  one, and the "content, not parameter" idea only true at the host boundary. (c) Leaving it:
+  Cubase lists 3840 cells inside two folders, and every family cut (AD-13) inherits them.
+- **Persistence.** Presets already carry the figure as data (`StepSeq.Steps` array since v7,
+  `Perc.Lanes` strings since v9); `PresetIO` reads and writes the store instead of parameters,
+  and the flat pre-v7/pre-v9 keys get a small legacy reader of their own. The DAW state and the
+  LiveState hold the patterns as two properties on `apvts.state` (the `rackLayout` precedent:
+  a property on the tree travels through `copyState`/`replaceState` and through the LiveState
+  file for free). A project saved by an earlier build still carries the cells as `<PARAM>`
+  elements; `setStateInformation` folds them into the store once, gated on their presence,
+  idempotent — the AD-11 migration pattern. No `FormatVersion` bump: the preset file does not
+  change shape.
+- **Rack binding.** AD-6 said all bindings live in `ModuleFrame`; it still holds. The frame
+  gains a second binding kind next to the APVTS attachments: a `PatternCell` source (get, set,
+  change-notify) for the step knob, its corner switch (on → accented), its GATE alt row and the
+  PERC grid cells. Paging (16.3) becomes index arithmetic on the store instead of string
+  arithmetic on parameter ids. The editor hooks (audition, cursor, playhead, note read-out)
+  already work on absolute step indices and keep their shape.
+- **Behaviour that changes with it.** RANDOM no longer scrambles the figure — it randomised
+  every parameter, cells included, which nobody asked for; it now leaves the pattern alone.
+  Module ↺ and the header RESET clear the pattern explicitly (an `onReset` on both modules)
+  instead of through the parameter loop. The preset-modified flag compares the store too.
+  MIDI import/export (`SeqMidiIO`) and the latch read the store.
+- **Why now.** AD-13's family cuts start from PERC (a drum machine) and from STEP SEQ (a
+  sequenced bass); a cut inherits whatever the pattern is. Cutting with the pattern as content
+  gives every cut the same small, honest parameter list from day one.
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.
