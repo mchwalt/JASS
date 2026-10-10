@@ -1199,20 +1199,19 @@ void SynthyEditor::chooseMidiExport()
 // PERC's x2 (maintainer 2026-08-30): append the pattern behind itself and double LEN — the
 // classic drum-machine "same bar again, then vary the copy". Capped at kMaxSteps; short of the
 // cap it copies what still fits (a partial doubling beats a dead button), at the cap it does
-// nothing. Plain parameter writes, so undo/preset/LiveState all see it like hand edits.
+// nothing. Cells go to the PatternStore (AD-14), LEN is still a parameter.
 void SynthyEditor::doublePercPattern()
 {
     namespace P = Parameters::ID;
     auto& a = processor.getAPVTS();
+    auto& grid = processor.getPatterns().perc;
     const int len    = (int) *a.getRawParameterValue(P::percLength);
     const int newLen = juce::jmin(2 * len, (int) PercSequencer::kMaxSteps);
     if (newLen <= len)
         return;
-    for (int l = 1; l <= PercSequencer::kLanes; ++l)
-        for (int s = 1; s + len <= newLen; ++s)
-            if (auto* src = a.getParameter(P::percStep(l, s)))
-                if (auto* dst = a.getParameter(P::percStep(l, s + len)))
-                    dst->setValueNotifyingHost(src->getValue() > 0.5f ? 1.0f : 0.0f);
+    for (int l = 0; l < PercSequencer::kLanes; ++l)
+        for (int s = 0; s + len < newLen; ++s)
+            grid.set(l, s + len, grid.get(l, s));
     if (auto* lp = a.getParameter(P::percLength))
         lp->setValueNotifyingHost(lp->convertTo0to1((float) newLen));
 }
@@ -2523,9 +2522,12 @@ void SynthyEditor::buildRack()
     // grid's 62 px cell), and the KIT list is dynamic, exactly like the SAMPLER's SET.
     {
         auto d = makeModuleDescriptor(Modules::perc());
-        auto* grid = new PercGrid(apvts,
+        auto* grid = new PercGrid(apvts, processor.getPatterns().perc,
                                   [this] { return processor.getPercStep(); },
                                   [this](int lane) { processor.auditionPercLane(lane); });
+        // Module ↺ clears the grid too (AD-14): the cells are no parameters, so the frame's
+        // parameter reset cannot reach them — and a reset that keeps the beat is no reset.
+        d.onReset = [this] { processor.getPatterns().perc.clear(); };
         rackOwned.add(grid);   // typed pointer kept: the COPY latch below talks to PercGrid itself
         percGrid = grid;       // 16.3: page flips push their window offset into the grid
         // Step pages (16.3): same A/B/C/D + FOLLOW as STEP SEQ. No paged body cells here — the

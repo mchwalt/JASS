@@ -10,6 +10,7 @@
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"   // Story 15.1
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
+#include "Audio/PatternStore.h"  // AD-14 (18.5): the sequencer patterns — content, not parameters
 #include "DSP/ChaosLorenz.h"     // LFO expansion — global Lorenz mod source (Chaos X/Y)
 #include <vector>
 #include <map>
@@ -92,6 +93,10 @@ public:
 
     // Which step PERC is on, for the grid's playhead (Story 16.1). Plain atomic read.
     int getPercStep() const { return percStepDisplay.load(); }
+    // The sequencer patterns (AD-14): the grid writes cells here from the message thread, the
+    // audio thread reads them per block. Not parameters — a DAW never sees them as such.
+    PatternStore&       getPatterns()       noexcept { return patterns; }
+    const PatternStore& getPatterns() const noexcept { return patterns; }
     // MIDI note the STEP SEQ is sounding, or -1. For the on-screen keyboard only (see seqNoteDisplay).
     int getSeqNote() const { return seqNoteDisplay.load(); }
     // Step the STEP SEQ is on (0-based), or -1. Drives the module's playhead, like PERC's grid.
@@ -225,6 +230,7 @@ private:
     // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
     // be dragged through the patch's filter and effects. See PercSequencer.h.
     PercSequencer perc;
+    PatternStore patterns;   // AD-14 (18.5): the PERC grid (stage 1); STEP SEQ follows in stage 2
     bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
                                   // entry can be quantised to the drum pattern (16.1 AC6)
     std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)
@@ -273,6 +279,7 @@ private:
     juce::String currentPresetName { "Init" };   // restored from LiveState on start
     std::atomic<bool> liveDirty { false };
     std::vector<float> cleanSnapshot;             // param values at last load/save (empty = "modified")
+    uint32_t cleanPercRevision = 0;               // PatternStore::perc revision at the same moment (AD-14)
     void timerCallback() override;
     void valueTreePropertyChanged(juce::ValueTree&, const juce::Identifier&) override { liveDirty = true; }
     void saveLiveState();

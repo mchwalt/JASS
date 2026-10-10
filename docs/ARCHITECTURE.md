@@ -419,10 +419,13 @@ light only the targeted oscillator's knob.
   matrix parameters, then `replaceState` + `markPresetClean`.
 - **VST3 parameter view** (2026-10-10): one unit per rack module
   (`AudioProcessorParameterGroup`, id = module id, name = module title);
-  parameter names are `"<title> <hostName|uiLabel|persistKey>"`; the sequencer
-  grid cells (STEP SEQ 768 × 4, PERC 4 × 192) and the internal LFO `Target` are
-  registered **not automatable**, so a host offers no lanes for them while the
-  state still carries them. VST3 parameter ids are hashes of the APVTS ids and
+  parameter names are `"<title> <hostName|uiLabel|persistKey>"`; the STEP SEQ
+  cells (768 × 4) and the internal LFO `Target` are registered **not
+  automatable**, so a host offers no lanes for them while the state still
+  carries them. The PERC grid is no parameter at all since 18.5 stage 1: it
+  lives in `PatternStore` (AD-14) and rides in the DAW state as one
+  `<PercPattern>` element; `setStateInformation` folds a pre-18.5 project's
+  cell parameters into it once. VST3 parameter ids are hashes of the APVTS ids and
   unchanged, so edits saved with earlier builds keep loading. Whether a host
   hides non-automatable parameters or shows units as folders is the host's
   call (Cubase does both; Bitwig flattens the list).

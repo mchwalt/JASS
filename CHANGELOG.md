@@ -39,6 +39,17 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   them next to the rack modules. JASS reads no controller, no pitch wheel and no aftertouch, so
   the emulation is now switched off and the entries are gone (maintainer 2026-10-10 in Cubase:
   "hunderte von Midi Noteneintraegen"). Nothing JASS reacts to has changed.
+- **The PERC grid is no longer a set of parameters (AD-14, Story 18.5 stage 1).** Its 4 x 768
+  cells live in the instrument's pattern memory, not in the parameter tree, so a DAW's list
+  shows PERC's knobs and nothing else. Presets keep their shape (the `Lanes[].Steps` rows),
+  the LiveState too, and a DAW project saved by an earlier build opens with its grid intact
+  (the old cell parameters are folded in once). Two consequences by design: RANDOM leaves the
+  drum pattern alone (it used to scramble it along with every other parameter), and the PERC
+  module's own reset now empties the grid as well as its knobs. Why: a pattern is content you
+  write into the instrument, not a control the DAW automates; the flag of 18.4 hid the cells in
+  Bitwig but not in Cubase, and the coming single-purpose instruments cut from JASS inherit
+  whatever the pattern is (maintainer 2026-10-10: "das Thema muessen wir ordentlich loesen").
+  STEP SEQ follows in stage 2.
 
 ## [2026.10.1] – 2026-10-03
 

@@ -5,6 +5,7 @@
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "../DSP/ModMatrixCatalog.h"     // v9 "Slots": generated ParamName (the catalog is dependency-free by design)
 #include "../DSP/StepSequencer.h"        // kMaxSteps — the Steps array length (48 since 16.2)
+#include "PatternStore.h"                // AD-14: the PERC grid is content, read/written here via a hook
 #include "DemoPresets.h"   // embedded shipped demo presets (juce_add_binary_data)
 #include "Wavetables.h"    // embedded shipped example wavetables (juce_add_binary_data)
 #include "Samples.h"       // embedded shipped SAMPLER examples (Story 12.1)
@@ -475,6 +476,12 @@ namespace PresetIO
     // Unset (plugin build without the hook, tests): loads behave as before.
     inline std::function<void(bool)> setPresetLoading;
 
+    // AD-14 (Story 18.5): the sequencer patterns are content, not parameters, so they do not come
+    // through the APVTS this file is handed. The processor points this at its PatternStore; toVar
+    // writes the PERC rows from it and applyVar fills it. Unset (tests): the rows are written empty
+    // and a loaded grid is dropped — the same "hook not set" stance as the latch root above.
+    inline PatternStore* patterns = nullptr;
+
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
     inline void preloadSamples(std::function<bool()> shouldAbort = {})
@@ -711,18 +718,17 @@ namespace PresetIO
         // '.' = rest, exactly the row the PERC grid shows.
         if (auto* mod = root->getProperty("Perc").getDynamicObject())
         {
-            int nLanes = 0, nSteps = 0;   // counted, not assumed — the spec is the single source
+            int nLanes = 0;   // counted, not assumed — the spec is the single source
             while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
-            while (mod->hasProperty("Step1_" + juce::String(nSteps + 1))) ++nSteps;
-            // Only the used cells are written (same cure as the STEP SEQ array above — 16 pages
-            // would be four 768-dot rows in every file): up to LENGTH, extended to the last hit
-            // in any lane so hits parked beyond it survive. All rows share one width — the grid
-            // alignment is what makes the file readable. Reading pads with rests, as ever.
-            int used = juce::jlimit(1, juce::jmax(1, nSteps), (int) mod->getProperty("Length"));
-            for (int l = 1; l <= nLanes; ++l)
-                for (int s = nSteps; s > used; --s)
-                    if ((bool) mod->getProperty("Step" + juce::String(l) + "_" + juce::String(s)))
-                    { used = s; break; }
+            // The rows come from the PatternStore (AD-14), not from parameters. Only the used
+            // cells are written (same cure as the STEP SEQ array above — 16 pages would be four
+            // 768-dot rows in every file): up to LENGTH, extended to the last hit in any lane so
+            // hits parked beyond it survive. All rows share one width — the grid alignment is
+            // what makes the file readable. Reading pads with rests, as ever.
+            const PercPattern* grid = patterns != nullptr ? &patterns->perc : nullptr;
+            int used = juce::jlimit(1, (int) PercPattern::kMaxSteps, (int) mod->getProperty("Length"));
+            if (grid != nullptr)
+                used = juce::jmax(used, grid->lastHit() + 1);
             juce::Array<juce::var> lanes;
             for (int l = 1; l <= nLanes; ++l)
             {
@@ -734,16 +740,12 @@ namespace PresetIO
                     ln->setProperty("Name", gm);
                 ln->setProperty("Amp", mod->getProperty("Amp" + L));
                 ln->setProperty("Pan", mod->getProperty("Pan" + L));
-                juce::String steps;
-                for (int s = 1; s <= used; ++s)
-                    steps << ((bool) mod->getProperty("Step" + L + "_" + juce::String(s)) ? 'X' : '.');
-                ln->setProperty("Steps", steps);
+                ln->setProperty("Steps", grid != nullptr ? grid->laneString(l - 1, used)
+                                                         : juce::String::repeatedString(".", used));
                 lanes.add(juce::var(ln));
                 mod->removeProperty("Note" + L);
                 mod->removeProperty("Amp" + L);
                 mod->removeProperty("Pan" + L);
-                for (int s = 1; s <= nSteps; ++s)
-                    mod->removeProperty("Step" + L + "_" + juce::String(s));
             }
             mod->setProperty("Lanes", juce::var(lanes));
         }
@@ -1009,6 +1011,7 @@ namespace PresetIO
         for (auto* p : a.processor.getParameters())
             p->setValueNotifyingHost(p->getDefaultValue());
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
+        if (patterns) patterns->perc.clear();   // AD-14: the grid is part of the snapshot too
 
         Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
 
@@ -1059,6 +1062,7 @@ namespace PresetIO
                 Modules::readState(a, juce::var(rt));
             };
             if (auto* mod = v["Perc"].getDynamicObject())
+            {
                 if (auto* lanes = mod->getProperty("Lanes").getArray())
                 {
                     auto* flat = new juce::DynamicObject();
@@ -1071,13 +1075,27 @@ namespace PresetIO
                         flat->setProperty("Amp"  + L, ln["Amp"]);
                         if (! ln["Pan"].isVoid())
                             flat->setProperty("Pan" + L, ln["Pan"]);   // omitted = centred (default)
-                        const juce::String steps = ln["Steps"].toString();
-                        for (int s = 0; s < steps.length(); ++s)
-                            flat->setProperty("Step" + L + "_" + juce::String(s + 1),
-                                              steps[s] == 'X' || steps[s] == 'x');
+                        // The row goes to the PatternStore (AD-14), not through the spec pass:
+                        // the cells are no parameters any more.
+                        if (patterns)
+                            patterns->perc.setLaneString(l, ln["Steps"].toString());
                     }
                     respell("Perc", flat);
                 }
+                else if (patterns)
+                {
+                    // Pre-v9 file: the grid as flat "Step<lane>_<step>" keys. Until 18.5 the spec
+                    // pass read them as parameters; now this is their one reader. Files of that
+                    // age hold at most 48 steps, but the loop takes whatever is there.
+                    for (int l = 1; l <= PercPattern::kLanes; ++l)
+                        for (int s = 1; s <= PercPattern::kMaxSteps; ++s)
+                        {
+                            const juce::Identifier key ("Step" + juce::String(l) + "_" + juce::String(s));
+                            if (! mod->hasProperty(key)) break;   // keys are contiguous from 1
+                            patterns->perc.set(l - 1, s - 1, (bool) mod->getProperty(key));
+                        }
+                }
+            }
             if (auto* mod = v["ModMatrix"].getDynamicObject())
                 if (auto* slots = mod->getProperty("Slots").getArray())
                 {

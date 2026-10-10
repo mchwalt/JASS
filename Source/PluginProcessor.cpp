@@ -56,6 +56,7 @@ SynthyProcessor::SynthyProcessor()
     // A preset is a post-coupling snapshot: while one is applied, the parameter couplings stay
     // silent and their auto-enable memories are dropped (see setPresetLoading in the header).
     PresetIO::setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
+    PresetIO::patterns          = &patterns;   // AD-14: the PERC grid is read/written through here
 
     PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
     PresetIO::applySeqLatchRoot = [this] (int note)
@@ -736,6 +737,7 @@ void SynthyProcessor::resetToDefault()
     // the auto-play drone now drives the whole stack.
     for (auto* p : getParameters())
         p->setValueNotifyingHost(p->getDefaultValue());
+    patterns.perc.clear();   // AD-14: the grid is no parameter, so the loop above cannot reach it
 
     for (int i = 1; i <= 3; ++i)
         if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
@@ -760,6 +762,7 @@ void SynthyProcessor::markPresetClean()
     cleanSnapshot.clear();
     for (auto* p : getParameters())
         cleanSnapshot.push_back(p->getValue());
+    cleanPercRevision = patterns.perc.revision.load();   // AD-14: a changed cell is a change too
 }
 
 bool SynthyProcessor::isPresetModified() const
@@ -767,6 +770,8 @@ bool SynthyProcessor::isPresetModified() const
     auto& params = getParameters();
     if (cleanSnapshot.size() != (size_t) params.size())
         return true;   // no baseline (e.g. restored as a modified working state)
+    if (patterns.perc.revision.load() != cleanPercRevision)
+        return true;   // a grid cell changed since the baseline (AD-14)
     for (int i = 0; i < params.size(); ++i)
         if (std::abs(params[i]->getValue() - cleanSnapshot[(size_t) i]) > 1.0e-6f)
             return true;
@@ -1333,8 +1338,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // never read, so they are not copied either (16 pages would be ~3000 loads per block).
             if (percOn)
                 for (int s = 0, n = juce::jlimit(1, (int) PercSequencer::kMaxSteps, perc.length); s < n; ++s)
-                    perc.on[(size_t) l][(size_t) s] =
-                        *apvts.getRawParameterValue(ID::percStep(l + 1, s + 1)) > 0.5f;
+                    perc.on[(size_t) l][(size_t) s] = patterns.perc.get(l, s);   // AD-14: one relaxed load per cell
         }
         // A step just placed in the grid sounds once, whether or not the pattern is running.
         if (const int lane = percAuditionLane.exchange(-1); lane >= 0)
@@ -1443,6 +1447,7 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
+    patterns.perc.writeXml(*xml);   // AD-14: the grid rides along as ONE element, not 3072 PARAMs
     copyXmlToBinary(*xml, destData);
 }
 
@@ -1469,6 +1474,39 @@ namespace
             pEl->setAttribute ("id", ID::modSlotParam  (n)); pEl->setAttribute ("value", (double) mp.param);
         }
     }
+
+    // 18.4→18.5 DAW-state migration (AD-14): a host project saved while the PERC grid cells were
+    // parameters carries them as <PARAM id="percStep<lane>_<step>" value="0|1">. Fold every one
+    // into the PatternStore and drop the element, so the tree handed to replaceState holds
+    // parameters that still exist. Gated on their presence — a state saved by this build has
+    // none (it carries a <PercPattern> element instead, read after this) — and idempotent.
+    // Returns true when anything was folded, so the caller knows the grid is already set.
+    bool migrateLegacyPercXml (juce::XmlElement& state, PercPattern& grid)
+    {
+        bool found = false;
+        for (auto* el = state.getFirstChildElement(); el != nullptr;)
+        {
+            auto* next = el->getNextElement();
+            if (el->hasTagName ("PARAM"))
+            {
+                const juce::String id = el->getStringAttribute ("id");
+                if (id.startsWith (Parameters::ID::percStepLegacyPrefix))
+                {
+                    const int us = id.indexOfChar ('_');
+                    if (us > 0)
+                    {
+                        if (! found) { grid.clear(); found = true; }   // the old state is complete
+                        const int lane = id.substring ((int) std::strlen (Parameters::ID::percStepLegacyPrefix), us).getIntValue();
+                        const int step = id.substring (us + 1).getIntValue();
+                        grid.set (lane - 1, step - 1, el->getDoubleAttribute ("value") > 0.5);
+                    }
+                    state.removeChildElement (el, true);
+                }
+            }
+            el = next;
+        }
+        return found;
+    }
 }
 
 void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
@@ -1477,6 +1515,12 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
         migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
+        // AD-14: the PERC grid. A pre-18.5 project carries it as parameters (folded in here), a
+        // current one as a <PercPattern> element; a state with neither is an empty grid — a DAW
+        // state is a complete snapshot, exactly like a preset.
+        const bool folded = migrateLegacyPercXml(*xml, patterns.perc);
+        if (! patterns.perc.readXml(*xml) && ! folded)
+            patterns.perc.clear();
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
         // The just-restored state IS the clean baseline: snapshot it so a freshly loaded host
         // project does not spuriously report "modified" (isPresetModified compares to this).

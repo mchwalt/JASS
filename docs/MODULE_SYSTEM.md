@@ -68,7 +68,7 @@ init, so the order matters):
 | 11 | `bool showInBody` | `false` ⇒ APVTS param exists but no rack control (hidden LFO `Target`, SUB `Octave`, SAMPLER `Set`). |
 | 12 | `juce::String legacyPersistKey` | Renamed key: the old name is still *read* as a fallback, writes use `persistKey`. Set by name after the brace init. |
 | 13 | `juce::String hostName` | Name in the DAW's parameter list; empty ⇒ `uiLabel`, else `persistKey`. For captions that only mean something inside the rack: a step knob captioned `"17"` becomes `"Step 17 Pitch"`, a matrix row's `"SRC"` becomes `"Slot 3 SRC"`. Set by name. |
-| 14 | `bool automatable` | `false` ⇒ exported **without** `kCanAutomate`. The value still travels in the plugin state; the DAW just offers no automation lane. Used for the sequencer grids (STEP SEQ 768 × 4, PERC 4 × 192) and the internal LFO `Target`. Set by name. |
+| 14 | `bool automatable` | `false` ⇒ exported **without** `kCanAutomate`. The value still travels in the plugin state; the DAW just offers no automation lane. Used for the STEP SEQ cells (768 × 4, until 18.5 stage 2 moves them to the `PatternStore` as the PERC grid already did) and the internal LFO `Target`. Set by name. |
 
 Generators:
 

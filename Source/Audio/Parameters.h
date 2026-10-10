@@ -135,21 +135,10 @@ namespace Parameters
         JASS_INDEXED_ID (percNote,  4, "percNote",  "")   // which instrument of the kit a lane fires
         JASS_INDEXED_ID (percLevel, 4, "percLevel", "")
         JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
-        JASS_INDEXED_ID (percStep1, PercSequencer::kMaxSteps, "percStep1_", "")
-        JASS_INDEXED_ID (percStep2, PercSequencer::kMaxSteps, "percStep2_", "")
-        JASS_INDEXED_ID (percStep3, PercSequencer::kMaxSteps, "percStep3_", "")
-        JASS_INDEXED_ID (percStep4, PercSequencer::kMaxSteps, "percStep4_", "")
-        // Lane (1..4) + step (1..48) -> id. Audio thread safe: pure array lookups, no String built.
-        inline const juce::String& percStep (int lane, int step)
-        {
-            switch (juce::jlimit (1, 4, lane))
-            {
-                case 1:  return percStep1 (step);
-                case 2:  return percStep2 (step);
-                case 3:  return percStep3 (step);
-                default: return percStep4 (step);
-            }
-        }
+        // The grid cells (percStep<lane>_<step>) are NO LONGER parameters (AD-14, Story 18.5):
+        // they live in PatternStore::perc. A DAW state saved before 18.5 still carries them as
+        // <PARAM> elements; PluginProcessor::setStateInformation folds those into the store once.
+        constexpr const char* percStepLegacyPrefix = "percStep";   // "percStep2_17" = lane 2, step 17
 
         // Portamento / glide (append-only)
         constexpr const char* glideOn   = "glideOn";
@@ -317,9 +306,7 @@ namespace Parameters
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
             for (int i = 1; i <= StepSequencer::kMaxSteps; ++i) { seqPitch(i); seqStep(i); seqAcc(i); seqSGate(i); }
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }
-            // Full kMaxSteps since 16.3 — this loop had stayed at 32 through 16.2, so the first
-            // audio-thread touch of percStep 33..48 took the one-time static-init lock. Fixed.
-            for (int i = 1; i <= PercSequencer::kMaxSteps; ++i) { percStep1(i); percStep2(i); percStep3(i); percStep4(i); }
+            // (The PERC grid cells are no parameters since 18.5 — nothing to warm for them.)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
                 { modSlotSource(n); modSlotModule(n); modSlotParam(n); modSlotAmount(n); modSlotTargetLegacy(n); modSlotQuant(n); }
         }
