@@ -31,8 +31,9 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   them. Why: Bitwig showed one flat list of several thousand entries, most of them unnamed grid
   cells, with the sixty knobs worth automating buried in between (maintainer 2026-10-10:
   "unbrauchbar und auch falsch"). Parameter ids are unchanged, so edits saved with earlier builds
-  keep loading. Whether a host hides non-automatable parameters is the host's call (Cubase does;
-  Bitwig to be seen).
+  keep loading. Whether a host hides non-automatable parameters or shows units as folders is the
+  host's call: Bitwig 6.1 hides the cells but keeps the list flat (checked 2026-10-10), which is
+  why the module title stays as a prefix in every name.
 
 ## [2026.10.1] – 2026-10-03
 
