@@ -10,6 +10,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.3] – 2026-10-19
+
 ### Fixed
 - **A first start is the Init patch.** Without a LiveState (fresh install, or AppData cleared)
   nothing was loaded and every parameter sat at its raw default, which is not Init: no oscillator
