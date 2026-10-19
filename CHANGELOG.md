@@ -10,6 +10,33 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.3] – 2026-10-19
+
+### Fixed
+- **A first start is the Init patch.** Without a LiveState (fresh install, or AppData cleared)
+  nothing was loaded and every parameter sat at its raw default, which is not Init: no oscillator
+  on, and the MOD MATRIX on and therefore shown - its parameter default stays "on" so presets
+  from before the enable existed keep routing. The standalone now runs the header RESET when the
+  LiveState is missing, so a first start looks and sounds like RESET; from the first auto-save on
+  the LiveState takes over as before. The rack layout follows suit: the standalone wrapper hands
+  the editor its own state saved at the last shutdown before the LiveState is re-loaded, and the
+  layout stayed with that older copy (a MOD MATRIX it had visible stayed visible after Init had
+  switched it off). The editor now applies the re-loaded layout as well, and starts from the
+  player's default rack when no LiveState existed.
+- **STEP SEQ's reset arms recording only while the module is on.** The module's reset button
+  empties the figure and puts the write cursor on step 1 on purpose (15.4): the button that clears
+  a figure is the moment one wants to record a new one. The header RESET is "every module's reset
+  at once" and so fired that arming too, while Init leaves STEP SEQ off - the first key played
+  after RESET was written into step 1 of a silent sequencer instead of sounding the Init patch.
+  An off module's reset now just empties the figure; the active sequencer's reset keeps arming,
+  and the header RESET keeps firing every module's reset (maintainer 2026-10-19: "nur, wenn ein
+  Modul disabelt ist, darf ich nicht automatisch in den Programmiermodus gelangen").
+- **No auto-play drone in a DAW.** The C4 that the standalone sounds while nothing is played
+  also ran inside every plugin instance, keeping a voice with its whole per-voice effect chain
+  rendering in idle instances. An instrument on a track sounds when the track sends notes
+  (AD-13); the standalone keeps the drone, where it is how a patch is auditioned. Found while
+  looking into Waveform's CPU read-out for an idle JASS (maintainer 2026-10-11).
+
 ## [2026.10.2] – 2026-10-11
 
 ### Added

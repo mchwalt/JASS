@@ -714,7 +714,18 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         else
             PresetIO::saveRackLayout(rackBody->defaultLayoutToVar());
         rackBody->onDefaultLayoutChanged = [](const juce::var& v) { PresetIO::saveRackLayout(v); };
-        rackBody->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
+        rackBody->reloadLayoutFromState();   // apply the layout in the state so far (Story 4.3) — at
+                                             // this point the wrapper's; the LiveState's follows below
+        // The processor re-loads the LiveState once more, asynchronously, after we exist (its
+        // constructor explains why). Follow it: the layout it brings replaces the wrapper's, and a
+        // start WITHOUT a LiveState (Init was run) begins from the player's default rack — otherwise
+        // the wrapper's old layout kept, e.g., a MOD MATRIX visible that Init had just switched off.
+        processor.onLiveStateReloaded = [this] (bool fromScratch)
+        {
+            if (rackBody == nullptr) return;
+            if (fromScratch) rackBody->resetLayout();
+            else             rackBody->reloadLayoutFromState();
+        };
     }
 
     std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)
@@ -2498,7 +2509,14 @@ void SynthyEditor::buildRack()
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
         // control of its own. doReset() writes the defaults first and calls this after.
-        d.onReset = [this] { seqSetCursor(0); };
+        // Only while the module is ON (maintainer 2026-10-19): the header RESET fires every module's
+        // ↺, STEP SEQ included, and Init leaves it off — the next key must sound the Init patch, not
+        // land in step 1. Arming is the active sequencer's reset; an off module's reset just empties.
+        d.onReset = [this]
+        {
+            const bool on = *processor.getAPVTS().getRawParameterValue (Parameters::ID::seqOn) >= 0.5f;
+            seqSetCursor (on ? 0 : -1);
+        };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
         // 16.2: the red line after step LEN — "where does the figure end", at a glance. The
         // marker cells are the pattern cells (no prefix needed since AD-14).

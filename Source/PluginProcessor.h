@@ -67,6 +67,14 @@ public:
     // destructor, so a closed window can never leave the sequencer rootless.
     void setSeqRecordArmed (bool armed) { seqRecordArmed.store (armed); }
 
+    // Standalone only. The shared LiveState is re-loaded ONCE asynchronously after construction,
+    // because the wrapper restores its own saved state in between (see the constructor). That
+    // re-load happens after the editor exists and replaces the parameters AND the stored rack
+    // layout — so the editor hooks in here to apply the layout it was built against (the wrapper's,
+    // which may be stale). `fromScratch` = no LiveState existed and Init was run instead: the rack
+    // then starts from the player's default layout. Message thread; the editor clears it on close.
+    std::function<void (bool fromScratch)> onLiveStateReloaded;
+
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
     // from the message thread).

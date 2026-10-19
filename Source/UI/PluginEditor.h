@@ -207,6 +207,7 @@ public:
     ~SynthyEditor() override
     {
         stopTimer();
+        processor.onLiveStateReloaded = nullptr;   // the async re-load must not reach a dead editor
         processor.getKeyboardState().removeListener (this);
         processor.setSeqRecordArmed (false);   // a closed window must never leave the sequencer
                                                // rootless — it would look enabled and stay silent
