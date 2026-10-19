@@ -11,6 +11,14 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **STEP SEQ's reset arms recording only while the module is on.** The module's reset button
+  empties the figure and puts the write cursor on step 1 on purpose (15.4): the button that clears
+  a figure is the moment one wants to record a new one. The header RESET is "every module's reset
+  at once" and so fired that arming too, while Init leaves STEP SEQ off - the first key played
+  after RESET was written into step 1 of a silent sequencer instead of sounding the Init patch.
+  An off module's reset now just empties the figure; the active sequencer's reset keeps arming,
+  and the header RESET keeps firing every module's reset (maintainer 2026-10-19: "nur, wenn ein
+  Modul disabelt ist, darf ich nicht automatisch in den Programmiermodus gelangen").
 - **No auto-play drone in a DAW.** The C4 that the standalone sounds while nothing is played
   also ran inside every plugin instance, keeping a voice with its whole per-voice effect chain
   rendering in idle instances. An instrument on a track sounds when the track sends notes

@@ -2498,7 +2498,14 @@ void SynthyEditor::buildRack()
         // The reset ↺ empties the pattern and arms step entry at step 1 (AC1): the button that
         // clears a figure is precisely the moment one wants to fill it again, so recording needs no
         // control of its own. doReset() writes the defaults first and calls this after.
-        d.onReset = [this] { seqSetCursor(0); };
+        // Only while the module is ON (maintainer 2026-10-19): the header RESET fires every module's
+        // ↺, STEP SEQ included, and Init leaves it off — the next key must sound the Init patch, not
+        // land in step 1. Arming is the active sequencer's reset; an off module's reset just empties.
+        d.onReset = [this]
+        {
+            const bool on = *processor.getAPVTS().getRawParameterValue (Parameters::ID::seqOn) >= 0.5f;
+            seqSetCursor (on ? 0 : -1);
+        };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
         // 16.2: the red line after step LEN — "where does the figure end", at a glance. The
         // marker cells are the pattern cells (no prefix needed since AD-14).
