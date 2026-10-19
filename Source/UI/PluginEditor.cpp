@@ -714,7 +714,18 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         else
             PresetIO::saveRackLayout(rackBody->defaultLayoutToVar());
         rackBody->onDefaultLayoutChanged = [](const juce::var& v) { PresetIO::saveRackLayout(v); };
-        rackBody->reloadLayoutFromState();   // apply any layout already loaded from LiveState (Story 4.3)
+        rackBody->reloadLayoutFromState();   // apply the layout in the state so far (Story 4.3) — at
+                                             // this point the wrapper's; the LiveState's follows below
+        // The processor re-loads the LiveState once more, asynchronously, after we exist (its
+        // constructor explains why). Follow it: the layout it brings replaces the wrapper's, and a
+        // start WITHOUT a LiveState (Init was run) begins from the player's default rack — otherwise
+        // the wrapper's old layout kept, e.g., a MOD MATRIX visible that Init had just switched off.
+        processor.onLiveStateReloaded = [this] (bool fromScratch)
+        {
+            if (rackBody == nullptr) return;
+            if (fromScratch) rackBody->resetLayout();
+            else             rackBody->reloadLayoutFromState();
+        };
     }
 
     std::function<void(juce::Component&)> dropFocus = [&](juce::Component& parent)

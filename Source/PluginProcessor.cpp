@@ -109,23 +109,36 @@ SynthyProcessor::SynthyProcessor()
         // LFO built-in targets into matrix slots). Uses apvts as scratch; the LiveState load below
         // overwrites it. See PresetIO::convertOldPresets.
         PresetIO::convertOldPresets(apvts);
-        PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
-        if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
-            currentPresetName = n;
-        restoreModifiedState(PresetIO::modifiedFromFile(PresetIO::liveStateFile()));
+
+        // No LiveState (first start, or AppData cleared) means nothing loads and every parameter
+        // sits at its RAW default — which is not the Init patch: OSC 1..3 off, MOD MATRIX on and
+        // therefore revealed (its param default stays 1 for old presets, see resetToDefault). Run
+        // the same reset the header button runs, so a first start looks and sounds like RESET
+        // (maintainer 2026-10-19).
+        auto loadLiveState = [this]() -> bool   // true = no LiveState, Init was run instead
+        {
+            const auto file = PresetIO::liveStateFile();
+            if (! file.existsAsFile()) { resetToDefault(); return true; }
+            PresetIO::loadFromFile(apvts, file);
+            if (auto n = PresetIO::nameFromFile(file); n.isNotEmpty())
+                currentPresetName = n;
+            restoreModifiedState(PresetIO::modifiedFromFile(file));
+            return false;
+        };
+        loadLiveState();
         apvts.state.addListener(this);
         startTimer(1500);
 
-        // The standalone wrapper restores its OWN saved state right after
-        // construction; re-load the shared LiveState afterwards so it wins.
+        // The standalone wrapper restores its OWN saved state right after construction (the
+        // "filterState" in JASS.settings, written at shutdown); re-load the shared LiveState
+        // afterwards so it wins. The editor has been built against the wrapper's state by then —
+        // tell it, so the rack layout follows the LiveState too (onLiveStateReloaded).
         juce::WeakReference<SynthyProcessor> weak (this);
-        juce::MessageManager::callAsync([this, weak]
+        juce::MessageManager::callAsync([this, weak, loadLiveState]
         {
             if (weak == nullptr) return;   // processor destroyed before this async ran
-            PresetIO::loadFromFile(apvts, PresetIO::liveStateFile());
-            if (auto n = PresetIO::nameFromFile(PresetIO::liveStateFile()); n.isNotEmpty())
-                currentPresetName = n;
-            restoreModifiedState(PresetIO::modifiedFromFile(PresetIO::liveStateFile()));
+            const bool fromScratch = loadLiveState();
+            if (onLiveStateReloaded) onLiveStateReloaded(fromScratch);
         });
     }
 }

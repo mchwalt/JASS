@@ -11,6 +11,16 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **A first start is the Init patch.** Without a LiveState (fresh install, or AppData cleared)
+  nothing was loaded and every parameter sat at its raw default, which is not Init: no oscillator
+  on, and the MOD MATRIX on and therefore shown - its parameter default stays "on" so presets
+  from before the enable existed keep routing. The standalone now runs the header RESET when the
+  LiveState is missing, so a first start looks and sounds like RESET; from the first auto-save on
+  the LiveState takes over as before. The rack layout follows suit: the standalone wrapper hands
+  the editor its own state saved at the last shutdown before the LiveState is re-loaded, and the
+  layout stayed with that older copy (a MOD MATRIX it had visible stayed visible after Init had
+  switched it off). The editor now applies the re-loaded layout as well, and starts from the
+  player's default rack when no LiveState existed.
 - **STEP SEQ's reset arms recording only while the module is on.** The module's reset button
   empties the figure and puts the write cursor on step 1 on purpose (15.4): the button that clears
   a figure is the moment one wants to record a new one. The header RESET is "every module's reset
