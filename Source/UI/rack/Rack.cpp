@@ -616,6 +616,7 @@ namespace rack
 
     void Rack::enforceHiddenDisabled()
     {
+        if (hosted) return;   // the host owns the state; the editor only reads it (see setHosted)
         for (const auto& e : layoutModel)
             if (! e.visible)
                 driveEnable (e.id, false);   // hidden ⇒ silent (invariant)

@@ -16,6 +16,8 @@ Does not run alongside the ARPEGGIATOR: both take the same place as the note sou
 
 **MIDI import/export — the LOAD MIDI / SAVE MIDI buttons in this module's title bar.** LOAD MIDI opens a `.mid` transcription: velocities become accents, note lengths become gate/TIE/SLIDE, the loop's cycle is detected, and the figure latches to its most frequent note and plays. SAVE MIDI writes the figure back out. One asymmetry: a TIE that changes pitch exports as the 303's overlap and comes back as SLIDE — MIDI cannot carry the difference.
 
+**In a DAW** the figure runs with the transport on the host's bar position, so it lines up with the project's grid and with a PERC on another track. A note from the track sets its root and is remembered with the project; STOP in the host stands it still.
+
 A **red line** after a step marks the pattern's end (LEN): everything right of it is kept but does not play.
 
 **Pages (< 1/4 >, header).** The 48 knobs show one page of the pattern; **< / >** step through four pages of 48 (LEN up to 192 = 12 bars of sixteenths). The read-out says shown page / pages, and a dot marks where the pattern is playing right now. With **FOLLOW** latched the shown page flips with the playhead; stepping a page by hand pauses FOLLOW — latch it again to jump back and resume. Writing with the ring crosses pages by itself.

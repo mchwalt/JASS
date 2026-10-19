@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <map>
 #include "Parameters.h"
 #include "../Modules/ModuleRegistry.h"   // spec-driven nested read/write (writeState/readState)
 #include "../DSP/ModMatrixCatalog.h"     // v9 "Slots": generated ParamName (the catalog is dependency-free by design)
@@ -445,28 +446,22 @@ namespace PresetIO
     // PERC's KIT (Story 16.1) — two independent instruments that must be able to wait for two
     // different sets. Without the parameter this hook would always drop the loaded set on the
     // sampler, which for a drum kit is exactly the wrong instrument.
-    inline std::function<void(const juce::String& setName, const juce::String& targetParamId)> requestSamplerSet;
 
     // Set name a preset asked for that has not arrived yet. While this is pending, the SET index
     // still points at some OTHER set — and the LiveState is written every 1.5 s. Saving the name
     // behind that index would quietly swap the patch's instrument, so toVar() persists this name
     // instead. Cleared when the set is selected, when it cannot be found, and when the user picks
     // a set by hand (their choice wins over a pending restore).
-    inline juce::String pendingSamplerSetName;
-    inline juce::String pendingPercKitName;      // the same guard for PERC's kit (Story 16.1)
 
     // STEP SEQ latch root (Story 15.5), read on save and applied on load. It lives in the processor
     // — a performance state, not a parameter — so PresetIO reaches it through hooks, exactly as it
     // reaches the background sample loader. Unset hooks (plugin build without an editor, tests) mean
     // the field is simply not written and not applied. -1 = no latch.
-    inline std::function<int()>     seqLatchRoot;
-    inline std::function<void(int)> applySeqLatchRoot;
 
     // The UI's way back to "as loaded" (maintainer 2026-08-26): a parameter's NORMALISED value in
     // the clean snapshot the processor keeps for the modified-star — i.e. what the loaded (or last
     // saved) preset gave it — or -1 when no clean baseline exists (a modified working state
     // restored from LiveState). ModuleFrame maps a knob's double-click onto it.
-    inline std::function<float(const juce::String& paramId)> presetBaseline01;
 
     // Preset-load bracket. A saved preset is a snapshot taken AFTER every parameter coupling
     // already ran, so applyVar must land it VERBATIM: the processor silences its couplings
@@ -474,14 +469,39 @@ namespace PresetIO
     // auto-enable memories — carried across a load, those made the result depend on the PREVIOUS
     // patch (presets needed two or three loads to arrive intact, maintainer 2026-08-23).
     // Unset (plugin build without the hook, tests): loads behave as before.
-    inline std::function<void(bool)> setPresetLoading;
 
     // AD-14 (Story 18.5): the sequencer patterns are content, not parameters, so they do not come
     // through the APVTS this file is handed. The processor points this at its PatternStore; toVar
     // writes the PERC rows and the STEP SEQ steps from it and applyVar fills it. Unset (tests): the
     // rows are written empty and a loaded pattern is dropped — the same "hook not set" stance as
     // the latch root above.
-    inline PatternStore* patterns = nullptr;
+    // PER-INSTANCE hooks (2026-10-20). The hooks described above used to be process-global
+    // functions — which is one instance, the standalone. Two plugin instances in one DAW process
+    // overwrote each other's: a kit requested by one landed in the other's loader (its PERC waited
+    // forever for a kit that arrived next door), a preset loaded in one wrote its patterns into
+    // the other's store, and the first instance to close took every hook with it. Each processor
+    // now registers its own set, keyed by its APVTS — the handle every PresetIO function is
+    // already given, so `hooks (a)` is the instance that owns the patch being read or written.
+    struct InstanceHooks
+    {
+        std::function<void(const juce::String& setName, const juce::String& targetParamId)> requestSamplerSet;
+        juce::String pendingSamplerSetName;
+        juce::String pendingPercKitName;      // the same guard for PERC's kit (Story 16.1)
+        std::function<int()>     seqLatchRoot;
+        std::function<void(int)> applySeqLatchRoot;
+        std::function<float(const juce::String& paramId)> presetBaseline01;
+        std::function<void(bool)> setPresetLoading;
+        PatternStore* patterns = nullptr;
+    };
+    inline juce::CriticalSection& hooksLock() { static juce::CriticalSection l; return l; }
+    inline std::map<const juce::AudioProcessorValueTreeState*, InstanceHooks>& hooksMap()
+    { static std::map<const juce::AudioProcessorValueTreeState*, InstanceHooks> m; return m; }
+    // The hooks of the instance that owns `a` — an empty set for one that never registered
+    // (tests), which reads exactly like the old "hook not set". The reference stays valid while
+    // the instance is registered: std::map never moves its nodes. The lock covers registration
+    // against a host that builds or tears down instances off the message thread.
+    inline InstanceHooks& hooks (const juce::AudioProcessorValueTreeState& a) { const juce::ScopedLock sl (hooksLock()); return hooksMap()[&a]; }
+    inline void unregisterHooks (const juce::AudioProcessorValueTreeState& a) { const juce::ScopedLock sl (hooksLock()); hooksMap().erase (&a); }
 
     // `shouldAbort` is polled between sets so the caller can cut a long preload short — the
     // background thread of 12.6 passes its threadShouldExit() here. Default: never abort.
@@ -602,7 +622,7 @@ namespace PresetIO
             // A set still being fetched for this patch wins over whatever the index points at
             // right now (see pendingSamplerSetName) — otherwise a save during the load would
             // rewrite the patch to a different instrument.
-            const juce::String setName = pendingSamplerSetName.isNotEmpty() ? pendingSamplerSetName
+            const juce::String setName = hooks(a).pendingSamplerSetName.isNotEmpty() ? hooks(a).pendingSamplerSetName
                                        : (set != nullptr ? set->getName() : juce::String());
             if (setName.isNotEmpty())
                 if (auto* mod = root->getProperty("Sampler").getDynamicObject())
@@ -616,7 +636,7 @@ namespace PresetIO
         {
             const int idx = static_cast<int>(*a.getRawParameterValue(ID::percKit)) - 1;   // 0 = no kit
             const auto* set = SampleBankStore::instance().getSet(idx);
-            const juce::String kitName = pendingPercKitName.isNotEmpty() ? pendingPercKitName
+            const juce::String kitName = hooks(a).pendingPercKitName.isNotEmpty() ? hooks(a).pendingPercKitName
                                        : (set != nullptr ? set->getName() : juce::String());
             // "File", not "Kit": the module's own writeState already puts the session-local INDEX
             // under "Kit". The name goes beside it, exactly as the SAMPLER stores "Set" + "File".
@@ -631,8 +651,8 @@ namespace PresetIO
         // is loaded rather than wait to be touched. It is not a parameter: it is a performance
         // state, it has no knob, and automating it would be meaningless. Absent / -1 ⇒ the patch
         // loads silent, which is every preset written before this field existed.
-        if (seqLatchRoot)
-            if (const int n = seqLatchRoot(); n >= 0)
+        if (hooks(a).seqLatchRoot)
+            if (const int n = hooks(a).seqLatchRoot(); n >= 0)
                 if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
                     mod->setProperty("LatchRoot", n);
 
@@ -655,7 +675,7 @@ namespace PresetIO
             // differs from factory default (OFF, pitch 0, plain, gate 100) so material parked
             // beyond the LEN line survives the round-trip. The reader has always tolerated a
             // short array: it factory-resets first, so a missing step IS the default.
-            const StepPattern* fig = patterns != nullptr ? &patterns->step : nullptr;
+            const StepPattern* fig = hooks(a).patterns != nullptr ? &hooks(a).patterns->step : nullptr;
             int used = juce::jlimit(1, (int) StepPattern::kMaxSteps,
                                     (int) *a.getRawParameterValue(ID::seqLength));
             if (fig != nullptr)
@@ -709,7 +729,7 @@ namespace PresetIO
             // 768-dot rows in every file): up to LENGTH, extended to the last hit in any lane so
             // hits parked beyond it survive. All rows share one width — the grid alignment is
             // what makes the file readable. Reading pads with rests, as ever.
-            const PercPattern* grid = patterns != nullptr ? &patterns->perc : nullptr;
+            const PercPattern* grid = hooks(a).patterns != nullptr ? &hooks(a).patterns->perc : nullptr;
             int used = juce::jlimit(1, (int) PercPattern::kMaxSteps, (int) mod->getProperty("Length"));
             if (grid != nullptr)
                 used = juce::jmax(used, grid->lastHit() + 1);
@@ -787,6 +807,52 @@ namespace PresetIO
     // ── Import (LEGACY FLAT reader, v<3) ──
     // Reads the OLD flat .synthy format. Retained ONLY to convert existing presets to v3 once
     // (see convertLegacyPresetsToV3). New code uses applyVar (nested) below.
+    // The NAME of the set a selector points at (or is still fetching): what a patch persists
+    // beside the session-local index (toVar), and since 2026-10-19 what a DAW project persists
+    // too. An index into a store whose contents and ORDER depend on what is installed, and on
+    // what has finished loading, is no identity for a drum kit.
+    inline juce::String currentSetName (APVTS& a, const char* paramId)
+    {
+        const bool perc = (juce::String (paramId) == Parameters::ID::percKit);
+        const int idx = static_cast<int> (*a.getRawParameterValue (paramId)) - (perc ? 1 : 0);   // KIT counts from 1
+        const auto& pending = perc ? hooks(a).pendingPercKitName : hooks(a).pendingSamplerSetName;
+        if (pending.isNotEmpty())
+            return pending;   // a set still being fetched for this patch wins over the index
+        const auto* set = SampleBankStore::instance().getSet (idx);
+        return set != nullptr ? set->getName() : juce::String();
+    }
+
+    // Re-resolve a set by NAME into `paramId` — the body of applyVar's resolveSet, shared with the
+    // DAW-state restore (setStateInformation). Already loaded ⇒ select it; otherwise the background
+    // loader (12.6) fetches it first and selects it when it lands, `pending` guarding the LiveState
+    // meanwhile. Without a loader (tests) the original synchronous path runs. `valueOffset` is 1
+    // for PERC, whose KIT counts from 1 so that 0 can mean "no kit". Message thread.
+    inline void resolveSetByName (APVTS& a, const juce::String& name, const char* paramId,
+                                  juce::String& pending, int valueOffset)
+    {
+        if (name.isEmpty())
+            return;
+        int idx = SampleBankStore::instance().indexOf (name);
+        if (idx < 0 && hooks(a).requestSamplerSet)
+        {
+            pending = name;
+            hooks(a).requestSamplerSet (name, paramId);
+            return;
+        }
+        pending.clear();
+        if (idx < 0)
+        {
+            auto matches = samplesFolder().findChildFiles (juce::File::findFiles, false, name + ".*");
+            if (! matches.isEmpty())
+                idx = SampleBankStore::instance().loadFile (matches.getReference (0));
+            else if (auto sub = samplesFolder().getChildFile (name); sub.isDirectory())
+                idx = loadSampleSetFolder (sub);   // 12.2: mapped set by folder name
+        }
+        if (idx >= 0)
+            if (auto* p = a.getParameter (paramId))
+                p->setValueNotifyingHost (p->convertTo0to1 ((float) (idx + valueOffset)));
+    }
+
     inline void applyVarFlatLegacy(APVTS& a, const juce::var& v)
     {
         using namespace detail;
@@ -802,7 +868,7 @@ namespace PresetIO
         const int fileVersion = jint(v, "FormatVersion", 1);
         juce::ignoreUnused(fileVersion);
 
-        if (setPresetLoading) setPresetLoading(true);   // couplings off — same bracket as applyVar
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);   // couplings off — same bracket as applyVar
 
         // FACTORY RESET before reading (a preset is a COMPLETE snapshot): reset every parameter
         // to its default AND clear the rack layout to factory. Any field the file omits then
@@ -979,7 +1045,7 @@ namespace PresetIO
         if (v.hasProperty("RackLayout"))
             a.state.setProperty(juce::Identifier("rackLayout"), juce::JSON::toString(v["RackLayout"]), nullptr);
 
-        if (setPresetLoading) setPresetLoading(false);
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
     }
 
     // ── Import (nested v3 — the live reader) ──
@@ -989,13 +1055,13 @@ namespace PresetIO
             return;
         // Couplings off while the snapshot lands (see setPresetLoading) — the writes below would
         // otherwise fire them hundreds of times against half-applied intermediate states.
-        if (setPresetLoading) setPresetLoading(true);
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);
         // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
         // file's values on top (missing field => factory default). Clear the rack-layout baseline.
         for (auto* p : a.processor.getParameters())
             p->setValueNotifyingHost(p->getDefaultValue());
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
-        if (patterns) { patterns->perc.clear(); patterns->step.clear(); }   // AD-14: part of the snapshot too
+        if (hooks(a).patterns) { hooks(a).patterns->perc.clear(); hooks(a).patterns->step.clear(); }   // AD-14: part of the snapshot too
 
         Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
 
@@ -1008,7 +1074,7 @@ namespace PresetIO
         {
             const int ref = seq->hasProperty("LatchRoot")
                                 ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
-            StepPattern* fig = patterns != nullptr ? &patterns->step : nullptr;
+            StepPattern* fig = hooks(a).patterns != nullptr ? &hooks(a).patterns->step : nullptr;
             if (auto* steps = seq->getProperty("Steps").getArray())
             {
                 for (int s = 0; fig != nullptr && s < juce::jmin((int) StepPattern::kMaxSteps, steps->size()); ++s)
@@ -1074,12 +1140,12 @@ namespace PresetIO
                             flat->setProperty("Pan" + L, ln["Pan"]);   // omitted = centred (default)
                         // The row goes to the PatternStore (AD-14), not through the spec pass:
                         // the cells are no parameters any more.
-                        if (patterns)
-                            patterns->perc.setLaneString(l, ln["Steps"].toString());
+                        if (hooks(a).patterns)
+                            hooks(a).patterns->perc.setLaneString(l, ln["Steps"].toString());
                     }
                     respell("Perc", flat);
                 }
-                else if (patterns)
+                else if (hooks(a).patterns)
                 {
                     // Pre-v9 file: the grid as flat "Step<lane>_<step>" keys. Until 18.5 the spec
                     // pass read them as parameters; now this is their one reader. Files of that
@@ -1089,7 +1155,7 @@ namespace PresetIO
                         {
                             const juce::Identifier key ("Step" + juce::String(l) + "_" + juce::String(s));
                             if (! mod->hasProperty(key)) break;   // keys are contiguous from 1
-                            patterns->perc.set(l - 1, s - 1, (bool) mod->getProperty(key));
+                            hooks(a).patterns->perc.set(l - 1, s - 1, (bool) mod->getProperty(key));
                         }
                 }
             }
@@ -1133,51 +1199,28 @@ namespace PresetIO
             auto* mod = src[object].getDynamicObject();
             if (mod == nullptr)
                 return;
-            const juce::String name = mod->getProperty (field).toString();
-            if (name.isEmpty())
-                return;
-            int idx = SampleBankStore::instance().indexOf (name);
-            if (idx < 0 && requestSamplerSet)
-            {
-                // Not in the store yet: hand it to the background loader (12.6) instead of
-                // decoding it here. A grand piano is several hundred MB — doing that on the
-                // message thread is what kept the window from appearing for ten seconds. The
-                // loader pulls this set to the FRONT of its queue and selects it into `paramId`
-                // when it lands, so the patch ends up correct, just a moment later.
-                pending = name;   // guards the LiveState while it loads
-                requestSamplerSet (name, paramId);
-                return;
-            }
-            pending.clear();      // this preset's set is already here
-            if (idx < 0)
-            {   // no loader installed (plugin build / tests): the original synchronous path
-                auto matches = samplesFolder().findChildFiles (juce::File::findFiles, false, name + ".*");
-                if (! matches.isEmpty())
-                    idx = SampleBankStore::instance().loadFile (matches.getReference (0));
-                else if (auto sub = samplesFolder().getChildFile (name); sub.isDirectory())
-                    idx = loadSampleSetFolder (sub);   // 12.2: mapped set by folder name
-            }
-            if (idx >= 0)
-                if (auto* p = a.getParameter (paramId))
-                    p->setValueNotifyingHost (p->convertTo0to1 ((float) (idx + valueOffset)));
+            // Not in the store yet ⇒ the background loader (12.6) fetches it instead of decoding
+            // it here — a grand piano is several hundred MB, and doing that on the message thread
+            // is what kept the window from appearing for ten seconds. See resolveSetByName.
+            resolveSetByName (a, mod->getProperty (field).toString(), paramId, pending, valueOffset);
         };
-        resolveSet (v, "Sampler", "File", ID::samplerSet, pendingSamplerSetName);
-        resolveSet (v, "Perc",    "File", ID::percKit,    pendingPercKitName, 1);
+        resolveSet (v, "Sampler", "File", ID::samplerSet, hooks(a).pendingSamplerSetName);
+        resolveSet (v, "Perc",    "File", ID::percKit,    hooks(a).pendingPercKitName, 1);
 
         // STEP SEQ latch (15.5): a patch saved with a figure running comes back running, on the note
         // it was running on. Missing field ⇒ -1 ⇒ no latch, which also CLEARS whatever the previous
         // patch left playing — switching presets must never leave a figure sounding under the new
         // patch. Presets written before this field behave exactly as they did.
-        if (applySeqLatchRoot)
+        if (hooks(a).applySeqLatchRoot)
         {
             int latch = -1;
             if (auto* seq = v["StepSeq"].getDynamicObject())
                 if (seq->hasProperty ("LatchRoot"))
                     latch = (int) seq->getProperty ("LatchRoot");
-            applySeqLatchRoot (latch);
+            hooks(a).applySeqLatchRoot (latch);
         }
 
-        if (setPresetLoading) setPresetLoading(false);   // couplings live again — for GESTURES
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);   // couplings live again — for GESTURES
     }
 
     // v3→v4 step: fold each enabled LFO's (now UI-less) built-in TARGET into a free MOD MATRIX slot,

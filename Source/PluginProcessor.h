@@ -11,6 +11,13 @@
 #include "DSP/StepSequencer.h"   // Story 15.1
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
 #include "Audio/PatternStore.h"  // AD-14 (18.5): the sequencer patterns — content, not parameters
+
+// DIAGNOSTIC BUILD SWITCH (2026-10-20, not for release): log the first blocks after each host PLAY
+// to %AppData%\JASS\hostsync.log — host position, play flag, the STEP SEQ clock before and after
+// syncToHost, and the step that fired. Set to 0 (or delete the blocks) once the start-up bug is found.
+#ifndef JASS_HOSTSYNC_DIAG
+ #define JASS_HOSTSYNC_DIAG 0
+#endif
 #include "DSP/ChaosLorenz.h"     // LFO expansion — global Lorenz mod source (Chaos X/Y)
 #include <vector>
 #include <map>
@@ -67,13 +74,16 @@ public:
     // destructor, so a closed window can never leave the sequencer rootless.
     void setSeqRecordArmed (bool armed) { seqRecordArmed.store (armed); }
 
-    // Standalone only. The shared LiveState is re-loaded ONCE asynchronously after construction,
-    // because the wrapper restores its own saved state in between (see the constructor). That
-    // re-load happens after the editor exists and replaces the parameters AND the stored rack
-    // layout — so the editor hooks in here to apply the layout it was built against (the wrapper's,
-    // which may be stale). `fromScratch` = no LiveState existed and Init was run instead: the rack
-    // then starts from the player's default layout. Message thread; the editor clears it on close.
-    std::function<void (bool fromScratch)> onLiveStateReloaded;
+    // The whole state was replaced behind an editor that already exists — it was built against
+    // a state that is now gone and must apply the stored rack layout again. Two callers:
+    // (1) standalone: the shared LiveState is re-loaded ONCE asynchronously after construction,
+    // because the wrapper restores its own saved state in between (see the constructor);
+    // `fromScratch` = no LiveState existed and Init was run instead, the rack then starts from
+    // the player's default layout. (2) host: setStateInformation — a DAW that reopens plugin
+    // windows BEFORE it hands the project state over (Bitwig does) had the editor show the
+    // stock rack, STEP SEQ and PERC hidden, while both played (maintainer 2026-10-19).
+    // Message thread; the editor clears it on close.
+    std::function<void (bool fromScratch)> onStateReloaded;
 
     // Re-pluck the Karplus string on every voice (PLUCK button / spacebar). The flag
     // is consumed on the audio thread in processBlock — RT-safe (no direct voice touch
@@ -250,6 +260,15 @@ private:
     // be dragged through the patch's filter and effects. See PercSequencer.h.
     PercSequencer perc;
     PatternStore patterns;   // AD-14 (18.5): the PERC grid and the STEP SEQ figure
+#if JASS_HOSTSYNC_DIAG
+    struct DiagRec { double ppq; double stepsPos; int playing; int preIdx, preCnt, postIdx, postCnt, postDelay, fired, n; };
+    std::array<DiagRec, 256> diag {};
+    std::atomic<int> diagWrite { 0 };
+    int  diagRead = 0;
+    int  diagBlocksLeft = 0;
+    bool diagWasPlaying = false;
+    void flushDiag();
+#endif
     bool seqKeyWasHeld = false;   // edge detect: the moment a figure starts from silence, so its
                                   // entry can be quantised to the drum pattern (16.1 AC6)
     std::atomic<bool> seqRecordArmed { false };   // see setSeqRecordArmed (Story 15.4)

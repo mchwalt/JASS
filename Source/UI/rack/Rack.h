@@ -109,6 +109,11 @@ namespace rack
         // enableParam off. Call after any path that may re-enable params under a stale layout
         // (header RESET/RANDOM, preset load) so nothing plays invisibly.
         void enforceHiddenDisabled();
+        // In a DAW the editor never WRITES enables on its own account (2026-10-20): a window the host
+        // opens before it hands the project state over would switch the restored modules off, and
+        // every such write reaches the host as an edit it queues and re-applies. "On => visible"
+        // (revealEnabledModules) still runs; what it never hides, enforceHiddenDisabled never silences.
+        void setHosted (bool h) { hosted = h; }
 
         static constexpr const char* kLayoutStateProp = "rackLayout";
 
@@ -255,6 +260,7 @@ namespace rack
         int layout (int width, bool apply);
 
         juce::AudioProcessorValueTreeState& apvts;
+        bool hosted = false;                       // see setHosted
         const int cols;                            // columns this rack instance packs into
         std::vector<Zone> zoneOrder;               // zones rendered, top→bottom
         SynthyLookAndFeel lnf;                     // the single shared look (AD-7)

@@ -641,6 +641,12 @@ The formal architecture spine lives at
 - **Sequencers stay in the instrument** for now (STEP SEQ, PERC, ARP): their feel, accent,
   slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
   option, not a plan.
+- **The clock is the host's (Story 18.6, 2026-10-19).** In a host, STEP SEQ and PERC derive
+  their step from the playhead's position in beats (`syncToHost`: song position in steps modulo
+  LEN) instead of their own sample counters, and stand while the host stands. Two instances on
+  two tracks therefore agree without talking to each other, and the standalone's quantised entry
+  / re-sync between the two modules is simply not needed there (it stays standalone-only). A
+  free RATE has no beat to lock to and runs free in the host as well.
 
 ### AD-14 in more detail (decided 2026-10-10, Story 18.5)
 
