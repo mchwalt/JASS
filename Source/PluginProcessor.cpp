@@ -338,6 +338,13 @@ void SynthyProcessor::timerCallback()
 }
 
 #if JASS_HOSTSYNC_DIAG
+void SynthyProcessor::diagNote (const char* what)
+{
+    PresetIO::jassFolder().getChildFile ("hostsync.log").appendText (
+        juce::String::toHexString ((juce::pointer_sized_int) this) + " t=" + juce::String (juce::Time::getMillisecondCounterHiRes() / 1000.0, 2)
+        + "  NOTE " + what + "\n");
+}
+
 void SynthyProcessor::flushDiag()
 {
     const int w = diagWrite.load();
@@ -346,8 +353,11 @@ void SynthyProcessor::flushDiag()
     for (; diagRead < w; ++diagRead)
     {
         const auto& r = diag[(size_t) (diagRead % 256)];
-        out << juce::String::toHexString ((juce::pointer_sized_int) this) << "  ppq=" << juce::String (r.ppq, 5)
-            << " stepsPos=" << juce::String (r.stepsPos, 4) << " playing=" << r.playing
+        out << juce::String::toHexString ((juce::pointer_sized_int) this) << " t=" << juce::String (r.t / 1000.0, 2) << "  ppq=" << juce::String (r.ppq, 5)
+            << " stepsPos=" << juce::String (r.stepsPos, 4) << " anchor=" << juce::String (r.anchor, 4)
+            << " percAnchor=" << juce::String (r.percAnchor, 4) << " playing=" << r.playing
+            << " seqOn=" << r.seqOn << " latch=" << r.latch << " percOn=" << r.percOn << " kitPending=" << r.kitPending
+            << " kitIdx=" << r.kitIdx << " percStep=" << r.percStep
             << " pre(idx=" << r.preIdx << ",cnt=" << r.preCnt << ")"
             << " post(idx=" << r.postIdx << ",cnt=" << r.postCnt << ",delay=" << r.postDelay << ")"
             << " fired=" << r.fired << " n=" << r.n << "\n";
@@ -829,6 +839,9 @@ void SynthyProcessor::restoreModifiedState(bool modified)
 
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+#if JASS_HOSTSYNC_DIAG
+    if (isHostedByDaw()) diagNote ("prepareToPlay");
+#endif
     Parameters::ID::warmIndexedIds();   // RT-safety: build the indexed-ID caches on the message thread
     synth.setCurrentPlaybackSampleRate(sampleRate);
     for (int i = 0; i < synth.getNumVoices(); ++i)
@@ -954,8 +967,34 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
         }
     const bool hostRunning = ! hosted || hostPlaying;
+    // 18.6: STOP freezes the sequencers, PLAY continues them - wherever the host's playhead is
+    // by then. The first cut counted both from the song's start, and a figure of three bars then
+    // sat at step 0 only every third bar: PLAY at bar 51 began it at its last note. The second
+    // cut anchored step 0 at PLAY's position, but Bitwig's STOP returns the playhead to where
+    // PLAY started, so every PLAY was "the same spot" and began the figure afresh (maintainer
+    // 2026-10-25: "nach Stopp beginnt es wieder von vorne"). So the anchor is moved on the PLAY
+    // edge by the playhead's jump, which keeps the phase STOP left behind: the drum machine's
+    // pause/continue, in host beats. Two instances on two tracks see the same edge and keep
+    // their relative phase. A clip note still moves the figure's anchor to the note (below);
+    // the first PLAY of a session starts at step 0. Loops and locates WHILE playing are not
+    // edges: the clock then follows the host's position against the anchor, as before.
+    if (hosted && hostPlaying && hostPpq.hasValue())
+    {
+        if (! hostWasPlaying)
+            for (auto* a : { &percAnchorPpq, &seqAnchorPpq })
+            {
+                const double cur = a->load();
+                a->store (cur >= 0.0 && hostLastPpq >= 0.0 ? *hostPpq - (hostLastPpq - cur)   // continue
+                                                             : *hostPpq);                       // first PLAY: step 0
+            }
+        hostLastPpq = *hostPpq + buffer.getNumSamples() * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate()));
+    }
+    hostWasPlaying = hosted && hostPlaying;
 #if JASS_HOSTSYNC_DIAG
     if (hosted && ! isTimerRunning()) startTimer (500);
+    int diagSeqPre[2] = { -1, -1 }, diagSeqPost[3] = { -1, -1, -1 };
+    const bool diagPlayEdge = hosted && hostPlaying && ! diagWasPlaying;
+    diagWasPlaying = hostPlaying;
 #endif
     // The host's STOP stands the figure still but KEEPS its latched root (it is part of the
     // project state too, see getStateInformation): PLAY from anywhere runs it again at the
@@ -1153,7 +1192,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                    : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
             // 18.6: lock the drum clock to the host's bar position (a free RATE has no beat to lock to).
             if (hosted && hostPlaying && percOn && hostPpq.hasValue() && SyncDivision::isSynced(pdiv))
-                perc.syncToHost(*hostPpq / SyncDivision::beatsPerCycle(pdiv));
+            {
+                const double anchor = percAnchorPpq.load();   // PLAY's position = step 0 (see above)
+                perc.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(pdiv));
+            }
         }
 
         const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
@@ -1202,6 +1244,42 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                         if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == 1)
                             if (root < 0 || m.getNoteNumber() < root)
                                 root = m.getNoteNumber();
+            }
+
+            // 18.6 ANCHOR: in a host the figure's step 0 is where its note ENTERED, not the song's
+            // start. The host position is taken modulo LEN (syncToHost), and a 48-step figure is
+            // three bars: counted from bar 1 it sits at step 0 only every third bar, so a clip
+            // launched or a PLAY pressed anywhere else began the figure in its middle (maintainer
+            // 2026-10-25, Bitwig: "der erste gespielte Ton ist der letzte der Sequenz"). The edge is
+            // taken event by event, not from the keys held at the block's end: a clip boundary in a
+            // DAW is a note-off and a note-on at the SAME sample, and that is a fresh entry - only a
+            // key added while another is really still down changes the root without restarting,
+            // exactly the standalone's rule. The note's exact position, not a grid: the user placed
+            // it. A key pressed while the host stands anchors nothing.
+            {
+                const bool anchorArmed = hosted && hostPlaying && hostPpq.hasValue()
+                                      && SyncDivision::isSynced(sdiv) && ! seqRecordArmed.load();
+                for (const auto meta : midiMessages)
+                {
+                    const auto m = meta.getMessage();
+                    if (m.getChannel() != 1) continue;
+                    if (m.isNoteOff() || (m.isNoteOn() && m.getVelocity() == 0))
+                        seqHostKeysDown.reset ((size_t) m.getNoteNumber());
+                    else if (m.isNoteOn())
+                    {
+                        // A note-off at this very sample that the buffer orders AFTER the note-on
+                        // still belongs before it (a clip boundary): apply those first.
+                        for (const auto later : midiMessages)
+                            if (later.samplePosition == meta.samplePosition)
+                                if (const auto l = later.getMessage(); l.isNoteOff() && l.getChannel() == 1)
+                                    seqHostKeysDown.reset ((size_t) l.getNoteNumber());
+                        if (seqHostKeysDown.none() && anchorArmed)
+                            seqAnchorPpq.store (*hostPpq + meta.samplePosition * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate())));
+                        seqHostKeysDown.set ((size_t) m.getNoteNumber());
+                    }
+                    else if (m.isAllNotesOff() || m.isAllSoundOff())
+                        seqHostKeysDown.reset();
+                }
             }
 
             // LATCH (maintainer 2026-08-11): the first key takes the pattern over and it keeps
@@ -1263,7 +1341,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             const int diagPreIdx = stepSeq.currentStep(), diagPreCnt = stepSeq.clockSampleCounter();
 #endif
             if (hosted && hostPlaying && hostPpq.hasValue() && playRoot >= 0 && SyncDivision::isSynced(sdiv))
-                stepSeq.syncToHost(*hostPpq / SyncDivision::beatsPerCycle(sdiv));
+            {
+                const double anchor = seqAnchorPpq.load();   // see seqAnchorPpq: step 0 = the note's entry
+                stepSeq.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(sdiv));
+            }
 #if JASS_HOSTSYNC_DIAG
             const int diagPostIdx = stepSeq.currentStep(), diagPostCnt = stepSeq.clockSampleCounter(),
                       diagPostDelay = stepSeq.clockStartDelay();
@@ -1271,23 +1352,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             const bool seqRuns = hostRunning ? (playRoot >= 0) : (root >= 0 && playRoot >= 0);
             stepSeq.processBlock(buffer.getNumSamples(), kept, 1, seqRuns);
 #if JASS_HOSTSYNC_DIAG
-            if (hosted)
-            {
-                if (hostPlaying && ! diagWasPlaying) diagBlocksLeft = 24;   // the first blocks after PLAY
-                diagWasPlaying = hostPlaying;
-                if (diagBlocksLeft > 0)
-                {
-                    --diagBlocksLeft;
-                    auto& r = diag[(size_t) (diagWrite.load() % 256)];
-                    r.ppq = hostPpq.hasValue() ? *hostPpq : -999.0;
-                    r.stepsPos = hostPpq.hasValue() ? *hostPpq / juce::jmax (1e-9, SyncDivision::beatsPerCycle(sdiv)) : -999.0;
-                    r.playing = hostPlaying ? 1 : 0;
-                    r.preIdx = diagPreIdx; r.preCnt = diagPreCnt;
-                    r.postIdx = diagPostIdx; r.postCnt = diagPostCnt; r.postDelay = diagPostDelay;
-                    r.fired = stepSeq.playingStep(); r.n = buffer.getNumSamples();
-                    diagWrite.fetch_add (1);
-                }
-            }
+            diagSeqPre[0] = diagPreIdx; diagSeqPre[1] = diagPreCnt;
+            diagSeqPost[0] = diagPostIdx; diagSeqPost[1] = diagPostCnt; diagSeqPost[2] = diagPostDelay;
 #endif
 
             // 15.7 TIE/SLIDE: a takeover boundary retunes the sounding voice instead of
@@ -1318,6 +1384,33 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             seqKeyWasHeld = false;
             seqRequantize.store(false);    // a stray flag must not fire on a later re-enable
         }
+
+#if JASS_HOSTSYNC_DIAG
+        if (hosted)
+        {
+            const double anchorNow = seqAnchorPpq.load();
+            const int stateNow = (perc.enabled ? 1 : 0) | (percKitPending.load() ? 2 : 0) | (hostPlaying ? 4 : 0) | (stepSeq.enabled ? 8 : 0);
+            if (diagPlayEdge || anchorNow != diagLastAnchor || stateNow != diagLastState) diagBlocksLeft = 24;
+            diagLastAnchor = anchorNow; diagLastState = stateNow;
+            if (diagBlocksLeft > 0)
+            {
+                --diagBlocksLeft;
+                const int sdivD = (int) *apvts.getRawParameterValue(Parameters::ID::seqSync);
+                auto& r = diag[(size_t) (diagWrite.load() % 256)];
+                r.t = juce::Time::getMillisecondCounterHiRes();
+                r.ppq = hostPpq.hasValue() ? *hostPpq : -999.0;
+                r.stepsPos = hostPpq.hasValue() ? *hostPpq / juce::jmax (1e-9, SyncDivision::beatsPerCycle(sdivD)) : -999.0;
+                r.anchor = anchorNow; r.percAnchor = percAnchorPpq.load();
+                r.playing = hostPlaying ? 1 : 0; r.seqOn = stepSeq.enabled ? 1 : 0; r.latch = seqLatchedRoot.load();
+                r.percOn = perc.enabled ? 1 : 0; r.kitPending = percKitPending.load() ? 1 : 0;
+                r.kitIdx = (int) *apvts.getRawParameterValue(Parameters::ID::percKit); r.percStep = perc.playingStep();
+                r.preIdx = diagSeqPre[0]; r.preCnt = diagSeqPre[1];
+                r.postIdx = diagSeqPost[0]; r.postCnt = diagSeqPost[1]; r.postDelay = diagSeqPost[2];
+                r.fired = stepSeq.enabled ? stepSeq.playingStep() : -1; r.n = buffer.getNumSamples();
+                diagWrite.fetch_add (1);
+            }
+        }
+#endif
 
         if (arpOn)
         {
@@ -1735,6 +1828,9 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         xml->removeAttribute("PercKitFile");
         xml->removeAttribute("SeqLatchRoot");
         seqLatchedRoot.store(latchRoot >= 0 ? juce::jlimit(0, 127, latchRoot) : -1);
+#if JASS_HOSTSYNC_DIAG
+        diagNote ("setStateInformation");
+#endif
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
         PresetIO::resolveSetByName(apvts, samplerName, Parameters::ID::samplerSet, PresetIO::hooks(apvts).pendingSamplerSetName, 0);
         PresetIO::resolveSetByName(apvts, kitName,     Parameters::ID::percKit,    PresetIO::hooks(apvts).pendingPercKitName,    1);
@@ -1755,6 +1851,9 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
 
 juce::AudioProcessorEditor* SynthyProcessor::createEditor()
 {
+#if JASS_HOSTSYNC_DIAG
+    diagNote ("createEditor");
+#endif
     return new SynthyEditor(*this);
 }
 

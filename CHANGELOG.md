@@ -11,6 +11,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **A JASS track no longer falls asleep in Bitwig.** The plug-in told the host it has no tail,
+  and Bitwig's default Suspend mode ("Trust plug-in") stops calling a plug-in that reports
+  none once nothing goes in or out of it. A PERC track gets no notes - the drums run from the
+  transport alone - so it was suspended at the first silence and stayed mute until its window
+  was opened, which wakes it (maintainer 2026-10-25, Bitwig: PERC played only after clicking
+  the track; the diagnostic log showed the instance processing no blocks at all while the host
+  played). JASS now reports an infinite tail: a self-playing instrument is never idle.
 - **In a DAW, SPACE reaches the host and the editor keeps its hands off the engine.** SPACE is
   the host's transport; a JASS window holding the focus swallowed it and stopped the latched
   figure while the host played on (maintainer 2026-10-20, Bitwig: the bass track stopped now
@@ -65,6 +72,22 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   actually held runs the figure on the free clock, for sound design. The standalone is
   unchanged: there the module switch is the transport, as before. Patterns on a free RATE have
   no beat to lock to and keep running free in the host too.
+  **STOP pauses, PLAY continues; a clip note starts the figure** (2026-10-25). The first cut
+  counted both sequencers from the song's start, and a 48-step figure is three bars: it sat at
+  step 0 only every third bar, so PLAY pressed at bar 51 began it at its last note (maintainer,
+  Bitwig: "der erste gespielte Ton ist der letzte der Sequenz"). A second cut began both at
+  PLAY's position, but Bitwig's STOP returns the playhead to where PLAY started, so every PLAY
+  began the figure afresh ("nach Stopp beginnt es wieder von vorne"). Now each sequencer keeps
+  its own zero in host beats and PLAY moves it by the playhead's jump, so the phase STOP left
+  behind continues - the drum machine's pause/continue - while the clock still follows the
+  host's position and tempo between the edges, and two instances on two tracks keep their
+  relative phase because they see the same edges. The first PLAY of a session starts at step
+  0. A channel-1 note that enters from silence while the host plays starts the figure at step
+  0 on the note; a note added while another is still down changes the root without
+  restarting, as a second key does in the standalone; a clip boundary - note-off and note-on
+  at the same sample - is a fresh entry, so a looping or relaunched clip starts the figure
+  over. And a step the playhead lands inside of is chased: fired late within its first half,
+  skipped in its second, so a locate no longer swallows the step it lands in.
 
 ## [2026.10.3] – 2026-10-19
 

@@ -642,11 +642,22 @@ The formal architecture spine lives at
   slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
   option, not a plan.
 - **The clock is the host's (Story 18.6, 2026-10-19).** In a host, STEP SEQ and PERC derive
-  their step from the playhead's position in beats (`syncToHost`: song position in steps modulo
+  their step from the playhead's position in beats (`syncToHost`: host position in steps modulo
   LEN) instead of their own sample counters, and stand while the host stands. Two instances on
   two tracks therefore agree without talking to each other, and the standalone's quantised entry
   / re-sync between the two modules is simply not needed there (it stays standalone-only). A
-  free RATE has no beat to lock to and runs free in the host as well.
+  free RATE has no beat to lock to and runs free in the host as well. The zero is not the
+  song's start but a per-module anchor in host beats (`percAnchorPpq` / `seqAnchorPpq`,
+  2026-10-25): a three-bar figure counted from bar 1 sits at step 0 only every third bar, and
+  PLAY at bar 51 began it at its last note. STOP freezes, PLAY continues - the edge moves the
+  anchor by the playhead's jump (Bitwig's STOP rewinds to where PLAY started), so the phase
+  STOP left behind carries on; the first PLAY of a session starts at step 0; a channel-1
+  note-on from silence while the host plays moves the figure's anchor to the note, a note added
+  over a held one only changes the root. Session state, not project state. A step the playhead
+  lands inside of is chased in its first half, skipped in its second. And the plug-in reports
+  an infinite tail: Bitwig's default Suspend mode stops calling a "no tail" plug-in whose input
+  and output are silent, which put a PERC track to sleep (it gets no notes) until its window
+  was opened.
 
 ### AD-14 in more detail (decided 2026-10-10, Story 18.5)
 

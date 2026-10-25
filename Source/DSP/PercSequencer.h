@@ -100,8 +100,12 @@ public:
             // A transport jump (start, locate, loop wrap): set the clock outright.
             const double whole = std::floor (host);
             const int c = (int) std::lround ((host - whole) * interval);
-            if (c <= 0) { stepIndex = (int) whole % steps;       sampleCounter = 0; }
-            else        { stepIndex = ((int) whole + 1) % steps; sampleCounter = juce::jmin (interval - 1, c); }
+            // Landed inside a step: in its first half the step is CHASED (fired now, late by c
+            // samples, as a DAW chases a note the playhead starts inside of), in its second half
+            // it is skipped and the next one fires on time. The nudge below pulls the few samples
+            // of lateness back over the following blocks.
+            if (c < interval / 2) { stepIndex = (int) whole % steps;       sampleCounter = 0; }
+            else                  { stepIndex = ((int) whole + 1) % steps; sampleCounter = juce::jmin (interval - 1, c); }
             startDelay = 0;
             return;
         }

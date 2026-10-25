@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <bitset>
 #include "Audio/SynthVoice.h"
 #include "Audio/SynthSound.h"
 #include "Audio/Parameters.h"
@@ -42,7 +43,13 @@ public:
     const juce::String getName() const override { return "JASS"; }
     bool acceptsMidi() const override { return true; }
     bool producesMidi() const override { return false; }
-    double getTailLengthSeconds() const override { return 0.0; }
+    // Infinite: JASS is never idle in a host. STEP SEQ and PERC play from the transport alone, with
+    // no note coming in, and a host that "trusts the plug-in" (Bitwig's default Suspend mode)
+    // stops calling a plug-in that reports no tail once its input and output are silent - the
+    // PERC track then stayed mute until its window was opened (maintainer 2026-10-25, Bitwig:
+    // "spielt erst, wenn ich die Spur anklicke"; the plug-in logged no blocks while the host
+    // played). An infinite tail (VST3 kInfiniteTail) keeps the process call coming.
+    double getTailLengthSeconds() const override { return std::numeric_limits<double>::infinity(); }
 
     int getNumPrograms() override { return 1; }
     int getCurrentProgram() override { return 0; }
@@ -145,7 +152,7 @@ public:
     // Stop the latched figure. Clearing the root is enough: the next block sees nothing playing,
     // releases the sounding note and re-arms the pattern at step 0, exactly as letting go of the
     // key did before the latch existed.
-    void stopSeqLatch() { seqLatchedRoot.store (-1); }
+    void stopSeqLatch() { seqLatchedRoot.store (-1); seqAnchorPpq.store (-1.0); }
     // Start a latched figure without a key — used when a preset whose STEP SEQ is ON is loaded, so
     // the patch plays itself the moment it arrives instead of waiting to be touched. It also ends
     // the auto-play drone: the instrument IS playing now, and hearing a held C4 under a bass figure
@@ -261,7 +268,10 @@ private:
     PercSequencer perc;
     PatternStore patterns;   // AD-14 (18.5): the PERC grid and the STEP SEQ figure
 #if JASS_HOSTSYNC_DIAG
-    struct DiagRec { double ppq; double stepsPos; int playing; int preIdx, preCnt, postIdx, postCnt, postDelay, fired, n; };
+    struct DiagRec { double t; double ppq; double stepsPos; double anchor, percAnchor; int playing, seqOn, latch, percOn, kitPending, kitIdx, percStep; int preIdx, preCnt, postIdx, postCnt, postDelay, fired, n; };
+    double diagLastAnchor = -2.0;
+    int    diagLastState = -1;      // percOn | kitPending | playing | seqOn bits, a change starts a burst
+    void   diagNote (const char* what);   // one free-text line (message thread events)
     std::array<DiagRec, 256> diag {};
     std::atomic<int> diagWrite { 0 };
     int  diagRead = 0;
@@ -275,6 +285,18 @@ private:
     std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
     std::atomic<int> seqNoteDisplay { -1 };   // note the STEP SEQ holds, for the on-screen keyboard
     std::atomic<int> seqLatchedRoot { -1 };   // STEP SEQ latch: the root outlives the key (see below)
+    // 18.6: the host position (beats) each sequencer's step 0 is anchored to, -1 = none yet.
+    // PLAY sets it so that the phase CONTINUES where STOP left it (hostLastPpq remembers the last
+    // playing position); a channel-1 note entering from silence while the host plays moves the
+    // figure's anchor to the note. Session state, not project state: a reopened project starts
+    // at step 0 on its first PLAY. See processBlock.
+    std::atomic<double> seqAnchorPpq { -1.0 };
+    std::atomic<double> percAnchorPpq { -1.0 };
+    double hostLastPpq = -1.0;                    // last position seen while the host played (audio thread)
+    bool hostWasPlaying = false;                  // the PLAY edge (audio thread)
+    std::bitset<128> seqHostKeysDown;         // channel-1 keys down, event by event (audio thread):
+                                              // the "from silence" edge at sample resolution, so a
+                                              // clip boundary (off and on at one sample) is one
     std::atomic<bool> seqRequantize { false };// preset-load latch: force a fresh quantised entry —
                                               // the rising-edge logic cannot see a latch that
                                               // replaced a still-running one (no edge to rise on)
