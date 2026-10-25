@@ -245,10 +245,10 @@ namespace SeqMidiIO
 
         // Write the figure — inside the preset-loading bracket (PR #60): couplings silent,
         // voices killed on both edges, so half-applied steps never sound.
-        if (PresetIO::setPresetLoading) PresetIO::setPresetLoading (true);
+        if (PresetIO::hooks(a).setPresetLoading) PresetIO::hooks(a).setPresetLoading (true);
         // The figure lives in the PatternStore (AD-14), reached through PresetIO's hook. Full
         // reset first: import replaces the WHOLE figure.
-        if (auto* fig = PresetIO::patterns != nullptr ? &PresetIO::patterns->step : nullptr)
+        if (auto* fig = PresetIO::hooks(a).patterns != nullptr ? &PresetIO::hooks(a).patterns->step : nullptr)
             for (int q = 0; q < StepPattern::kMaxSteps; ++q)
             {
                 fig->setOn     (q, on.count (q) > 0);
@@ -262,8 +262,8 @@ namespace SeqMidiIO
         setRaw (a, Parameters::ID::seqOn, 1.0f);      // the ARP exclusion coupling handles the rest
         if (r.tempo > 0.0)
             setRaw (a, Parameters::ID::syncTempo, (float) juce::jlimit (40.0, 250.0, r.tempo));
-        if (PresetIO::setPresetLoading) PresetIO::setPresetLoading (false);
-        if (PresetIO::applySeqLatchRoot) PresetIO::applySeqLatchRoot (root);   // …and it plays
+        if (PresetIO::hooks(a).setPresetLoading) PresetIO::hooks(a).setPresetLoading (false);
+        if (PresetIO::hooks(a).applySeqLatchRoot) PresetIO::hooks(a).applySeqLatchRoot (root);   // …and it plays
 
         r.steps = period;
         r.root  = root;
@@ -292,8 +292,8 @@ namespace SeqMidiIO
         const int    stepTicks = (int) std::llround (ppq * beats);
 
         const int len  = juce::jlimit (1, StepSequencer::kMaxSteps, (int) raw (Parameters::ID::seqLength));
-        const int root = PresetIO::seqLatchRoot && PresetIO::seqLatchRoot() >= 0
-                             ? PresetIO::seqLatchRoot() : 48;   // C3 — the same fallback the preset writer uses
+        const int root = PresetIO::hooks(a).seqLatchRoot && PresetIO::hooks(a).seqLatchRoot() >= 0
+                             ? PresetIO::hooks(a).seqLatchRoot() : 48;   // C3 — the same fallback the preset writer uses
 
         juce::MidiMessageSequence seq;
         {
@@ -302,7 +302,7 @@ namespace SeqMidiIO
         }
 
         // The figure lives in the PatternStore (AD-14); without the hook there is nothing to export.
-        const StepPattern* fig = PresetIO::patterns != nullptr ? &PresetIO::patterns->step : nullptr;
+        const StepPattern* fig = PresetIO::hooks(a).patterns != nullptr ? &PresetIO::hooks(a).patterns->step : nullptr;
         if (fig == nullptr)
             return false;
         auto stepOn    = [fig] (int s) { return fig->on (s); };

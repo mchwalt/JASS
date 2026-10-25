@@ -40,7 +40,7 @@ SynthyProcessor::SynthyProcessor()
     // decoding every installed set (grand pianos: ~1.2 GB) held up the start of the app. The
     // hook lets a preset ask for ITS set: that one is pulled to the front of the queue and
     // selected once loaded, so restoring a piano patch no longer blocks the window either.
-    PresetIO::requestSamplerSet = [this] (const juce::String& setName, const juce::String& target)
+    PresetIO::hooks(apvts).requestSamplerSet = [this] (const juce::String& setName, const juce::String& target)
     {
         if (target == Parameters::ID::percKit)
             percKitPending.store (true);   // PERC stays silent until its kit is really here
@@ -55,11 +55,11 @@ SynthyProcessor::SynthyProcessor()
     // the auto-play drone, since the instrument is now playing.
     // A preset is a post-coupling snapshot: while one is applied, the parameter couplings stay
     // silent and their auto-enable memories are dropped (see setPresetLoading in the header).
-    PresetIO::setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
-    PresetIO::patterns          = &patterns;   // AD-14: the PERC grid is read/written through here
+    PresetIO::hooks(apvts).setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
+    PresetIO::hooks(apvts).patterns          = &patterns;   // AD-14: the PERC grid is read/written through here
 
-    PresetIO::seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
-    PresetIO::applySeqLatchRoot = [this] (int note)
+    PresetIO::hooks(apvts).seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
+    PresetIO::hooks(apvts).applySeqLatchRoot = [this] (int note)
     {
         if (note >= 0)
         {
@@ -72,7 +72,7 @@ SynthyProcessor::SynthyProcessor()
 
     // Double-click-on-a-knob's baseline: the value the loaded preset gave that parameter.
     // cleanSnapshot is indexed like getParameters(), which is what getParameterIndex() names.
-    PresetIO::presetBaseline01  = [this] (const juce::String& id) -> float
+    PresetIO::hooks(apvts).presetBaseline01  = [this] (const juce::String& id) -> float
     {
         if (auto* p = apvts.getParameter (id))
             if (const auto i = (size_t) p->getParameterIndex(); i < cleanSnapshot.size())
@@ -132,13 +132,13 @@ SynthyProcessor::SynthyProcessor()
         // The standalone wrapper restores its OWN saved state right after construction (the
         // "filterState" in JASS.settings, written at shutdown); re-load the shared LiveState
         // afterwards so it wins. The editor has been built against the wrapper's state by then —
-        // tell it, so the rack layout follows the LiveState too (onLiveStateReloaded).
+        // tell it, so the rack layout follows the LiveState too (onStateReloaded).
         juce::WeakReference<SynthyProcessor> weak (this);
         juce::MessageManager::callAsync([this, weak, loadLiveState]
         {
             if (weak == nullptr) return;   // processor destroyed before this async ran
             const bool fromScratch = loadLiveState();
-            if (onLiveStateReloaded) onLiveStateReloaded(fromScratch);
+            if (onStateReloaded) onStateReloaded(fromScratch);
         });
     }
 }
@@ -188,11 +188,14 @@ void SynthyProcessor::SamplePreloadThread::loadRequested (const Request& req)
         juce::WeakReference<SynthyProcessor> gone (&owner);
         juce::MessageManager::callAsync ([target, gone]
         {
-            (target == Parameters::ID::samplerSet ? PresetIO::pendingSamplerSetName
-                                                  : PresetIO::pendingPercKitName).clear();
+            auto* p = gone.get();
+            if (p == nullptr)
+                return;
+            auto& h = PresetIO::hooks (p->apvts);
+            (target == Parameters::ID::samplerSet ? h.pendingSamplerSetName : h.pendingPercKitName).clear();
             // Give up waiting: PERC may sound again with whatever kit the index points at, rather
             // than staying silent forever because a preset named a set that is not installed.
-            if (auto* p = gone.get(); p != nullptr && target == Parameters::ID::percKit)
+            if (target == Parameters::ID::percKit)
                 p->percKitPending.store (false);
         });
         return;
@@ -255,8 +258,8 @@ void SynthyProcessor::selectSamplerSet (int index, int generation, const juce::S
     const int value = index + (targetParamId == Parameters::ID::percKit ? 1 : 0);
     if (auto* p = apvts.getParameter (targetParamId))
         p->setValueNotifyingHost (p->convertTo0to1 ((float) value));
-    (targetParamId == Parameters::ID::samplerSet ? PresetIO::pendingSamplerSetName
-                                                 : PresetIO::pendingPercKitName).clear();
+    (targetParamId == Parameters::ID::samplerSet ? PresetIO::hooks(apvts).pendingSamplerSetName
+                                                 : PresetIO::hooks(apvts).pendingPercKitName).clear();
     if (targetParamId == Parameters::ID::percKit)
         percKitPending.store (false);   // the kit is real now — PERC may sound
 }
@@ -266,11 +269,8 @@ SynthyProcessor::~SynthyProcessor()
     // Stop the loader before anything else goes away, and drop the hook first so a late preset
     // load cannot queue work into a dying thread. The abort is polled per zone, so this returns
     // in milliseconds even mid-piano.
-    PresetIO::requestSamplerSet = nullptr;
-    PresetIO::seqLatchRoot      = nullptr;   // these capture `this` — drop them before it dies
-    PresetIO::applySeqLatchRoot = nullptr;
-    PresetIO::presetBaseline01  = nullptr;
-    PresetIO::setPresetLoading  = nullptr;
+    PresetIO::unregisterHooks (apvts);   // they capture `this` — gone before it dies; the other
+                                         // instances in this process keep theirs (2026-10-20)
     samplePreload.stopThread (4000);
 
     keyboardState.removeListener(this);
@@ -330,9 +330,41 @@ void SynthyProcessor::handleNoteOff(juce::MidiKeyboardState*, int midiChannel, i
 
 void SynthyProcessor::timerCallback()
 {
+#if JASS_HOSTSYNC_DIAG
+    if (isHostedByDaw()) { flushDiag(); return; }
+#endif
     if (liveDirty.exchange(false))
         saveLiveState();
 }
+
+#if JASS_HOSTSYNC_DIAG
+void SynthyProcessor::diagNote (const char* what)
+{
+    PresetIO::jassFolder().getChildFile ("hostsync.log").appendText (
+        juce::String::toHexString ((juce::pointer_sized_int) this) + " t=" + juce::String (juce::Time::getMillisecondCounterHiRes() / 1000.0, 2)
+        + "  NOTE " + what + "\n");
+}
+
+void SynthyProcessor::flushDiag()
+{
+    const int w = diagWrite.load();
+    if (w == diagRead) return;
+    juce::String out;
+    for (; diagRead < w; ++diagRead)
+    {
+        const auto& r = diag[(size_t) (diagRead % 256)];
+        out << juce::String::toHexString ((juce::pointer_sized_int) this) << " t=" << juce::String (r.t / 1000.0, 2) << "  ppq=" << juce::String (r.ppq, 5)
+            << " stepsPos=" << juce::String (r.stepsPos, 4) << " anchor=" << juce::String (r.anchor, 4)
+            << " percAnchor=" << juce::String (r.percAnchor, 4) << " playing=" << r.playing
+            << " seqOn=" << r.seqOn << " latch=" << r.latch << " percOn=" << r.percOn << " kitPending=" << r.kitPending
+            << " kitIdx=" << r.kitIdx << " percStep=" << r.percStep
+            << " pre(idx=" << r.preIdx << ",cnt=" << r.preCnt << ")"
+            << " post(idx=" << r.postIdx << ",cnt=" << r.postCnt << ",delay=" << r.postDelay << ")"
+            << " fired=" << r.fired << " n=" << r.n << "\n";
+    }
+    PresetIO::jassFolder().getChildFile ("hostsync.log").appendText (out);
+}
+#endif
 
 void SynthyProcessor::saveLiveState()
 {
@@ -807,6 +839,9 @@ void SynthyProcessor::restoreModifiedState(bool modified)
 
 void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
 {
+#if JASS_HOSTSYNC_DIAG
+    if (isHostedByDaw()) diagNote ("prepareToPlay");
+#endif
     Parameters::ID::warmIndexedIds();   // RT-safety: build the indexed-ID caches on the message thread
     synth.setCurrentPlaybackSampleRate(sampleRate);
     for (int i = 0; i < synth.getNumVoices(); ++i)
@@ -912,10 +947,61 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // BPM = the host's tempo when hosted (VST3/DAW), else the internal Sync Tempo knob
     // (Standalone). A division of "Free" (0) keeps the module's own free-running knob.
     double syncBpm = *apvts.getRawParameterValue(Parameters::ID::syncTempo);
+    // 18.6: in a DAW the host owns the CLOCK, not just the tempo (AD-13). Transport state and the
+    // position in beats are read once per block: the sequencers lock their step to the position
+    // (StepSequencer::syncToHost / PercSequencer::syncToHost - two instances on two tracks then
+    // agree by construction) and stand while the host stands. A host without position info, and
+    // the standalone, keep the free clocks exactly as before.
+    const bool hosted = isHostedByDaw();
+    bool hostPlaying = true;
+    juce::Optional<double> hostPpq;   // JUCE's own Optional (what getPpqPosition returns)
     if (auto* ph = getPlayHead())
         if (auto pos = ph->getPosition())
+        {
             if (auto hostBpm = pos->getBpm())
                 syncBpm = *hostBpm;
+            if (hosted)
+            {
+                hostPlaying = pos->getIsPlaying();
+                hostPpq     = pos->getPpqPosition();
+            }
+        }
+    const bool hostRunning = ! hosted || hostPlaying;
+    // 18.6: STOP freezes the sequencers, PLAY continues them - wherever the host's playhead is
+    // by then. The first cut counted both from the song's start, and a figure of three bars then
+    // sat at step 0 only every third bar: PLAY at bar 51 began it at its last note. The second
+    // cut anchored step 0 at PLAY's position, but Bitwig's STOP returns the playhead to where
+    // PLAY started, so every PLAY was "the same spot" and began the figure afresh (maintainer
+    // 2026-10-25: "nach Stopp beginnt es wieder von vorne"). So the anchor is moved on the PLAY
+    // edge by the playhead's jump, which keeps the phase STOP left behind: the drum machine's
+    // pause/continue, in host beats. Two instances on two tracks see the same edge and keep
+    // their relative phase. A clip note still moves the figure's anchor to the note (below);
+    // the first PLAY of a session starts at step 0. Loops and locates WHILE playing are not
+    // edges: the clock then follows the host's position against the anchor, as before.
+    if (hosted && hostPlaying && hostPpq.hasValue())
+    {
+        if (! hostWasPlaying)
+            for (auto* a : { &percAnchorPpq, &seqAnchorPpq })
+            {
+                const double cur = a->load();
+                a->store (cur >= 0.0 && hostLastPpq >= 0.0 ? *hostPpq - (hostLastPpq - cur)   // continue
+                                                             : *hostPpq);                       // first PLAY: step 0
+            }
+        hostLastPpq = *hostPpq + buffer.getNumSamples() * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate()));
+    }
+    hostWasPlaying = hosted && hostPlaying;
+#if JASS_HOSTSYNC_DIAG
+    if (hosted && ! isTimerRunning()) startTimer (500);
+    int diagSeqPre[2] = { -1, -1 }, diagSeqPost[3] = { -1, -1, -1 };
+    const bool diagPlayEdge = hosted && hostPlaying && ! diagWasPlaying;
+    diagWasPlaying = hostPlaying;
+#endif
+    // The host's STOP stands the figure still but KEEPS its latched root (it is part of the
+    // project state too, see getStateInformation): PLAY from anywhere runs it again at the
+    // host's position, with or without a note from the clip. A first version cleared the latch
+    // on STOP and relied on the clip re-sending its note; Bitwig does not chase a note the
+    // playhead starts inside of, and a reopened project had no root at all until a note-on
+    // arrived - the bass track fell silent (maintainer 2026-10-19/20).
 
     // CHAOS: advance the one global attractor and publish this block's snapshot. Published as 0
     // when the module is off (a routed-but-silent source, same rule as the LFOs). Advanced BEFORE
@@ -1071,7 +1157,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // STOP (header latch) counts as "not running" here on purpose: the clock stands, the
             // playhead goes out, and the STEP SEQ does not wait for a drum downbeat that will not
             // come. Rendering below still runs, so a grid click can sound its lane while held.
-            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f && ! percHeld.load();
+            const bool percOn = *apvts.getRawParameterValue(ID::percOn) > 0.5f && ! percHeld.load()
+                                && hostRunning;   // 18.6: in a DAW the host's STOP stops the drums too
             if (! percOn && perc.enabled)
                 perc.reset();      // switched off or held ⇒ the next start is a downbeat, not where it stopped
             // The drums (re)starting IS a downbeat (maintainer 2026-10-11: after STOP, or after
@@ -1088,7 +1175,9 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 // the drums came in a fraction of a step behind the bass (maintainer 2026-10-11:
                 // "um einen halben Takt (einen Step?) verschoben"; found with a sample simulation).
                 perc.reset();
-                if (stepSeq.enabled && stepSeq.playingStep() >= 0)
+                // Standalone only: in a DAW both clocks follow the host's position (below), so
+                // there is nothing to negotiate between them.
+                if (! hosted && stepSeq.enabled && stepSeq.playingStep() >= 0)
                 {
                     const int wait = stepSeq.samplesToNextStep();
                     perc.setStartDelay(wait);
@@ -1101,6 +1190,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             perc.stepSeconds = SyncDivision::isSynced(pdiv)
                                    ? SyncDivision::delaySeconds(syncBpm, pdiv)
                                    : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::percRate));
+            // 18.6: lock the drum clock to the host's bar position (a free RATE has no beat to lock to).
+            if (hosted && hostPlaying && percOn && hostPpq.hasValue() && SyncDivision::isSynced(pdiv))
+            {
+                const double anchor = percAnchorPpq.load();   // PLAY's position = step 0 (see above)
+                perc.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(pdiv));
+            }
         }
 
         const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
@@ -1137,8 +1232,55 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // transpose the pattern on every note entered.
             int root = -1;
             if (! seqRecordArmed.load())
+            {
                 for (int n = 0; n < 128 && root < 0; ++n)
                     if (keyboardState.isNoteOn(1, n)) root = n;
+                // A note whose note-off lands in the SAME block is already up by now and the
+                // search above never sees it — a short clip note in a DAW, or a tapped key. It
+                // still latches: take the lowest channel-1 note-on of this block (maintainer
+                // 2026-10-19, Bitwig: the figure started "nur manchmal" — a block-alignment lottery).
+                if (root < 0)
+                    for (const auto meta : midiMessages)
+                        if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == 1)
+                            if (root < 0 || m.getNoteNumber() < root)
+                                root = m.getNoteNumber();
+            }
+
+            // 18.6 ANCHOR: in a host the figure's step 0 is where its note ENTERED, not the song's
+            // start. The host position is taken modulo LEN (syncToHost), and a 48-step figure is
+            // three bars: counted from bar 1 it sits at step 0 only every third bar, so a clip
+            // launched or a PLAY pressed anywhere else began the figure in its middle (maintainer
+            // 2026-10-25, Bitwig: "der erste gespielte Ton ist der letzte der Sequenz"). The edge is
+            // taken event by event, not from the keys held at the block's end: a clip boundary in a
+            // DAW is a note-off and a note-on at the SAME sample, and that is a fresh entry - only a
+            // key added while another is really still down changes the root without restarting,
+            // exactly the standalone's rule. The note's exact position, not a grid: the user placed
+            // it. A key pressed while the host stands anchors nothing.
+            {
+                const bool anchorArmed = hosted && hostPlaying && hostPpq.hasValue()
+                                      && SyncDivision::isSynced(sdiv) && ! seqRecordArmed.load();
+                for (const auto meta : midiMessages)
+                {
+                    const auto m = meta.getMessage();
+                    if (m.getChannel() != 1) continue;
+                    if (m.isNoteOff() || (m.isNoteOn() && m.getVelocity() == 0))
+                        seqHostKeysDown.reset ((size_t) m.getNoteNumber());
+                    else if (m.isNoteOn())
+                    {
+                        // A note-off at this very sample that the buffer orders AFTER the note-on
+                        // still belongs before it (a clip boundary): apply those first.
+                        for (const auto later : midiMessages)
+                            if (later.samplePosition == meta.samplePosition)
+                                if (const auto l = later.getMessage(); l.isNoteOff() && l.getChannel() == 1)
+                                    seqHostKeysDown.reset ((size_t) l.getNoteNumber());
+                        if (seqHostKeysDown.none() && anchorArmed)
+                            seqAnchorPpq.store (*hostPpq + meta.samplePosition * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate())));
+                        seqHostKeysDown.set ((size_t) m.getNoteNumber());
+                    }
+                    else if (m.isAllNotesOff() || m.isAllSoundOff())
+                        seqHostKeysDown.reset();
+                }
+            }
 
             // LATCH (maintainer 2026-08-11): the first key takes the pattern over and it keeps
             // running after the key is released — holding one down for a whole piece is not playing,
@@ -1166,7 +1308,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
             // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
             // running figure must not restart or delay anything, exactly as in 15.1.
-            if (playRoot >= 0 && ! seqKeyWasHeld && perc.enabled)
+            if (! hosted && playRoot >= 0 && ! seqKeyWasHeld && perc.enabled)   // 18.6: a DAW's grid rules
                 stepSeq.setStartDelay(perc.samplesToPatternStart());
             seqKeyWasHeld = (playRoot >= 0);
 
@@ -1187,10 +1329,32 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 // 2026-10-11). A preset load (the other caller) has no voice sounding, so the
                 // takeover finds nothing and the entry is a plain note-on, as before.
                 stepSeq.restartLegato();
-                if (perc.enabled)
+                if (! hosted && perc.enabled)
                     stepSeq.setStartDelay(perc.samplesToPatternStart());
             }
-            stepSeq.processBlock(buffer.getNumSamples(), kept, 1, playRoot >= 0);
+            // 18.6: in a DAW the figure's step is the host's bar position, whatever key started it
+            // and whenever - so it lines up with a PERC on another track, and with the DAW's grid.
+            // Only while the host PLAYS: a stopped host's position would pull a free-running clock
+            // back to the same step every block. While it stands, the figure runs only under a key
+            // that is actually held (sound design with the transport off), on the free clock.
+#if JASS_HOSTSYNC_DIAG
+            const int diagPreIdx = stepSeq.currentStep(), diagPreCnt = stepSeq.clockSampleCounter();
+#endif
+            if (hosted && hostPlaying && hostPpq.hasValue() && playRoot >= 0 && SyncDivision::isSynced(sdiv))
+            {
+                const double anchor = seqAnchorPpq.load();   // see seqAnchorPpq: step 0 = the note's entry
+                stepSeq.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(sdiv));
+            }
+#if JASS_HOSTSYNC_DIAG
+            const int diagPostIdx = stepSeq.currentStep(), diagPostCnt = stepSeq.clockSampleCounter(),
+                      diagPostDelay = stepSeq.clockStartDelay();
+#endif
+            const bool seqRuns = hostRunning ? (playRoot >= 0) : (root >= 0 && playRoot >= 0);
+            stepSeq.processBlock(buffer.getNumSamples(), kept, 1, seqRuns);
+#if JASS_HOSTSYNC_DIAG
+            diagSeqPre[0] = diagPreIdx; diagSeqPre[1] = diagPreCnt;
+            diagSeqPost[0] = diagPostIdx; diagSeqPost[1] = diagPostCnt; diagSeqPost[2] = diagPostDelay;
+#endif
 
             // 15.7 TIE/SLIDE: a takeover boundary retunes the sounding voice instead of
             // retriggering it — MIDI cannot say that, so the sequencer recorded it and the voice
@@ -1220,6 +1384,33 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             seqKeyWasHeld = false;
             seqRequantize.store(false);    // a stray flag must not fire on a later re-enable
         }
+
+#if JASS_HOSTSYNC_DIAG
+        if (hosted)
+        {
+            const double anchorNow = seqAnchorPpq.load();
+            const int stateNow = (perc.enabled ? 1 : 0) | (percKitPending.load() ? 2 : 0) | (hostPlaying ? 4 : 0) | (stepSeq.enabled ? 8 : 0);
+            if (diagPlayEdge || anchorNow != diagLastAnchor || stateNow != diagLastState) diagBlocksLeft = 24;
+            diagLastAnchor = anchorNow; diagLastState = stateNow;
+            if (diagBlocksLeft > 0)
+            {
+                --diagBlocksLeft;
+                const int sdivD = (int) *apvts.getRawParameterValue(Parameters::ID::seqSync);
+                auto& r = diag[(size_t) (diagWrite.load() % 256)];
+                r.t = juce::Time::getMillisecondCounterHiRes();
+                r.ppq = hostPpq.hasValue() ? *hostPpq : -999.0;
+                r.stepsPos = hostPpq.hasValue() ? *hostPpq / juce::jmax (1e-9, SyncDivision::beatsPerCycle(sdivD)) : -999.0;
+                r.anchor = anchorNow; r.percAnchor = percAnchorPpq.load();
+                r.playing = hostPlaying ? 1 : 0; r.seqOn = stepSeq.enabled ? 1 : 0; r.latch = seqLatchedRoot.load();
+                r.percOn = perc.enabled ? 1 : 0; r.kitPending = percKitPending.load() ? 1 : 0;
+                r.kitIdx = (int) *apvts.getRawParameterValue(Parameters::ID::percKit); r.percStep = perc.playingStep();
+                r.preIdx = diagSeqPre[0]; r.preCnt = diagSeqPre[1];
+                r.postIdx = diagSeqPost[0]; r.postCnt = diagSeqPost[1]; r.postDelay = diagSeqPost[2];
+                r.fired = stepSeq.enabled ? stepSeq.playingStep() : -1; r.n = buffer.getNumSamples();
+                diagWrite.fetch_add (1);
+            }
+        }
+#endif
 
         if (arpOn)
         {
@@ -1497,6 +1688,15 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     patterns.perc.writeXml(*xml);   // AD-14: the patterns ride along as ONE element each, not thousands of PARAMs
     patterns.step.writeXml(*xml);
+    // The sample-set NAMES beside the indices, for the same reason a preset carries them
+    // (PresetIO::toVar): a DAW project must find its drum kit again whatever the store's order
+    // is when the project opens (maintainer 2026-10-19, Bitwig: PERC came in late / not at all).
+    xml->setAttribute("SamplerSetFile", PresetIO::currentSetName(apvts, Parameters::ID::samplerSet));
+    xml->setAttribute("PercKitFile",    PresetIO::currentSetName(apvts, Parameters::ID::percKit));
+    // The figure's latched root (15.5 for presets): a sequencer track comes back running on the
+    // note it was running on, exactly as a preset does - without it a reopened project waited for
+    // a note-on that Bitwig does not send for a note the playhead starts inside of.
+    xml->setAttribute("SeqLatchRoot", seqLatchedRoot.load());
     copyXmlToBinary(*xml, destData);
 }
 
@@ -1616,7 +1816,33 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         const bool foldedStep = migrateLegacyStepXml(*xml, patterns.step);
         if (! patterns.step.readXml(*xml) && ! foldedStep)
             patterns.step.clear();
+        // The set names (written by getStateInformation since 2026-10-19; a project saved before
+        // carries none and keeps the index behaviour). Taken off the tree before it becomes the
+        // state, then re-resolved AFTER replaceState so the selection lands on top of the indices:
+        // the store fills in the background at start-up, so the restored index alone pointed at
+        // nothing — or at another kit — until the list was complete.
+        const juce::String samplerName = xml->getStringAttribute("SamplerSetFile");
+        const juce::String kitName     = xml->getStringAttribute("PercKitFile");
+        const int latchRoot = xml->getIntAttribute("SeqLatchRoot", -1);   // absent (older project) = -1 = none
+        xml->removeAttribute("SamplerSetFile");
+        xml->removeAttribute("PercKitFile");
+        xml->removeAttribute("SeqLatchRoot");
+        seqLatchedRoot.store(latchRoot >= 0 ? juce::jlimit(0, 127, latchRoot) : -1);
+#if JASS_HOSTSYNC_DIAG
+        diagNote ("setStateInformation");
+#endif
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
+        PresetIO::resolveSetByName(apvts, samplerName, Parameters::ID::samplerSet, PresetIO::hooks(apvts).pendingSamplerSetName, 0);
+        PresetIO::resolveSetByName(apvts, kitName,     Parameters::ID::percKit,    PresetIO::hooks(apvts).pendingPercKitName,    1);
+        // An editor that already exists was built against the state this one replaces — tell it
+        // to apply the restored rack layout (see onStateReloaded, case 2). Posted, because a host
+        // may hand the state over off the message thread.
+        juce::WeakReference<SynthyProcessor> weak(this);
+        juce::MessageManager::callAsync([weak]
+        {
+            if (auto* p = weak.get(); p != nullptr && p->onStateReloaded)
+                p->onStateReloaded(false);
+        });
         // The just-restored state IS the clean baseline: snapshot it so a freshly loaded host
         // project does not spuriously report "modified" (isPresetModified compares to this).
         markPresetClean();
@@ -1625,6 +1851,9 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
 
 juce::AudioProcessorEditor* SynthyProcessor::createEditor()
 {
+#if JASS_HOSTSYNC_DIAG
+    diagNote ("createEditor");
+#endif
     return new SynthyEditor(*this);
 }
 

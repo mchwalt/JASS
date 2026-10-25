@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <cmath>
 #include <array>
 #include "SamplePlayer.h"
 #include "SampleBank.h"
@@ -75,6 +76,45 @@ public:
     // figure: both wait for the figure's next step boundary and start step 0 together — the
     // running bass step finishes instead of being cut (maintainer 2026-10-11: "rhythmischer Ruck").
     void setStartDelay (int samples) { startDelay = juce::jmax (0, samples); }
+
+    // 18.6: in a DAW the host owns the clock - the same contract as StepSequencer::syncToHost
+    // (see there): host position in steps since the song start, nudged or set outright.
+    void syncToHost (double stepsFromStart)
+    {
+        const int steps    = juce::jlimit (1, kMaxSteps, length);
+        const int interval = juce::jmax (1, (int) (sampleRate * juce::jmax (0.01, stepSeconds)));
+        // Host position inside the pattern cycle, in (fractional) steps.
+        double host = std::fmod (stepsFromStart, (double) steps);
+        if (host < 0.0) host += steps;
+        // Local position: the step being played plus the way through it, less a pending hold.
+        // sampleCounter == 0 means "stepIndex fires at this sample"; otherwise stepIndex is
+        // already the NEXT step and the counter is the way through the current one.
+        const double local = (sampleCounter == 0 ? (double) stepIndex
+                                                 : (double) (stepIndex - 1) + sampleCounter / (double) interval)
+                             - startDelay / (double) interval;
+        double diff = std::fmod (local - host, (double) steps);   // > 0: the local clock is ahead
+        if (diff >  steps * 0.5) diff -= steps;
+        if (diff < -steps * 0.5) diff += steps;
+        if (std::abs (diff) > 0.5)
+        {
+            // A transport jump (start, locate, loop wrap): set the clock outright.
+            const double whole = std::floor (host);
+            const int c = (int) std::lround ((host - whole) * interval);
+            // Landed inside a step: in its first half the step is CHASED (fired now, late by c
+            // samples, as a DAW chases a note the playhead starts inside of), in its second half
+            // it is skipped and the next one fires on time. The nudge below pulls the few samples
+            // of lateness back over the following blocks.
+            if (c < interval / 2) { stepIndex = (int) whole % steps;       sampleCounter = 0; }
+            else                  { stepIndex = ((int) whole + 1) % steps; sampleCounter = juce::jmin (interval - 1, c); }
+            startDelay = 0;
+            return;
+        }
+        const int d = (int) std::lround (diff * interval);
+        if (d > 0)
+            startDelay += d;                                                   // ahead: hold
+        else if (d < 0 && sampleCounter > 0)                                   // behind: advance -
+            sampleCounter = juce::jmin (interval - 1, sampleCounter - d);      // (0 fires now anyway)
+    }
 
     // The kit. Handed in per block like the SAMPLER's set, so switching kits (or one arriving from
     // the background loader) simply takes effect — SamplePlayer::setSource is a no-op when unchanged.

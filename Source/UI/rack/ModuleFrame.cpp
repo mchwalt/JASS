@@ -511,8 +511,8 @@ namespace rack
                     // live ratio, so "the preset's value" is not what their slider displays.
                     s->presetBaseline = [&a = apvts, id = k->paramId]() -> double
                     {
-                        if (PresetIO::presetBaseline01)
-                            if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                        if (PresetIO::hooks(a).presetBaseline01)
+                            if (const float v01 = PresetIO::hooks(a).presetBaseline01 (id); v01 >= 0.0f)
                                 if (auto* p = a.getParameter (id))
                                     return (double) p->convertFrom0to1 (v01);
                         return std::numeric_limits<double>::quiet_NaN();
@@ -692,8 +692,8 @@ namespace rack
                         g->setDoubleClickReturnValue (false, 0.0);
                         g->presetBaseline = [&a = apvts, id = k->altParamId]() -> double
                         {
-                            if (PresetIO::presetBaseline01)
-                                if (const float v01 = PresetIO::presetBaseline01 (id); v01 >= 0.0f)
+                            if (PresetIO::hooks(a).presetBaseline01)
+                                if (const float v01 = PresetIO::hooks(a).presetBaseline01 (id); v01 >= 0.0f)
                                     if (auto* p = a.getParameter (id))
                                         return (double) p->convertFrom0to1 (v01);
                             return std::numeric_limits<double>::quiet_NaN();

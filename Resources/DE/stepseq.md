@@ -16,6 +16,8 @@ Läuft nicht zusammen mit dem ARPEGGIATOR: Beide besetzen denselben Platz als No
 
 **MIDI-Import/-Export — die Knöpfe LOAD MIDI / SAVE MIDI in der Titelzeile dieses Moduls.** LOAD MIDI öffnet eine `.mid`-Transkription: Velocity wird zu Akzenten, Notenlängen zu Gate/TIE/SLIDE, der Zyklus des Loops wird erkannt, und die Figur latcht auf ihren häufigsten Ton und spielt. SAVE MIDI schreibt die Figur wieder heraus. Eine Asymmetrie: ein TIE mit Tonhöhenwechsel wird als 303-Überlappung exportiert und kommt als SLIDE zurück — MIDI kann den Unterschied nicht transportieren.
 
+**In einer DAW** läuft die Figur mit dem Transport: PLAY startet sie bei Step 1, STOP hält sie an, erneutes PLAY macht weiter. Eine Note der Spur setzt ihren Grundton und startet sie bei Step 1; eine Note, die beginnt, während eine andere noch gehalten wird, wechselt nur den Grundton. Grundton und Position werden mit dem Projekt gespeichert.
+
 Eine **rote Linie** hinter einem Schritt markiert das Pattern-Ende (LEN): alles rechts davon bleibt erhalten, spielt aber nicht.
 
 **Seiten (< 1/4 >, Kopfzeile).** Die 48 Knöpfe zeigen eine Seite des Musters; **< / >** blättern durch vier Seiten à 48 (LEN bis 192 = 12 Takte Sechzehntel). Die Anzeige nennt Seite / Seiten, ein Punkt zeigt, wo das Muster gerade spielt. Mit gerastetem **FOLLOW** blättert die Anzeige mit dem Muster mit; von Hand blättern pausiert FOLLOW — erneut rasten springt zurück und folgt wieder. Die Eingabe mit dem Ring wechselt die Seite von selbst.

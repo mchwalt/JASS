@@ -692,8 +692,11 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         // AD-13 (Story 18.1): in a DAW the host owns mute, level and tempo — MASTER renders locked
         // + dimmed; its stored params stay as they are for the standalone.
         if (processor.isHostedByDaw())
+        {
             if (auto* master = rackBody->moduleById ("master"))
                 master->lockForHost();
+            rackBody->setHosted (true);   // no enable writes from the editor in a DAW (see Rack::setHosted)
+        }
         // Tell the rack which enable params ship "on" in the Init patch despite a declared
         // default of 0 (mirrors SynthyProcessor::resetToDefault): OSC 1..3. A zone RESET then
         // reproduces the factory enable state instead of silencing the oscillators.
@@ -716,11 +719,13 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         rackBody->onDefaultLayoutChanged = [](const juce::var& v) { PresetIO::saveRackLayout(v); };
         rackBody->reloadLayoutFromState();   // apply the layout in the state so far (Story 4.3) — at
                                              // this point the wrapper's; the LiveState's follows below
-        // The processor re-loads the LiveState once more, asynchronously, after we exist (its
-        // constructor explains why). Follow it: the layout it brings replaces the wrapper's, and a
-        // start WITHOUT a LiveState (Init was run) begins from the player's default rack — otherwise
+        // The state can be replaced behind our back after we exist: the standalone re-loads the
+        // LiveState once more, asynchronously (the processor's constructor explains why), and a
+        // host may hand the project state over AFTER it reopened our window (Bitwig). Follow it:
+        // the layout it brings replaces the one we were built against, and a standalone start
+        // WITHOUT a LiveState (Init was run) begins from the player's default rack — otherwise
         // the wrapper's old layout kept, e.g., a MOD MATRIX visible that Init had just switched off.
-        processor.onLiveStateReloaded = [this] (bool fromScratch)
+        processor.onStateReloaded = [this] (bool fromScratch)
         {
             if (rackBody == nullptr) return;
             if (fromScratch) rackBody->resetLayout();
@@ -1722,6 +1727,12 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         seqSkipStep();
         return true;
     }
+    // In a DAW, SPACE is the host's transport (2026-10-20): a plugin window that happens to hold
+    // the focus must not swallow it - and must not stop the latched figure or pluck the string
+    // while the host keeps playing (maintainer, Bitwig: the bass track "hoert immer mal wieder
+    // auf"). Writing a figure (above) still takes it as a rest: an explicit mode of this window.
+    if (key == juce::KeyPress::spaceKey && processor.isHostedByDaw())
+        return false;
     // SPACE stops a LATCHED figure. Since the pattern outlives the key that started it, something
     // has to end it — and the key that means "nothing" everywhere else is the obvious one. Ranked
     // between writing (above: SPACE is a rest) and the Karplus pluck (below), so it only claims the
@@ -2242,7 +2253,7 @@ void SynthyEditor::buildRack()
         {
             // Picking a set by hand ends any pending restore (12.6): the user's choice is the
             // one that must be saved, not the set a preset was still waiting for.
-            PresetIO::pendingSamplerSetName.clear();
+            PresetIO::hooks(processor.getAPVTS()).pendingSamplerSetName.clear();
             const auto* s = SampleBankStore::instance().getSet (setIdx);
             if (s != nullptr && s->isMapped())
             {

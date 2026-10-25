@@ -10,6 +10,87 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.4] – 2026-10-25
+
+### Fixed
+- **A JASS track no longer falls asleep in Bitwig.** The plug-in told the host it has no tail,
+  and Bitwig's default Suspend mode ("Trust plug-in") stops calling a plug-in that reports
+  none once nothing goes in or out of it. A PERC track gets no notes - the drums run from the
+  transport alone - so it was suspended at the first silence and stayed mute until its window
+  was opened, which wakes it (maintainer 2026-10-25, Bitwig: PERC played only after clicking
+  the track; the diagnostic log showed the instance processing no blocks at all while the host
+  played). JASS now reports an infinite tail: a self-playing instrument is never idle.
+- **In a DAW, SPACE reaches the host and the editor keeps its hands off the engine.** SPACE is
+  the host's transport; a JASS window holding the focus swallowed it and stopped the latched
+  figure while the host played on (maintainer 2026-10-20, Bitwig: the bass track stopped now
+  and then and had to be restarted by clicking the track). In a host the key is now passed
+  through, except while a figure is being written, where it stays a rest. And the editor no
+  longer writes enable parameters when it is built or re-laid-out in a host: a window the host
+  opens before it hands the project state over switched the restored modules off, and every
+  such write reached Bitwig as an edit ("Plugin misbehaving ... invalid parameter ID"). "On
+  means visible" still holds; "hidden means silent" is now standalone-only.
+- **Two JASS instances in one DAW no longer cross wires.** The hooks between the preset code and
+  the engine - the background kit loader, the figure's latched root, the pattern store, the
+  preset-load bracket, the double-click baseline - were process-global, i.e. built for exactly
+  one instance, the standalone. With two plugin instances the last one built owned them all: a
+  kit requested by the first landed in the second's loader and the first's PERC waited forever
+  for it (maintainer 2026-10-20, Bitwig: both tracks silent after reopening the project), a
+  preset loaded in one instance wrote its patterns into the other, and closing one instance took
+  every hook from the survivor. Each instance now registers its own set, keyed by its parameter
+  tree.
+- **A plugin window opened by the host shows the restored rack.** Bitwig reopens the plugin
+  windows it had open before it hands the project state to the plugin, so the editor was built
+  against the empty default state and showed the stock rack - STEP SEQ and PERC hidden - while
+  both were playing from the restored state (maintainer 2026-10-19). The processor now tells an
+  existing editor when its state has been replaced, and the editor applies the stored layout.
+- **A short note latches the figure too.** The STEP SEQ took its root from the keys held at the
+  end of the block, so a note whose note-off fell into the same block as its note-on was never
+  seen - in a DAW a short clip note started the figure only when the two happened to straddle a
+  block boundary (maintainer 2026-10-19, Bitwig: the bass track played "nur manchmal" after
+  reopening the project, and the latch is not part of the host state by design - the clip is the
+  trigger). The lowest channel-1 note-on of the block now latches as well.
+- **A DAW project finds its drum kit and sample set by name.** The host state carried the KIT
+  and SET selectors only as indices into the sample store, which fills in the background when
+  the plugin starts and whose order depends on what is installed - so a reopened project pointed
+  at nothing, or at another kit, until the list was complete (maintainer 2026-10-19, Bitwig:
+  "Roboter Perc startet erst nachdem ich die Spur explizit nochmal angeklickt habe"). The names
+  now travel with the project, exactly as a preset carries them, and are re-resolved on load
+  through the same background loader; PERC stays silent until the right kit is really there.
+  Projects saved before this carry no names and keep the old behaviour until re-saved.
+
+### Changed
+- **In a DAW the sequencers follow the host's clock (Story 18.6, AD-13).** JASS took only the
+  tempo from the host; STEP SEQ and PERC ran on their own sample clocks - the drums started
+  counting when the preset loaded, the figure when the clip's first note arrived, and two
+  instances on two tracks had no common reference (maintainer 2026-10-19, Bitwig: "laeuft,
+  beide - aber nicht synchron"). Now the step is derived from the host's position in beats:
+  pattern step = song position in steps modulo LEN, so bass and drums on separate tracks line
+  up by construction, whatever their lengths, and so does the DAW's grid. The clock is nudged
+  by a sample or two against the host's exact tempo without firing a step twice or skipping
+  one; a locate or loop wrap sets it outright. STOP in the host stands both still; PLAY runs
+  them again from the host's position. The figure's latched root is part of the project state
+  (as it is of a preset), so a sequencer track comes back running on its note and needs no note
+  from the clip to start - a clip note changes the root. While the host stands, a key that is
+  actually held runs the figure on the free clock, for sound design. The standalone is
+  unchanged: there the module switch is the transport, as before. Patterns on a free RATE have
+  no beat to lock to and keep running free in the host too.
+  **STOP pauses, PLAY continues; a clip note starts the figure** (2026-10-25). The first cut
+  counted both sequencers from the song's start, and a 48-step figure is three bars: it sat at
+  step 0 only every third bar, so PLAY pressed at bar 51 began it at its last note (maintainer,
+  Bitwig: "der erste gespielte Ton ist der letzte der Sequenz"). A second cut began both at
+  PLAY's position, but Bitwig's STOP returns the playhead to where PLAY started, so every PLAY
+  began the figure afresh ("nach Stopp beginnt es wieder von vorne"). Now each sequencer keeps
+  its own zero in host beats and PLAY moves it by the playhead's jump, so the phase STOP left
+  behind continues - the drum machine's pause/continue - while the clock still follows the
+  host's position and tempo between the edges, and two instances on two tracks keep their
+  relative phase because they see the same edges. The first PLAY of a session starts at step
+  0. A channel-1 note that enters from silence while the host plays starts the figure at step
+  0 on the note; a note added while another is still down changes the root without
+  restarting, as a second key does in the standalone; a clip boundary - note-off and note-on
+  at the same sample - is a fresh entry, so a looping or relaunched clip starts the figure
+  over. And a step the playhead lands inside of is chased: fired late within its first half,
+  skipped in its second, so a locate no longer swallows the step it lands in.
+
 ## [2026.10.3] – 2026-10-19
 
 ### Fixed

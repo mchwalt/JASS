@@ -2,6 +2,7 @@
 #include <JuceHeader.h>
 #include <array>
 #include <algorithm>
+#include <cmath>
 
 // STEP SEQ (Story 15.1) — a 32-step note sequencer. Where the Arpeggiator turns a held chord into
 // an automatic sequence, this plays an AUTHORED figure: each step carries its own semitone offset,
@@ -131,6 +132,51 @@ public:
     // forever. Set once by the processor at the moment the first key arrives; ignored (0) when no
     // drum pattern is running, which leaves 15.1's immediate start exactly as it was.
     void setStartDelay (int samples) { startDelay = juce::jmax (0, samples); }
+
+    // 18.6: in a DAW the host owns the clock (AD-13). Called once per block while the host plays,
+    // with the host's position in STEPS since the song start (ppq / beats per step). Pattern
+    // position = host position modulo LEN, so two instances on two tracks agree by construction,
+    // whatever their lengths. Small deviations - the integer step interval against the host's exact
+    // tempo - are nudged away without ever firing a step twice or skipping one: a clock that is
+    // ahead holds for the difference, one that is behind advances its counter. A deviation beyond
+    // half a step is a transport jump (start, locate, loop wrap) and the clock is set outright.
+    void syncToHost (double stepsFromStart)
+    {
+        const int steps    = juce::jlimit (1, kMaxSteps, length);
+        const int interval = juce::jmax (1, (int) (sampleRate * juce::jmax (0.01, stepSeconds)));
+        // Host position inside the pattern cycle, in (fractional) steps.
+        double host = std::fmod (stepsFromStart, (double) steps);
+        if (host < 0.0) host += steps;
+        // Local position: the step being played plus the way through it, less a pending hold.
+        // sampleCounter == 0 means "stepIndex fires at this sample"; otherwise stepIndex is
+        // already the NEXT step and the counter is the way through the current one.
+        const double local = (sampleCounter == 0 ? (double) stepIndex
+                                                 : (double) (stepIndex - 1) + sampleCounter / (double) interval)
+                             - startDelay / (double) interval;
+        double diff = std::fmod (local - host, (double) steps);   // > 0: the local clock is ahead
+        if (diff >  steps * 0.5) diff -= steps;
+        if (diff < -steps * 0.5) diff += steps;
+        if (std::abs (diff) > 0.5)
+        {
+            // A transport jump (start, locate, loop wrap): set the clock outright.
+            const double whole = std::floor (host);
+            const int c = (int) std::lround ((host - whole) * interval);
+            // Landed inside a step: in its first half the step is CHASED (fired now, late by c
+            // samples, as a DAW chases a note the playhead starts inside of), in its second half
+            // it is skipped and the next one fires on time. The nudge below pulls the few samples
+            // of lateness back over the following blocks.
+            if (c < interval / 2) { stepIndex = (int) whole % steps;       sampleCounter = 0; }
+            else                  { stepIndex = ((int) whole + 1) % steps; sampleCounter = juce::jmin (interval - 1, c); }
+            startDelay = 0;
+            pendingRestart = -1;
+            return;
+        }
+        const int d = (int) std::lround (diff * interval);
+        if (d > 0)
+            startDelay += d;                                                   // ahead: hold
+        else if (d < 0 && sampleCounter > 0)                                   // behind: advance -
+            sampleCounter = juce::jmin (interval - 1, sampleCounter - d);      // (0 fires now anyway)
+    }
 
     void processBlock (int numSamples, juce::MidiBuffer& out, int channel, bool anyKeyHeld)
     {
@@ -272,6 +318,10 @@ public:
     const Legato& legatoEvent (int i) const noexcept { return legato[(size_t) i]; }
 
     int currentStep() const noexcept { return stepIndex; }
+    // Clock read-outs for diagnosis (2026-10-20, host-sync): the way through the current step in
+    // samples, and a pending hold. Read-only; nothing in the engine depends on them.
+    int clockSampleCounter() const noexcept { return sampleCounter; }
+    int clockStartDelay()    const noexcept { return startDelay; }
     // The step the pattern is ON right now, for the module's playhead — NOT `stepIndex`, which has
     // already been advanced to the next one by the time anybody looks. -1 when nothing is running.
     int playingStep() const noexcept { return litStep; }
