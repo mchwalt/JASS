@@ -10,6 +10,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.10.4] – 2026-10-25
+
 ### Fixed
 - **A JASS track no longer falls asleep in Bitwig.** The plug-in told the host it has no tail,
   and Bitwig's default Suspend mode ("Trust plug-in") stops calling a plug-in that reports
