@@ -10,6 +10,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.11.0] – 2026-11-04
+
 ### Fixed
 - **A new JASS on a DAW track sounds right away.** A fresh instance in a host sat at the raw
   parameter defaults, which are not the Init patch: OSC 1..3 off. Nothing came out until a preset
