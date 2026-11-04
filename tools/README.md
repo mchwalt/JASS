@@ -39,3 +39,11 @@ fade-out, and writes `Piano_<note>.wav` files following the JASS folder naming c
 an attribution `README.txt`. Standard library only (no `aifc` — parses AIFF by hand, Python
 3.13-safe). Usage: `python tools/get_iowa_piano.py [output-folder]`, then copy the folder into
 `%AppData%\JASS\Samples\` or import it via SAMPLER → FOLDER.
+
+## `rig/clocktest.py` — 18.6 host-clock test against the SoundCraft rig
+
+Drives the SoundCraft fork's CLI (`D:\Projects\Rust\soundcraft`, see
+[`docs/notes/DAW_Candidates.md`](../docs/notes/DAW_Candidates.md)) headless: one or two JASS.vst3
+tracks with STEP SEQ on at 1/16, a long clip note as the root, a four-bar bounce, and every onset
+measured against the grid. Usage and the meaning of the numbers are in the script's docstring.
+Needs numpy and the rig folder `D:\Projects\Rust\soundcraft-rig`.

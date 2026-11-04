@@ -198,8 +198,38 @@ soundcraft-cli run --in s.scraft   --cmd 'midi.note_add={"clip":2,"pitch":48,"st
 The JUCE state blob is `0x21324356`, a little-endian length, the APVTS XML
 (`<Parameters><PARAM id="osc1On" value="1.0"/>...</Parameters>`) and a NUL
 byte. `file.import_midi` exists too, so the Roboter MIDI files can go straight
-into a session. Open: bounce transport values for 18.6 (STEP SEQ on, figure
-loaded, compare step timing against the host tempo).
+into a session.
+
+**18.6 host-clock test (2026-11-04, `tools/rig/clocktest.py`, JASS v2026.11.0).**
+SoundCraft's bounce hands the plugin `playing = true` and the position in
+quarters (`crates/mix/src/automation.rs`, `transport_at`), so the headless
+bounce exercises the same path as a DAW's PLAY. State: STEP SEQ on, SYNC 1/16,
+16 steps all on, one clip note of four bars as the root; every onset measured
+against the 1/16 grid at 48 kHz.
+
+| Test | Result |
+|------|--------|
+| 120 BPM, note at beat 0 | 64 onsets, every one +1 sample from the grid (the envelope's first sample), gaps 125.000 ms |
+| 90 BPM, note at beat 0 | 64 onsets, +1 sample, gaps 166.667 ms |
+| 120 BPM, note enters at beat 2.5 | step 0 exactly at the note (1.2500 s), then the grid as above - the note anchor |
+| two JASS instances, same figure, stems | 64/64 onsets, phase difference 0 after step 0 |
+| bounce from beat 2.5 (note at 0) | continues at step 10, on the grid - the host chases the note-on and the clock follows the position |
+| bounce from beat 2.3 (off the grid) | step 0 at the bounce start, figure runs 0.3 beats beside the bar grid - the PLAY anchor of 2026-10-25 (first PLAY = step 0), as designed |
+
+So the clock holds the host grid to the sample over four bars at both tempi,
+two tracks agree, and the anchor rules behave as written. One side finding,
+not a clock matter: the very first note after the plugin is activated fades in
+over its first block, because the master gain ramps from `prevMasterGain = 0`
+(`applyGainRamp`, PluginProcessor.cpp) - about 1.3 ms to reach -40 dBFS here,
+2.6 ms on the second instance. A DAW processes silence before PLAY, so a user
+never hears it; a bounce that starts exactly on a note does. Left as is.
+STOP/PLAY (the moved anchor) stays a Bitwig test by ear: a bounce has no STOP.
+
+Session, WAV and stem files land in `D:\Projects\Rust\soundcraft-rig`
+(the only path the MCP server may read or write). The MCP registration is
+bound to the project path with a capital `D:`; a session started from
+`d:\Projects\...` does not see the `soundcraft` tools - the CLI works either
+way, which is what the script uses.
 
 Revisit as a DAW when the MIDI device layer has landed and the release
 cadence has settled. The project's own estimate for alpha is 110 to 180
