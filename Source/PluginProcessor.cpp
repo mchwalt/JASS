@@ -141,6 +141,15 @@ SynthyProcessor::SynthyProcessor()
             if (onStateReloaded) onStateReloaded(fromScratch);
         });
     }
+    else
+    {
+        // A fresh instance in a host is the Init patch too. Without this the instance sat at the
+        // RAW defaults - OSC 1..3 off - and a track with a new JASS was silent until a preset was
+        // loaded or RESET pressed (found 2026-11-04 by a headless bounce in SoundCraft: -144 dBFS
+        // while another instrument on the same session played). A host that restores a project
+        // calls setStateInformation right after construction and replaces all of this.
+        resetToDefault();
+    }
 }
 
 void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName,
@@ -1660,12 +1669,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Master volume — gated by masterOn (Story 2.4): off => silent output. Base + MOD MATRIX offset,
     // applied as a per-block RAMP (prev→cur) so LFO-modulated VOL doesn't zipper.
-    // In a DAW the MASTER module is off (AD-13, Story 18.1): unity gain, mute ignored, VOL mod
-    // dead — the track fader is the one level and the host's mute is the mute. The stored params
-    // stay untouched so the same patch keeps its VOL/mute in the standalone.
+    // In a DAW the MASTER module is off (AD-13, Story 18.1): mute ignored, VOL mod dead — the
+    // track fader is the one level and the host's mute is the mute. The stored params stay
+    // untouched so the same patch keeps its VOL/mute in the standalone. The host gain is a FIXED
+    // pad equal to VOL's default (0.5, -6 dB), not unity: every preset so far sits at that VOL,
+    // so unity put each one 6 dB hotter in a DAW than in the standalone, and the Init stack
+    // (three oscillators at 0.5) peaked at +7 dBFS (headless bounce, maintainer 2026-11-04).
+    // With the pad a patch lands in the DAW at the level it has in the standalone.
     const bool  masterOn   = *apvts.getRawParameterValue(Parameters::ID::masterOn) > 0.5f;
     const float masterVol  = juce::jlimit(0.0f, 1.0f, (float) (apvts.getRawParameterValue(Parameters::ID::masterVol)->load() + gMod[(size_t) LFOTarget::MasterVol] * 1.0));
-    const float masterGain = isHostedByDaw() ? 1.0f : (masterOn ? masterVol : 0.0f);
+    const float masterGain = isHostedByDaw() ? kHostPad : (masterOn ? masterVol : 0.0f);
     buffer.applyGainRamp(0, buffer.getNumSamples(), prevMasterGain, masterGain);
     prevMasterGain = masterGain;
 

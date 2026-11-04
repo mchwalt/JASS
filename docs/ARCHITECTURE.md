@@ -625,11 +625,14 @@ The formal architecture spine lives at
   September 2026, Linux, where its Pro features are free. Fallback if Waveform ever blocks: the
   engine is GPL and a thin JUCE front end of our own loads the same `.tracktionedit` files.
 - **MASTER in a host.** Rendered as a disabled, locked module. The engine ignores `masterOn`
-  (always on) and `masterVol` (unity), the tempo is the host tempo, and the `MasterVol` /
-  `MasterTempo` mod targets are dead. The stored parameters are untouched, so the same patch
-  keeps its mute, level and tempo in the standalone. Consequences accepted: a quiet patch comes in
-  at full level in the host (the track fader is the one level); VOL tremolo is a standalone-only
-  effect (route the LFO to the generator amplitudes instead).
+  (always on) and `masterVol`, the tempo is the host tempo, and the `MasterVol` /
+  `MasterTempo` mod targets are dead. The host gain is a **fixed pad of 0.5 (-6 dB)**, VOL's
+  default, not unity (2026-11-04): every preset so far sits at VOL 0.5, so unity put each one
+  6 dB hotter in a DAW than in the standalone and the Init stack peaked at +7 dBFS. With the pad
+  a patch has the same level in both (Init still peaks about +1 dBFS at velocity 100, in both). The stored parameters are untouched, so the same patch
+  keeps its mute, level and tempo in the standalone. Consequences accepted: the track fader is
+  the one level (a patch with VOL other than 0.5 comes in at the pad, not at its VOL); VOL
+  tremolo is a standalone-only effect (route the LFO to the generator amplitudes instead).
 - **The plugin family.** The present `JASS.vst3` (the whole rack) is a transitional build. The
   target is a set of small, single-purpose instruments cut from the same sources, each its own
   CMake plugin target with its own plugin id, name and module set, so a track reads like a
@@ -638,6 +641,10 @@ The formal architecture spine lives at
   beside the voice straight onto the bus; nothing in it touches the voice, so it is the cheapest
   clean cut); and a **sequenced bass** from OSC 1 + SUB + FILTER + ADSR + GLIDE + DISTORTION +
   STEP SEQ (the DAF line). Names are open; **JASS** is reserved for the standalone.
+- **Which DAW.** Waveform 14 was the first host; the purchase decision between Bitwig,
+  Cubase and Waveform is still open (2026-11). The running list of candidates, tested and
+  rejected, with the reason and date for each, is
+  [`notes/DAW_Candidates.md`](notes/DAW_Candidates.md).
 - **Sequencers stay in the instrument** for now (STEP SEQ, PERC, ARP): their feel, accent,
   slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
   option, not a plan.

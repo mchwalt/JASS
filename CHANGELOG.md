@@ -10,6 +10,26 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+## [2026.11.0] – 2026-11-04
+
+### Fixed
+- **A new JASS on a DAW track sounds right away.** A fresh instance in a host sat at the raw
+  parameter defaults, which are not the Init patch: OSC 1..3 off. Nothing came out until a preset
+  was loaded or RESET pressed - easy to miss, because a preset is usually the first thing one
+  loads, but it made a headless render silent (found 2026-11-04 with SoundCraft driven from the
+  command line: a JASS track bounced at -144 dBFS while another instrument on the same session
+  played). The standalone has run the Init reset on a first start since 2026.10.3; a hosted
+  instance now does the same, and a host that restores a project replaces it a moment later.
+- **In a DAW, JASS plays at its standalone level.** The host gain was unity (AD-13: MASTER is
+  off in a host, the track fader is the one level). But every preset so far sits at VOL 0.5, so
+  each one came in 6 dB hotter in a DAW than in the standalone, and the Init stack - three
+  oscillators at 0.5 - peaked at +7 dBFS in a headless render (2026-11-04). The host gain is now
+  a fixed pad of 0.5, VOL's default: a patch has the same level on a DAW track that it has in
+  the standalone (the Init stack then renders at about +1 dBFS peak at velocity 100, as it does
+  in the standalone - the fader still has to come down a touch for it). Existing DAW projects
+  play 6 dB quieter than before; the track fader makes up the difference. VOL itself stays dead
+  in a host.
+
 ## [2026.10.4] – 2026-10-25
 
 ### Fixed
