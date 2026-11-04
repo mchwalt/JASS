@@ -638,6 +638,10 @@ The formal architecture spine lives at
   beside the voice straight onto the bus; nothing in it touches the voice, so it is the cheapest
   clean cut); and a **sequenced bass** from OSC 1 + SUB + FILTER + ADSR + GLIDE + DISTORTION +
   STEP SEQ (the DAF line). Names are open; **JASS** is reserved for the standalone.
+- **Which DAW.** Waveform 14 was the first host; the purchase decision between Bitwig,
+  Cubase and Waveform is still open (2026-11). The running list of candidates, tested and
+  rejected, with the reason and date for each, is
+  [`notes/DAW_Candidates.md`](notes/DAW_Candidates.md).
 - **Sequencers stay in the instrument** for now (STEP SEQ, PERC, ARP): their feel, accent,
   slide, the DAF bass, is the instrument. Exporting them as MIDI-effect plugins is a later
   option, not a plan.

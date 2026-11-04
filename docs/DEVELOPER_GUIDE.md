@@ -382,8 +382,9 @@ a header struct embedded in `SynthVoice` requires a clean rebuild**
    press RESET in the app — the auto-loaded LiveState otherwise masks new
    defaults.
 5. For VST3 testing: build `JASS_VST3.vcxproj`, copy the bundle to
-   `C:\Program Files\Common Files\VST3\`, rescan in the DAW (REAPER is the
-   reference host).
+   `C:\Program Files\Common Files\VST3\`, rescan in the DAW (Bitwig is the
+   current reference host; the candidate list with reasons is in
+   [`notes/DAW_Candidates.md`](notes/DAW_Candidates.md)).
 6. Update `CHANGELOG.md` (`Unreleased` → promote in the releasing PR), open
    the PR to `main`; the merge triggers the release pipeline.
 
