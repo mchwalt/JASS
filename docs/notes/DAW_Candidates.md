@@ -181,6 +181,8 @@ second. Two findings:
   -4.6 LUFS, because MASTER is unity in a host (AD-13) and three oscillators
   at amplitude 0.5 add up. The standalone hides this behind the master level.
 
+Both were acted on the same evening: a hosted fresh instance now runs the Init reset, and the host gain is a fixed pad of 0.5 instead of unity (AD-13 amended; every preset sits at VOL 0.5, so a patch now has its standalone level on a DAW track). Re-bounced: the plain session sounds without any injected state, peak +1.0 dBFS instead of +7.0.
+
 With the oscillators on, pitch and order were right: notes 48, 55, 60 measured
 130.7, 196.3 and 261.8 Hz, the release tail decays into silence by the fourth
 quarter. The SoundCraft tick is 960 per quarter (a 480-tick note is an eighth).
