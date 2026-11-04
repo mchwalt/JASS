@@ -10,6 +10,15 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+### Fixed
+- **A new JASS on a DAW track sounds right away.** A fresh instance in a host sat at the raw
+  parameter defaults, which are not the Init patch: OSC 1..3 off. Nothing came out until a preset
+  was loaded or RESET pressed - easy to miss, because a preset is usually the first thing one
+  loads, but it made a headless render silent (found 2026-11-04 with SoundCraft driven from the
+  command line: a JASS track bounced at -144 dBFS while another instrument on the same session
+  played). The standalone has run the Init reset on a first start since 2026.10.3; a hosted
+  instance now does the same, and a host that restores a project replaces it a moment later.
+
 ## [2026.10.4] – 2026-10-25
 
 ### Fixed

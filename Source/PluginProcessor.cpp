@@ -141,6 +141,15 @@ SynthyProcessor::SynthyProcessor()
             if (onStateReloaded) onStateReloaded(fromScratch);
         });
     }
+    else
+    {
+        // A fresh instance in a host is the Init patch too. Without this the instance sat at the
+        // RAW defaults - OSC 1..3 off - and a track with a new JASS was silent until a preset was
+        // loaded or RESET pressed (found 2026-11-04 by a headless bounce in SoundCraft: -144 dBFS
+        // while another instrument on the same session played). A host that restores a project
+        // calls setStateInformation right after construction and replaces all of this.
+        resetToDefault();
+    }
 }
 
 void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName,
