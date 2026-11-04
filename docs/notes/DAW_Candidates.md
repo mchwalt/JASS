@@ -164,6 +164,41 @@ Fork for this purpose: `mchwalt/soundcraft`, clone `D:\Projects\Rust\soundcraft`
 Anything that breaks in the host is a bug report for SoundCraft, not a JASS
 story.
 
+**First headless run (2026-11-04, fork at v0.17.0-45, Rust 1.99, release build
+3 min 21 s).** `soundcraft-cli` found `JASS.vst3` under Common Files as an
+instrument (VST SDK 3.8.0, vendor Michael Walter). A session with one
+instrument track, a one-bar MIDI clip and four notes bounced in well under a
+second. Two findings:
+
+- **A fresh JASS instance in a host is silent.** The bounce came back at
+  -144 dBFS while Odin2 in the same session played. Cause is on the JASS side:
+  the oscillator enables default to off, and `resetToDefault()` (which turns
+  them on for the Init patch) runs only in the standalone constructor and
+  behind the RESET button. A DAW instance with no restored state therefore has
+  OSC 1..3 off until a preset is loaded or RESET is pressed. Injecting a state
+  with `osc1On..osc3On = 1` through `mix.insert_state` made it sound.
+- **With the stack on, the Init patch clips in a host**: peak +7.0 dBFS,
+  -4.6 LUFS, because MASTER is unity in a host (AD-13) and three oscillators
+  at amplitude 0.5 add up. The standalone hides this behind the master level.
+
+With the oscillators on, pitch and order were right: notes 48, 55, 60 measured
+130.7, 196.3 and 261.8 Hz, the release tail decays into silence by the fourth
+quarter. The SoundCraft tick is 960 per quarter (a 480-tick note is an eighth).
+
+Recipe (paths relative to the fork's `target/release`):
+
+```sh
+soundcraft-cli run --cmd 'engine.vst3_plugins={}'
+soundcraft-cli run   --cmd 'track.new={"kind":"instrument","name":"JASS","instrument":"vst3:<class id>"}'   --cmd 'midi.new_clip={"track":"JASS"}' --save s.scraft --inspect     # clip id in the reply
+soundcraft-cli run --in s.scraft   --cmd 'midi.note_add={"clip":2,"pitch":48,"start_ticks":0,"length_ticks":400}'   --cmd 'mix.insert_state={"track":"JASS","slot":"instrument","state":"<base64 JUCE state>"}'   --bounce out.wav                                                     # returns peak and LUFS
+```
+
+The JUCE state blob is `0x21324356`, a little-endian length, the APVTS XML
+(`<Parameters><PARAM id="osc1On" value="1.0"/>...</Parameters>`) and a NUL
+byte. `file.import_midi` exists too, so the Roboter MIDI files can go straight
+into a session. Open: bounce transport values for 18.6 (STEP SEQ on, figure
+loaded, compare step timing against the host tempo).
+
 Revisit as a DAW when the MIDI device layer has landed and the release
 cadence has settled. The project's own estimate for alpha is 110 to 180
 hours of work.
