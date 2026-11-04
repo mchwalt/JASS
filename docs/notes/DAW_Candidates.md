@@ -33,7 +33,7 @@ What JASS needs from a host (the test list, in the order it bites):
 | LMMS | **Out** (2026-10-11) | No VST3; 1.3 is alpha; UI not intuitive either. |
 | Ardour | Out | gtkmm; not considered further. |
 | Avid Pro Tools | **Out** (2026-11-04) | Hosts AAX only, no VST3. See below. |
-| SoundCraft (storytold) | **Out for now** (2026-11-04) | Pre-alpha, no MIDI device layer, transport to plugins undocumented. See below. |
+| SoundCraft (storytold) | **Not a DAW candidate, but a candidate test rig** (2026-11-04) | Pre-alpha, no MIDI device layer; fully scriptable (CLI, JSON, MCP), transport reaches VST3. See below. |
 
 Open-source engines looked at before Waveform was adopted (2026-10-05):
 Tracktion Engine (JUCE, GPL3, the engine under Waveform; kept as the fallback
@@ -121,9 +121,12 @@ Why it is out for now:
 
 - **No MIDI device layer.** No keyboard input, no live playing, no MIDI
   recording; listed in its roadmap as an alpha blocker.
-- **Transport and tempo to third-party plugins are not documented** anywhere
-  in README, roadmap or release notes. A failure in the 18.6 host-clock path
-  could not be attributed to JASS or to the host.
+- Transport and tempo to third-party plugins are not in the docs, but the
+  source has them: the mixer builds a `Transport` (playing, tempo, meter,
+  samples, seconds, quarters, bar start) per block and the VST3 host maps it
+  to the VST3 `ProcessContext` (`crates/vst3-host/src/plugin.rs`,
+  `ffi.rs`). Whether the values are right during bounce and after locate is
+  untested; that is the first thing to check.
 - MIDI and instruments are rated by the project itself at ~30 % readiness;
   there is a piano roll and SMF import, but no clip launcher.
 - A release with overflow and crash fixes every few days means test results
@@ -138,12 +141,32 @@ What is promising, and why it stays on the list:
   and IAttributeList are supported, multi-out instruments are accepted. The
   ~150 JASS host parameters would be a fair stress test for their host.
 
-Cheap smoke test worth half an hour, not a project: portable zip, load
-JASS.vst3, open the editor, play a few notes from the piano roll. Anything
-that breaks is a bug report for SoundCraft, not a JASS story.
+**Why it stays interesting anyway: everything is a command.** The README
+section "For agents and scripts" says it, and the sources confirm it: every
+UI action has a command id with JSON parameters, reachable from the CLI
+(`soundcraft-cli run --cmd ...`), a JSON control channel on a port, and an
+MCP server (`claude mcp add soundcraft -- soundcraft-cli mcp`). The commands
+JASS would need all exist: `engine.vst3_plugins` (discovery), `track.new` and
+`mix.instrument` with a `vst3:` id, `midi.new_clip` and `midi.note_add`,
+`transport.play`/`locate`/`stop`, `file.bounce_mix` (returns peak and LUFS),
+`session.inspect`, `session.save`/`open` (plugin state round-trip), and
+`ui.screenshot` in the desktop app. Programmatic calls never open dialogs.
 
-Revisit when the MIDI device layer has landed and the release cadence has
-settled. The project's own estimate for alpha is 110 to 180 hours of work.
+That makes SoundCraft a possible **automated test rig for the plugin build**,
+which JASS has never had (no unit tests, verification is build + ears): an
+agent can load JASS.vst3, put a figure in a MIDI clip, bounce, and measure
+the WAV (the audio-measure tooling already exists), or save and reopen a
+session and inspect the restored parameters. The 18.6 host-clock path could
+be checked the same way, if the bounce transport proves trustworthy.
+
+Fork for this purpose: `mchwalt/soundcraft`, clone `D:\Projects\Rust\soundcraft`
+(Rust 1.99 installed 2026-11-04). Not a DAW for the maintainer's own work.
+Anything that breaks in the host is a bug report for SoundCraft, not a JASS
+story.
+
+Revisit as a DAW when the MIDI device layer has landed and the release
+cadence has settled. The project's own estimate for alpha is 110 to 180
+hours of work.
 
 Sources (2026-11-04): project README and ROADMAP.md, GitHub releases page,
 guide at pasqualepillitteri.it (release history, co-author count), Antares
