@@ -10,6 +10,22 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+### Added
+- **A GLOBAL switch on every LFO, and rates down to a 200 s period.** Every LFO used to live
+  inside the voice: one per note, restarted by the key. Fine for vibrato, useless for the sound
+  that started this (a pad measured off a UDO Super Gemini demo, 2026-11-07: the low-pass opens
+  over ~80 s while the chords change every 8 s) - a sweep routed to the filter began again with
+  every chord, and the RATE knob stopped at 0.1 Hz anyway. GLOBAL hands the LFO to the processor:
+  one phase for all voices, never retriggered, the same rule CHAOS already follows; the ring on
+  the module shows exactly what the voices hear. A global One-Shot sweeps once when the LFO is
+  switched on or a preset loads. In a DAW a synced global LFO is pinned to the song position
+  (bar-locked, so STOP/PLAY and locates land on the bar) and stands while the host stands; an
+  unsynced one keeps running. RATE goes down to 0.005 Hz with the knob skewed so 2 Hz stays at
+  mid-travel, and below 0.1 Hz the box reads seconds per cycle. Decided over a separate sweep
+  module, which would have duplicated the LFO for one trigger button (Story 20.1). Old presets
+  are untouched: GLOBAL defaults to off and stored rates are absolute. Note for DAW projects: an
+  automation lane on RATE keeps its normalised points, which now map to slightly different Hz.
+
 ## [2026.11.0] – 2026-11-04
 
 ### Fixed

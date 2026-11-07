@@ -196,6 +196,7 @@ namespace Parameters
         JASS_INDEXED_ID (lfoDepth,   kNumLFOs, "lfo", "Depth")
         JASS_INDEXED_ID (lfoTarget,  kNumLFOs, "lfo", "Target")
         JASS_INDEXED_ID (lfoSyncDiv, kNumLFOs, "lfo", "SyncDiv")
+        JASS_INDEXED_ID (lfoGlobal,  kNumLFOs, "lfo", "Global")    // 20.1: one phase for all voices
 
         // CHAOS — Lorenz attractor mod source (LFO expansion)
         constexpr const char* chaosOn   = "chaosOn";
@@ -304,7 +305,7 @@ namespace Parameters
         // guard lock). After this, all indexed-ID lookups on the audio thread are alloc- and lock-free.
         inline void warmIndexedIds()
         {
-            for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); }
+            for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); lfoGlobal(i); }
             for (int i = 1; i <= 3; ++i)        { oscOn(i); oscWave(i); oscFreq(i); oscAmp(i); oscUniVoices(i); oscUniDetune(i); oscFeedback(i); oscPan(i); }
             // (The STEP SEQ cells are no parameters since 18.5 — nothing to warm for them.)
             for (int i = 1; i <= 4; ++i)        { percNote(i); percLevel(i); percPan(i); }

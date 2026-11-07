@@ -1134,6 +1134,7 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
 
     loadedFormatVersion = res.migrated ? PresetIO::kFormatVersion : res.fileVersion;
     setPresetName(f.getFileNameWithoutExtension());
+    processor.requestGlobalLfoRearm();   // 20.1: a global One-Shot sweeps once from the load
     if (rackBody) rackBody->reloadLayoutFromState (/*presetLoad*/ true);
                                                        // reflect the loaded layout (Story 4.3) and
                                                        // show exactly the patch: modules the preset

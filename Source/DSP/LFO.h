@@ -99,6 +99,11 @@ public:
     // continues across notes (no reseed), so consecutive notes step differently.
     void reset() { phase = 0.0; heldValue = drawRandom(); }
 
+    // GLOBAL LFO (Story 20.1): the processor owns the phase of a global LFO and, in a DAW with
+    // SYNC on, pins it to the song position once per block.
+    void   setPhase (double p) noexcept { phase = p; }
+    double getPhase() const noexcept   { return phase; }
+
 private:
     // Fast xorshift PRNG -> [-1, 1) — same inline pattern as NoiseGenerator/KarplusStrong
     // (deliberately duplicated there too; extracting a shared RNG header is not worth the churn).

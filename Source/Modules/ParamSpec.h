@@ -3,6 +3,7 @@
 #include "../DSP/LFO.h"   // LFOTarget — audio-safe; rack::ModTarget mirrors its order (Off==None)
 #include <vector>
 #include <memory>
+#include <functional>
 
 // AUDIO-safe half of the module-spec system (see docs/MODULE_SYSTEM.md): parameter
 // declarations + APVTS generation only. NO UI includes here, so Parameters.h stays UI-free — the
@@ -36,6 +37,9 @@ struct ParamSpec
                                                 // in the plugin state; the DAW just offers no lane for it. Used
                                                 // for the sequencer grids: thousands of authored cells, never
                                                 // automated, that otherwise bury the sixty knobs worth a lane.
+    std::function<juce::String (double)> textFromValue;   // optional value-box read-out instead of the number
+                                                // (LFO RATE: "167 s" below 0.1 Hz). Typing into the box still
+                                                // parses a plain number in the param's unit. Set by name.
 };
 
 // The DAW-facing name: "<module title> <hostName|uiLabel|persistKey>". The title prefix stays even

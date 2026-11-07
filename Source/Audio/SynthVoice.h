@@ -93,6 +93,11 @@ public:
     // slow chaotic source (~94 Hz update at 512-sample blocks).
     void setChaosValues (float x, float y) noexcept { chaosSrc[0] = x; chaosSrc[1] = y; }
 
+    // GLOBAL LFO (Story 20.1): when LFO i is GLOBAL, the processor's single instance owns the phase
+    // (never retriggered by a key) and hands every voice the same block-rate value — the CHAOS rule
+    // applied to an LFO. The voice's own LFO of that index is then not consulted.
+    void setGlobalLfo (int i, bool on, float v) noexcept { globalLfo[i] = on; globalLfoVal[i] = v; }
+
     // ACCENT depth (15.2), pushed per block by the processor from STEP SEQ's knob: how much a
     // note's velocity above/below the sequencer's plain 100 moves the note's gain and cutoff.
     // 0 = velocity changes nothing — the pre-15.2 behaviour and the sound of every old preset.
@@ -187,6 +192,8 @@ private:
     bool    modMatrixOn = true;    // false => explicit slots ignored (implicit LFO routing still applies)
     float   noteVelocity = 1.0f;   // MIDI velocity 0..1 (Velocity mod source)
     float   chaosSrc[2] {};        // ChaosX/Y sources — global attractor snapshot (setChaosValues)
+    bool    globalLfo[kNumLFOs] {};     // 20.1: LFO i is GLOBAL => use globalLfoVal[i], not lfos[i]
+    float   globalLfoVal[kNumLFOs] {};  // the processor's value for it (block-constant, like CHAOS)
     float   accentDepth = 0.0f;    // 15.2: velocity → gain/cutoff amount (STEP SEQ's ACCENT knob)
 
     // Store base values for LFO modulation

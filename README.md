@@ -90,7 +90,9 @@ info** so nothing is hidden and every control explains itself.
 
 **Envelopes & modulation**
 - **ADSR** + **pitch envelope**
-- **4 LFOs** (sine/triangle/square/saw), tempo sync
+- **4 LFOs** (sine/triangle/square/saw/S&H/one-shot), tempo sync, rates down to a
+  200 s period, and a **GLOBAL** switch per LFO — one phase for all voices that no key
+  restarts, so a filter sweep can run across a whole piece
 - **Modulation matrix** — **8 slots**, two-step **MODULE → PARAM** routing: pick a
   module, then any of its parameters (sorted A→Z, named exactly like the knobs).
   **Per-oscillator** targets (route FREQ/AMP/DETUNE/FB/VOICES to a *single* OSC, or

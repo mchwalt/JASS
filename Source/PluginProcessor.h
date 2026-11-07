@@ -178,6 +178,9 @@ public:
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
     float getLfoDisplayValue(int i) const { return lfoDisplayValues[i].load(); }   // per-LFO (for the rings)
+    // 20.1: a preset / DAW-state load restarts every GLOBAL LFO (a global One-Shot then sweeps once
+    // from "now"). Message thread sets, the audio thread consumes it once.
+    void requestGlobalLfoRearm() noexcept { rearmGlobalLfos.store (true); }
     float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
@@ -253,6 +256,11 @@ private:
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
     LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
     std::atomic<float> lfoDisplayValues[kNumLFOs] {};
+    // GLOBAL LFOs (Story 20.1): uiLfos double as the ONE instance of a global LFO — what the rings
+    // show is what every voice hears. Rising edge of (on && GLOBAL) rearms it, so a global One-Shot
+    // starts when the LFO is switched on; a preset or DAW-state load rearms as well.
+    bool lfoGlobalWasOn[kNumLFOs] {};            // audio thread only
+    std::atomic<bool> rearmGlobalLfos { false };
     // CHAOS: ONE global Lorenz attractor (all voices move together — correlated, musical, cheap).
     // Advanced once per block; voices, master-bus targets and rings all read the same snapshot,
     // so display == audio by construction. Free-running: never reset (see DSP/ChaosLorenz.h).

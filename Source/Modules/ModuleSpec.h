@@ -61,6 +61,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
         {
             rack::Knob k { p.id, p.uiLabel };
             k.modTarget = p.modTarget;   // same type now (rack::ModTarget is an alias for LFOTarget)
+            k.textFromValue = p.textFromValue;   // optional spec-level read-out (LFO RATE in seconds)
             if (p.freqDisplay)
             {
                 k.toDisplay   = [] (double base,  double ratio) { return base  * ratio; };

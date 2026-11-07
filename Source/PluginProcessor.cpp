@@ -1066,12 +1066,15 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 
     // Per-LFO effective rate (Tempo-Sync resolved once per block; Free => raw RATE knob).
     double lfoRateHz[kNumLFOs];
+    bool   lfoGlobalActive[kNumLFOs];   // 20.1: on && GLOBAL => the processor's instance is the LFO
     for (int i = 0; i < kNumLFOs; ++i)
     {
         const int div = (int) *apvts.getRawParameterValue(Parameters::ID::lfoSyncDiv(i + 1));
         lfoRateHz[i] = SyncDivision::isSynced(div)
                            ? SyncDivision::lfoRateHz(syncBpm, div)
                            : (double) *apvts.getRawParameterValue(Parameters::ID::lfoRate(i + 1));
+        lfoGlobalActive[i] = *apvts.getRawParameterValue(Parameters::ID::lfoOn(i + 1)) > 0.5f
+                          && *apvts.getRawParameterValue(Parameters::ID::lfoGlobal(i + 1)) > 0.5f;
     }
 
     const int delayDiv = (int) *apvts.getRawParameterValue(Parameters::ID::delaySyncDiv);
@@ -1132,6 +1135,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
         {
             voice->setChaosValues(chaosDisplay[0].load(), chaosDisplay[1].load());   // one orbit, all voices
+            for (int li = 0; li < kNumLFOs; ++li)   // 20.1: a GLOBAL LFO's value — the processor's instance,
+                voice->setGlobalLfo(li, lfoGlobalActive[li], lfoDisplayValues[li].load());   // one block behind, like the rings
             voice->setAccentDepth(*apvts.getRawParameterValue(Parameters::ID::seqAccent));   // 15.2
             Parameters::applyToVoice(apvts, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
@@ -1610,10 +1615,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
                 v->setPluckEnabled(true);
 
-    // Advance the display-only LFO so the editor can draw live modulation rings.
+    // Advance the display LFOs so the editor can draw live modulation rings — and, since 20.1,
+    // because a GLOBAL LFO IS this instance: what the ring shows is what every voice hears.
     // Mirrors the patch LFO params; runs regardless of whether a note sounds.
     {
         using namespace Parameters;
+        const bool rearm = rearmGlobalLfos.exchange(false);   // preset / DAW-state load (20.1)
         for (int li = 0; li < kNumLFOs; ++li)
         {
             uiLfos[li].setRate(lfoRateHz[li]);   // mirror the effective (synced or free) rate
@@ -1622,9 +1629,27 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             const bool on = *apvts.getRawParameterValue(ID::lfoOn(li + 1)) > 0.5f;
             uiLfos[li].setTarget(on ? (LFOTarget)((int) *apvts.getRawParameterValue(ID::lfoTarget(li + 1)) + 1)
                                     : LFOTarget::Off);
-            float v = 0.0f;
-            for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
-                v = uiLfos[li].process();
+            // 20.1 GLOBAL: rearm on the rising edge of (on && GLOBAL) and on a load, so a global
+            // One-Shot sweeps once from "now" (a per-voice One-Shot is rearmed by the key instead).
+            // In a DAW with SYNC on the phase is pinned to the song position every block — bar-locked,
+            // so a locate or STOP/PLAY lands on the bar by construction — and it stands while the
+            // host stands. A global LFO with SYNC = Free keeps running: it is a movement, not a clock.
+            const bool global = lfoGlobalActive[li];
+            if (global && (rearm || ! lfoGlobalWasOn[li]))
+                uiLfos[li].reset();
+            lfoGlobalWasOn[li] = global;
+            const int  div    = (int) *apvts.getRawParameterValue(ID::lfoSyncDiv(li + 1));
+            const bool pinned = global && hosted && hostPpq.hasValue() && SyncDivision::isSynced(div);
+            if (pinned)
+            {
+                double ph = std::fmod(*hostPpq / SyncDivision::beatsPerCycle(div), 1.0);
+                if (ph < 0.0) ph += 1.0;
+                uiLfos[li].setPhase(ph);
+            }
+            float v = lfoDisplayValues[li].load();   // held while a pinned LFO's host stands
+            if (! (pinned && ! hostPlaying))
+                for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
+                    v = uiLfos[li].process();
             lfoDisplayValues[li].store(v);
         }
     }
@@ -1819,6 +1844,7 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
+        rearmGlobalLfos.store(true);    // 20.1: a restored project starts its global One-Shots afresh
         migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
         // AD-14: the patterns. A pre-18.5 project carries them as parameters (folded in here), a
         // current one as <PercPattern> / <StepPattern> elements; a state with neither is an empty
