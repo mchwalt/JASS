@@ -21,7 +21,7 @@ Windows & Linux builds (Standalone + VST3), produced automatically on every merg
 > bars at two tempi, and two instances on two tracks stay in phase. The rack is
 > monotimbral by design — several voices of music are several JASS instances on
 > several tracks. Host-by-host record:
-> [`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md).
+> [`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md). #SoundCraft
 
 ### 🎧 Hear it
 
