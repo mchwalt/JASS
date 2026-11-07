@@ -1,8 +1,8 @@
 # JASS – Just Another Simple Synthesizer
 
 A polyphonic software synthesizer written in **C++20 / [JUCE 9](https://juce.com/)**,
-with an interface styled as a **19″ rack**. It runs as a **standalone** app, which
-is the main focus.
+with an interface styled as a **19″ rack**. It runs as a **standalone** app and as
+a **VST3 instrument** inside a DAW.
 
 ### ⬇ Download
 
@@ -10,8 +10,18 @@ is the main focus.
 Windows & Linux builds (Standalone + VST3), produced automatically on every merge to
 `main` by the CI pipeline.
 
-> **VST3:** a VST3 build is produced as well, but it has so far only been tested
-> **very superficially in vPlayer 4 Lite** — treat plugin support as experimental.
+> **VST3:** the same build runs as a plugin instrument in a DAW. In a host JASS
+> follows the **host clock** (STEP SEQ and PERC lock to tempo, song position and
+> transport, and keep their place across STOP/PLAY), exposes **one parameter per
+> knob grouped by module**, keeps its **patterns in the plugin state**, and plays at
+> its **standalone level**. Checked by ear in **Bitwig Studio 6.1**, **Cubase
+> Elements 15** and **Waveform Free 14** (Windows and Linux), and **cross-checked
+> headless** in [SoundCraft](https://github.com/storytold/soundcraft), a scriptable
+> Rust host: the sequencer clock holds the host grid **to the sample** over four
+> bars at two tempi, and two instances on two tracks stay in phase. The rack is
+> monotimbral by design — several voices of music are several JASS instances on
+> several tracks. Host-by-host record:
+> [`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md).
 
 ### 🎧 Hear it
 
@@ -195,6 +205,16 @@ There is no automated test rig. Verification is deliberate and low-tech: it
 builds, the app runs, and changes are confirmed **by eye and by ear** against
 measured references (several presets are transcribed from records and checked
 against spectral measurements — see the CHANGELOG for the reasoning per change).
+
+The **plugin build** has one scripted check on top of that:
+[`tools/rig/clocktest.py`](tools/rig/clocktest.py) drives `JASS.vst3` headless in
+[SoundCraft](https://github.com/storytold/soundcraft) (fork `mchwalt/soundcraft`),
+loads a sequencer figure as plugin state, bounces four bars and measures every
+onset against the host's 1/16 grid — at 120 and 90 BPM, with a note entering
+mid-bar, with two instances on two tracks, and with a bounce that starts off the
+grid. The same rig found the two host-only bugs fixed in 2026.11.0 (a fresh
+instance silent, the Init patch 6 dB hot) before any DAW session did. Recipe and
+results: [`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md).
 
 ## Project layout
 
