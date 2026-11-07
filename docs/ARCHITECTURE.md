@@ -593,7 +593,7 @@ its viewport only if it is still taller than the window.
 
 The formal architecture spine lives at
 `_bmad-output/planning-artifacts/architecture/architecture-JASS-2026-06-28/ARCHITECTURE-SPINE.md`
-(AD-1…AD-14). One-line summaries:
+(AD-1…AD-15). One-line summaries:
 
 | AD | Decision |
 |---|---|
@@ -612,6 +612,7 @@ The formal architecture spine lives at
 | AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS stays a monotimbral instrument; several voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
 
 | AD-14 | **Sequencer patterns are content, not parameters.** The STEP SEQ figure (768 × pitch/on/accent/gate) and the PERC grid (4 × 192) leave the APVTS and live in a `PatternStore` the engine reads lock-free; a host sees ~150 parameters, not ~4000. Presets, DAW state and LiveState carry the patterns as data blocks; the rack binds step knobs and grid cells to the store, not to parameters |
+| AD-15 | **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** JASS stays one patch on the keyboard. Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and is driven by an existing sequencer through a TARGET choice, never by the keyboard. Two boxes are the limit: PERC (drums) and BASS (a sequenced mono bass). A third box, a second BASS or matrix targets into a box are the part system AD-13 rejected — that music is DAW tracks |
 
 ### AD-13 in more detail (decided 2026-10-05)
 
@@ -710,6 +711,63 @@ The formal architecture spine lives at
 - **Why now.** AD-13's family cuts start from PERC (a drum machine) and from STEP SEQ (a
   sequenced bass); a cut inherits whatever the pattern is. Cutting with the pattern as content
   gives every cut the same small, honest parameter list from day one.
+
+### AD-15 in more detail (decided 2026-11-08, Story 20.2)
+
+- **The problem.** JASS is monotimbral (AD-13): the STEP SEQ takes over the held chord, so a
+  pad on the keyboard and a sequenced figure from the same instance are mutually exclusive.
+  The DAW route works (two instances on two tracks) but the sound-design focus of 2026-11 is
+  the standalone, and the reference piece ("Light in transit", 2026-11-07) is exactly that: a
+  pad under the hands and a straight-8ths bass line underneath. PERC already breaks the
+  monotimbral rule once, by construction: its own engine, dry into the bus, its own clock,
+  nothing of it in the voice. The maintainer's question (2026-11-07): the bass line is the
+  same kind of thing — can the two be connected?
+- **The rule.** A *box* may play beside the patch if, and only if, all of this holds:
+  1. **Own engine at processor level**, rendered after `synth.renderNextBlock` and summed into
+     the buffer where PERC is summed — before the compressor, width, room and master gain, so
+     the bus stages and the one master fader cover it as they cover the drums.
+  2. **No part selector, no second voice pool.** A box is a handful of its own module
+     parameters (`<Box>Specs.h`, one place), not a second JASS: no OSC trio, no FX chain of its
+     own, no routing into the patch. Dry is the construction, as in PERC.
+  3. **Driven by a sequencer, never by the keyboard.** The keyboard is the patch's. A box gets
+     its notes from an existing sequencer through a TARGET choice on that sequencer (STEP SEQ:
+     `PATCH | BASS`, default PATCH, append-only). With PATCH nothing changes anywhere.
+  4. **Two boxes, named.** PERC (drums) and BASS (one monophonic sequenced bass). The list is
+     closed: a third box, a second BASS or a polyphonic box is the part system AD-13 rejected,
+     and the answer to "I need more" stays the DAW.
+  5. **No matrix targets into a box at first.** The MOD MATRIX modulates the patch. A box's
+     knobs are knobs; if a routing into the bass ever proves musically necessary it is a
+     separate decision, not a drift.
+- **BASS, concretely.** An SH-101-sized module: `bassOn`, WAVE (Saw | Square), SUB (level,
+  one octave down), CUTOFF, RESO, ENV (one decay driving amp and filter), ENV>CUT (filter
+  envelope amount), GLIDE (seconds; a SLIDE step glides, a plain step does not), LEVEL, PAN.
+  One rack unit in the SOURCES zone next to PERC, hidden by default (the stock rack is the Init
+  set), help in both languages. About ten host parameters in one unit.
+- **How the notes get there.** `StepSequencer::processBlock` already writes its note-ons and
+  note-offs into a MIDI buffer and records TIE/SLIDE as legato events that the processor applies
+  to the sounding voice (`slideTo`). With TARGET = BASS the sequencer writes into a scratch
+  buffer the bass voice consumes (note-on with velocity → accent, note-off → release, legato
+  event → slide or retune), and the keyboard's own MIDI reaches the synth untouched. Root,
+  latch, the PERC-quantised entry from silence and the 18.6 host clock are the sequencer's and
+  stay exactly as they are; only the consumer of its output changes. ACCENT's cutoff share is
+  the bass's own filter envelope depth, not the patch's.
+- **State.** Ordinary APVTS parameters, generic persistence (`Bass` object in the preset, missing
+  ⇒ off). Nothing new in the PatternStore: the figure is still the STEP SEQ's, so LOAD MIDI /
+  SAVE MIDI, paging and the GATE row are untouched. The preset-modified flag sees the new
+  parameters through the normal path.
+- **What was rejected.** (a) A second `SynthVoice` pool with prefixed parameter ids and a part
+  switch: that is AD-13's rejected design in miniature, and it would drag the whole FX chain and
+  matrix along. (b) Routing the figure out as MIDI to a DAW track: already possible by hand
+  (SAVE MIDI) and the DAW route stays the answer for anything beyond two boxes, but it does not
+  give the standalone a bass under a pad. (c) A "BASS" preset mode that re-purposes OSC 3 +
+  a second filter inside the voice: the bass would still live per voice, be retriggered by the
+  chord and pass through the patch's effects — the very thing PERC was built to avoid.
+- **What it costs.** One always-on mono voice while enabled (two oscillators, one biquad, two
+  one-pole envelopes): negligible next to 16 voices. Rack width: one unit. Documentation: the
+  README's "monotimbral" sentence becomes "one patch plus two fixed boxes"; this section; help.
+- **Relation to AD-13's family cuts.** The sequenced-bass cut named there is this engine with
+  the STEP SEQ in front of it; building BASS inside JASS first means the cut inherits a voice
+  that has been played, not designed on paper.
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.
