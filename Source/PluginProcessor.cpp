@@ -1363,12 +1363,22 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             seqKeyWasHeld = (playRoot >= 0);
 
             // Drop the raw chord so only the pattern sounds; keep everything else.
+            // While the figure is being WRITTEN (the editor's cursor is armed) a key is an entry, not
+            // a played note: with the BASS switch the keyboard otherwise reaches the patch, and the
+            // pad sounded under every note entered (maintainer 2026-11-08). Note-ons are held back;
+            // note-offs pass, so a chord held from before the cursor still releases.
+            const bool writing = seqRecordArmed.load();
             auto& kept = arpKeptScratch; kept.clear();
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
-                if (! toBass && (m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
-                    continue;   // the figure replaces the chord — unless it plays the BASS box (20.2)
+                if (m.getChannel() == 1)
+                {
+                    if (! toBass && (m.isNoteOn() || m.isNoteOff()))
+                        continue;   // the figure replaces the chord — unless it plays the BASS box (20.2)
+                    if (toBass && writing && m.isNoteOn())
+                        continue;   // an entry, not a note (above)
+                }
                 kept.addEvent(m, meta.samplePosition);
             }
             if (toBass != seqWasToBass)   // 20.2: the figure changed its instrument mid-flight

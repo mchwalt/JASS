@@ -34,7 +34,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   no matrix targets into them - a third voice is a DAW track (Story 20.2). Old presets load with
   BASS off and the switch off; RANDOM leaves both alone, like the master bus. With the switch on,
   a step clicked or turned in the STEP SEQ (and the GATE row's length preview) sounds through the
-  bass as well, so what you hear while writing is what the figure will play.
+  bass as well, so what you hear while writing is what the figure will play - and a key pressed
+  to write a step is an entry, not a note: it no longer sounds the patch underneath.
 - **A GLOBAL switch on every LFO, and rates down to a 200 s period.** Every LFO used to live
   inside the voice: one per note, restarted by the key. Fine for vibrato, useless for the sound
   that started this (a pad measured off a UDO Super Gemini demo, 2026-11-07: the low-pass opens
