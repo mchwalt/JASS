@@ -1170,6 +1170,22 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
     bassMidiScratch.clear();   // 20.2: the STEP SEQ's notes for the BASS box this block (render section consumes)
+    // 20.2: with the STEP SEQ's BASS switch on, the editor's step preview (kAuditionChannel: a
+    // clicked or turned step, the GATE row's length preview) goes to the bass box too, so a step
+    // sounds the way the figure will play it (maintainer 2026-11-08). The synth never sees it.
+    if (*apvts.getRawParameterValue(Parameters::ID::seqToBass) > 0.5f)
+    {
+        auto& rest = arpKeptScratch; rest.clear();   // free until the ARP/SEQ blocks below reuse it
+        for (const auto meta : midiMessages)
+        {
+            const auto m = meta.getMessage();
+            if (m.getChannel() == kAuditionChannel && (m.isNoteOn() || m.isNoteOff()))
+                bassMidiScratch.addEvent(m, meta.samplePosition);
+            else
+                rest.addEvent(m, meta.samplePosition);
+        }
+        midiMessages.swapWith(rest);
+    }
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {

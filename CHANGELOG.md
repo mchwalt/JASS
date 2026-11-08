@@ -32,8 +32,9 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   notes moves, and the keyboard keeps the patch. An accented step opens the bass filter further and
   plays louder by the figure's ACCENT amount. AD-15 also closes the list: two boxes, PERC and BASS,
   no matrix targets into them - a third voice is a DAW track (Story 20.2). Old presets load with
-  BASS off and the switch off; RANDOM leaves both alone, like the master bus. One known gap: a step
-  clicked in the STEP SEQ still auditions through the patch, not through the bass.
+  BASS off and the switch off; RANDOM leaves both alone, like the master bus. With the switch on,
+  a step clicked or turned in the STEP SEQ (and the GATE row's length preview) sounds through the
+  bass as well, so what you hear while writing is what the figure will play.
 - **A GLOBAL switch on every LFO, and rates down to a 200 s period.** Every LFO used to live
   inside the voice: one per note, restarted by the key. Fine for vibrato, useless for the sound
   that started this (a pad measured off a UDO Super Gemini demo, 2026-11-07: the low-pass opens
