@@ -6,8 +6,9 @@
 // by the STEP SEQ when its BASS switch is on — never by the keyboard, which stays the patch's.
 //
 // Deliberately SH-101-sized: WAVE, SUB, CUTOFF, RESO, ENV, ENV>CUT, GLIDE, LEVEL, PAN. No second
-// OSC trio, no effects of its own, no matrix targets (AD-15 rule 5). Sits next to STEP SEQ and
-// PERC in the MODULATION zone — the sequencer row — because it is the sequencer's instrument.
+// OSC trio, no effects of its own, no matrix targets (AD-15 rule 5). A sound source, so it sits
+// with the GENERATORS (maintainer 2026-11-08: "BASS muss unter die Generatoren" — the first cut
+// had it beside the sequencer, PERC's reasoning, which read as a modulation of OSC 1).
 namespace Modules
 {
     inline ModuleSpec bass()
@@ -15,7 +16,7 @@ namespace Modules
         ModuleSpec m;
         m.id = "bass"; m.title = "BASS"; m.persistObject = "Bass"; m.enableParamId = "bassOn";
         m.type = rack::ModuleType::Generator;   // a sound source, like PERC
-        m.zone = rack::Zone::Modulation;        // the sequencer row (PERC's reasoning, 2026-08-10)
+        m.zone = rack::Zone::Generators;        // with the other sound sources (maintainer 2026-11-08)
         m.size = rack::SizeClass::W10H1;        // WAVE (2 slots) + 8 knobs = 10 slots, one row
         m.defaultVisible = false;               // hidden until switched on (stock rack = Init set)
         m.params = {

@@ -744,8 +744,9 @@ The formal architecture spine lives at
 - **BASS, concretely.** An SH-101-sized module: `bassOn`, WAVE (Saw | Square), SUB (level,
   one octave down), CUTOFF, RESO, ENV (one decay driving amp and filter), ENV>CUT (filter
   envelope amount), GLIDE (seconds; a SLIDE step glides, a plain step does not), LEVEL, PAN.
-  One rack unit in the SOURCES zone next to PERC, hidden by default (the stock rack is the Init
-  set), help in both languages. About ten host parameters in one unit.
+  One rack unit in the GENERATORS zone with the other sound sources (the first cut sat beside
+  the sequencer and read as a modulation of OSC 1; moved 2026-11-08), hidden by default (the
+  stock rack is the Init set), help in both languages. About ten host parameters in one unit.
 - **How the notes get there.** `StepSequencer::processBlock` already writes its note-ons and
   note-offs into a MIDI buffer and records TIE/SLIDE as legato events that the processor applies
   to the sounding voice (`slideTo`). With TARGET = BASS the sequencer writes into a scratch
