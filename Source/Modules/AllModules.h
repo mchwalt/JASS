@@ -35,6 +35,7 @@
 #include "PercSpecs.h"
 #include "ChaosSpecs.h"
 #include "GrainSpecs.h"
+#include "BassSpecs.h"
 
 namespace Modules
 {
@@ -55,6 +56,7 @@ namespace Modules
             perc(),         // Story 16.1 — ditto (140 params; append-only keeps old presets valid)
             chaos(),        // LFO expansion — ditto (Lorenz mod source)
             grain(),        // Story 17.1 — ditto (granular cloud on the SAMPLER's set)
+            bass(),         // Story 20.2 — ditto (the sequenced bass box beside the patch, AD-15)
         };
     }
 }

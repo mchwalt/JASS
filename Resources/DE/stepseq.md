@@ -7,6 +7,7 @@ Spielt eine Figur mit bis zu 192 Schritten, die du selbst schreibst, transponier
 - **LEN** — nach wie vielen Schritten das Muster wiederholt.
 - **GATE** — Notenlänge, für das ganze Muster. **1 = Legato**: jeder Ton wird in den nächsten Schritt gehalten, ohne Lücke. Kleinere Werte kürzen alle Töne; die eigene Gate-Länge eines Schritts skaliert obendrauf.
 - **ACCENT** — was ein akzentuierter Schritt tut: wie viel lauter er spielt und wie weit der Filter öffnet. Bei 0 ändern Akzente nichts.
+- **BASS** — schickt die Figur an das Modul BASS statt an den Patch: die Tastatur spielt dann den Patch und die Figur den Bass darunter. BASS muss ebenfalls eingeschaltet sein.
 
 Beim Klicken oder Drehen erklingt der Schritt, du kannst die Figur also nach Gehör schreiben. Eine **Pause behält ihre Note**: ihr Knopf ist gedimmt, dreht aber weiter — die Tonhöhe eines stummen Schritts lässt sich also einstellen und anhören, bevor er eingeschaltet wird. Ein **Doppelklick** setzt einen Knopf auf den Wert des geladenen Presets zurück. Vorschau, Eingabe und Notennamen folgen dem Grundton, auf dem die Figur klingt: der gelatchten Taste, solange eine läuft, sonst dem aktuellen C der Klaviatur (Hoch / Runter verschiebt es).
 

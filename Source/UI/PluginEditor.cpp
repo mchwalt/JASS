@@ -2659,6 +2659,8 @@ void SynthyEditor::buildRack()
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));
     }
+    // BASS (Story 20.2, AD-15): the sequenced bass box beside the patch — pure spec, no hooks.
+    addRackModule(makeModuleDescriptor(Modules::bass()));
     addRackModule(makeModuleDescriptor(Modules::glide()));
     addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
     addRackModule(makeModuleDescriptor(Modules::chaos()));   // LFO expansion — Lorenz mod source

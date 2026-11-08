@@ -19,8 +19,8 @@ Windows & Linux builds (Standalone + VST3), produced automatically on every merg
 > headless** in [SoundCraft](https://github.com/storytold/soundcraft), a scriptable
 > Rust host: the sequencer clock holds the host grid **to the sample** over four
 > bars at two tempi, and two instances on two tracks stay in phase. The rack is
-> monotimbral by design — several voices of music are several JASS instances on
-> several tracks. Host-by-host record:
+> one patch plus two fixed boxes (PERC drums, BASS) by design — more voices of
+> music are more JASS instances on more tracks. Host-by-host record:
 > [`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md). #SoundCraft
 
 ### 🎧 Hear it
@@ -125,6 +125,12 @@ info** so nothing is hidden and every control explains itself.
   a step column onto any number of steps, **x2** doubles the pattern behind itself.
   Deliberately not a second note sequencer — JASS is monotimbral, so drums sent as
   MIDI would be dragged through the patch's filter and effects.
+- **BASS** — a second voice beside the patch, built the way PERC is: one sequenced
+  mono bass (saw/square, a sub an octave down, a resonant lowpass with its own decay
+  envelope, glide for SLIDE steps) with its own engine, summed dry into the master
+  bus. Flip the STEP SEQ's **BASS** switch and the figure plays here while the
+  keyboard plays the patch — a pad under the hands and the bass line underneath,
+  from one JASS. One box, one job: no matrix targets, no second BASS.
 
 **Processing & effects**
 - **Biquad filter** (lowpass/highpass, resonance) + **formant filter**

@@ -288,7 +288,10 @@ compile against channel 0. Delay and reverb are **per voice**, not bus sends.
 Stage order after the housekeeping (auto-play/drone, tempo resolve from host
 BPM or the MASTER TEMPO knob, arp MIDI rewrite, glide):
 
-1. `synth.renderNextBlock(...)` — all voices mix into the buffer.
+1. `synth.renderNextBlock(...)` — all voices mix into the buffer. Then the two
+   **boxes** (AD-15) render dry into the same buffer: `perc.processBlock` (the
+   drums) and `bass.processBlock` (the sequenced bass, fed by the STEP SEQ's MIDI
+   when its BASS switch is on). Neither passes through a voice or its effects.
 2. Advance the four display-only `uiLfos` → `lfoDisplayValues[]` (these feed
    both the mod rings and the global mod path — "ring == audio").
 3. **Compressor** (feed-forward, stereo-linked peak detector) on the summed mix.

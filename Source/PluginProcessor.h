@@ -11,6 +11,7 @@
 #include "DSP/Arpeggiator.h"
 #include "DSP/StepSequencer.h"   // Story 15.1
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
+#include "DSP/BassVoice.h"   // Story 20.2: the sequenced bass box beside the patch (AD-15)
 #include "Audio/PatternStore.h"  // AD-14 (18.5): the sequencer patterns — content, not parameters
 
 // DIAGNOSTIC BUILD SWITCH (2026-10-20, not for release): log the first blocks after each host PLAY
@@ -277,6 +278,13 @@ private:
     // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
     // be dragged through the patch's filter and effects. See PercSequencer.h.
     PercSequencer perc;
+    // BASS (Story 20.2, AD-15): one monophonic voice beside the patch, fed by the STEP SEQ's MIDI
+    // (bassMidiScratch, filled in the sequencer section, consumed in the render section) when the
+    // sequencer's BASS switch is on. seqWasToBass sees the switch flip, so the old instrument's
+    // note is released instead of hanging.
+    BassVoice        bass;
+    juce::MidiBuffer bassMidiScratch;
+    bool             seqWasToBass = false;
     PatternStore patterns;   // AD-14 (18.5): the PERC grid and the STEP SEQ figure
 #if JASS_HOSTSYNC_DIAG
     struct DiagRec { double t; double ppq; double stepsPos; double anchor, percAnchor; int playing, seqOn, latch, percOn, kitPending, kitIdx, percStep; int preIdx, preCnt, postIdx, postCnt, postDelay, fired, n; };

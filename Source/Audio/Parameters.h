@@ -137,6 +137,19 @@ namespace Parameters
         JASS_INDEXED_ID (percNote,  4, "percNote",  "")   // which instrument of the kit a lane fires
         JASS_INDEXED_ID (percLevel, 4, "percLevel", "")
         JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
+        // BASS (Story 20.2, AD-15) — the sequenced bass box beside the patch (DSP/BassVoice.h), and
+        // the STEP SEQ switch that sends the figure there instead of to the patch.
+        constexpr const char* bassOn     = "bassOn";
+        constexpr const char* bassWave   = "bassWave";
+        constexpr const char* bassSub    = "bassSub";
+        constexpr const char* bassCutoff = "bassCutoff";
+        constexpr const char* bassReso   = "bassReso";
+        constexpr const char* bassEnv    = "bassEnv";
+        constexpr const char* bassEnvAmt = "bassEnvAmt";
+        constexpr const char* bassGlide  = "bassGlide";
+        constexpr const char* bassLevel  = "bassLevel";
+        constexpr const char* bassPan    = "bassPan";
+        constexpr const char* seqToBass  = "seqToBass";
         // The grid cells (percStep<lane>_<step>) are NO LONGER parameters (AD-14, Story 18.5):
         // they live in PatternStore::perc. A DAW state saved before 18.5 still carries them as
         // <PARAM> elements; PluginProcessor::setStateInformation folds those into the store once.

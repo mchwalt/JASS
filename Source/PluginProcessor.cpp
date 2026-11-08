@@ -664,6 +664,15 @@ void SynthyProcessor::randomize()
 
     // Random value for every parameter... (the MOD MATRIX is re-rolled CONTROLLED below —
     // it is the synth's central movement layer, so RANDOM must vary it, not leave it alone.)
+    // 20.2: the BASS box and the STEP SEQ's BASS switch are not the patch's sound design — RANDOM
+    // leaves them where they are, like the master bus.
+    static const char* const boxIds[] = { ID::bassOn, ID::bassWave, ID::bassSub, ID::bassCutoff, ID::bassReso,
+                                          ID::bassEnv, ID::bassEnvAmt, ID::bassGlide, ID::bassLevel, ID::bassPan,
+                                          ID::seqToBass };
+    float keepBox[sizeof (boxIds) / sizeof (boxIds[0])];
+    for (size_t i = 0; i < sizeof (boxIds) / sizeof (boxIds[0]); ++i)
+        keepBox[i] = *apvts.getRawParameterValue (boxIds[i]);
+
     for (auto* p : getParameters())
         p->setValueNotifyingHost(rng.nextFloat());
 
@@ -721,6 +730,8 @@ void SynthyProcessor::randomize()
     set(ID::arpOn,       keepArpOn);
     set(ID::glideOn,     keepGlideOn);
     set(ID::keyboardOn,  keepKeyboardOn);
+    for (size_t i = 0; i < sizeof (boxIds) / sizeof (boxIds[0]); ++i)
+        set(boxIds[i], keepBox[i]);   // 20.2
 
     // Modulation matrix: RANDOM VARIES it too (it is the central movement layer). The blanket
     // dice above already wrote random slots; redo them CONTROLLED so patches move without blowing
@@ -875,6 +886,8 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     arp.prepare(sampleRate);
     stepSeq.prepare(sampleRate);
     perc.prepare(sampleRate);   // 16.1: four SamplePlayers, configured once (their stretch engine allocates)
+    bass.prepare(sampleRate);   // 20.2: the bass box
+    bassMidiScratch.ensureSize(1024);
     arpHeldScratch.reserve(128);
 
     // Feed the real sample rate to the scope/spectrum displays (ms-window + bin→Hz).
@@ -1156,6 +1169,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                      voice->getFilterKeytrackRef());
         }
 
+    bassMidiScratch.clear();   // 20.2: the STEP SEQ's notes for the BASS box this block (render section consumes)
+
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {
         using namespace Parameters;
@@ -1217,6 +1232,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         if (seqOn)
         {
             stepSeq.enabled = true;
+            // 20.2 (AD-15): with the BASS switch the figure plays the bass box and the keyboard keeps
+            // the patch — the sequencer's root/latch/clock logic below is untouched, only the
+            // consumer of its MIDI changes (bassMidiScratch instead of the synth's buffer).
+            const bool   toBass    = *apvts.getRawParameterValue(ID::seqToBass) > 0.5f;
+            const double bassGlide = *apvts.getRawParameterValue(ID::bassGlide);
             stepSeq.length  = (int) *apvts.getRawParameterValue(ID::seqLength);
             // Step length: the musical division against the resolved tempo (host BPM when hosted,
             // else the MASTER knob), or the free-running RATE in steps/s. Same clock the LFOs and
@@ -1331,9 +1351,14 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
-                if ((m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
-                    continue;
+                if (! toBass && (m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
+                    continue;   // the figure replaces the chord — unless it plays the BASS box (20.2)
                 kept.addEvent(m, meta.samplePosition);
+            }
+            if (toBass != seqWasToBass)   // 20.2: the figure changed its instrument mid-flight
+            {
+                stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : kept, 1);   // close the old one's note
+                seqWasToBass = toBass;
             }
             if (requantize)
             {
@@ -1364,7 +1389,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                       diagPostDelay = stepSeq.clockStartDelay();
 #endif
             const bool seqRuns = hostRunning ? (playRoot >= 0) : (root >= 0 && playRoot >= 0);
-            stepSeq.processBlock(buffer.getNumSamples(), kept, 1, seqRuns);
+            stepSeq.processBlock(buffer.getNumSamples(), toBass ? bassMidiScratch : kept, 1, seqRuns);
 #if JASS_HOSTSYNC_DIAG
             diagSeqPre[0] = diagPreIdx; diagSeqPre[1] = diagPreCnt;
             diagSeqPost[0] = diagPostIdx; diagSeqPost[1] = diagPostCnt; diagSeqPost[2] = diagPostDelay;
@@ -1378,6 +1403,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             for (int e = 0; e < stepSeq.numLegatoEvents(); ++e)
             {
                 const auto& ev = stepSeq.legatoEvent(e);
+                if (toBass)   // 20.2: the bass box slides with its own GLIDE time
+                {
+                    bass.slideTo((double) ev.semitones, ev.slide ? bassGlide : 0.0);
+                    continue;
+                }
                 for (int v = 0; v < synth.getNumVoices(); ++v)
                     if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(v)))
                         if (voice->isVoiceActive() && voice->getCurrentlyPlayingNote() == ev.note)
@@ -1392,7 +1422,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         else if (stepSeq.enabled)
         {
             stepSeq.enabled = false;       // just switched off => release its note
-            stepSeq.releaseAll(midiMessages, 1);
+            stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : midiMessages, 1);   // 20.2: whichever instrument holds it
             stepSeq.reset();
             seqLatchedRoot.store(-1);      // the switch is the transport: off forgets the root
             seqKeyWasHeld = false;
@@ -1600,6 +1630,24 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         // ringing when it was switched off, both have to come out.
         perc.processBlock(buffer, buffer.getNumSamples());
         percStepDisplay.store(percOn ? perc.playingStep() : -1);
+    }
+
+    // BASS (Story 20.2, AD-15): the second box, rendered dry into the same buffer right after the
+    // drums. Its notes are the STEP SEQ's MIDI for this block (bassMidiScratch); rendered even when
+    // the module is off so a note released at the switch fades instead of hanging.
+    {
+        using namespace Parameters;
+        bass.enabled     = *apvts.getRawParameterValue(ID::bassOn) > 0.5f;
+        bass.wave        = (int) *apvts.getRawParameterValue(ID::bassWave);
+        bass.sub         =       *apvts.getRawParameterValue(ID::bassSub);
+        bass.cutoff      =       *apvts.getRawParameterValue(ID::bassCutoff);
+        bass.reso        =       *apvts.getRawParameterValue(ID::bassReso);
+        bass.envSec      =       *apvts.getRawParameterValue(ID::bassEnv);
+        bass.envOct      = 4.0 * *apvts.getRawParameterValue(ID::bassEnvAmt);   // 0..4 octaves
+        bass.level       =       *apvts.getRawParameterValue(ID::bassLevel);
+        bass.pan         =       *apvts.getRawParameterValue(ID::bassPan);
+        bass.accentDepth =       *apvts.getRawParameterValue(ID::seqAccent);     // the figure's ACCENT knob
+        bass.processBlock(buffer, buffer.getNumSamples(), bassMidiScratch);
     }
 
     // Mirror the note the STEP SEQ is holding, so the on-screen keyboard can show what the pattern

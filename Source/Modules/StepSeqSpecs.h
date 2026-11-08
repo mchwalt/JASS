@@ -13,7 +13,7 @@
 // tighter shape instead ("Breite 28 sollte möglich sein", 2026-08-31) — the cell width lands a
 // hair under the old 19-on-W20 and the knob itself is the fixed Small size either way.
 //     row 1 = pitch  1..24 | SYNC (2 cells) | RATE
-//     row 2 = pitch 25..48 | LEN | GATE | ACCENT
+//     row 2 = pitch 25..48 | LEN | GATE | ACCENT | BASS   (row 1 ends in a spacer so both rows are 28 cells)
 // DISPLAY order is bodyOrder below; the params vector keeps the historical REGISTRATION order
 // (steps 1..32 + globals as shipped, steps 33..48 appended at the end) — the append-only
 // contract, so old DAW state keeps its parameter indices. That split is the whole reason
@@ -74,6 +74,11 @@ namespace Modules
         // no accents anyway, so the audible default only greets NEW figures.
         m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
+        // BASS (Story 20.2, AD-15, appended): the figure plays the BASS box instead of the patch,
+        // and the keyboard keeps the patch. A Bool, not a PATCH|BASS combo: one cell keeps the two
+        // body rows at equal width, and AD-15 closes the list of boxes, so there is no third target.
+        m.params.push_back ({ "seqToBass", "ToBass", "BASS", ParamSpec::Kind::Bool, {}, 0.0f });
+        m.params.back().hostName = "To BASS";
 
         // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
         // The body shows ONE PAGE (kPageSteps knobs); "step:<n>" is a pattern cell (a knob bound
@@ -81,9 +86,9 @@ namespace Modules
         // with patternStep = n-1). ModuleFrame rebinds these cells to the shown page's steps
         // (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
         for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
-        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate" });
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate", "" });   // "" = spacer (20.2: row 2 gained BASS)
         for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
-        m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent" });
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent", "seqToBass" });
         return m;
     }
 }
