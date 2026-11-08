@@ -10,6 +10,14 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ## [Unreleased]
 
+### Fixed
+- **The MOD MATRIX's MOD list is sorted again.** The destination catalog is append-only (its
+  index is what a DAW project stores), so every module added since the matrix shipped -
+  COMPRESSOR, KARPLUS, MASTER, NOISE, PITCH ENV, STEREO, SAMPLER, GRAIN - had piled up behind
+  WAVETABLE (maintainer 2026-11-08). The combo now shows Off, then the modules A to Z, and maps
+  each position back to its catalog index, the way PERC's KIT list already does. Nothing stored
+  changes.
+
 ### Added
 - **BASS — a second voice beside the patch, and a BASS switch on the STEP SEQ.** JASS is
   monotimbral, and the STEP SEQ takes the held chord over: a pad on the keyboard and a figure from

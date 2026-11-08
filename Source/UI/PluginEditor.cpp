@@ -2701,15 +2701,31 @@ void SynthyEditor::buildRack()
                                     // descriptor is hand-built, so the flag in ModMatrixSpecs.h does not reach it.
 
         const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
+        // MOD lists the catalog's modules SORTED by name (maintainer 2026-11-08: the catalog is
+        // append-only, so COMPRESSOR … GRAIN had piled up behind WAVETABLE). The catalog index stays
+        // the persisted value; the combo shows items in display order and maps each position back
+        // to its index through itemValues — the PERC KIT pattern. Off first, then A→Z.
+        juce::Array<int> modOrder;
+        modOrder.add (0);
+        {
+            juce::Array<int> rest;
+            for (int i = 1; i < ModDest::kNumModules; ++i) rest.add (i);
+            std::sort (rest.begin(), rest.end(), [] (int a, int b)
+                       { return juce::String (ModDest::moduleLabel (a)).compareIgnoreCase (ModDest::moduleLabel (b)) < 0; });
+            modOrder.addArray (rest);
+        }
         juce::StringArray modItems;
-        for (int i = 0; i < ModDest::kNumModules; ++i) modItems.add (ModDest::moduleLabel (i));   // == ModDest order
+        for (int i : modOrder) modItems.add (ModDest::moduleLabel (i));
 
         for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
         {
             const juce::String modId = P::modSlotModule (n);
             const juce::String parId = P::modSlotParam  (n);
             d.body.push_back (C (P::modSlotSource (n), "SRC", srcItems));
-            d.body.push_back (C (modId,                "MOD", modItems));
+            Combo modCombo = C (modId, "MOD", modItems);
+            modCombo.indexIsValue = true;                       // position ≠ value: see modOrder above
+            modCombo.itemValues   = [modOrder] { return modOrder; };
+            d.body.push_back (modCombo);
             // PARAM: the params of whichever MODULE this slot currently selects (re-listed on change).
             // indexIsValue: the selected item index IS the param value (0/1/2), so a 2-item module
             // maps its 2nd entry to 1 (not the ComboBoxAttachment's index/(numItems-1) mismap).
