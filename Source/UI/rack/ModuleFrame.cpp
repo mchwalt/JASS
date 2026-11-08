@@ -524,7 +524,8 @@ namespace rack
                 if (k->textFromValue)
                 {
                     s->textFromValueFunction = k->textFromValue;
-                    s->valueFromTextFunction = [] (const juce::String& t) { return t.getDoubleValue(); };
+                    s->valueFromTextFunction = k->valueFromText ? k->valueFromText
+                                             : [] (const juce::String& t) { return t.getDoubleValue(); };
                     s->updateText();
                     // The value box can be narrower than the name (PERC NOTE: "HH Closed · 42"):
                     // hovering the knob shows the full read-out as a tooltip, kept in sync below

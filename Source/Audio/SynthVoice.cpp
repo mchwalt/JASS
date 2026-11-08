@@ -423,8 +423,9 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // envelope.process() advances the ADSR ONCE here and is REUSED for the amplitude
         // gain below — it must NOT be advanced again this sample. Velocity is constant.
         float lfoVals[kNumLFOs];
-        for (int i = 0; i < kNumLFOs; ++i)
-            lfoVals[i] = globalLfo[i] ? globalLfoVal[i]     // 20.1: one phase for all voices (processor-owned)
+        const float gFrac = (float) (sample + 1) / (float) numSamples;   // 20.1: a GLOBAL LFO's value is
+        for (int i = 0; i < kNumLFOs; ++i)                                  // ramped across the block
+            lfoVals[i] = globalLfo[i] ? globalLfoPrev[i] + (globalLfoVal[i] - globalLfoPrev[i]) * gFrac
                                       : lfos[i].process();
         const float envValue = envelope.process();
         const float gateG    = bypassGate.getNextValue();   // advanced every sample (ADSR-bypass gain + voice-free)

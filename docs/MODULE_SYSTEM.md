@@ -69,7 +69,8 @@ init, so the order matters):
 | 12 | `juce::String legacyPersistKey` | Renamed key: the old name is still *read* as a fallback, writes use `persistKey`. Set by name after the brace init. |
 | 13 | `juce::String hostName` | Name in the DAW's parameter list; empty ⇒ `uiLabel`, else `persistKey`. For captions that only mean something inside the rack: a step knob captioned `"17"` becomes `"Step 17 Pitch"`, a matrix row's `"SRC"` becomes `"Slot 3 SRC"`. Set by name. |
 | 14 | `bool automatable` | `false` ⇒ exported **without** `kCanAutomate`. The value still travels in the plugin state; the DAW just offers no automation lane. Used for the internal LFO `Target`. Set by name. |
-| 15 | `std::function<juce::String (double)> textFromValue` | Optional value-box read-out instead of the plain number (LFO `RATE` shows seconds per cycle below 0.1 Hz). Typing into the box still parses a number in the parameter's unit. Set by name. |
+| 15 | `std::function<juce::String (double)> textFromValue` | Optional value-box read-out instead of the plain number (LFO `RATE` shows seconds per cycle below 0.1 Hz). Set by name. |
+| 16 | `std::function<double (const juce::String&)> valueFromText` | Its inverse for the editable value box (LFO `RATE`: "167 s" typed back becomes 1/167 Hz). Unset ⇒ the text parses as a plain number in the parameter's unit. Set by name. |
 
 **Pattern cells (AD-14).** The STEP SEQ figure and the PERC grid are *content*, not
 parameters: they live in `Source/Audio/PatternStore.h` (`StepPattern`, `PercPattern` —

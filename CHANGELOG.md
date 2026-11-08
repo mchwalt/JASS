@@ -48,8 +48,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   unsynced one keeps running. RATE goes down to 0.005 Hz with the knob skewed so 2 Hz stays at
   mid-travel, and below 0.1 Hz the box reads seconds per cycle. Decided over a separate sweep
   module, which would have duplicated the LFO for one trigger button (Story 20.1). Old presets
-  are untouched: GLOBAL defaults to off and stored rates are absolute. Note for DAW projects: an
-  automation lane on RATE keeps its normalised points, which now map to slightly different Hz.
+  are untouched: GLOBAL defaults to off and stored rates are absolute. The voice ramps a global
+  value across each block, so a fast GLOBAL vibrato does not step with the host's buffer size;
+  a global One-Shot is never pinned to the song position (it would restart every bar), it sweeps
+  once from its rearm. Known break for DAW projects: an automation lane on RATE keeps its
+  normalised points, and the knob's mapping changed - a lane at 50 % used to mean 10 Hz and now
+  means 2 Hz, a lane at 0 % used to mean 0.1 Hz and now means a 200 s period. Static values are
+  unaffected.
 
 ## [2026.11.0] – 2026-11-04
 

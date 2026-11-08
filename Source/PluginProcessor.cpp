@@ -1172,17 +1172,25 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     bassMidiScratch.clear();   // 20.2: the STEP SEQ's notes for the BASS box this block (render section consumes)
     // 20.2: with the STEP SEQ's BASS switch on, the editor's step preview (kAuditionChannel: a
     // clicked or turned step, the GATE row's length preview) goes to the bass box too, so a step
-    // sounds the way the figure will play it (maintainer 2026-11-08). The synth never sees it.
-    if (*apvts.getRawParameterValue(Parameters::ID::seqToBass) > 0.5f)
+    // sounds the way the figure will play it (maintainer 2026-11-08). The synth never sees its
+    // note-ons. Note-OFFs and a host's panic (All Notes/Sound Off) reach BOTH consumers always:
+    // the switch may have flipped while the preview was held, and a note-off for a note an
+    // instrument does not play is harmless (review 2026-11-08).
     {
+        const bool toBassNow = *apvts.getRawParameterValue(Parameters::ID::seqToBass) > 0.5f;
         auto& rest = arpKeptScratch; rest.clear();   // free until the ARP/SEQ blocks below reuse it
         for (const auto meta : midiMessages)
         {
             const auto m = meta.getMessage();
-            if (m.getChannel() == kAuditionChannel && (m.isNoteOn() || m.isNoteOff()))
-                bassMidiScratch.addEvent(m, meta.samplePosition);
-            else
-                rest.addEvent(m, meta.samplePosition);
+            const bool audition = m.getChannel() == kAuditionChannel;
+            if (m.isAllNotesOff() || m.isAllSoundOff() || (audition && m.isNoteOff()))
+                bassMidiScratch.addEvent(m, meta.samplePosition);   // copy: the synth gets it too
+            if (toBassNow && audition && m.isNoteOn())
+            {
+                bassMidiScratch.addEvent(m, meta.samplePosition);   // move: the preview plays the box
+                continue;
+            }
+            rest.addEvent(m, meta.samplePosition);
         }
         midiMessages.swapWith(rest);
     }
@@ -1384,6 +1392,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (toBass != seqWasToBass)   // 20.2: the figure changed its instrument mid-flight
             {
                 stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : kept, 1);   // close the old one's note
+                if (seqWasToBass) bass.allNotesOff();   // ...and a preview the box may still hold (review 2026-11-08)
                 seqWasToBass = toBass;
             }
             if (requantize)
@@ -1663,7 +1672,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // the module is off so a note released at the switch fades instead of hanging.
     {
         using namespace Parameters;
-        bass.enabled     = *apvts.getRawParameterValue(ID::bassOn) > 0.5f;
+        bass.setEnabled(*apvts.getRawParameterValue(ID::bassOn) > 0.5f);   // off: release now, start nothing
+        bass.auditionChannel = kAuditionChannel;
         bass.wave        = (int) *apvts.getRawParameterValue(ID::bassWave);
         bass.sub         =       *apvts.getRawParameterValue(ID::bassSub);
         bass.cutoff      =       *apvts.getRawParameterValue(ID::bassCutoff);
@@ -1713,7 +1723,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 uiLfos[li].reset();
             lfoGlobalWasOn[li] = global;
             const int  div    = (int) *apvts.getRawParameterValue(ID::lfoSyncDiv(li + 1));
-            const bool pinned = global && hosted && hostPpq.hasValue() && SyncDivision::isSynced(div);
+            // A One-Shot is never pinned: pinning would restart it every cycle, and its point is to
+            // sweep ONCE from the rearm (review 2026-11-08, maintainer's call). It still takes its
+            // sweep time from the synced rate.
+            const bool pinned = global && hosted && hostPpq.hasValue() && SyncDivision::isSynced(div)
+                             && uiLfos[li].getWaveform() != LFOWaveform::OneShot;
             if (pinned)
             {
                 double ph = std::fmod(*hostPpq / SyncDivision::beatsPerCycle(div), 1.0);
@@ -1918,7 +1932,6 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
     std::unique_ptr<juce::XmlElement> xml(getXmlFromBinary(data, sizeInBytes));
     if (xml && xml->hasTagName(apvts.state.getType()))
     {
-        rearmGlobalLfos.store(true);    // 20.1: a restored project starts its global One-Shots afresh
         migrateLegacyMatrixXml(*xml);   // v4→v5: SlotNTarget → SlotNModule + SlotNParam
         // AD-14: the patterns. A pre-18.5 project carries them as parameters (folded in here), a
         // current one as <PercPattern> / <StepPattern> elements; a state with neither is an empty
@@ -1945,6 +1958,8 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         diagNote ("setStateInformation");
 #endif
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
+        rearmGlobalLfos.store(true);    // 20.1: a restored project starts its global One-Shots afresh —
+                                        // AFTER the replace, or a block in between spends it on the old state
         PresetIO::resolveSetByName(apvts, samplerName, Parameters::ID::samplerSet, PresetIO::hooks(apvts).pendingSamplerSetName, 0);
         PresetIO::resolveSetByName(apvts, kitName,     Parameters::ID::percKit,    PresetIO::hooks(apvts).pendingPercKitName,    1);
         // An editor that already exists was built against the state this one replaces — tell it

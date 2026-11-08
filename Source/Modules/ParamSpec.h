@@ -38,8 +38,9 @@ struct ParamSpec
                                                 // for the sequencer grids: thousands of authored cells, never
                                                 // automated, that otherwise bury the sixty knobs worth a lane.
     std::function<juce::String (double)> textFromValue;   // optional value-box read-out instead of the number
-                                                // (LFO RATE: "167 s" below 0.1 Hz). Typing into the box still
-                                                // parses a plain number in the param's unit. Set by name.
+                                                // (LFO RATE: "167 s" below 0.1 Hz). Set by name.
+    std::function<double (const juce::String&)> valueFromText;   // its inverse for the editable box; unset =>
+                                                // the text parses as a plain number in the param's unit.
 };
 
 // The DAW-facing name: "<module title> <hostName|uiLabel|persistKey>". The title prefix stays even

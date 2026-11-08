@@ -7,7 +7,7 @@
 //
 // Deliberately SH-101-sized: WAVE, SUB, CUTOFF, RESO, ENV, ENV>CUT, GLIDE, LEVEL, PAN. No second
 // OSC trio, no effects of its own, no matrix targets (AD-15 rule 5). A sound source, so it sits
-// with the GENERATORS (maintainer 2026-11-08: "BASS muss unter die Generatoren" — the first cut
+// with the GENERATORS (maintainer 2026-11-08: it belongs with the generators — the first cut
 // had it beside the sequencer, PERC's reasoning, which read as a modulation of OSC 1).
 namespace Modules
 {

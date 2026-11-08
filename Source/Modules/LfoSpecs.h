@@ -4,7 +4,9 @@
 
 // LFO 1..kNumLFOs — indexed factory. LFO 1 keeps the stable id "lfo" (help/layout) and is visible;
 // further LFOs are "lfo2"/"lfo3"… and hidden by default. Body order: WAVE, TARGET(hidden), SYNC, RATE,
-// DEPTH — selector combos (WAVE, SYNC) first, then knobs (RATE, DEPTH), matching every other module.
+// DEPTH, GLOBAL — selector combos (WAVE, SYNC) first, then knobs (RATE, DEPTH), then the GLOBAL
+// latch (20.1), matching every other module. Seven slots in W6: the frame lays the body out from
+// its content, so the cells are a touch narrower than the four-knob body the W6 note below describes.
 namespace Modules
 {
     inline ModuleSpec lfo (int i)
@@ -47,6 +49,13 @@ namespace Modules
         {
             if (hz > 0.0 && hz < 0.1) return juce::String (juce::roundToInt (1.0 / hz)) + " s";
             return juce::String (hz, hz < 1.0 ? 3 : 2) + " Hz";
+        };
+        m.params[4].valueFromText = [] (const juce::String& text)   // "167 s" typed back is a period, not 167 Hz
+        {
+            const auto t = text.trim();
+            const double v = t.getDoubleValue();
+            const bool seconds = t.endsWithIgnoreCase ("s") && ! t.endsWithIgnoreCase ("hz");
+            return (seconds && v > 0.0) ? 1.0 / v : v;
         };
         return m;
     }

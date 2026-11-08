@@ -7,24 +7,24 @@
 
 // BASS (Story 20.2, AD-15) — ONE monophonic sequenced bass voice beside the patch, the PERC way.
 //
-// JASS is monotimbral: the STEP SEQ takes the held chord over, so a pad on the keyboard and a
-// figure from the same instance were mutually exclusive. AD-15 allows a fixed BOX beside the
-// patch if it has its own engine at processor level, no part selector, sums dry into the master
-// bus at PERC's point, and is driven by a sequencer, never by the keyboard. This is that box for
-// the bass line: an SH-101-sized voice — one oscillator (saw or square), a square sub an octave
-// down, one resonant lowpass with a decay envelope, a gate-shaped amp envelope, glide for SLIDE
-// steps. Nothing of the patch's chain touches it; "dry" is the construction, as in PercSequencer.
+// JASS is one patch on the keyboard: the STEP SEQ takes the held chord over, so a pad on the
+// keyboard and a figure from the same instance were mutually exclusive. AD-15 allows a fixed BOX
+// beside the patch if it has its own engine at processor level, no part selector, sums dry into
+// the master bus at PERC's point, and is driven by a sequencer, never by the keyboard. This is
+// that box for the bass line: an SH-101-sized voice — one oscillator (saw or square), a square sub
+// an octave down, one resonant lowpass with a decay envelope, a gate-shaped amp envelope, glide for
+// SLIDE steps. Nothing of the patch's chain touches it; "dry" is the construction, as in
+// PercSequencer.
 //
 // Fed by the STEP SEQ's own MIDI output (channel 1: note-on velocity 100 = plain, 127 = accented)
-// and its legato events (TIE = retune without a new attack, SLIDE = the same, gliding). Root,
-// latch, quantised entry and the host clock are the sequencer's; only the consumer changes.
-// Allocation-free on the audio thread: fixed members, parameters are plain fields the processor
-// sets per block (the PercSequencer pattern).
+// and its legato events (TIE = retune without a new attack, SLIDE = the same, gliding), plus the
+// editor's step preview on `auditionChannel`. Root, latch, quantised entry and the host clock are
+// the sequencer's; only the consumer changes. Allocation-free on the audio thread: fixed members,
+// parameters are plain fields the processor sets per block (the PercSequencer pattern).
 class BassVoice
 {
 public:
-    // Parameters — set per block by the processor from the APVTS.
-    bool   enabled     = false;
+    // Parameters — set per block by the processor from the APVTS (`enabled` through setEnabled).
     int    wave        = 0;       // 0 = Sawtooth, 1 = Square
     double sub         = 0.3;     // level of the square sub-oscillator one octave down
     double cutoff      = 500.0;   // Hz — the filter's rest position (envelope decays back to it)
@@ -34,6 +34,7 @@ public:
     double level       = 0.5;
     double pan         = 0.0;     // -1 left … +1 right, equal-power
     double accentDepth = 0.5;     // STEP SEQ's ACCENT knob: what velocity 127 adds (gain + envelope)
+    int    auditionChannel = 0;   // the editor's preview channel (SynthyProcessor::kAuditionChannel)
 
     void prepare (double sr)
     {
@@ -60,33 +61,79 @@ public:
         amp.reset();
         glide.reset (sampleRate, 0.0);
         glide.setCurrentAndTargetValue (110.0);
-        filtEnv = 0.0; accent = 0.0; note = -1; coeffCountdown = 0;
+        filtEnv = 0.0; accent = 0.0; seqNote = -1; auditionNote = -1; seqTargetHz = 110.0;
+        coeffCountdown = 0;
     }
 
-    // --- events (from the STEP SEQ's MIDI out and its legato list) -----------------------------
-    void noteOn (int midiNote, int velocity)
+    // The module's Enable. Off: no new note starts (the sequencer may still feed the box, as a
+    // switched-off PERC is still fed by its grid), a sounding note is released so the switch is
+    // audible at once, and only the release tail is rendered.
+    void setEnabled (bool on)
     {
-        note = midiNote;
-        glide.reset (sampleRate, 0.0);                           // a plain step jumps; SLIDE glides (slideTo)
-        glide.setCurrentAndTargetValue (hzOf (midiNote));
-        accent  = juce::jlimit (0.0, 1.0, (velocity - 100) / 27.0) * accentDepth;   // 100 = plain, 127 = accented
-        filtEnv = 1.0;                                           // the envelope restarts with every attack
-        amp.gateOn();
+        if (enabled && ! on) allNotesOff();
+        enabled = on;
     }
+    bool isEnabled() const noexcept { return enabled; }
 
-    void noteOff (int midiNote)
+    // --- events (from the STEP SEQ's MIDI out, the preview channel, and the legato list) --------
+    void noteOn (int midiNote, int velocity, bool audition)
     {
-        if (midiNote == note) { amp.gateOff(); note = -1; }
+        if (! enabled) return;   // a disabled box starts nothing (review 2026-11-08)
+        const double hz = hzOf (midiNote);
+        if (audition)
+        {
+            // A preview rides on top of the sequencer's note: the pitch jumps to the previewed step
+            // and comes back when the preview ends, the gate stays as it is if a note is held.
+            auditionNote = midiNote;
+            if (seqNote < 0) { filtEnv = 1.0; amp.gateOn(); accent = accentOf (velocity); }
+        }
+        else
+        {
+            seqNote     = midiNote;
+            seqTargetHz = hz;
+            auditionNote = -1;          // the figure's own note wins over a preview
+            accent  = accentOf (velocity);
+            filtEnv = 1.0;              // the envelope restarts with every attack
+            amp.gateOn();
+        }
+        glide.reset (sampleRate, 0.0);  // a plain step jumps; SLIDE glides (slideTo)
+        glide.setCurrentAndTargetValue (hz);
     }
 
-    void allNotesOff() { amp.gateOff(); note = -1; }
+    void noteOff (int midiNote, bool audition)
+    {
+        if (audition)
+        {
+            if (midiNote != auditionNote) return;
+            auditionNote = -1;
+            if (seqNote >= 0)
+            {
+                // Back to the figure's note (wherever its slides have taken it meanwhile).
+                glide.reset (sampleRate, 0.0);
+                glide.setCurrentAndTargetValue (seqTargetHz);
+            }
+            else
+                amp.gateOff();
+        }
+        else
+        {
+            if (midiNote != seqNote) return;
+            seqNote = -1;
+            if (auditionNote < 0) amp.gateOff();   // a preview still held keeps the gate
+        }
+    }
+
+    void allNotesOff() { amp.gateOff(); seqNote = -1; auditionNote = -1; }
 
     // TIE/SLIDE boundary (StepSequencer::Legato): move the sounding pitch by `semitones`, over
     // `seconds` for a SLIDE (the GLIDE knob) or at once for a TIE. The envelope is untouched —
     // the same contract as SynthVoice::slideTo.
     void slideTo (double semitones, double seconds)
     {
-        const double target = glide.getTargetValue() * std::pow (2.0, semitones / 12.0);
+        const double factor = std::pow (2.0, semitones / 12.0);
+        seqTargetHz *= factor;                    // the figure's pitch, even under a preview
+        if (auditionNote >= 0) return;            // the preview holds its pitch; restored on its note-off
+        const double target = glide.getTargetValue() * factor;
         const double now    = glide.getCurrentValue();
         glide.reset (sampleRate, seconds > 0.001 ? seconds : 0.0);
         glide.setCurrentAndTargetValue (now);
@@ -96,14 +143,15 @@ public:
     bool isSounding() const noexcept { return amp.getStage() != AdsrEnvelope::Stage::Idle; }
 
     // Render ADDITIVELY into the buffer (after the voices, before the bus stages — PERC's point).
-    // `events` is the sequencer's MIDI for this block: handled sample-accurately inline. Runs even
-    // when the module is off, so a note released at the switch still fades instead of hanging.
+    // `events` is this block's MIDI for the box: handled sample-accurately inline. Runs even when
+    // the module is off, so a note released at the switch still fades instead of hanging.
     void processBlock (juce::AudioBuffer<float>& buffer, int numSamples, const juce::MidiBuffer& events)
     {
         auto it = events.begin();
         const auto end = events.end();
-        float* outL = buffer.getWritePointer (0);
-        float* outR = buffer.getNumChannels() > 1 ? buffer.getWritePointer (1) : nullptr;
+        const int nCh = buffer.getNumChannels();   // a host with the output bus off hands over 0
+        float* outL = nCh > 0 ? buffer.getWritePointer (0) : nullptr;
+        float* outR = nCh > 1 ? buffer.getWritePointer (1) : nullptr;
         const double p  = (juce::jlimit (-1.0, 1.0, pan) + 1.0) * juce::MathConstants<double>::pi / 4.0;
         const float gL  = (float) std::cos (p), gR = (float) std::sin (p);
         const double envCoef = std::exp (-1.0 / (juce::jmax (0.001, envSec) * sampleRate));
@@ -117,8 +165,8 @@ public:
                 handle ((*it).getMessage());
                 ++it;
             }
-            if (! enabled && ! isSounding())
-                continue;   // silent: nothing to render, no state to advance
+            if (outL == nullptr || ! isSounding())
+                continue;   // silent (or nowhere to write): nothing to render, no state to advance
 
             const double f = glide.getNextValue();
             osc.setFrequency (f);
@@ -146,11 +194,16 @@ public:
 
 private:
     static double hzOf (int midiNote) { return 440.0 * std::pow (2.0, (midiNote - 69) / 12.0); }
+    double accentOf (int velocity) const
+    {
+        return juce::jlimit (0.0, 1.0, (velocity - 100) / 27.0) * accentDepth;   // 100 = plain, 127 = accented
+    }
 
     void handle (const juce::MidiMessage& m)
     {
-        if (m.isNoteOn() && m.getVelocity() > 0)        noteOn (m.getNoteNumber(), (int) m.getVelocity());
-        else if (m.isNoteOff() || m.isNoteOn())         noteOff (m.getNoteNumber());
+        const bool audition = (m.getChannel() == auditionChannel);
+        if (m.isNoteOn() && m.getVelocity() > 0)         noteOn (m.getNoteNumber(), (int) m.getVelocity(), audition);
+        else if (m.isNoteOff() || m.isNoteOn())          noteOff (m.getNoteNumber(), audition);
         else if (m.isAllNotesOff() || m.isAllSoundOff()) allNotesOff();
     }
 
@@ -158,9 +211,12 @@ private:
     BiquadFilter filter;
     AdsrEnvelope amp;
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> glide;
+    bool   enabled    = false;
     double sampleRate = 44100.0;
-    double filtEnv = 0.0;        // 1 at the attack, decays with envSec
-    double accent  = 0.0;        // 0..accentDepth, from the note-on velocity
-    int    note    = -1;         // the sounding note (the sequencer's note-off names it)
+    double filtEnv    = 0.0;      // 1 at the attack, decays with envSec
+    double accent     = 0.0;      // 0..accentDepth, from the note-on velocity
+    int    seqNote    = -1;       // the sequencer's sounding note (its note-off names it)
+    double seqTargetHz = 110.0;   // ...and its pitch, kept across a preview and its slides
+    int    auditionNote = -1;     // the editor's preview note while held, else -1
     int    coeffCountdown = 0;
 };

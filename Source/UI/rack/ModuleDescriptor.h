@@ -109,6 +109,9 @@ namespace rack
         // stored value stays the note number, only its presentation changes. Injected by the editor
         // (the name depends on the loaded kit, which a static spec cannot reach).
         std::function<juce::String (double value)> textFromValue;
+        // Its inverse for the editable value box. Unset => the text parses as a plain number, which is
+        // wrong for a read-out in another unit (LFO RATE shows "167 s": typed back it must be 1/167 Hz).
+        std::function<double (const juce::String& text)> valueFromText;
 
         // Optional preview hook (Story 15.3): a knob whose value IS a pitch can sound it while it
         // is being edited — STEP SEQ, where a step is a number of semitones and writing a figure

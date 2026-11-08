@@ -123,8 +123,8 @@ info** so nothing is hidden and every control explains itself.
   you switch it on, no key needed, and the drums are the clock: a STEP SEQ figure
   started from silence enters on the next start of the drum pattern. **COPY** stamps
   a step column onto any number of steps, **x2** doubles the pattern behind itself.
-  Deliberately not a second note sequencer — JASS is monotimbral, so drums sent as
-  MIDI would be dragged through the patch's filter and effects.
+  Deliberately not a second note sequencer — the patch is one voice of music, so
+  drums sent as MIDI would be dragged through its filter and effects.
 - **BASS** — a second voice beside the patch, built the way PERC is: one sequenced
   mono bass (saw/square, a sub an octave down, a resonant lowpass with its own decay
   envelope, glide for SLIDE steps) with its own engine, summed dry into the master
