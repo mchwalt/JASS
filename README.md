@@ -1,33 +1,19 @@
 # JASS – Just Another Simple Synthesizer
 
-A polyphonic software synthesizer written in **C++20 / [JUCE 9](https://juce.com/)**,
-with an interface styled as a **19″ rack**. It runs as a **standalone** app and as
-a **VST3 instrument** inside a DAW.
+A polyphonic software synthesizer with an interface styled as a **19″ rack** —
+sound sources, modulation, effects, a step sequencer, drums and a bass line on
+one screen. Written in **C++20 / [JUCE 9](https://juce.com/)**; runs as a
+**standalone** app and as a **VST3 instrument**, on Windows and Linux.
 
-### ⬇ Download
+![JASS Rack](docs/screenshots/rack.png)
 
-**[Get the latest release](https://github.com/mchwalt/JASS/releases/latest)** —
-Windows & Linux builds (Standalone + VST3), produced automatically on every merge to
-`main` by the CI pipeline.
+**[⬇ Download the latest release](https://github.com/mchwalt/JASS/releases/latest)** ·
+**[🎧 Hear the demo (MP3, ~1 min)](https://raw.githubusercontent.com/mchwalt/JASS/main/docs/Demo.mp3)** ·
+**[JASS in a DAW](#jass-in-a-daw)**
 
-> **VST3:** the same build runs as a plugin instrument in a DAW. In a host JASS
-> follows the **host clock** (STEP SEQ and PERC lock to tempo, song position and
-> transport, and keep their place across STOP/PLAY), exposes **one parameter per
-> knob grouped by module**, keeps its **patterns in the plugin state**, and plays at
-> its **standalone level**. Checked by ear in **Bitwig Studio 6.1**, **Cubase
-> Elements 15** and **Waveform Free 14** (Windows and Linux), and **cross-checked
-> headless** in [SoundCraft](https://github.com/storytold/soundcraft), a scriptable
-> Rust host: the sequencer clock holds the host grid **to the sample** over four
-> bars at two tempi, and two instances on two tracks stay in phase. The rack is
-> one patch plus two fixed boxes (PERC drums, BASS) by design — more voices of
-> music are more JASS instances on more tracks. Host-by-host record:
-> [`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md). #SoundCraft
-
-### 🎧 Hear it
-
-**[Download the demo to hear it (MP3, ~1 min)](https://raw.githubusercontent.com/mchwalt/JASS/main/docs/Demo.mp3)** —
-recorded straight out of JASS. Depending on your browser it plays right away or
-lands in your downloads.
+Releases carry Windows and Linux builds (Standalone + VST3), produced by the CI
+pipeline on every merge to `main`. The demo was recorded straight out of JASS;
+depending on your browser it plays right away or lands in your downloads.
 
 ## Why this project
 
@@ -42,138 +28,129 @@ Everything you need is on one screen: sources, modulation, and processing laid
 out as a rack you can rearrange, with per-module and per-zone **enable / reset /
 info** so nothing is hidden and every control explains itself.
 
-![JASS Rack](docs/screenshots/rack.png)
+## What makes it different
+
+- **Write a figure by playing it.** Arm the STEP SEQ, press keys, and each one
+  lands on the next step — SPACE leaves a rest. Up to 768 steps with accents,
+  **TIE** and the 303's **SLIDE**; a `.mid` transcription loads as a playing
+  figure and saves back out for the DAW.
+- **One JASS plays a whole piece.** The patch under your hands, **PERC** drums and
+  a sequenced **BASS** underneath — the two boxes run beside the patch, dry into
+  the master bus, so the drums never get dragged through your filter.
+- **Kunstkopf output.** Every generator is placed in 3-D by convolving it with a
+  measured **MIT KEMAR** head response, and a binaural early-reflection stage
+  pushes the image **out of the head** on headphones.
+- **GRAIN is two instruments.** A granular cloud over any recording — and, with
+  **KEY** on, a formant synth: one grain per period of the played note, so the
+  sample's timbre stays put while the pitch moves.
+- **A matrix that speaks the rack's language.** Pick a module, then one of its
+  knobs by name. Route **CHAOS** (a Lorenz orbit) to a pitch, snap it to a scale
+  with **QUANT**, and the modulation writes melodies.
+- **Sample-exact in a DAW.** As a VST3 the sequencers lock to the host clock and
+  hold its grid to the sample — measured headless, not just heard.
+- **Presets measured off records.** Several demos are transcribed from recordings
+  and checked against spectral measurements: tempo, figure, drum pattern, filter.
 
 ## Features
 
 **Sound sources**
-- **3 oscillators** — sine / sawtooth / square / triangle, each with enable,
-  freq, amp, **per-oscillator unison** (1–7 voices, detune) and **self-FM** (feedback)
+- **3 oscillators** — sine / sawtooth / square / triangle, each with
+  **unison** (1–7 voices, detune) and **self-FM** (feedback)
 - **Cross-mod / mix modes** — additive, ring modulation, FM between selectable
-  sources (SRC/DEST)
-- **Sub oscillator** — sine/square, −1/−2 octave, tracks OSC 1 pitch
+  sources
+- **Sub oscillator** — sine/square, −1/−2 octave, tracks OSC 1
 - **Wavetable oscillator** — 6 built-in banks (Basic, Digital, Harmonic, Vocal,
-  PWM, Spectral) with example WAVs, position morph, **WAV import**, own unison
+  PWM, Spectral), position morph, **WAV import**, own unison
 - **Noise** — white / pink / brown / blue
-- **Karplus-Strong** — plucked string, played from the keyboard
-- **SAMPLER** — play your own recordings (WAV/AIFF/FLAC/MP3, ≤60 s) as a sound source
-  through the whole chain: ROOT-key tape-style transposition, START/END, One-Shot /
-  Loop (crossfaded, beat-locked via a shared loop clock) / Reverse modes, SPEED
-  (0.25×–4×), stereo files rendered as two placed sub-sources. **Multisampling**:
-  load a folder of `Name_C3.wav`-style files (or a basic `.sfz`) as one set — zones
-  spread across the keyboard with their own roots, and `.sfz` **velocity layers**
-  respond to your touch (soft hit → soft recording). **STRETCH**: pitch/time
-  decoupling — the key sets only the pitch, SPEED only the tempo, loops stay
-  beat-locked on every key (Signalsmith Stretch, MIT). Ships with an example
-  catalog (seeded to `%AppData%\JASS\Samples`); presets reference sets by name.
-  - 🎹 **Two multisampled grand pianos included as free downloads** — AKAI's
-    **Splendid** Steinway and Alexander Holm's **Salamander** Yamaha C5, four
-    velocity layers each. Unzip, pick the set, play:
+- **Karplus-Strong** — plucked string
+- **SAMPLER** — your own recordings (WAV/AIFF/FLAC/MP3, ≤60 s) through the whole
+  chain: One-Shot / Loop / Reverse, SPEED 0.25×–4×, beat-locked crossfaded loops.
+  **Multisampling** from a folder of `Name_C3.wav` files or a basic `.sfz`, with
+  velocity layers. **STRETCH** decouples pitch from tempo (Signalsmith Stretch).
+  Sets load in the background.
+  - 🎹 Two multisampled grand pianos are free downloads — see
     **[Optional piano multisample sets](#optional-piano-multisample-sets)**.
-    Sets load in the background, so a library of this size no longer delays
-    the start of the app — a patch's own instrument is fetched first and
-    selected as soon as it is ready.
-- **GRAIN** — granular synthesis on the SAMPLER's set: a cloud of short grains
-  with POS/SPRAY (where in the recording), SIZE (5–300 ms), DENS (grains per
-  second) and a per-grain PITCH spread that **QUANT** snaps to a scale relative to
-  the played note. Position, size, pitch centre, amp and pan are matrix targets —
-  CHAOS X → POS wanders through a recording. **KEY** turns the same engine into a
-  formant synth: one grain per period of the played note, so the repetition rate
-  is the pitch and the sample's own timbre stays put. A texture generator, not a
-  pitch-shifter (that is SAMPLER + STRETCH).
+- **GRAIN** — granular synthesis on the SAMPLER's set: POS/SPRAY, SIZE (5–300 ms),
+  DENS, a per-grain PITCH spread that **QUANT** snaps to a scale, and **KEY** for
+  the formant mode. Position, size, pitch, amp and pan are matrix targets.
 
-**Input devices**
-- **On-screen keyboard** — playable with mouse & computer keys
-- **MIDI keyboard / controller** — the synth accepts MIDI note input with velocity
-  (a mod-matrix source): in the standalone pick the device in the audio/MIDI
-  settings; as a VST3 it receives MIDI from the DAW track
+**Sequencers & the two boxes**
+- **STEP SEQ** — a figure of up to **768 steps** (48 per page, FOLLOW flips the
+  page with the playhead), transposed by the key you play. Per step: note,
+  on / accent / rest, and a gate length from staccato through **TIE** to **SLIDE**.
+  The first key starts it and it keeps running; a new key moves it, SPACE stops
+  it. Tempo-synced or free. **LOAD MIDI / SAVE MIDI** in the title bar.
+- **PERC** — four percussion tracks on a grid of up to 768 steps with their own
+  kit and a level and pan per track. Runs without a key and is the clock: a
+  figure started from silence enters on the next start of the drum pattern.
+  **COPY** stamps a step column, **x2** doubles the pattern. SFZ choke groups are
+  honoured (a closed hi-hat silences the open one).
+- **BASS** — one sequenced mono bass (saw/square, a sub an octave down, a resonant
+  lowpass with its own decay envelope, glide for SLIDE steps). Flip the STEP SEQ's
+  **BASS** switch and the figure plays here while the keyboard plays the patch.
+- **Arpeggiator** — up / down / up-down / random. Takes the same place as the
+  STEP SEQ, so only one of the two runs.
 
 **Envelopes & modulation**
-- **ADSR** + **pitch envelope**
-- **4 LFOs** (sine/triangle/square/saw/S&H/one-shot), tempo sync, rates down to a
-  200 s period, and a **GLOBAL** switch per LFO — one phase for all voices that no key
-  restarts, so a filter sweep can run across a whole piece
-- **Modulation matrix** — **8 slots**, two-step **MODULE → PARAM** routing: pick a
-  module, then any of its parameters (sorted A→Z, named exactly like the knobs).
-  **Per-oscillator** targets (route FREQ/AMP/DETUNE/FB/VOICES to a *single* OSC, or
-  "Alle OSC" for all), plus near-**full coverage** of every module's continuous
-  parameters. Sources: LFO 1–4 / envelope / velocity. Each routing has a bipolar
-  amount, auto-enables its source + target module, and shows a live modulation ring.
-- **Poly glide** (mono/legato/poly), **arpeggiator** (up/down/up-down/random)
-- **STEP SEQ** — a 48-step sequencer (two rows of twenty-four; a red line marks where
-  the pattern ends) that plays a figure you write, transposed by the key you play.
-  Per-step semitone offset and a three-state corner switch (off = rest, on,
-  **accented** — the ACCENT knob sets how much harder an accent plays and how far it
-  opens the filter); the **GATE** header latch flips the same knobs to each step's
-  length, from staccato through **TIE** to the 303's **SLIDE**. Locked to the tempo
-  like the LFOs and DELAY, or free-running. It replaces the ARPEGGIATOR — both take
-  over the held chord, so only one can run.
-  **The first key starts it and it keeps running** — a new key moves it, the octave
-  keys shift it, SPACE stops it; a patch saved while it plays comes back playing.
-  **Write the figure by playing it**: Reset arms step entry, a ring shows which step
-  is waiting, every key you press is written there, SPACE leaves a rest. Clicking or
-  turning a step sounds it too — over the keyboard's current C, so the whole figure
-  can be written by ear. While it runs, a lit dot marks the step being played and the
-  on-screen keyboard shows the note. **LOAD MIDI / SAVE MIDI** in the title bar turn
-  a `.mid` transcription into the playing figure (velocities become accents, note
-  lengths become gates/ties/slides, a looped file is folded to its cycle) and write
-  the figure back out for the DAW.
-- **PERC** — four percussion tracks on a 48-step grid with their own kit, their own
-  clock and a level per track, played **dry into the master bus**. It runs as soon as
-  you switch it on, no key needed, and the drums are the clock: a STEP SEQ figure
-  started from silence enters on the next start of the drum pattern. **COPY** stamps
-  a step column onto any number of steps, **x2** doubles the pattern behind itself.
-  Deliberately not a second note sequencer — the patch is one voice of music, so
-  drums sent as MIDI would be dragged through its filter and effects.
-- **BASS** — a second voice beside the patch, built the way PERC is: one sequenced
-  mono bass (saw/square, a sub an octave down, a resonant lowpass with its own decay
-  envelope, glide for SLIDE steps) with its own engine, summed dry into the master
-  bus. Flip the STEP SEQ's **BASS** switch and the figure plays here while the
-  keyboard plays the patch — a pad under the hands and the bass line underneath,
-  from one JASS. One box, one job: no matrix targets, no second BASS.
+- **ADSR**, **pitch envelope**, **poly glide** (mono / legato / poly)
+- **4 LFOs** — sine / triangle / square / saw / S&H / one-shot, tempo sync, rates
+  down to a 200 s period, and a **GLOBAL** switch: one phase for all voices that
+  no key restarts, so a filter sweep can run across a whole piece
+- **CHAOS** — a Lorenz attractor as a modulation source: never repeating, never
+  random. X and Y ride the same orbit, so two routings drift together but not alike
+- **Modulation matrix** — **8 slots**, two-step **MODULE → PARAM** routing with a
+  bipolar amount and a live modulation ring on the target knob. Sources: LFO 1–4,
+  envelope, velocity, Chaos X/Y. Targets: nearly every continuous knob, a single
+  oscillator or all of them at once. **QUANT** per row snaps a pitch routing to a
+  scale. A routing switches on the modules it needs.
 
 **Processing & effects**
-- **Biquad filter** (lowpass/highpass, resonance) + **formant filter**
-- **Distortion** (soft/hard clip, foldback), **wavefolding**, **bitcrusher**
-- **Compressor**, **phaser/flanger**
-- **Delay** (tempo sync), **chorus**, **reverb**
-- **STEREO output stage** with a per-generator **PAN** and five modes: Mono,
-  **Pseudo-stereo** (Haas widener, on by default), **Stereo-Pan**, **Binaural**
-  (parametric headphone 3-D) and **Kunstkopf (HRTF)** — real out-of-head placement
-  by convolving each generator with a measured **MIT KEMAR** head impulse response.
-  PAN is a mod-matrix target, so any source can auto-pan a voice in 3-D.
-- **Kunstkopf externalization (ROOM)** — a binaural **early-reflection** stage
-  (six non-harmonic taps, 8–24 ms, rendered through lateral KEMAR ears) that pushes
-  the headphone image **out of the head** — the cue dry HRTF rendering cannot
-  deliver. Level-neutral at any setting; heard best on transients (plucks, arps).
+- **Filter** (lowpass / highpass, resonance, keytracking) + **formant filter**
+- **Distortion** (soft / hard clip, foldback), **wavefolding**, **bitcrusher**
+- **Compressor**, **phaser / flanger**, **chorus**, **delay** (tempo sync), **reverb**
+- **STEREO output stage** with a **PAN** per generator and five modes: Mono,
+  **Pseudo-stereo** (Haas widener), **Stereo-Pan**, **Binaural** and
+  **Kunstkopf (HRTF)**. PAN is a matrix target, so any source can move a
+  generator around the head. **ROOM** adds the binaural early reflections.
 
 **Playing & workflow**
-- **19″ rack UI** with zones; every module and zone has **enable / reset / info**
-  (context help, EN/DE)
-- Show/hide and reorder modules (persisted), **randomize** & **reset**
-- **Stereo oscilloscope + spectrum analyzer** (FFT) — tapped at the **final output**
-  (after all master stages incl. the spatial modes), L/R side-by-side scope plots and a
-  two-colour spectrum, with automatic mono collapse and per-channel scope triggering
-- **3D spinning JASS logo** in the header (toggle off via right-click)
-- **Presets** in the `.jass` format + an auto-saved live state; demo presets
-  (incl. **"Matrix Showcase"**, which exercises the whole mod matrix) and example
-  wavetables ship embedded and seed on first run
-- **`DAF Beat`** (F11) demos the **STEP SEQ** and **PERC** together — a bass figure
-  measured off a 1981 record, with the record's drum pattern underneath it. The first
-  preset that plays a whole piece by itself. Needs the free SamsSonor kit (see below);
-  it is restored by name.
-- **PRESETS quick-access bank** (F1–F12) in the MASTER BUS — single-press loads,
-  double-press assigns; assignments are global. **F8 = GrandPiano**: the
-  Splendid set with nothing else in the signal path, for when you just want a
-  piano
-
-Use the **MODULES** button to show/hide modules per zone, reorder them by drag &
-drop, and set each module's **left/right alignment** within its zone row via the
-**L/R tags** (e.g. keep MASTER BUS modules hugging the right). The whole layout —
-visibility, order and alignment — is saved; "Reset layout" restores the factory
-arrangement:
+- **On-screen keyboard** (mouse and computer keys) and **MIDI** input with velocity
+- **19″ rack** with zones; every module and zone has **enable / reset / info**
+  (context help in English and German)
+- **MODULES** panel — show or hide modules per zone, reorder them by drag & drop,
+  align them left or right within a row. The layout is saved; "Reset layout"
+  restores the factory arrangement.
+- **Stereo oscilloscope + spectrum analyzer**, tapped at the final output
+- **Presets** in the `.jass` format plus an auto-saved live state; demo presets
+  and example wavetables ship embedded and seed on first run
+- **Quick-access bank F1–F12** — one press loads, a double press assigns. **F8** is
+  a plain grand piano, **F9** a grain cloud, **F11** `DAF Beat`: a bass figure
+  measured off a 1981 record with the record's drum pattern underneath (needs the
+  free SamsSonor kit, see below).
+- **Randomize** the whole rack, **reset** a module, a zone or everything
 
 <img src="docs/screenshots/Modules.png" alt="MODULES panel" width="360">
+
+## JASS in a DAW
+
+The same build runs as a **VST3 instrument**. In a host, JASS
+
+- follows the **host clock** — STEP SEQ and PERC lock to tempo, song position and
+  transport. PLAY starts the figure at step 1, STOP stands it still, PLAY again
+  continues; a note from the track sets its root.
+- exposes **one parameter per knob, grouped by module**,
+- keeps its **patterns in the plugin state**, so they travel with the project,
+- plays at its **standalone level**.
+
+The rack is one patch plus two fixed boxes (PERC, BASS) by design — more voices
+of music are more JASS instances on more tracks, and two instances stay in phase.
+
+**Tested in:** Bitwig Studio 6.1, Cubase Elements 15 and Waveform Free 14
+(Windows and Linux), by ear — and cross-checked headless in
+[SoundCraft](https://github.com/storytold/soundcraft), a scriptable Rust host,
+where the sequencer clock holds the host grid **to the sample** over four bars at
+two tempi. Host-by-host record:
+[`docs/notes/DAW_Candidates.md`](docs/notes/DAW_Candidates.md). #SoundCraft
 
 ## Build & run
 
@@ -211,8 +188,7 @@ cmake -B build -G "Visual Studio 17 2022"
 
 There is no automated test rig. Verification is deliberate and low-tech: it
 builds, the app runs, and changes are confirmed **by eye and by ear** against
-measured references (several presets are transcribed from records and checked
-against spectral measurements — see the CHANGELOG for the reasoning per change).
+measured references (see the CHANGELOG for the reasoning per change).
 
 The **plugin build** has one scripted check on top of that:
 [`tools/rig/clocktest.py`](tools/rig/clocktest.py) drives `JASS.vst3` headless in
@@ -233,15 +209,13 @@ Source/
 │                         <Name>Specs.h generate APVTS params + rack descriptor
 ├─ Audio/
 │  ├─ Parameters.h        parameter IDs + applyToVoice()
-│  ├─ PresetIO.h          .jass import/export (nested v6, migration)
+│  ├─ PresetIO.h          .jass import/export, version migration
+│  ├─ PatternStore.h      STEP SEQ figure + PERC grid (content, not parameters)
 │  └─ SynthVoice.*        one voice (oscillators, generators, effects)
 ├─ DSP/                   Oscillator, Noise, KarplusStrong, WavetableBank,
 │                         BiquadFilter, LFO, ADSR, Effects, ModMatrix …
 └─ UI/                    rack editor + knob/display components
 ```
-
-Architecture details: **[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)** ·
-module-spec system: **[`docs/MODULE_SYSTEM.md`](docs/MODULE_SYSTEM.md)**.
 
 ## Docs
 
@@ -256,13 +230,13 @@ module-spec system: **[`docs/MODULE_SYSTEM.md`](docs/MODULE_SYSTEM.md)**.
 
 **Reference:**
 
-- **[`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)** — `.jass` preset format (nested v6)
-- **[`docs/Glossary.md`](docs/Glossary.md)** — glossary
+- **[`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)** — the `.jass` preset format
+- **[`docs/Glossary.md`](docs/Glossary.md)** — glossary (German)
 - `docs/notes/` — internal ideas, research & cheat-sheet notes (not official docs)
 
 ## Versioning
 
-JASS uses **CalVer** — `YYYY.MM.MICRO` (e.g. `2026.07.0`) — shown in the header
+JASS uses **CalVer** — `YYYY.MM.MICRO` (e.g. `2026.11.0`) — shown in the header
 subtitle and the right-click title info menu. Changes land on `main` only via pull
 requests, and each merge bumps the version. See **[`CHANGELOG.md`](CHANGELOG.md)**.
 
@@ -271,9 +245,9 @@ contract — see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
 
 **Releases / CI.** A GitHub Actions pipeline (`.github/workflows/release.yml`) runs on
 every merge to `main`: it derives the next CalVer, builds Windows + Linux artifacts
-(Standalone + VST3), and publishes them to a GitHub release (see the Download link above).
+(Standalone + VST3), and publishes them to a GitHub release.
 
-**Contributing.** Don't push to `main` directly — use a feature branch + PR. Enable the
+**Contributing.** Don't push to `main` directly — use a branch + PR. Enable the
 local guard hook once per clone:
 
 ```sh
@@ -332,10 +306,7 @@ the sampler is the sole generator).
 
 Both zips are reproducible from source: `python tools/build_piano_zips.py`
 fetches the upstream repos (shallow) and assembles them around the curated
-`.sfz` files in [`tools/piano-packs/`](tools/piano-packs/). A third option,
-the **Iowa Steinway**, still builds with `python tools/get_iowa_piano.py`
-(University of Iowa [MIS](https://theremin.music.uiowa.edu/MIS.html)
-recordings, freely available without restrictions).
+`.sfz` files in [`tools/piano-packs/`](tools/piano-packs/).
 
 ### Optional drum kit
 
@@ -346,11 +317,6 @@ mapped to SFZ by kinwie, **CC BY-SA 4.0**, ~35 MB. Nothing is redistributed here
 download the repository yourself and drop it into `%AppData%\JASS\Samples\` as
 its own folder, so that `SamsSonor.sfz` sits next to its `Samples/` directory.
 JASS loads it straight from the upstream `.sfz` — no curated copy in between.
-
-The kit's **choke groups** are honoured: on a real kit a closed hi-hat silences the
-ringing open one, and SFZ says so with `group=` / `off_by=`. JASS reads both and
-fades the choked hit out over a few milliseconds, across voices and across PERC's
-four tracks.
 
 Any other mapped `.sfz` kit works too — Alexander Holm's
 [**Salamander Drumkit**](https://archive.org/details/SalamanderDrumkit) (CC BY-SA
