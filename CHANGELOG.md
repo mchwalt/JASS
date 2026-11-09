@@ -17,6 +17,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   WAVETABLE (maintainer 2026-11-08). The combo now shows Off, then the modules A to Z, and maps
   each position back to its catalog index, the way PERC's KIT list already does. Nothing stored
   changes.
+- **The in-app help says what the app does again.** The MOD MATRIX page had been saved
+  double-encoded since 2026-08-18, so its dashes, arrows and German umlauts showed as
+  `â€”`-style garbage in both languages; it is back to clean UTF-8 and now says the MOD list is
+  sorted A to Z. The STEP SEQ and PERC pages still described the 16.2-era limits (192 steps, four
+  pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
 - **BASS — a second voice beside the patch, and a BASS switch on the STEP SEQ.** JASS is
