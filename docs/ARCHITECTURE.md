@@ -439,12 +439,14 @@ light only the targeted oscillator's knob.
   hides non-automatable parameters or shows units as folders is the host's
   call (Cubase does both; Bitwig flattens the list).
 - **Preset format**: nested JSON per module,
-  [`PresetIO::kFormatVersion = 6`](Glossary.md#formatversion),
+  [`PresetIO::kFormatVersion = 10`](Glossary.md#formatversion),
   load = *factory-reset everything first, then layer the file on top* —
   missing fields land on factory defaults. [Migration](Glossary.md#migration) chain v<3 (flat) → v3
   (nested) → v4 (LFO target folded into slots) → v5 (DEST split
   MODULE + PARAM) → v6 (catalog A→Z param remap), with backups to
-  `%AppData%\JASS\PresetsBackup`. Details: [`JASS_Preset_Format.md`](JASS_Preset_Format.md).
+  `%AppData%\JASS\PresetsBackup`; v7–v10 changed the *spelling* of the
+  step, lane and slot arrays and write every field, and need no value
+  migration. Details: [`JASS_Preset_Format.md`](JASS_Preset_Format.md).
 
 Side channels the module specs deliberately do not cover: `RackLayout`
 (above), `Sampler.File` (sample set referenced **by name**, re-resolved on
@@ -599,7 +601,7 @@ its viewport only if it is still taller than the window.
 
 The formal architecture spine lives at
 `_bmad-output/planning-artifacts/architecture/architecture-JASS-2026-06-28/ARCHITECTURE-SPINE.md`
-(AD-1…AD-15). One-line summaries:
+(AD-1…AD-16). One-line summaries:
 
 | AD | Decision |
 |---|---|
@@ -615,14 +617,16 @@ The formal architecture spine lives at
 | AD-10 | `RackLayout` model (id/zone/position/visible) is the single source of placement truth; customization is a reorderable list panel |
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
 | AD-12 | Width fixed (1920 px), height auto-fits the visible rack; the display-fit scale comes from the may-appear worst case, with a floor of 1:1 physical pixels |
-| AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS stays one patch on the keyboard (plus the two fixed boxes of AD-15); several voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
+| AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS plays one instrument on the keyboard — two layers since AD-16, plus the two fixed boxes of AD-15; further voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
 
 | AD-14 | **Sequencer patterns are content, not parameters.** The STEP SEQ figure (768 × pitch/on/accent/gate) and the PERC grid (4 × 192) leave the APVTS and live in a `PatternStore` the engine reads lock-free; a host sees ~150 parameters, not ~4000. Presets, DAW state and LiveState carry the patterns as data blocks; the rack binds step knobs and grid cells to the store, not to parameters |
-| AD-15 | **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** JASS stays one patch on the keyboard. Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and is driven by an existing sequencer through a switch on that sequencer (STEP SEQ's BASS), never by the keyboard. Two boxes are the limit: PERC (drums) and BASS (a sequenced mono bass). A third box, a second BASS or matrix targets into a box are the part system AD-13 rejected — that music is DAW tracks |
+| AD-15 | **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** The keyboard plays the patch (two layers since AD-16). Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and is driven by an existing sequencer through a switch on that sequencer (STEP SEQ's BASS), never by the keyboard. Two boxes are the limit: PERC (drums) and BASS (a sequenced mono bass). A third box, a second BASS or matrix targets into a box stay out, and so does a third layer (AD-16) — that music is DAW tracks |
+| AD-16 | **JASS is bitimbral (decided 2026-11-11, Story 21.3): two identical layers, one rack.** Every patch module exists twice, layer A (today's ids, untouched) and layer B (the same specs, ids prefixed `b`), each with its own voice pool; one A|B focus switch in the header decides which layer the rack shows and edits. Instrument modules (MASTER bus, STEP SEQ, ARP, PERC, BASS, CHAOS, displays, keyboard, preset bank) stay single and serve both; the sequencers get a target. LAYER and SPLIT from one keyboard. A preset is instrument + layer A + an optional `LayerB` object; old presets are layer A with B off. Supersedes AD-13 (a) for two layers; songs with more voices stay DAW tracks |
 
 ### AD-13 in more detail (decided 2026-10-05)
 
-- **What was rejected.** (a) Parts inside one JASS: N engines behind one APVTS, prefixed
+- **What was rejected.** (a) Parts inside one JASS (*superseded for exactly two identical layers by
+  AD-16, 2026-11-11*): N engines behind one APVTS, prefixed
   parameter ids, a part selector in a 1920 px rack, a global ARP/SEQ/PERC/GLIDE made per-part.
   (b) JASS as a plugin host: a small DAW of our own (scanning, editor windows, latency, routing).
   Both buy with the simplicity of JASS what a DAW already has.
@@ -741,7 +745,8 @@ The formal architecture spine lives at
      the list of boxes a PATCH|BASS combo would never grow a third entry). Off: nothing changes
      anywhere.
   4. **Two boxes, named.** PERC (drums) and BASS (one monophonic sequenced bass). The list is
-     closed: a third box, a second BASS or a polyphonic box is the part system AD-13 rejected,
+     closed: a third box, a second BASS or a polyphonic box stays out (since AD-16 the patch itself
+     has two layers; a third layer is out as well),
      and the answer to "I need more" stays the DAW.
   5. **No matrix targets into a box at first.** The MOD MATRIX modulates the patch. A box's
      knobs are knobs; if a routing into the bass ever proves musically necessary it is a
@@ -777,6 +782,121 @@ The formal architecture spine lives at
 - **Relation to AD-13's family cuts.** The sequenced-bass cut named there is this engine with
   the STEP SEQ in front of it; building BASS inside JASS first means the cut inherits a voice
   that has been played, not designed on paper.
+
+### AD-16 in more detail (decided 2026-11-11, Story 21.3)
+
+- **The problem.** AD-13 sent every second voice of music to the DAW, and AD-15 allowed two
+  fixed boxes beside the patch and closed the list. On 2026-11-11 the maintainer listened
+  through 40 hardware demos and named the UDO Super 6 / Super Gemini his target ("wir bauen
+  JASS zu einem UDO Gemini aus" — "21.3 ist ab heute ganz klar, wir müssen JASS bitimbral neu
+  aufsetzen"). The Super Gemini is a *dual-layer* instrument: "two identical synthesis strands
+  with direct access", 20 voices, layer or split, one arpeggiator/step sequencer, one keyboard.
+  Neither the DAW (two instances are two instruments, not one) nor a box (small, fixed, no
+  keyboard) gives that.
+- **The rule.**
+  1. **Two identical layers, A and B.** Every *patch module* exists twice; layer B is not a
+     reduced copy. Patch modules (27 of today's 39 specs): OSC 1–3, SUB, NOISE, STRING,
+     WAVETABLE, SAMPLER, GRAIN, CROSS MOD, FILTER, FORMANT, ADSR, PITCH ENV, GLIDE, LFO 1–4,
+     MOD MATRIX, DISTORTION, WAVEFOLD, BITCRUSH, PHASER, CHORUS, DELAY, REVERB.
+  2. **Instrument modules stay single** and serve both layers (12 specs): MASTER, COMPRESSOR,
+     STEREO (output mode, width, room), ARP, STEP SEQ, PERC, BASS, CHAOS, OSCILLOSCOPE, SPECTRUM,
+     KEYBOARD, PRESET BANK. CHAOS is one attractor both matrices can read; the master bus sums
+     both layers before the compressor, as it already sums PERC and BASS.
+  3. **Ids: layer A keeps today's ids, layer B prefixes them.** The parameter layout is built
+     from the same `ModuleSpec` list twice: once as is, once with every id prefixed `b`
+     (`filterCutoff` → `bfilterCutoff`; group and host names prefixed `B `). Old presets, DAW
+     projects, automation and the 450-odd `ID::` call sites keep meaning layer A; the B ids
+     come out of the spec walk, not out of hand-written constants (the `JASS_INDEXED_ID`
+     pattern already proves the cached-string approach for OSC/LFO/slot ids). New layer-level
+     parameters (all append-only, defaults = today): `layerBOn` (off), `layerMode` (LAYER |
+     SPLIT), `splitNote` (C3), `layerFocus` (A | B, UI only, not automatable), level/pan
+     balance per layer.
+  4. **One engine class per layer.** Everything per-patch that lives in the processor today
+     moves into a `PatchEngine` (working name): the `juce::Synthesiser` with its voices, the
+     `GlideInfo` and mono-glide state, the GLOBAL LFOs (20.1), the sampler loop clock, the
+     block-level values (LFO rates, delay time, generator mask) and `applyToVoice`. The
+     processor owns `PatchEngine a, b` plus the instrument stages. **Prerequisite, no sound
+     change:** `applyToVoice` stops looking parameters up by string — each engine resolves its
+     ~220 `std::atomic<float>*` once (A's ids or B's) and reads through them; idle voices are
+     skipped. Today that is ~1,700 string-map lookups per block for 8 voices; doubled it would
+     be ~3,400 (agent count 2026-11-11).
+  5. **Voices.** Each layer has its own pool of **8** voices (today's count), stock JUCE
+     allocation and stealing inside the pool; B's pool renders only while `layerBOn`. Raising
+     the count (the Gemini has 20 shared) is a later measurement, not part of this decision.
+  6. **MIDI router in front of the engines.** LAYER: every key goes to both. SPLIT: below
+     `splitNote` → B, from it up → A (bass/pad under the left hand, the classic split). The
+     drone (ch 16) and the step audition (ch 15) keep their channels and go to the focused
+     layer. A per-layer MIDI-channel mode (ch 1 → A, ch 2 → B, for the DAW) is a candidate for
+     later, not part of this decision.
+  7. **Sequencers get a target, not a copy.** ARP and STEP SEQ stay single (the Gemini has one
+     of each); each gets a target choice **A | B | A+B** (STEP SEQ additionally keeps its BASS
+     switch — BASS wins when on). Default A: the pre-AD-16 behaviour. PERC and BASS stay boxes
+     under AD-15; AD-15's rule 4 ("two boxes, closed list") still holds — layers are not boxes.
+  8. **One rack, a focus switch.** The header gets **A | B** (lit, B tinted so it is always
+     visible which layer is edited), B ON, LAYER/SPLIT and the split note. The rack shows the
+     focused layer's patch modules; instrument modules look the same whichever layer is in
+     focus. Implementation preference: **two frame sets** for the patch modules (B's frames are
+     built against B's ids) swapped on focus — no rebinding of `ModuleFrame` attachments, of
+     its cached atomics or of the editor's captured lambdas (PAN gating, CROSS MOD
+     `enabledWhen`, the hand-built MOD MATRIX body). One rack layout for both layers (positions
+     and visibility are the module id's, AD-10/11). Mod rings, scope and spectrum follow the
+     focus. RANDOM and the LOAD-into-layer act on the focused layer; RESET and preset LOAD act
+     on the instrument.
+  9. **Preset = instrument + layer A + optional layer B.** The file keeps its root as today
+     (instrument modules + layer A's modules, unchanged keys) and gains one object
+     `"LayerB": { <patch module objects> }` plus the layer-level fields. Missing `LayerB` ⇒ B
+     off, defaults — every existing preset loads exactly as before; no version bump for
+     reading (append-only, AD-11 / preset rule). Two new actions: **LOAD INTO B** (any existing
+     single-layer preset becomes layer B — the whole preset library turns into layer
+     material) and **COPY A → B**. PatternStore, sample-set names and the latch root stay
+     instrument-level. DAW state needs nothing new: B's parameters ride in the APVTS XML.
+  10. **Hosted.** The VST3 gets both layers (same code); MASTER's host rules (AD-13) apply to
+      the sum. The host list grows by layer B's parameters (the patch part, the larger share of
+      today's list — count it in S1), still far below the ~4000 AD-14 removed; B's groups sort
+      after A's.
+- **What it supersedes.** AD-13 (a) — "parts inside one JASS" — for exactly two identical
+  layers; the rest of AD-13 stands (the DAW owns songs, tracks and mixing; more voices of music
+  = more instances; the plugin family of single-purpose cuts, which simply use layer A). AD-15
+  stays, with rule 4 reworded from "the part system AD-13 rejected" to "a third layer or a
+  third box". README: "two layers plus two fixed boxes".
+- **What was rejected.**
+  (a) **Layer B as a read-only preset** (played, edited only by loading): saves the UI work but
+  not the engine work, and the Gemini's point is direct access to both.
+  (b) **A polyphonic third box**: a crippled second sound, and AD-15 rule 4.
+  (c) **One shared voice pool with a layer tag per voice**: better voice economy (the Gemini
+  shares 20), but every voice would switch parameter sets per note and stealing would cross
+  layers; two pools are simpler and testable. Revisit only if 2 × 8 is measured too tight.
+  (d) **Rebinding one frame set on focus** (`rebuildPagedBody` generalised): fewer widgets, but
+  it touches every place that caches an atomic or captures one in a lambda; two frame sets
+  cost memory, not correctness.
+  (e) **Prefixing both layers** (`a…`/`b…`): symmetric, but it breaks every old preset key,
+  DAW project and automation lane — layer A must stay today's ids.
+- **What it costs.** CPU: up to 2 × 8 voices × channel strips — measure on the maintainer's
+  machine before raising anything (the prerequisite of rule 4 pays part of it back). Memory:
+  per voice ~2.5 MB of delay buffers at 48 kHz (6.5 s × 2 strips) — 16 voices ≈ 40 MB, plus a
+  second set of stretch engines. UI: one more header row of controls and ~27 more frames.
+  Format: one new root object. Docs/help: header controls, LAYER/SPLIT, the `bass.md` line
+  "beside the patch", README.
+- **How it is built (stages, each its own story, each audibly a no-op until the last):**
+  - **S0 — `PatchEngine` extraction + cached parameter pointers + idle-voice skip.** Rig null
+    test: output identical to before (below −90 dBFS). Pays for itself even without layer B.
+  - **S1 — Layer B in the engine:** prefixed spec walk, second engine, MIDI router
+    (LAYER/SPLIT), `LayerB` in presets/LiveState, LOAD INTO B / COPY A → B; temporary minimal
+    header controls. Ear test: two old presets layered.
+  - **S2 — Focus switch and the second frame set,** B tint, mod rings/scope by focus, help
+    EN/DE.
+  - **S3 — Sequencer targets** (ARP/STEP SEQ A | B | A+B), balance per layer, CPU measured and
+    noted, README.
+  - Stories 21.1 (FILTER SLOPE + DRIVE) and 21.2 (DUAL) live inside the voice and therefore
+    apply to both layers without extra work; they can come before or after S0–S3.
+- **Open after S3: does the BASS box stay?** Once STEP SEQ can target layer B, a mono bass patch
+  on B covers most of what BASS does. BASS still differs: dry past the patch FX, one cheap mono
+  voice, and a third simultaneous part (pad on A, a second sound on B, the figure on BASS).
+  Decided by ear after S3 against `Light Duo`; if it goes, it is hidden and its parameters stay
+  readable (append-only), never deleted.
+- **Out of scope here (Gemini features for later stories):** pitch bend, poly aftertouch,
+  ribbon and portamento fader (JASS has no pitch bend today), more voices, a per-layer MIDI
+  channel mode, a shared voice pool.
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.
