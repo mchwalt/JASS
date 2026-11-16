@@ -1,4 +1,5 @@
 #include "SynthVoice.h"
+#include "PatchEngine.h"   // 21.4: refreshVoice for a voice the block push skipped
 
 bool SynthVoice::canPlaySound(juce::SynthesiserSound* sound)
 {
@@ -39,6 +40,11 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
 void SynthVoice::startNote(int midiNoteNumber, float velocity,
                            juce::SynthesiserSound*, int)
 {
+    // 21.4: a voice the block push skipped (it was idle) takes this block's parameters FIRST —
+    // everything below reads them (envelope times, sampler set and mode, grain, LFO shapes).
+    if (paramsStale && engine != nullptr)
+        engine->refreshVoice(*this);
+
     noteVelocity = velocity;   // Velocity mod source (Story 8.1): 0..1, constant across the note.
 
     // All generators transpose relative to C4 (note 60); the FREQ knobs define

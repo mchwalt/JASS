@@ -53,6 +53,10 @@ public:
     // Advance the display / GLOBAL LFOs (20.1) — after the render, as before.
     void endBlock (const BlockContext& ctx);
 
+    // A voice the block push skipped starts a note inside the block: give it the push now.
+    // Called from SynthVoice::startNote on the audio thread (inside render).
+    void refreshVoice (SynthVoice& voice);
+
     // ── editor / instrument reads ───────────────────────────────────────────────────────────
     float getLfoDisplayValue (int i) const   { return lfoDisplayValues[i].load(); }
     void  requestGlobalLfoRearm() noexcept   { rearmGlobalLfos.store (true); }
@@ -80,9 +84,16 @@ private:
 
     double samplerMasterFrac = 0.0;   // Story 12.1: shared SAMPLER loop phase (see beginBlock)
 
-    // Block-level values resolved in beginBlock, read again in endBlock.
+    // Block-level values resolved in beginBlock, read again in endBlock and by refreshVoice.
     double lfoRateHz[kNumLFOs] {};
     bool   lfoGlobalActive[kNumLFOs] {};   // 20.1: on && GLOBAL => the engine's instance is the LFO
+    double blockDelayTimeSec = 0.0;
+    float  blockChaosX = 0.0f, blockChaosY = 0.0f, blockAccent = 0.0f;
+    // The GLOBAL LFO values pushed this block and the block before. setGlobalLfo keeps the previous
+    // value (the voice ramps prev → current across the block), so a stale voice gets both, in order.
+    float  globalLfoPushed[kNumLFOs] {}, globalLfoPushedBefore[kNumLFOs] {};
+
+    void pushToVoice (SynthVoice& voice);
 
     // Poly-glide (portamento): each newly-started note gets a predecessor pitch to glide FROM
     // (pitch-sorted against the previous chord), shared with all voices via glideInfo. Held-note

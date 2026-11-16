@@ -93,6 +93,7 @@ namespace
             juce::AudioBuffer<float> block (2, kBlock);
             juce::MidiBuffer midi;
             size_t next = 0;
+            const double t0 = juce::Time::getMillisecondCounterHiRes();
             for (int pos = 0; pos < total; pos += kBlock)
             {
                 const int n = std::min (kBlock, total - pos);
@@ -111,6 +112,7 @@ namespace
                 for (int c = 0; c < 2; ++c)
                     all.copyFrom (c, pos, block, c, 0, n);
             }
+            const double renderMs = juce::Time::getMillisecondCounterHiRes() - t0;   // CPU hint, not part of the null
 
             out.deleteFile();
             std::unique_ptr<juce::OutputStream> stream = std::make_unique<juce::FileOutputStream> (out);
@@ -123,7 +125,7 @@ namespace
             if (writer == nullptr) { fail ("cannot write " + out.getFullPathName()); return; }
             writer->writeFromAudioSampleBuffer (all, 0, total);
             std::cout << out.getFileName() << "  peak " << juce::Decibels::gainToDecibels (all.getMagnitude (0, total), -200.0f)
-                      << " dBFS" << std::endl;
+                      << " dBFS  render " << juce::String (renderMs, 0) << " ms" << std::endl;
         }
 
         juce::File preset, out;

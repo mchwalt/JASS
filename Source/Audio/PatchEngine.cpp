@@ -19,7 +19,10 @@ PatchEngine::PatchEngine (juce::AudioProcessorValueTreeState& s, const juce::Str
         if (auto* v = dynamic_cast<SynthVoice*> (synth.getVoice (i)))
             voiceRoster.push_back (v);
     for (auto* v : voiceRoster)
+    {
         v->setVoicePeers (&voiceRoster);
+        v->setEngine (this);   // 21.4: a skipped (idle) voice pulls the block push at note-on
+    }
     // GRAIN (17.1): one random stream per voice — golden-ratio multiples spread the xorshift seeds
     // apart, so a chord is several different clouds, not one cloud summed coherently (+6 dB).
     for (size_t i = 0; i < voiceRoster.size(); ++i)
@@ -58,7 +61,7 @@ void PatchEngine::beginBlock (const BlockContext& ctx)
     }
 
     const int delayDiv = (int) *p.delaySyncDiv;
-    const double delayTimeSec = SyncDivision::isSynced(delayDiv)
+    blockDelayTimeSec = SyncDivision::isSynced(delayDiv)
                                     ? SyncDivision::delaySeconds(ctx.syncBpm, delayDiv)
                                     : (double) *p.delayTime;
 
@@ -109,31 +112,63 @@ void PatchEngine::beginBlock (const BlockContext& ctx)
             samplerMasterFrac = 0.0;   // off/empty/silent: clock parks at START
     }
 
-    // Update all voice parameters
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
+    blockChaosX = ctx.chaosX;
+    blockChaosY = ctx.chaosY;
+    blockAccent = ctx.accentDepth;
+    for (int li = 0; li < kNumLFOs; ++li)   // 20.1: a GLOBAL LFO's value — the engine's instance,
+    {                                       // one block behind, like the rings
+        globalLfoPushedBefore[li] = globalLfoPushed[li];
+        globalLfoPushed[li]       = lfoDisplayValues[li].load();
+    }
+
+    // Update the voice parameters — only where a note plays (21.4). An idle voice renders nothing,
+    // so its parameters matter only once a note starts on it: it is marked stale and pulls the
+    // push in startNote (refreshVoice), inside this block, with this block's values.
+    for (auto* voice : voiceRoster)
+    {
+        if (voice->isVoiceActive())
         {
-            voice->setChaosValues(ctx.chaosX, ctx.chaosY);   // one orbit, all voices
-            for (int li = 0; li < kNumLFOs; ++li)   // 20.1: a GLOBAL LFO's value — the engine's instance,
-                voice->setGlobalLfo(li, lfoGlobalActive[li], lfoDisplayValues[li].load());   // one block behind, like the rings
-            voice->setAccentDepth(ctx.accentDepth);   // 15.2
-            Parameters::applyToVoice(p, voice->getOscillators(),
-                                     voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
-                                     voice->getLFOs(), voice->getNoise(),
-                                     voice->getKarplus(), voice->getWavetable(),
-                                     voice->getSampler(), samplerMasterFrac,   // Story 12.1 (+ loop clock)
-                                     voice->getGrain(),                         // Story 17.1
-                                     voice->getMixMode(),
-                                     voice->getSubOsc(), voice->getSubOctaveRef(),
-                                     voice->getAdsrOnRef(), voice->getMixModeOnRef(),
-                                     voice->getMixSrcARef(), voice->getMixSrcBRef(),
-                                     voice->getPitchEnv(), voice->getPitchEnvAmountRef(),
-                                     voice->getPitchEnvOnRef(),
-                                     voice->getModSlots(), voice->getModMatrixOnRef(),
-                                     voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
-                                     lfoRateHz, delayTimeSec,
-                                     voice->getFilterKeytrackRef());
+            pushToVoice(*voice);
+            voice->clearParamsStale();
         }
+        else
+            voice->markParamsStale();
+    }
+}
+
+void PatchEngine::refreshVoice (SynthVoice& voice)
+{
+    // The previous block's GLOBAL LFO values first: a voice pushed every block would hold them as
+    // its ramp start (setGlobalLfo shifts current → previous).
+    for (int li = 0; li < kNumLFOs; ++li)
+        voice.setGlobalLfo(li, lfoGlobalActive[li], globalLfoPushedBefore[li]);
+    pushToVoice(voice);
+    voice.clearParamsStale();
+}
+
+void PatchEngine::pushToVoice (SynthVoice& v)
+{
+    auto* voice = &v;
+    voice->setChaosValues(blockChaosX, blockChaosY);   // one orbit, all voices
+    for (int li = 0; li < kNumLFOs; ++li)
+        voice->setGlobalLfo(li, lfoGlobalActive[li], globalLfoPushed[li]);
+    voice->setAccentDepth(blockAccent);   // 15.2
+    Parameters::applyToVoice(p, voice->getOscillators(),
+                             voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
+                             voice->getLFOs(), voice->getNoise(),
+                             voice->getKarplus(), voice->getWavetable(),
+                             voice->getSampler(), samplerMasterFrac,   // Story 12.1 (+ loop clock)
+                             voice->getGrain(),                         // Story 17.1
+                             voice->getMixMode(),
+                             voice->getSubOsc(), voice->getSubOctaveRef(),
+                             voice->getAdsrOnRef(), voice->getMixModeOnRef(),
+                             voice->getMixSrcARef(), voice->getMixSrcBRef(),
+                             voice->getPitchEnv(), voice->getPitchEnvAmountRef(),
+                             voice->getPitchEnvOnRef(),
+                             voice->getModSlots(), voice->getModMatrixOnRef(),
+                             voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
+                             lfoRateHz, blockDelayTimeSec,
+                             voice->getFilterKeytrackRef());
 }
 
 void PatchEngine::slideVoice (int note, double semitones, double seconds)

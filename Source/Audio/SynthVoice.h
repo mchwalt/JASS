@@ -30,6 +30,8 @@ struct GlideInfo
     GlideInfo() { startRatio.fill(-1.0f); }
 };
 
+class PatchEngine;   // 21.4: refreshes a stale voice at note-on (PatchEngine.h includes this file)
+
 class SynthVoice : public juce::SynthesiserVoice
 {
 public:
@@ -124,6 +126,14 @@ public:
     // Poly-glide: shared read-only info filled by the processor each block (see GlideInfo).
     void setGlideInfo(const GlideInfo* g) { glideInfo = g; }
 
+    // Idle-voice skip (Story 21.4): the engine pushes the block's parameters only into voices that
+    // play a note. A skipped voice is marked stale and, when a note starts on it inside the block,
+    // pulls the push first (startNote → PatchEngine::refreshVoice) — so it starts with exactly
+    // what a push every block would have left behind.
+    void setEngine(PatchEngine* e) noexcept { engine = e; }
+    void markParamsStale() noexcept         { paramsStale = true; }
+    void clearParamsStale() noexcept        { paramsStale = false; }
+
     // 15.7 (STEP SEQ TIE/SLIDE): retune the sounding note WITHOUT retriggering — the 303's
     // slide. The pitch target moves by `semitones`; seconds > 0 glides there through the same
     // smoothed ratio the GLIDE module uses, ~0 steps instantly (a tie taking over a new pitch).
@@ -212,6 +222,8 @@ private:
     // pitch (equals the target instantly when glide is off / no predecessor).
     double transposeRatio = 1.0;
     const GlideInfo* glideInfo = nullptr;   // poly-glide info (owned by the PatchEngine)
+    PatchEngine* engine = nullptr;          // 21.4: who refreshes a stale voice at note-on
+    bool paramsStale = false;               // 21.4: skipped by the last block push
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> glideRatio;
     int subOctave = -1;           // sub-oscillator octave offset (-1 or -2)
 
