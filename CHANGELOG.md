@@ -24,6 +24,21 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
+- **Layer B — JASS becomes bitimbral (engine, routing and state; the controls follow).** The
+  target of this season is the UDO Super Gemini: two complete sounds from one keyboard, layered
+  or split. A DAW with two instances is two instruments, the BASS box is a fixed mono voice -
+  neither is a second playable patch (AD-16). JASS now carries a second, complete patch: every
+  sound module exists twice, layer B's parameters are layer A's with a `b` in front, and its own
+  engine renders 8 more voices. LAYER plays every key on both, SPLIT sends the keys below the
+  split point (C3 by default) to B; a released key always reaches the layer its note went to, so
+  moving the split while holding a chord cannot hang a voice. Each layer has a level and a
+  balance. Master bus, ARP, STEP SEQ, PERC and BASS stay single - the ARP and the figure play
+  layer A until they get their own target. Presets keep their root as it was (layer A plus the
+  instrument) and add `Layers` and, when B is in use, `LayerB`; every existing preset and DAW
+  project loads exactly as before, with B off (verified bit-identical on all presets). **There is
+  no control for it in the rack yet** - the A|B switch in the header, LOAD INTO B and COPY A→B
+  arrive with the next step (Story 21.5, S1 of AD-16). The DAW parameter list grows from 254 to
+  456 entries; B's sit after all of A's.
 - **BASS — a second voice beside the patch, and a BASS switch on the STEP SEQ.** JASS is
   monotimbral, and the STEP SEQ takes the held chord over: a pad on the keyboard and a figure from
   the same instance could not sound together. The reference piece of this month (a Super Gemini

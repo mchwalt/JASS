@@ -829,6 +829,18 @@ The formal architecture spine lives at
      concern). Idle voices are marked stale and pull the push in `startNote` (`refreshVoice`,
      which replays the previous block's GLOBAL LFO value first — `setGlobalLfo` ramps from
      it). Verified bit-exact on 24 presets with `JASS_Render` + `tools/rig/nulltest.py`.
+     **S1 done 2026-11-16 (Story 21.5):** `ModuleSpec::layered` marks the 27 patch modules;
+     `createParameterLayout` walks them a second time with prefix `b` (194 params per layer, 456
+     in all, B's groups after A's). `PatchParams::resolve` leaves instrument ids unprefixed
+     (`outputMode`). The processor owns `engineA`, `engineB` (A declared first — LFO seeds);
+     B is not called while `layerBOn` is off. `LayerRouter` (per channel × note memory) splits
+     the final MIDI buffer; B renders into its own buffer and joins the mix before PERC/BASS.
+     Decisions taken with the maintainer: **D1** no UI in S1 (ear test by rendered WAVs);
+     **D2** per-layer LEVEL *and* PAN, the pan being a balance (centre = unity both sides);
+     **D3** the master-bus modulation sums both layers' matrices; **D4** ARP and STEP SEQ play
+     layer A until S3. Preset: `Layers` + optional `LayerB` (see `JASS_Preset_Format.md`).
+     Verified: B off bit-identical on 24 presets; preset and DAW-state round trips with B;
+     B = A bit-exact with the same preset (except where ARP/SEQ play A only, D4).
   5. **Voices.** Each layer has its own pool of **8** voices (today's count), stock JUCE
      allocation and stealing inside the pool; B's pool renders only while `layerBOn`. Raising
      the count (the Gemini has 20 shared) is a later measurement, not part of this decision.

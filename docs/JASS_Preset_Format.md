@@ -63,9 +63,27 @@ nested format on load.
   //   ADSR, PitchEnv, Glide, Arp, Delay, Chorus, Reverb, Karplus, CrossMod, etc.
 
   // Optional. Only present when the rack layout differs from the factory default.
-  "RackLayout": { "GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ], … }   // by zone, in rack order
+  "RackLayout": { "GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ], … },   // by zone, in rack order
+
+  // AD-16 (Story 21.5): the bitimbral switches — instrument-level, always written.
+  "Layers": { "BOn": false, "Mode": "Layer", "Split": 48, "Focus": "A",
+              "ALevel": 1.0, "BLevel": 1.0, "APan": 0.0, "BPan": 0.0 },
+
+  // Optional. Layer B's patch: the PATCH modules once more, with exactly the object and field
+  // names the root uses for layer A ("Filter", "Osc1", "ModMatrix.Slots", "Sampler.File", …).
+  // Written when B is on or differs from a fresh layer; absent ⇒ B at defaults, off.
+  "LayerB": { "Filter": { … }, "Osc1": { … }, … , "Sampler": { …, "File": "Splendid" } }
 }
 ```
+
+**Layers (AD-16).** The root keeps its meaning: instrument modules (master bus, ARP, STEP SEQ,
+PERC, BASS, CHAOS, displays, keyboard, LAYERS) **plus layer A's patch** — every file written
+before AD-16 is therefore a valid single-layer preset, and an older JASS reading a new file sees
+layer A and ignores `Layers` and `LayerB`. Which module is a patch module is the spec's `layered`
+flag (`Source/Modules/*Specs.h`); in the APVTS, layer B's parameters are layer A's ids with the
+prefix `b` (`filterCutoff` → `bfilterCutoff`). No `FormatVersion` bump: new fields only.
+**LOAD INTO B** reads a preset's *root* patch modules into layer B and leaves everything else
+alone (current-format files only).
 
 Field renames never break old files: a `ParamSpec` may carry a `legacyPersistKey`, and the
 reader falls back to it when the current key is missing. Writes always use the current key.

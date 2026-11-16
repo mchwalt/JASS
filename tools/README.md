@@ -60,6 +60,13 @@ compare (proves determinism), make the change, render again, compare against the
     python tools/rig/nulltest.py render  build/Release/JASS_Render.exe       build/nulltest/new
     python tools/rig/nulltest.py compare build/nulltest/refA build/nulltest/new
 
+`JASS_Render` options (Story 21.5, layer B): `--b <preset>` loads that preset's patch into layer B
+and turns B on (LAYER), `--split <note>` splits instead (below the note → B), `--solo a|b` mutes
+the other layer, `--roundtrip` checks that every parameter survives a preset and a DAW-state
+round trip into a fresh processor (exit 3 otherwise; unused MOD MATRIX slots are skipped — they
+are left out of a preset by design), `--save <file>` writes the loaded state back as a preset,
+`--info` prints the parameter counts.
+
 Without preset arguments it renders `%AppData%\JASS\Presets\*.jass` (copies — PresetIO migrates
 an old file in place). The renderer runs the host code path: no LiveState, no drone, MASTER
 locked; standalone-only behaviour still needs the app and an ear. Known non-deterministic
