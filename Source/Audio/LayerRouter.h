@@ -22,11 +22,13 @@ public:
 
     struct Settings
     {
-        bool layerBOn      = false;
-        bool split         = false;   // false = LAYER
+        bool playA         = true;    // the layers that take NEW notes (Single: the selected one,
+        bool playB         = false;   // Dual / Split: both)
+        bool split         = false;   // with both: false = DUAL (every key to both)
         int  splitNote     = 48;
         bool focusB        = false;   // drone + step preview go to the edited layer
-        bool patternOwnsCh1 = false;  // ARP / STEP SEQ (not to BASS) plays channel 1 → A
+        bool patternOwnsCh1 = false;  // ARP / STEP SEQ (not to BASS) plays channel 1 ...
+        bool patternToB    = false;   // ... into B (Single with B selected) instead of A
         int  droneChannel  = 16;
         int  auditionChannel = 15;
     };
@@ -83,16 +85,14 @@ public:
 private:
     std::uint8_t destForNoteOn (const juce::MidiMessage& m, const Settings& s) const
     {
-        if (! s.layerBOn)
-            return kA;
         const int ch = m.getChannel();
         if (ch == s.droneChannel || ch == s.auditionChannel)
             return s.focusB ? kB : kA;
         if (ch == 1 && s.patternOwnsCh1)
-            return kA;
-        if (! s.split)
-            return kBoth;
-        return m.getNoteNumber() < s.splitNote ? kB : kA;
+            return s.patternToB ? kB : kA;
+        if (s.playA && s.playB)
+            return ! s.split ? kBoth : (m.getNoteNumber() < s.splitNote ? kB : kA);
+        return s.playB ? kB : kA;
     }
 
     void remember (const juce::MidiMessage& m, std::uint8_t d)

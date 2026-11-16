@@ -880,14 +880,25 @@ void SynthyEditor::timerCallback()
     {
         auto& a = processor.getAPVTS();
         // SPLIT shown on the keyboard whenever it is on (B's keys violet), whatever the selection.
-        const bool split = *a.getRawParameterValue (Parameters::ID::layerMode) > 0.5f
-                        && *a.getRawParameterValue (Parameters::ID::layerBOn) > 0.5f;
+        const bool split = juce::roundToInt (a.getRawParameterValue (Parameters::ID::layerMode)->load()) == 2;
         if (keyboard != nullptr)
             keyboard->setSplitNote (split ? juce::roundToInt (a.getRawParameterValue (Parameters::ID::splitNote)->load()) : -1);
         // LEARN: the key the processor saw becomes the split point (written here, message thread).
         if (const int n = processor.takeLearnedSplitNote(); n >= 0)
             if (auto* p = a.getParameter (Parameters::ID::splitNote))
                 p->setValueNotifyingHost (p->convertTo0to1 ((float) n));
+        // LEARN = key 3 held (the Super Gemini's "hold SPLIT and play a key"): armed while the key is
+        // down, re-armed after every caught note so the last one played wins; released = off.
+        if (learnKeyHeld)
+        {
+            if (! juce::KeyPress::isKeyCurrentlyDown ('3'))
+            {
+                learnKeyHeld = false;
+                processor.armSplitLearn (false);
+            }
+            else if (! processor.isSplitLearnArmed())
+                processor.armSplitLearn (true);   // after the take above: arming clears the caught note
+        }
     }
 
     // Story 7.6: while Shift is held every module ↺ shows "factory values" (amber + dot) — the
@@ -1721,6 +1732,11 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     {
         if (key.getTextCharacter() == '1') { layerSelector->press (true);  return true; }
         if (key.getTextCharacter() == '2') { layerSelector->press (false); return true; }
+        if (key.getTextCharacter() == '3')   // hold + play a key = the split key (LEARN)
+        {
+            if (! learnKeyHeld) { learnKeyHeld = true; processor.armSplitLearn (true); }
+            return true;
+        }
     }
     // ESC closes an open help panel (Story 6.1) — fallback in case the panel lost focus.
     if (key == juce::KeyPress::escapeKey && helpPanel && helpPanel->isVisible())
@@ -2277,16 +2293,13 @@ void SynthyEditor::buildRack()
         ModuleDescriptor d;
         d.id = "layers"; d.title = "LAYERS";
         d.pinnedOnReset = true;   // back on screen after every reset (maintainer 2026-11-16)
-        d.sizeClass = SizeClass::W12H1; d.type = ModuleType::Processor;
+        d.sizeClass = SizeClass::W10H1; d.type = ModuleType::Processor;
         d.defaultZone = Rack::Zone::MasterBus;
         auto* selector = new LayerSelector (apvts);
         rackOwned.add (selector);
         layerSelector = selector;   // keys 1 / 2 press its buttons
         Knob split = K (P::splitNote, "SPLIT");
         split.alwaysFine = true;   // a key is aimed at, one semitone at a time (maintainer 2026-11-16)
-        auto* learn = new LearnButton ([this] { return processor.isSplitLearnArmed(); },
-                                       [this] (bool on) { processor.armSplitLearn (on); });
-        rackOwned.add (learn);
         split.textFromValue = [] (double v) { return juce::MidiMessage::getMidiNoteName (juce::roundToInt (v), true, true, 4); };
         split.tooltipFromValue = [] (double v)
         {
@@ -2299,10 +2312,8 @@ void SynthyEditor::buildRack()
         bPan.activeWhen = [] { return true; };
         d.body = {
             Display { selector, 2 },
-            Toggle { P::layerBOn, "B ON" },
-            Combo { P::layerMode, "MODE", juce::StringArray { "Layer", "Split" } },
+            Combo { P::layerMode, "MODE", juce::StringArray { "Single", "Dual", "Split" } },
             split,
-            Display { learn, 1 },
             K (P::layerALevel, "A LVL"), aPan,
             K (P::layerBLevel, "B LVL"), bPan,
         };

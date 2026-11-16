@@ -256,13 +256,21 @@ private:
     LayerRouter layerRouter;                       // 21.5: LAYER / SPLIT, note-offs follow their note-on
     juce::MidiBuffer layerMidiA, layerMidiB;       // the router's two outputs (pre-sized, audio thread)
     juce::AudioBuffer<float> layerBRender;         // B renders here, then joins the mix (pre-sized)
-    bool  layerBWasOn = false;                     // falling edge: stop B's voices
     float layerGainPrev[2][2] { { 1.0f, 1.0f }, { 1.0f, 1.0f } };   // [layer][L/R] last block's level×balance
     PatchEngine& focusedEngine() noexcept;         // the layer the rack edits (layerFocus)
 public:
     // layerFocus: 0 = A, 1 = B, 2 = A+B (linked editing — the rack shows A, edits mirror to B).
     int  getLayerFocus() const { return juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerFocus)->load()); }
     bool isFocusB() const      { return getLayerFocus() == 1; }
+    // Which layers take notes (21.6): SINGLE — the selection (A, B, or both); DUAL / SPLIT — both.
+    struct LayersPlaying { bool a = true, b = false; };
+    LayersPlaying layersPlaying() const
+    {
+        const int mode = juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerMode)->load());
+        if (mode != 0) return { true, true };
+        const int f = getLayerFocus();
+        return { f != 1, f != 0 };
+    }
     // LAYERS · LEARN (21.6): arm, then the next played key is reported once (-1 = none yet).
     void armSplitLearn (bool armed)  { learnedSplitNote.store (-1); splitLearnArmed.store (armed); }
     bool isSplitLearnArmed() const   { return splitLearnArmed.load(); }

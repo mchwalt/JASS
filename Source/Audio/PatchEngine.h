@@ -38,6 +38,14 @@ public:
 
     // ── block, in call order ─────────────────────────────────────────────────────────────────
     void killAllVoices()                     { synth.allNotesOff (0, false); }
+    // A voice still plays (a held note or a release tail) — a layer that stopped taking notes
+    // (SINGLE switched to the other one) keeps rendering until this is false.
+    bool isSounding() const
+    {
+        for (auto* v : voiceRoster)
+            if (v->isVoiceActive()) return true;
+        return false;
+    }
     // LFO rates, delay time, SAMPLER loop clock, and the parameter push into the voices.
     void beginBlock (const BlockContext& ctx);
     // STEP SEQ legato/slide: move the voice holding `note` without retriggering it.

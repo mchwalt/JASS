@@ -112,11 +112,11 @@ namespace
             {
                 if (! PresetIO::loadIntoLayerB (proc->getAPVTS(), opt.layerB).ok)
                 { fail ("cannot load into layer B (format older than current?) " + opt.layerB.getFullPathName()); return; }
-                setParam (*proc, Parameters::ID::layerBOn, 1.0f);
+                setParam (*proc, Parameters::ID::layerMode, 1.0f);   // DUAL
             }
             if (opt.split >= 0)
             {
-                setParam (*proc, Parameters::ID::layerMode, 1.0f);
+                setParam (*proc, Parameters::ID::layerMode, 2.0f);   // SPLIT
                 setParam (*proc, Parameters::ID::splitNote, (float) opt.split);
             }
             if (opt.solo == 1) setParam (*proc, Parameters::ID::layerBLevel, 0.0f);

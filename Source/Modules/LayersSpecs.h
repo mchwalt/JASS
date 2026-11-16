@@ -10,12 +10,14 @@ namespace Modules
     inline ModuleSpec layers()
     {
         ModuleSpec m;
-        m.id = "layers"; m.title = "LAYERS"; m.persistObject = "Layers"; m.enableParamId = "layerBOn";
+        m.id = "layers"; m.title = "LAYERS"; m.persistObject = "Layers";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::MasterBus; m.size = rack::SizeClass::W6H1;
         m.defaultVisible = false;
         m.params = {
-            { "layerBOn",    "BOn",    "B ON",  ParamSpec::Kind::Bool },
-            { "layerMode",   "Mode",   "MODE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Layer", "Split" } },
+            // SINGLE: the selected layer plays (1 = A, 2 = B, both = both). DUAL: both play on every
+            // key. SPLIT: below the split key B, from it up A. (UDO Super Gemini: Single/Dual/Split;
+            // maintainer 2026-11-16 — replaces the B ON switch, which was no way to play live.)
+            { "layerMode",   "Mode",   "MODE",  ParamSpec::Kind::Choice, {}, 0.0f, { "Single", "Dual", "Split" } },
             // SPLIT: notes BELOW this go to B (the left hand), from it up to A. 48 = C3.
             { "splitNote",   "Split",  "SPLIT", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (0.0f, 127.0f, 1.0f), 48.0f },
             // Which layer the rack edits (S2). A view choice, not sound: no automation lane.
@@ -28,7 +30,7 @@ namespace Modules
             { "layerAPan",   "APan",   "A PAN", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f },
             { "layerBPan",   "BPan",   "B PAN", ParamSpec::Kind::Float, juce::NormalisableRange<float> (-1.0f, 1.0f, 0.001f), 0.0f },
         };
-        m.params[3].automatable = false;   // layerFocus
+        m.params[2].automatable = false;   // layerFocus
         return m;
     }
 }

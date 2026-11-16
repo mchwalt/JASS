@@ -393,7 +393,7 @@ void SynthyProcessor::updateMatrixModuleEnables()
     // AD-16 (21.6): both layers' matrices — B's while B plays. A layer's patch modules are its own
     // ("b"-prefixed for B); an instrument module (COMPRESSOR, STEREO, MASTER, CHAOS) is shared, so
     // a claim from either layer keeps it on.
-    const bool bOn = *apvts.getRawParameterValue(ID::layerBOn) > 0.5f;
+    const bool bOn = layersPlaying().b;
     std::set<juce::String> claimed;
     for (const juce::String pre : { juce::String(), juce::String(Modules::kLayerBPrefix) })
     {
@@ -583,7 +583,7 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
 
     // Either layer's slots (21.6: "bmodSlot…"), and B switching on or off (its claims count only
     // while it plays).
-    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerBOn)
+    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerMode || paramId == Parameters::ID::layerFocus)
     {
         if (onMsgThread) updateMatrixModuleEnables();
         else             matrixEnablesDirty.store(true);
@@ -1121,10 +1121,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                                                    (int) ModSource::LFO3, (int) ModSource::LFO4 };
         // AD-16 D3: both layers' matrices drive the master bus (B only while it plays); the
         // offsets add. Layer A alone is the pre-AD-16 sum, in the same order.
-        const bool bOnForMod = *apvts.getRawParameterValue(ID::layerBOn) > 0.5f;
+        const auto playing = layersPlaying();   // 21.6: only the layers that play
         for (const PatchEngine* layer : { &engineA, &engineB })
         {
-        if (layer == &engineB && ! bOnForMod) break;
+        if (layer == &engineA && ! playing.a) continue;
+        if (layer == &engineB && ! playing.b) break;
         const auto& pp = layer->params();
         if (*pp.modMatrixOn > 0.5f)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
@@ -1164,13 +1165,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     engineA.beginBlock(patchCtx);
     // Layer B (AD-16): not called at all while off — no push, no render, no LFO advance — so the
     // instrument with B off is the pre-AD-16 one, bit for bit. Switching it off stops its voices.
-    const bool layerBOn = *apvts.getRawParameterValue(Parameters::ID::layerBOn) > 0.5f;
-    if (! layerBOn && layerBWasOn)
-    {
-        engineB.killAllVoices();
-        layerRouter.forgetLayerB();
-    }
-    layerBWasOn = layerBOn;
+    // 21.6 SINGLE / DUAL / SPLIT: B renders while it takes notes, and on after that until its last
+    // release tail has faded — switching SINGLE from B to A lets B's notes ring out, not cut.
+    const auto playing = layersPlaying();
+    const bool layerBOn = playing.b || engineB.isSounding();
     if (layerBOn)
         engineB.beginBlock(patchCtx);
 
@@ -1558,8 +1556,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     else
     {
         LayerRouter::Settings rs;
-        rs.layerBOn        = true;
-        rs.split           = *apvts.getRawParameterValue(Parameters::ID::layerMode) > 0.5f;
+        rs.playA           = playing.a;
+        rs.playB           = playing.b;
+        rs.split           = juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerMode)->load()) == 2;
+        rs.patternToB      = ! playing.a && playing.b;   // SINGLE on B: the figure / ARP plays B
         rs.splitNote       = (int) *apvts.getRawParameterValue(Parameters::ID::splitNote);
         rs.focusB          = isFocusB();   // A+B edits through A: drone and preview stay on A
         rs.patternOwnsCh1  = patternOwnsCh1;
@@ -1963,7 +1963,8 @@ juce::StringArray SynthyProcessor::listenedParamIds() const
         ids.add(bp + ID::modSlotSource(n));
         ids.add(bp + ID::modSlotModule(n));
     }
-    ids.add(ID::layerBOn);
+    ids.add(ID::layerMode);    // which layers play (Single / Dual / Split) …
+    ids.add(ID::layerFocus);   // … and in Single the selection
     return ids;
 }
 

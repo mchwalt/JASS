@@ -848,7 +848,7 @@ namespace PresetIO
 
         // Layer B (AD-16): the patch modules once more, same object/field names, inside "LayerB".
         // Omitted while B is off AND untouched — a single-layer preset stays the file it was.
-        if (*a.getRawParameterValue(ID::layerBOn) > 0.5f || ! layerBIsDefault(a))
+        if (juce::roundToInt (a.getRawParameterValue(ID::layerMode)->load()) != 0 || ! layerBIsDefault(a))
         {
             auto* lb = new juce::DynamicObject();
             Modules::writeLayerState(a, Modules::kLayerBPrefix, *lb);
@@ -1155,6 +1155,12 @@ namespace PresetIO
         }
         else
             Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
+        // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Layer" is
+        // DUAL now, B ON + "Split" is SPLIT, B off is SINGLE (the default the read left).
+        if (auto* lay = instSrc["Layers"].getDynamicObject(); lay != nullptr && lay->hasProperty("BOn"))
+            if ((bool) lay->getProperty("BOn"))
+                if (auto* p = a.getParameter(ID::layerMode))
+                    p->setValueNotifyingHost(p->convertTo0to1(lay->getProperty("Mode").toString() == "Split" ? 2.0f : 1.0f));
 
         // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
         // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when
@@ -1569,7 +1575,7 @@ namespace PresetIO
         if (scope == LoadScope::KeepLayerB)
         {
             for (const auto& id : Modules::layeredParamIds()) keepId(juce::String(Modules::kLayerBPrefix) + id);
-            for (const char* id : { ID::layerBOn, ID::layerMode, ID::splitNote, ID::layerALevel, ID::layerBLevel,
+            for (const char* id : { ID::layerMode, ID::splitNote, ID::layerALevel, ID::layerBLevel,
                                     ID::layerAPan, ID::layerBPan })
                 keepId(id);
             keepPendingB = hooks(a).pendingBSamplerSetName;

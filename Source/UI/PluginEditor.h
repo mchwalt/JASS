@@ -77,6 +77,21 @@ public:
     void paint (juce::Graphics& g) override
     {
         juce::MidiKeyboardComponent::paint (g);
+        // SPLIT (21.6): a big "B" over B's keys and "A" over A's, near the bottom of the white keys.
+        if (splitNote > getRangeStart() && splitNote <= getRangeEnd())
+        {
+            const float yb = (float) getHeight() - 34.0f;
+            auto label = [&] (const juce::String& t, int from, int to, juce::Colour c)
+            {
+                const auto r0 = getRectangleForKey (from), r1 = getRectangleForKey (to);
+                const juce::Rectangle<float> box (r0.getX(), yb, r1.getRight() - r0.getX(), 30.0f);
+                g.setColour (c);
+                g.setFont (juce::FontOptions (24.0f, juce::Font::bold));
+                g.drawText (t, box, juce::Justification::centred);
+            };
+            label ("B", getRangeStart(), splitNote - 1, juce::Colour (0xff8b5cf6));
+            label ("A", splitNote, getRangeEnd(), juce::Colour (0xff0e7490));
+        }
         if (hoverNote < 0)
             return;
         // Separator as an explicit UTF-8 escape: a bare "·" literal is non-ASCII, and MSVC
@@ -102,18 +117,17 @@ private:
 
     void paintPatternNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) const
     {
-        // AD-16 SPLIT (21.6): layer B's keys (below the split point) carry B's violet; the split
-        // key itself gets a violet edge on its left side — where B ends and A begins.
+        // AD-16 SPLIT (21.6): the two halves in their layer's colour — B (below the split key)
+        // violet, A cyan, as on the LAYERS buttons — and a bar on the split key's left edge, where
+        // B ends and A begins. The letters are drawn over the whole range in paint().
         if (splitNote >= 0)
         {
-            if (midiNote < splitNote)
+            g.setColour (midiNote < splitNote ? juce::Colour (0xff8b5cf6).withAlpha (0.24f)    // rack::kLayerBColour
+                                              : juce::Colour (0xff22d3ee).withAlpha (0.14f));  // A's colour
+            g.fillRect (area);
+            if (midiNote == splitNote)
             {
-                g.setColour (juce::Colour (0xff8b5cf6).withAlpha (0.22f));   // rack::kLayerBColour
-                g.fillRect (area);
-            }
-            else if (midiNote == splitNote)
-            {
-                g.setColour (juce::Colour (0xff8b5cf6));
+                g.setColour (juce::Colours::white);
                 g.fillRect (area.withWidth (3.0f));
             }
         }
@@ -136,30 +150,6 @@ private:
     int patternNote = -1;
     int hoverNote = -1;
     int splitNote = -1;
-};
-
-// LAYERS · LEARN (21.6): lit while it waits for a key — the next played key becomes the split
-// point. A second click cancels. Polls the processor's armed flag (the key may come over MIDI).
-class LearnButton : public juce::TextButton, private juce::Timer
-{
-public:
-    LearnButton (std::function<bool()> armedFn, std::function<void(bool)> armFn)
-        : juce::TextButton ("LEARN"), isArmed (std::move (armedFn)), arm (std::move (armFn))
-    {
-        setClickingTogglesState (false);
-        setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff334155));
-        setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8b5cf6));   // rack::kLayerBColour
-        setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.75f));
-        setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
-        setTooltip ("Click, then play a key: it becomes the split point (keys below play B)");
-        onClick = [this] { arm (! isArmed()); setToggleState (isArmed(), juce::dontSendNotification); };
-        startTimerHz (10);
-    }
-
-private:
-    void timerCallback() override { setToggleState (isArmed(), juce::dontSendNotification); }
-    std::function<bool()> isArmed;
-    std::function<void(bool)> arm;
 };
 
 // LAYERS (AD-16, Story 21.6): which layer the rack edits — two buttons, A and B, each on its own
@@ -414,6 +404,7 @@ private:
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     LayerSelector* layerSelector = nullptr;        // 21.6: owned by rackOwned; keys 1 / 2 press it
+    bool learnKeyHeld = false;                     // 21.6: key 3 held = LEARN the split key
 
     // Without a TooltipWindow instance JUCE shows NO tooltips at all — every setTooltip in the
     // rack (module reset/info buttons, the full-text knob read-outs) was silent until this line.
