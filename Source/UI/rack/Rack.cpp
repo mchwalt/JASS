@@ -541,6 +541,13 @@ namespace rack
         if (onLayoutChanged) onLayoutChanged();
     }
 
+    void Rack::showFactoryReset (bool factory)
+    {
+        for (auto* f : frames)
+            if (f != nullptr)
+                f->showFactoryReset (factory);
+    }
+
     void Rack::resetAllModules()
     {
         // Every module's own ↺, visible or not: the body-derived param family, the paged steps

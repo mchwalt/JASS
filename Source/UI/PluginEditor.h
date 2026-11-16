@@ -374,6 +374,7 @@ private:
     int shownSampleSets = -1;   // set count the SET combo was last listed with (12.6 background preload)
     juce::OwnedArray<juce::Component> rackOwned;   // owns the rack's Display components (ADSR curve, scope, spectrum)
     std::unique_ptr<rack::Rack> rackBody;
+    bool shiftShownOnReset = false;   // 7.6: last Shift state shown on the module ↺ icons
     void buildRack();
 
     // Online help (Story 6.1): a header language selector + one shared movable HelpPanel.

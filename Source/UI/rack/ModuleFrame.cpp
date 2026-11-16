@@ -271,8 +271,11 @@ namespace rack
         if (hasResettableParams || desc.onReset)
         {
             resetBtn.setTint (typeColour (desc.type));
-            resetBtn.setTooltip ("Reset this module to default");
-            resetBtn.onClick = [this] { doReset(); };
+            resetBtn.setTooltip ("Back to the loaded preset - Shift: factory values");
+            resetBtn.onClick = [this]
+            {
+                doReset (juce::ModifierKeys::currentModifiers.isShiftDown() ? ResetTo::Factory : ResetTo::Preset);
+            };
             addAndMakeVisible (resetBtn);
         }
 
@@ -482,6 +485,22 @@ namespace rack
                     if (auto* raw = apvts.getRawParameterValue (id))
                         s->setValue ((double) raw->load(), juce::dontSendNotification);
                     xformKnobs.push_back ({ s, id, k->toDisplay, k->fromDisplay });
+                    // Story 7.6: double-click = the loaded preset's value here too (OSC FREQ was the
+                    // one knob without it). The baseline is a BASE value; the slider shows base ×
+                    // the played ratio, so hand it over in display units — onValueChange above turns
+                    // it back with the same ratio, and the stored base is exactly the preset's.
+                    s->setDoubleClickReturnValue (false, 0.0);
+                    s->presetBaseline = [this, id, toDisp = k->toDisplay]() -> double
+                    {
+                        if (PresetIO::hooks (apvts).presetBaseline01)
+                            if (const float v01 = PresetIO::hooks (apvts).presetBaseline01 (id); v01 >= 0.0f)
+                                if (auto* p = apvts.getParameter (id))
+                                {
+                                    const double er = (moduleEnabled() && liveRatio > 0.0) ? liveRatio : 1.0;
+                                    return toDisp ((double) p->convertFrom0to1 (v01), er);
+                                }
+                        return std::numeric_limits<double>::quiet_NaN();
+                    };
                 }
                 else if (patternCell)
                 {
@@ -1007,19 +1026,34 @@ namespace rack
         }
     }
 
-    void ModuleFrame::doReset()
+    void ModuleFrame::showFactoryReset (bool factory)
     {
-        // Reset ALL of the module's parameters to their factory defaults, EXCEPT the
-        // enable flag. The body is the single source of truth for which params the
-        // module owns (every Knob/Combo/Toggle carries its paramId), so we derive the
-        // reset set from it — this can never drift out of sync with the module's
-        // controls the way a hand-maintained list would.
-        auto resetId = [this] (const juce::String& id)
+        if (resetBtn.isAlternate() != factory)
+            resetBtn.setAlternate (factory);
+    }
+
+    void ModuleFrame::doReset (ResetTo to)
+    {
+        // Reset ALL of the module's parameters, EXCEPT the enable flag. The body is the single
+        // source of truth for which params the module owns (every Knob/Combo/Toggle carries its
+        // paramId), so we derive the reset set from it — this can never drift out of sync with
+        // the module's controls the way a hand-maintained list would.
+        // Story 7.6 (maintainer 2026-11-16: "Preset MatrixDemo laden, OSC 2 zurücksetzen — andere
+        // Werte als das Preset"): a plain ↺ goes back to the LOADED preset — the same baseline the
+        // knob double-click uses — and only Shift / the header RESET goes to the factory values.
+        const bool toPreset = (to == ResetTo::Preset);
+        auto resetId = [this, toPreset] (const juce::String& id)
         {
             if (id.isEmpty() || id == desc.enableParam)
                 return;
             if (auto* p = apvts.getParameter (id))
-                p->setValueNotifyingHost (p->getDefaultValue());
+            {
+                float v01 = p->getDefaultValue();
+                if (toPreset && PresetIO::hooks (apvts).presetBaseline01)
+                    if (const float b = PresetIO::hooks (apvts).presetBaseline01 (id); b >= 0.0f)
+                        v01 = b;   // no clean snapshot (modified LiveState at startup) ⇒ factory
+                p->setValueNotifyingHost (v01);
+            }
         };
 
         // A knob owns more than its main param: the corner toggle (STEP SEQ's on/off), the accent
@@ -1040,10 +1074,12 @@ namespace rack
             else if (auto* t = std::get_if<Toggle> (&el)) resetId (t->paramId);
         }
 
-        // Pattern cells (AD-14): the figure is content, not parameters — cleared as one block,
-        // every page at once ("empties the pattern", the button's own words).
+        // Pattern cells (AD-14): the figure is content, not parameters — handled as one block,
+        // every page at once. Factory: emptied ("empties the pattern", the button's old words).
+        // Preset (7.6): the figure as loaded; no snapshot ⇒ emptied, like the params' fallback.
         if (desc.stepPattern != nullptr && ! patternCells.empty())
-            desc.stepPattern->clear();
+            if (! toPreset || ! desc.stepPattern->restoreBaseline())
+                desc.stepPattern->clear();
 
         // Step pages (16.3): the body lists one page — reset the SAME family on every other page
         // too. Each id carries a trailing step number; shift it by page*stepsPerPage.
@@ -1074,7 +1110,8 @@ namespace rack
         // user-loaded banks). Run it, then re-poll any dynamic-provider combo so its item list
         // reflects the post-reset state (e.g. the BANK list shrinks back to the built-ins) and the
         // now-default selection is re-applied.
-        if (desc.onReset) desc.onReset();
+        if (toPreset) { if (desc.onPresetReset) desc.onPresetReset(); }   // 7.6: never the factory extra
+        else if (desc.onReset) desc.onReset();
         for (auto& dc : dynCombos)
             refreshCombo (dc.paramId);
     }

@@ -16,6 +16,12 @@ namespace rack
 
         void setTint (juce::Colour c) { tint = c; }
 
+        // Story 7.6: the reset icon's second meaning while Shift is held — FACTORY values instead
+        // of the loaded preset. Told apart by colour AND shape (the maintainer is red-green colour
+        // blind): amber instead of the module tint, a stronger disc, and a solid dot in the middle.
+        void setAlternate (bool a) { if (alternate != a) { alternate = a; repaint(); } }
+        bool isAlternate() const noexcept { return alternate; }
+
         void paintButton (juce::Graphics& g, bool over, bool down) override
         {
             auto r = getLocalBounds().toFloat().reduced (0.5f);
@@ -23,13 +29,20 @@ namespace rack
             const float cx = r.getCentreX(), cy = r.getCentreY();
             const float rad = d * 0.48f;   // fill the click box almost completely
 
-            juce::Colour c = tint;
+            const bool alt = alternate && kind == Kind::Reset;
+            juce::Colour c = alt ? juce::Colour (0xfff59e0b) : tint;   // amber = factory
             if (down)      c = c.brighter (0.35f);
             else if (over) c = c.brighter (0.18f);
 
             // subtle circular background so the icon reads against the header
-            g.setColour (c.withAlpha (0.22f));
+            g.setColour (c.withAlpha (alt ? 0.45f : 0.22f));
             g.fillEllipse (cx - rad - 1.0f, cy - rad - 1.0f, (rad + 1.0f) * 2.0f, (rad + 1.0f) * 2.0f);
+            if (alt)
+            {
+                g.setColour (c);
+                const float dot = juce::jmax (2.0f, d * 0.26f);
+                g.fillEllipse (cx - dot * 0.5f, cy - dot * 0.5f, dot, dot);
+            }
 
             g.setColour (c);
             const float stroke = juce::jmax (1.3f, d * 0.11f);
@@ -69,6 +82,7 @@ namespace rack
     private:
         Kind kind;
         juce::Colour tint { juce::Colours::white };
+        bool alternate = false;
 
         JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (IconButton)
     };

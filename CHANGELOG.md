@@ -77,6 +77,16 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   unaffected.
 
 ### Changed
+- **A module's ↺ goes back to the loaded preset; Shift + ↺ to the factory values.** The ↺ used to
+  jump to factory values nobody had chosen: load *Matrix Demo*, reset OSC 2, and it no longer
+  sounded like the preset (maintainer 2026-11-16). It now does what the knob double-click already
+  did, for the whole module - every knob, combo and switch back to the loaded (or last saved)
+  state; STEP SEQ and PERC bring back the loaded figure and grid. **Shift + ↺** is the old
+  factory reset, the same for every module (STEP SEQ: empty the figure and start writing at step
+  1; PRESETS: the factory F-key bank). While Shift is held every ↺ turns amber with a dot, so the
+  meaning is visible before the click. Without a loaded state (the app started on unsaved
+  changes) the ↺ falls back to factory values. The OSC **FREQ** knobs, which had no double-click,
+  now return to the preset's value too, whatever note is playing (Story 7.6).
 - **The patch runs in its own engine, and idle voices no longer cost a parameter update.** First
   step towards a second, bitimbral layer (AD-16, Story 21.4): everything that belongs to the patch -
   voices, glide, the GLOBAL LFOs, the SAMPLER loop clock - moved out of the processor into one

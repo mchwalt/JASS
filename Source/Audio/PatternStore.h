@@ -114,6 +114,27 @@ struct PercPattern
         return true;
     }
 
+    // --- baseline (Story 7.6: the module ↺ = the grid as loaded) — message thread only ---------
+    // markClean() snapshots the grid at a preset load / save (PluginProcessor::markPresetClean);
+    // invalidateBaseline() is the "no clean state" case (a modified LiveState at startup).
+    void markClean() noexcept
+    {
+        for (int l = 0; l < kLanes; ++l)
+            for (int s = 0; s < kMaxSteps; ++s)
+                base[(size_t) l][(size_t) s] = get (l, s) ? 1 : 0;
+        baselineValid = true;
+    }
+    void invalidateBaseline() noexcept { baselineValid = false; }
+    // Back to the snapshot. False (and nothing changed) when there is none — the caller clears.
+    bool restoreBaseline() noexcept
+    {
+        if (! baselineValid) return false;
+        for (int l = 0; l < kLanes; ++l)
+            for (int s = 0; s < kMaxSteps; ++s)
+                set (l, s, base[(size_t) l][(size_t) s] != 0);
+        return true;
+    }
+
     std::atomic<uint32_t> revision { 0 };
 
 private:
@@ -123,6 +144,8 @@ private:
     }
 
     std::array<std::array<std::atomic<uint8_t>, kMaxSteps>, kLanes> on {};
+    std::array<std::array<uint8_t, kMaxSteps>, kLanes> base {};
+    bool baselineValid = false;
 };
 
 // The STEP SEQ figure (18.5 stage 2): per step a semitone offset from the root (-24..+24), an ON
@@ -178,10 +201,28 @@ struct StepPattern
         {
             basePitch[(size_t) s] = (int8_t)  pitch (s);
             baseGate [(size_t) s] = (uint8_t) gate  (s);
+            baseOn   [(size_t) s] = (uint8_t) (on (s) ? 1 : 0);       // 7.6: the whole step, for ↺
+            baseAcc  [(size_t) s] = (uint8_t) (accent (s) ? 1 : 0);
         }
+        baselineValid = true;
     }
     int baselinePitch (int s) const noexcept { return inRange (s) ? (int) basePitch[(size_t) s] : 0; }
     int baselineGate  (int s) const noexcept { return inRange (s) ? (int) baseGate [(size_t) s] : kGateDefault; }
+    // Story 7.6: the module ↺ = the figure as loaded. No snapshot (a modified LiveState at
+    // startup) ⇒ false, nothing changed — the caller clears instead.
+    void invalidateBaseline() noexcept { baselineValid = false; }
+    bool restoreBaseline() noexcept
+    {
+        if (! baselineValid) return false;
+        for (int s = 0; s < kMaxSteps; ++s)
+        {
+            setPitch  (s, basePitch[(size_t) s]);
+            setOn     (s, baseOn   [(size_t) s] != 0);
+            setAccent (s, baseAcc  [(size_t) s] != 0);
+            setGate   (s, baseGate [(size_t) s]);
+        }
+        return true;
+    }
 
     // DAW state: ONE child element on the APVTS XML, rows trimmed to the last used step:
     //   <StepPattern on="X.X." pitch="0 7 0 12" accent="..X." gate="100 100 101 50"/>
@@ -245,6 +286,9 @@ private:
     std::array<std::atomic<uint8_t>, kMaxSteps> gateArr {};   // 0 until the first write — see ctor
     std::array<int8_t,  kMaxSteps> basePitch {};
     std::array<uint8_t, kMaxSteps> baseGate {};
+    std::array<uint8_t, kMaxSteps> baseOn {};    // 7.6
+    std::array<uint8_t, kMaxSteps> baseAcc {};   // 7.6
+    bool baselineValid = false;                  // 7.6: false until the first markClean
 
 public:
     StepPattern() noexcept

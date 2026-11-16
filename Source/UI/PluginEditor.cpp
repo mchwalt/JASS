@@ -867,6 +867,17 @@ void SynthyEditor::timerCallback()
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
 
+    // Story 7.6: while Shift is held every module ↺ shows "factory values" (amber + dot) — the
+    // modifier has no event of its own for an unfocused rack, so it is polled with the timer.
+    {
+        const bool shift = juce::ModifierKeys::getCurrentModifiersRealtime().isShiftDown();
+        if (shift != shiftShownOnReset && rackBody != nullptr)
+        {
+            shiftShownOnReset = shift;
+            rackBody->showFactoryReset (shift);
+        }
+    }
+
     // Dragged onto another monitor? Re-fit. Moving a window changes no bounds we already watch, so
     // without this the rack keeps the previous screen's scale — on a desk that mixes a 5120x2160 at
     // 150 % with a smaller display, that is the difference between fitting and being cut off. The
@@ -2578,6 +2589,13 @@ void SynthyEditor::buildRack()
         // Module ↺ clears the grid too (AD-14): the cells are no parameters, so the frame's
         // parameter reset cannot reach them — and a reset that keeps the beat is no reset.
         d.onReset = [this] { processor.getPatterns().perc.clear(); };
+        // 7.6: a plain ↺ brings the grid back as loaded (no snapshot ⇒ cleared, like factory).
+        d.onPresetReset = [this]
+        {
+            auto& grid = processor.getPatterns().perc;
+            if (! grid.restoreBaseline())
+                grid.clear();
+        };
         rackOwned.add(grid);   // typed pointer kept: the COPY latch below talks to PercGrid itself
         percGrid = grid;       // 16.3: page flips push their window offset into the grid
         // Step pages (16.3): same A/B/C/D + FOLLOW as STEP SEQ. No paged body cells here — the

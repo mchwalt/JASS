@@ -294,6 +294,10 @@ namespace rack
         // a reset ↺ even if it has no resettable params, and doReset() calls this after writing
         // any param defaults. Used by the VISUALIZATION modules (Story 6.1 follow-up).
         std::function<void()> onReset;
+        // Story 7.6: the PLAIN ↺ click (back to the loaded preset) runs THIS instead of onReset —
+        // onReset is the factory action (drop user wavetables, empty a pattern, clear an F-key
+        // bank), which must not hit a preset that uses them. Unset ⇒ nothing extra.
+        std::function<void()> onPresetReset;
 
         // Horizontal alignment WITHIN the zone row. false (default) => the module packs flush
         // left; true => it is shifted (as a block with the other right-aligned modules) to hug

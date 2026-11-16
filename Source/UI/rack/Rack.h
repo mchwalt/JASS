@@ -100,6 +100,8 @@ namespace rack
         // re-enforces hidden ⇒ silent. The caller sets the params to default first
         // (processor.resetToDefault) — this adds the per-module extras on top.
         void resetAllModules();
+        // Story 7.6: Shift held ⇒ every module's ↺ shows "factory" (the editor polls Shift).
+        void showFactoryReset (bool factory);
         // re-apply the persisted layout from apvts.state. `presetLoad` = an explicit preset load
         // (not the start-up LiveState restore): the rack then shows exactly the patch — modules
         // the preset leaves switched off are hidden (hideUnusedModules).

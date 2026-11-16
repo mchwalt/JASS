@@ -820,7 +820,8 @@ void SynthyProcessor::markPresetClean()
     for (auto* p : getParameters())
         cleanSnapshot.push_back(p->getValue());
     cleanPercRevision = patterns.perc.revision.load();   // AD-14: a changed cell is a change too
-    patterns.step.markClean();                            // ...and the figure's double-click baseline
+    patterns.perc.markClean();                            // 7.6: the grid as loaded, for PERC's ↺
+    patterns.step.markClean();                            // ...and the figure's double-click / ↺ baseline
     cleanStepRevision = patterns.step.revision.load();
 }
 
@@ -843,7 +844,11 @@ void SynthyProcessor::restoreModifiedState(bool modified)
     // On LiveState load: a clean state gets a matching baseline; a modified
     // working state leaves the baseline empty so isPresetModified() stays true.
     if (modified)
+    {
         cleanSnapshot.clear();
+        patterns.perc.invalidateBaseline();   // 7.6: no "as loaded" state ⇒ the ↺ falls back to factory
+        patterns.step.invalidateBaseline();
+    }
     else
         markPresetClean();
 }

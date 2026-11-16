@@ -74,10 +74,15 @@ namespace rack
         SizeClass maxSizeClass() const noexcept { return desc.sizeClass; }
         std::function<void()> onFootprintChanged;
 
-        // The module's own reset (the header ↺): every body-owned param to its factory default,
-        // the paged step families on every page, then the descriptor's onReset extra. Public so
-        // the header RESET can be exactly "every module's ↺ at once" (Rack::resetAllModules).
-        void doReset();
+        // The module's own reset (the header ↺): every body-owned param, the paged step families
+        // on every page, then the descriptor's extra. Story 7.6: a plain click (Preset) returns
+        // them to the LOADED preset (the processor's clean snapshot; factory where there is none),
+        // Shift-click and the header RESET (Factory) to the factory defaults + onReset, as before.
+        // Public so the header RESET is exactly "every module's ↺ at once" (Rack::resetAllModules).
+        enum class ResetTo { Preset, Factory };
+        void doReset (ResetTo to = ResetTo::Factory);
+        // Story 7.6: Shift held ⇒ the ↺ shows that a click goes to factory (editor polls Shift).
+        void showFactoryReset (bool factory);
 
     private:
         void applyCollapsed();   // show/hide the Display cells + re-flow this frame's body
