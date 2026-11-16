@@ -145,3 +145,11 @@ target_link_libraries(JASS
         juce::juce_recommended_config_flags
         juce::juce_recommended_warning_flags
 )
+
+# Headless offline renderer for null tests (Story 21.4): a console exe on the same shared code as
+# the Standalone and the VST3 — one preset in, one float WAV out (Source/Tools/RenderMain.cpp,
+# driven by tools/rig/nulltest.py). Built the way JUCE builds its plug-in wrappers: the shared
+# code target's include dirs re-exported privately, the shared code linked. Not shipped.
+add_executable(JASS_Render Source/Tools/RenderMain.cpp)
+target_include_directories(JASS_Render PRIVATE $<TARGET_PROPERTY:JASS,INCLUDE_DIRECTORIES>)
+target_link_libraries(JASS_Render PRIVATE JASS)
