@@ -54,6 +54,10 @@ namespace rack
     // Desaturated identity tints (FR6), matching the rack mockup. The single source
     // of the type→colour map, shared by ModuleFrame (top edge / reset tint) and the
     // Rack (zone-header hue) so the palette is defined exactly once.
+    // AD-16 (21.6): layer B's colour — its frames, the B button of LAYERS, B's keys on the keyboard.
+    // Violet: apart from the type tints and from red/green (red-green colour vision).
+    inline const juce::Colour kLayerBColour { 0xff8b5cf6 };
+
     inline juce::Colour typeColour (ModuleType t) noexcept
     {
         switch (t)
@@ -298,6 +302,12 @@ namespace rack
         // onReset is the factory action (drop user wavetables, empty a pattern, clear an F-key
         // bank), which must not hit a preset that uses them. Unset ⇒ nothing extra.
         std::function<void()> onPresetReset;
+
+        // AD-16 (Story 21.6): this frame edits LAYER B (its params carry the "b" prefix). The rack
+        // shows it in place of layer A's frame of the same module while B is focused; the frame
+        // marks itself (violet header tint + top strip) so it is never in doubt which layer a knob
+        // belongs to. `id` is "b<layer A id>", `helpId` the layer-A module's help.
+        bool layerB = false;
 
         // Horizontal alignment WITHIN the zone row. false (default) => the module packs flush
         // left; true => it is shifted (as a block with the other right-aligned modules) to hug

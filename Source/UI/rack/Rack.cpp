@@ -299,9 +299,53 @@ namespace rack
 
     const Rack::Placed* Rack::placedById (const juce::String& id) const
     {
+        // AD-16 (21.6): while B is focused a patch module's entry resolves to B's frame — so
+        // placement, the zone bypass and everything else that asks "which frame is this" follow
+        // the focus by construction.
+        if (layerFocusB)
+            for (const auto& p : placedB)
+                if (p.id == id) return &p;
         for (const auto& p : placed)
             if (p.id == id) return &p;
         return nullptr;
+    }
+
+    std::vector<const Rack::Placed*> Rack::allLayersById (const juce::String& id) const
+    {
+        std::vector<const Placed*> out;
+        for (const auto& p : placed)  if (p.id == id) out.push_back (&p);
+        for (const auto& p : placedB) if (p.id == id) out.push_back (&p);
+        return out;
+    }
+
+    void Rack::addLayerBModule (const juce::String& layerAId, ModuleDescriptor desc)
+    {
+        desc.layerB = true;
+        auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
+        addChildComponent (*f);   // hidden until B is focused (layout() decides)
+        f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
+        f->onFootprintChanged = [this, f]
+        {
+            for (auto& p : placedB)
+                if (p.frame == f)
+                {
+                    const auto s = sizeClassSpec (f->effectiveSizeClass());
+                    p.cols = s.cols; p.units = s.heightUnits;
+                }
+            relayout();
+        };
+        const auto spec = sizeClassSpec (f->effectiveSizeClass());
+        bool alignR = false;
+        for (const auto& p : placed)
+            if (p.id == layerAId) alignR = p.alignRight;
+        placedB.push_back ({ layerAId, f, spec.cols, spec.heightUnits, alignR });
+    }
+
+    void Rack::setLayerFocusB (bool b)
+    {
+        if (layerFocusB == b) return;
+        layerFocusB = b;
+        relayout();   // same layout, the other layer's frames
     }
 
     juce::String Rack::zoneName (Zone zone) { return zoneText (zone); }
@@ -317,9 +361,10 @@ namespace rack
         // hide  => force the module disabled (it's "not present" for the synth);
         // show  => restore its FACTORY-DEFAULT enable state, NOT force-on — e.g. CROSS MOD
         //          defaults to disabled, so re-showing it must leave it disabled.
-        if (const auto* p = placedById (id); p != nullptr && p->frame != nullptr)
+        // AD-16 (21.6): one layout for both layers, so showing/hiding drives BOTH layers' enables.
+        for (const auto* p : allLayersById (id))
         {
-            if (p->frame->isHostLocked()) return;   // AD-13: the host owns this one (never write its enable)
+            if (p->frame == nullptr || p->frame->isHostLocked()) continue;   // AD-13: never write a host-locked enable
             const auto pid = p->frame->enableParamId();
             if (pid.isNotEmpty())
                 if (auto* param = apvts.getParameter (pid))
@@ -609,14 +654,21 @@ namespace rack
             if (! e.visible) continue;
             if (e.zone == Zone::MasterBus || e.zone == Zone::Input) continue;   // infrastructure, not patch
             if (isVisualOnly (e.id)) continue;                                   // the player's scope, not the preset's
-            if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
+            // D4 (21.6): hidden only when the module is off in EVERY layer that has it.
+            bool anyOn = false, readable = false;
+            for (const auto* p : allLayersById (e.id))
             {
-                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                if (p->frame == nullptr || p->frame->isHostLocked()) { anyOn = true; break; }   // AD-13: leave it
                 const auto pid = p->frame->enableParamId();
-                if (pid.isEmpty()) continue;   // nothing to read — leave it (no such module today)
-                if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() <= 0.5f)
-                { e.visible = false; changed = true; }   // off ⇒ hidden (the enable is already off)
+                if (pid.isEmpty()) { anyOn = true; break; }   // nothing to read — leave it
+                if (auto* param = apvts.getParameter (pid))
+                {
+                    readable = true;
+                    anyOn = anyOn || param->getValue() > 0.5f;
+                }
             }
+            if (readable && ! anyOn)
+            { e.visible = false; changed = true; }   // off everywhere ⇒ hidden (the enables are already off)
         }
         return changed;
     }
@@ -643,13 +695,14 @@ namespace rack
             // is entitled to bring back the 266 px that bought. Its enable param is driven off by
             // enforceHiddenDisabled, which for a display only stops it drawing.
             if (! e.visible && ! isVisualOnly (e.id))
-                if (const auto* p = placedById (e.id); p != nullptr && p->frame != nullptr)
+                // D4 (21.6): on in EITHER layer ⇒ shown.
+                for (const auto* p : allLayersById (e.id))
                 {
-                    if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                    if (p->frame == nullptr || p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
                     const auto pid = p->frame->enableParamId();
                     if (pid.isNotEmpty())
                         if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() > 0.5f)
-                        { e.visible = true; changed = true; }   // enabled ⇒ show (leave the enable as-is)
+                        { e.visible = true; changed = true; break; }   // enabled ⇒ show (leave the enable as-is)
                 }
         return changed;
     }
@@ -970,7 +1023,8 @@ namespace rack
     void Rack::updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio)
     {
         for (auto* f : frames)
-            f->updateLiveFeed (ringByTarget, playedRatio);
+            if (f->isVisible())   // 21.6: the hidden layer's frames (and hidden modules) skip the 20 Hz fan-out
+                f->updateLiveFeed (ringByTarget, playedRatio);
 
         // Individual module enable toggles change the params behind our back; refresh the
         // zone-header group toggles from the live values on the same (editor) tick.

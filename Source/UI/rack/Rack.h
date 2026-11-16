@@ -39,6 +39,24 @@ namespace rack
         // then driven exclusively by the RackLayout model, not raw insertion order.
         void addModule (ModuleDescriptor desc);
 
+        // --- AD-16 layers (Story 21.6) --------------------------------------------------
+        // Layer B's frame of a patch module: built against B's params, placed by LAYER A's layout
+        // entry (`layerAId`) — one layout for both layers. It takes A's place while B is focused.
+        void addLayerBModule (const juce::String& layerAId, ModuleDescriptor desc);
+        // Which layer the rack shows: false = A (also for A+B, linked editing), true = B.
+        void setLayerFocusB (bool b);
+        bool isLayerFocusB() const noexcept { return layerFocusB; }
+        // After LOAD B / A>B: what layer B now uses must be visible ("on ⇒ visible", D4).
+        void revealAfterLayerLoad()
+        {
+            if (revealEnabledModules())
+            {
+                relayout();
+                writeLayoutToState();
+                if (onLayoutChanged) onLayoutChanged();
+            }
+        }
+
         void resized() override;            // THE placement + zone-header layout site
         void paint (juce::Graphics&) override;
 
@@ -303,6 +321,11 @@ namespace rack
 
         juce::OwnedArray<ModuleFrame> frames;
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
+        std::vector<Placed> placedB;               // 21.6: layer A id -> layer B's frame (patch modules)
+        bool layerFocusB = false;
+        // Both layers' frames of a module (B's only where one exists) — visibility couples to
+        // BOTH enables (D4: shown if on in A or B, hidden ⇒ silent in both).
+        std::vector<const Placed*> allLayersById (const juce::String& id) const;
         std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement
         std::vector<RackLayoutEntry> defaultLayout;// descriptor defaults, captured at build (for reset + isDefault)
         std::vector<ZoneBand> zoneBands;           // computed in layout(), drawn in paint()

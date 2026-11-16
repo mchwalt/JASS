@@ -22,6 +22,13 @@
 // together they keep the column at ~53 px, so no module changed physical size — the rack simply
 // packs two rows shorter. Height is the scarce dimension (the fit scale was at its readable floor);
 // width was idle, 1520 designed against 3413 available.
+// AD-16 (Story 21.6): a parameter id for layer `pre` ("" = A, "b" = B). Only patch-module params
+// exist per layer; an instrument param (STEREO's outputMode, the sequencers, …) is the same for both.
+static juce::String lid (const juce::String& pre, const juce::String& id)
+{
+    return (pre.isNotEmpty() && Modules::isLayeredParamId (id)) ? pre + id : id;
+}
+
 namespace EditorGeom
 {
     constexpr int kDesignW    = 1920;
@@ -867,6 +874,22 @@ void SynthyEditor::timerCallback()
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
 
+    // AD-16 (21.6): the rack shows the focused layer's patch frames (A also for A+B).
+    if (rackBody != nullptr && rackBody->isLayerFocusB() != processor.isFocusB())
+        rackBody->setLayerFocusB (processor.isFocusB());
+    {
+        auto& a = processor.getAPVTS();
+        // SPLIT shown on the keyboard whenever it is on (B's keys violet), whatever the selection.
+        const bool split = *a.getRawParameterValue (Parameters::ID::layerMode) > 0.5f
+                        && *a.getRawParameterValue (Parameters::ID::layerBOn) > 0.5f;
+        if (keyboard != nullptr)
+            keyboard->setSplitNote (split ? juce::roundToInt (a.getRawParameterValue (Parameters::ID::splitNote)->load()) : -1);
+        // LEARN: the key the processor saw becomes the split point (written here, message thread).
+        if (const int n = processor.takeLearnedSplitNote(); n >= 0)
+            if (auto* p = a.getParameter (Parameters::ID::splitNote))
+                p->setValueNotifyingHost (p->convertTo0to1 ((float) n));
+    }
+
     // Story 7.6: while Shift is held every module ↺ shows "factory values" (amber + dot) — the
     // modifier has no event of its own for an unfocused rack, so it is polled with the timer.
     {
@@ -913,14 +936,16 @@ void SynthyEditor::timerCallback()
     lfoSrcVal[(size_t) ModSource::ChaosX] = processor.getChaosDisplayValue(0);   // same snapshot the
     lfoSrcVal[(size_t) ModSource::ChaosY] = processor.getChaosDisplayValue(1);   // voices modulate with
     {
-        const bool matrixOn = *apvts.getRawParameterValue(P::modMatrixOn) > 0.5f;
+        // AD-16 (21.6): the rings show the modulation of the layer the rack shows (A for A+B).
+        const juce::String rp = processor.isFocusB() ? juce::String (Modules::kLayerBPrefix) : juce::String();
+        const bool matrixOn = *apvts.getRawParameterValue(lid(rp, P::modMatrixOn)) > 0.5f;
         if (matrixOn)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
             {
-                const int   src = (int) *apvts.getRawParameterValue(P::modSlotSource(n));
-                const int   mod = (int) *apvts.getRawParameterValue(P::modSlotModule(n));
-                const int   par = (int) *apvts.getRawParameterValue(P::modSlotParam(n));
-                const float amt = *apvts.getRawParameterValue(P::modSlotAmount(n));
+                const int   src = (int) *apvts.getRawParameterValue(lid(rp, P::modSlotSource(n)));
+                const int   mod = (int) *apvts.getRawParameterValue(lid(rp, P::modSlotModule(n)));
+                const int   par = (int) *apvts.getRawParameterValue(lid(rp, P::modSlotParam(n)));
+                const float amt = *apvts.getRawParameterValue(lid(rp, P::modSlotAmount(n)));
                 if (mod <= 0 || src < 0 || src >= (int) lfoSrcVal.size()) continue;   // Off / bad source
                 const int   tgt = (int) ModDest::targetOf(mod, par);
                 const float val = amt * lfoSrcVal[(size_t) src];   // Env/Vel contribute 0 (no idle ring)
@@ -2078,13 +2103,39 @@ void SynthyEditor::buildRack()
         const int m = (int) outModeRaw->load();
         return m != (int) OutputMode::Mono && m != (int) OutputMode::PseudoStereo;
     };
-    auto addRackModule = [this, panKnobsActive] (ModuleDescriptor d)
+    // AD-16 (Story 21.6): two frame sets for the PATCH modules. Every patch module below is built
+    // by a `patch` builder: it runs once now for layer A (pre = "") and once more at the end of
+    // this function for layer B (pre = "b"), where `lid(pre, id)` prefixes the patch params and
+    // leaves instrument params (STEREO's outputMode, …) alone. Lambdas that read a param at run
+    // time capture `pre` BY VALUE, so A's frames keep A's ids after B's pass. B's frames go to
+    // Rack::addLayerBModule: placed by A's layout entry, shown while B is focused.
+    juce::String pre;
+    std::vector<std::function<void()>> patchBuilders;
+    auto patch = [&patchBuilders] (std::function<void()> build) { build(); patchBuilders.push_back (std::move (build)); };
+    auto LS = [&pre] (ModuleSpec m)   // a patch module's spec with layer B's ids
+    {
+        if (pre.isEmpty() || ! m.layered) return m;
+        for (auto& p : m.params) p.id = lid (pre, p.id);
+        if (m.enableParamId.isNotEmpty()) m.enableParamId = lid (pre, m.enableParamId);
+        for (auto& id : m.bodyOrder) if (id.isNotEmpty() && ! id.startsWith ("step:")) id = lid (pre, id);
+        return m;
+    };
+
+    auto addRackModule = [this, panKnobsActive, &pre] (ModuleDescriptor d)
     {
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob> (&el))
                 if (k->activeWhen == nullptr && k->paramId.endsWith ("Pan"))
                     k->activeWhen = panKnobsActive;
-        rackBody->addModule (std::move (d));
+        if (pre.isEmpty())
+        {
+            rackBody->addModule (std::move (d));
+            return;
+        }
+        const auto aId = d.id;                      // layer B: same module, "b" id, A's help,
+        if (d.helpId.isEmpty()) d.helpId = aId;     // placed by A's layout entry
+        d.id = pre + aId;
+        rackBody->addLayerBModule (aId, std::move (d));
     };
 
     // small builders to keep the descriptor list readable
@@ -2187,53 +2238,113 @@ void SynthyEditor::buildRack()
     }
     addRackModule(makeModuleDescriptor(Modules::master()));
 
+    // LAYERS (AD-16, Story 21.6; maintainer 2026-11-16: "der Layer Block ist ein Modul und gehört
+    // auf den MasterBus") — an instrument module: which layer the rack edits (A, B or both =
+    // linked editing), B ON, LAYER/SPLIT with the split point (+ LEARN: the next played key), each
+    // layer's level and balance, LOAD B (a preset's patch into B) and A>B (copy). No module
+    // enable: A's level and the selection matter with B off too, so nothing here may dim.
+    {
+        ModuleDescriptor d;
+        d.id = "layers"; d.title = "LAYERS";
+        d.sizeClass = SizeClass::W14H1; d.type = ModuleType::Processor;
+        d.defaultZone = Rack::Zone::MasterBus;
+        auto* selector = new LayerSelector (apvts);
+        rackOwned.add (selector);
+        Knob split = K (P::splitNote, "SPLIT");
+        split.textFromValue = [] (double v) { return juce::MidiMessage::getMidiNoteName (juce::roundToInt (v), true, true, 4); };
+        split.tooltipFromValue = [] (double v)
+        {
+            const int n = juce::roundToInt (v);
+            return juce::MidiMessage::getMidiNoteName (n, true, true, 4) + juce::String::fromUTF8 (" \xc2\xb7 ") + juce::String (n)
+                 + " - keys below go to B";
+        };
+        Knob aPan = K (P::layerAPan, "A PAN"), bPan = K (P::layerBPan, "B PAN");
+        aPan.activeWhen = [] { return true; };   // a layer balance is not a generator PAN: never gated by the output mode
+        bPan.activeWhen = [] { return true; };
+        d.body = {
+            Display { selector, 2 },
+            Toggle { P::layerBOn, "B ON" },
+            Combo { P::layerMode, "MODE", juce::StringArray { "Layer", "Split" } },
+            split,
+            Action { "LEARN", [this] { processor.armSplitLearn (! processor.isSplitLearnArmed()); }, {} },
+            K (P::layerALevel, "A LVL"), aPan,
+            K (P::layerBLevel, "B LVL"), bPan,
+            FileAction { "LOAD B", [this] (juce::File f)
+                         {
+                             if (PresetIO::loadIntoLayerB (processor.getAPVTS(), f).ok)
+                             {
+                                 if (rackBody != nullptr) rackBody->revealAfterLayerLoad();
+                             }
+                             else
+                                 juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "LOAD B",
+                                     "\"" + f.getFileName() + "\" is in an older format. Load it once and save it, then load it into B.");
+                         },
+                         {}, PresetIO::presetsFolder(), "*.jass", false, "layerb" },
+            Action { "A>B", [this]
+                     {
+                         PresetIO::copyLayerAToB (processor.getAPVTS());
+                         if (rackBody != nullptr) rackBody->revealAfterLayerLoad();
+                     }, {} },
+        };
+        addRackModule (std::move (d));
+    }
+
     // ---- GENERATORS ----
     // OSC 1-3 — spec-driven (OscSpecs.h). FREQ display-transform + AMP ring come from the spec.
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     for (int i = 1; i <= 3; ++i)
-        addRackModule(makeModuleDescriptor(Modules::osc(i)));
+        addRackModule(makeModuleDescriptor(LS(Modules::osc(i))));
+    });
     // CROSS MOD now lives in the MODULATION zone (it shapes the oscillators, it is not a source).
     // Added below with the other modulators so its default within-zone position is natural.
 
-    addRackModule(makeModuleDescriptor(Modules::sub()));
-    addRackModule(makeModuleDescriptor(Modules::noise()));
-    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", P::karplusOn,   // W8: PLUCK + 5 knobs incl. PAN
-        { Action{ "PLUCK", [this] { processor.pluckString(); }, {} },
-          K(P::karplusFreq, "FREQ"),
-          K(P::karplusDamping, "DAMP"), K(P::karplusStretch, "STR"),
-          K(P::karplusAmp, "AMP"),   // AMP·PAN grouped last as the output stage (rack-wide convention)
-          Kmod(P::karplusPan, "PAN", ModTarget::KarplusPan) },   // Epic 10: stereo placement + auto-pan target
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
+    addRackModule(makeModuleDescriptor(LS(Modules::sub())));
+    addRackModule(makeModuleDescriptor(LS(Modules::noise())));
+    });
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
+    add(Rack::Zone::Generators, SizeClass::W8H1, ModuleType::Generator, "STRING - KARPLUS", lid(pre, P::karplusOn),   // W8: PLUCK + 5 knobs incl. PAN
+        { Action{ "PLUCK", [this, pre] { processor.pluckString(); }, {} },
+          K(lid(pre, P::karplusFreq), "FREQ"),
+          K(lid(pre, P::karplusDamping), "DAMP"), K(lid(pre, P::karplusStretch), "STR"),
+          K(lid(pre, P::karplusAmp), "AMP"),   // AMP·PAN grouped last as the output stage (rack-wide convention)
+          Kmod(lid(pre, P::karplusPan), "PAN", ModTarget::KarplusPan) },   // Epic 10: stereo placement + auto-pan target
         {}, /*visualOnly*/ false, /*defaultVisible*/ false);     // hidden until switched on (2026-10-03)
+    });
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     // BANK: item index == store index == param value, so the combo must bypass the
     // ComboBoxAttachment (indexIsValue). With the attachment, 6 items were spread over the
     // full 0..63 range: "Digital" wrote 13, "Vocal" 38 … and getBank() clamped every one of
     // them to the LAST bank — all built-ins except Basic played Spectral (user-heard 2026-08-18).
-    Combo bankCombo{ P::wavetableBank, "BANK",
+    Combo bankCombo{ lid(pre, P::wavetableBank), "BANK",
                      std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) };
     bankCombo.indexIsValue = true;
-    add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", P::wavetableOn,   // W10: BANK+LOAD+7 knobs incl. FB+PAN (9 slots of 10)
+    add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", lid(pre, P::wavetableOn),   // W10: BANK+LOAD+7 knobs incl. FB+PAN (9 slots of 10)
         { bankCombo,
           FileAction{ "LOAD WAV",
-                      [this] (juce::File f)
+                      [this, bankId = lid(pre, P::wavetableBank)] (juce::File f)
                       {
                           int idx = WavetableBankStore::instance().loadWav(f);
                           if (idx >= 0)
-                              if (auto* pr = processor.getAPVTS().getParameter(P::wavetableBank))
+                              if (auto* pr = processor.getAPVTS().getParameter(bankId))
                                   pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
                       },
-                      { juce::String(P::wavetableBank) },   // refresh the BANK combo after load
+                      { juce::String(lid(pre, P::wavetableBank)) },   // refresh the BANK combo after load
                       PresetIO::wavetablesFolder(), "*.wav",   // first run: the shipped examples folder
                       /*pickDirectory*/ false, "wavetable" },  // then: wherever LOAD WAV last picked
-          Kmod(P::wavetablePosition, "POS", ModTarget::WavetablePosition), Kmod(P::wavetableFreq, "FREQ", ModTarget::WavetableFreq),
-          Kmod(P::wavetableUniVoices, "VOICES", ModTarget::WavetableVoices), Kmod(P::wavetableUniDetune, "DETUNE", ModTarget::WavetableDetune),
-          Kmod(P::wavetableFeedback, "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, AMP, PAN)
-          Kmod(P::wavetableAmp, "AMP", ModTarget::WavetableAmp),   // AMP·PAN grouped last as the output stage (rack-wide convention)
-          Kmod(P::wavetablePan, "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
+          Kmod(lid(pre, P::wavetablePosition), "POS", ModTarget::WavetablePosition), Kmod(lid(pre, P::wavetableFreq), "FREQ", ModTarget::WavetableFreq),
+          Kmod(lid(pre, P::wavetableUniVoices), "VOICES", ModTarget::WavetableVoices), Kmod(lid(pre, P::wavetableUniDetune), "DETUNE", ModTarget::WavetableDetune),
+          Kmod(lid(pre, P::wavetableFeedback), "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, AMP, PAN)
+          Kmod(lid(pre, P::wavetableAmp), "AMP", ModTarget::WavetableAmp),   // AMP·PAN grouped last as the output stage (rack-wide convention)
+          Kmod(lid(pre, P::wavetablePan), "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
         [] { WavetableBankStore::instance().resetToBuiltIns(); },    // ↺ drops user-loaded banks → back to the standard list
         /*visualOnly*/ false, /*defaultVisible*/ false);             // hidden until switched on (2026-10-03)
+    });
     // SAMPLER (Story 12.1) — recordings as a generator: dynamic SET combo over the session's
     // SampleBankStore + LOAD (which COPIES the file into %AppData%\JASS\Samples so presets can
     // re-resolve it by name). Hand-built body like WAVETABLE; default-HIDDEN like COMPRESSOR
     // (show via MODULES) so the GENERATORS zone stays compact.
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     {
         ModuleDescriptor d;
         d.sizeClass = SizeClass::W12H1; d.type = ModuleType::Generator;
@@ -2241,11 +2352,11 @@ void SynthyEditor::buildRack()
         d.defaultZone = Rack::Zone::Generators;
         d.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set
                                     // (maintainer 2026-10-03; visible from the start before)
-        d.enableParam = P::samplerOn;
+        d.enableParam = lid(pre, P::samplerOn);
         // SET selects a STORE INDEX: bind by item index (indexIsValue), NOT via ComboBoxAttachment —
         // that maps item positions across the whole 0..31 range and lands on the wrong sample
         // (the classic combo-index bug class; found by ear: "Brass" played CH_01).
-        Combo setCombo{ P::samplerSet, "SET",
+        Combo setCombo{ lid(pre, P::samplerSet), "SET",
                         std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
         setCombo.indexIsValue = true;
         // Standard width (2 slots), NOT the 3 it used to claim for long set names like
@@ -2261,23 +2372,23 @@ void SynthyEditor::buildRack()
         // MODE follows to One-Shot and STRETCH switches off (requests 2026-08-04); preset loads
         // stay untouched (programmatic combo updates don't fire onUserSelect), and picking a
         // single-sample set never flips anything back — loops keep their setting.
-        auto oneShotForMappedSet = [this] (int setIdx)
+        auto oneShotForMappedSet = [this, pre] (int setIdx)
         {
             // Picking a set by hand ends any pending restore (12.6): the user's choice is the
             // one that must be saved, not the set a preset was still waiting for.
-            PresetIO::hooks(processor.getAPVTS()).pendingSamplerSetName.clear();
+            PresetIO::hooks(processor.getAPVTS()).pendingFor (lid(pre, P::samplerSet)).clear();
             const auto* s = SampleBankStore::instance().getSet (setIdx);
             if (s != nullptr && s->isMapped())
             {
-                if (auto* pm = processor.getAPVTS().getParameter (P::samplerMode))
+                if (auto* pm = processor.getAPVTS().getParameter (lid(pre, P::samplerMode)))
                     pm->setValueNotifyingHost (pm->convertTo0to1 (0.0f));   // One-Shot
-                if (auto* ps = processor.getAPVTS().getParameter (P::samplerStretch))
+                if (auto* ps = processor.getAPVTS().getParameter (lid(pre, P::samplerStretch)))
                     ps->setValueNotifyingHost (0.0f);                        // STRETCH off
                 // An instrument wants a note-off fade everywhere: lift REL off 0 so zones the
                 // .sfz left without ampeg_release (Splendid's mid range) fade too. Only from 0 —
                 // a deliberately set knob value survives the set switch; zones with own values
                 // ignore REL either way. (user request 2026-08-04)
-                if (auto* pr = processor.getAPVTS().getParameter (P::samplerRelease))
+                if (auto* pr = processor.getAPVTS().getParameter (lid(pre, P::samplerRelease)))
                     if (pr->getValue() <= 0.0f)
                         pr->setValueNotifyingHost (pr->convertTo0to1 (2.16f));   // user's pick (by ear)
                 // ...and its tail must not be cut by the global ADSR: switch the ENVELOPE module
@@ -2285,20 +2396,20 @@ void SynthyEditor::buildRack()
                 // preset the envelope belongs to the other generators too, and yanking it would
                 // gut the whole voice. Cross-module, but through APVTS only (AD-9); precedent:
                 // the mod matrix auto-enables source+target modules. (user request 2026-08-04)
-                auto isOn = [this] (const juce::String& id)
+                auto isOn = [this, pre] (const juce::String& id)
                 { return *processor.getAPVTS().getRawParameterValue (id) > 0.5f; };
-                const bool otherGenOn = isOn (P::oscOn (1)) || isOn (P::oscOn (2)) || isOn (P::oscOn (3))
-                                     || isOn (P::subOn) || isOn (P::noiseOn)
-                                     || isOn (P::karplusOn) || isOn (P::wavetableOn);
+                const bool otherGenOn = isOn (lid(pre, P::oscOn (1))) || isOn (lid(pre, P::oscOn (2))) || isOn (lid(pre, P::oscOn (3)))
+                                     || isOn (lid(pre, P::subOn)) || isOn (lid(pre, P::noiseOn))
+                                     || isOn (lid(pre, P::karplusOn)) || isOn (lid(pre, P::wavetableOn));
                 if (! otherGenOn)
                 {
-                    if (auto* pa = processor.getAPVTS().getParameter (P::adsrOn))
+                    if (auto* pa = processor.getAPVTS().getParameter (lid(pre, P::adsrOn)))
                         pa->setValueNotifyingHost (0.0f);   // sampler governs its own tail (12.4)
                     // ...and the output stage must not colour it: Stereo-Pan is the one mode
                     // that renders a stereo recording untouched (hard L/R). Kunstkopf/Binaural
                     // re-spatialise through HRIR/ITD — audibly wrong on a piano (user 2026-08-04);
                     // Mono/Pseudo-Stereo sum the mic channels (comb). Same guard: sole generator.
-                    if (auto* po = processor.getAPVTS().getParameter (P::outputMode))
+                    if (auto* po = processor.getAPVTS().getParameter (lid(pre, P::outputMode)))
                         po->setValueNotifyingHost (po->convertTo0to1 ((float) (int) OutputMode::StereoPan));
                 }
             }
@@ -2306,13 +2417,13 @@ void SynthyEditor::buildRack()
         setCombo.onUserSelect = oneShotForMappedSet;
         // Shared by LOAD (file or .sfz) and FOLDER (12.2): import via PresetIO (copies into
         // %AppData%\JASS\Samples for preset portability), select on success, explain on failure.
-        auto importSource = [this, oneShotForMappedSet] (juce::File f)
+        auto importSource = [this, pre, oneShotForMappedSet] (juce::File f)
         {
             juce::String err;
             const int idx = PresetIO::importSamplerSource(f, &err);
             if (idx >= 0)
             {
-                if (auto* pr = processor.getAPVTS().getParameter(P::samplerSet))
+                if (auto* pr = processor.getAPVTS().getParameter(lid(pre, P::samplerSet)))
                     pr->setValueNotifyingHost(pr->convertTo0to1((float) idx));
                 oneShotForMappedSet(idx);   // importing an instrument is a user gesture too
             }
@@ -2328,11 +2439,11 @@ void SynthyEditor::buildRack()
         // request 2026-08-08 — displays the release the instrument actually plays instead of its
         // own inert value. Decoupled display (toDisplay/fromDisplay), so the shown number follows
         // the SET; fromDisplay is identity because a dimmed knob cannot be dragged anyway.
-        Knob relKnob = K(P::samplerRelease, "REL");
-        auto currentSampleSet = [this]
+        Knob relKnob = K(lid(pre, P::samplerRelease), "REL");
+        auto currentSampleSet = [this, pre]
         {
             return SampleBankStore::instance().getSet(
-                static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::samplerSet)));
+                static_cast<int>(*processor.getAPVTS().getRawParameterValue(lid(pre, P::samplerSet))));
         };
         relKnob.activeWhen = [currentSampleSet]
         {
@@ -2346,11 +2457,11 @@ void SynthyEditor::buildRack()
         };
         relKnob.fromDisplay = [](double shown, double) { return shown; };
 
-        Knob rootKnob = K(P::samplerRoot, "ROOT");
-        rootKnob.activeWhen = [this]
+        Knob rootKnob = K(lid(pre, P::samplerRoot), "ROOT");
+        rootKnob.activeWhen = [this, pre]
         {
             const auto* s = SampleBankStore::instance().getSet(
-                static_cast<int>(*processor.getAPVTS().getRawParameterValue(P::samplerSet)));
+                static_cast<int>(*processor.getAPVTS().getRawParameterValue(lid(pre, P::samplerSet))));
             return s == nullptr || ! s->isMapped();
         };
         // ROOT is a key, so it reads as one: the box says "C4", the hover adds the MIDI number
@@ -2367,37 +2478,39 @@ void SynthyEditor::buildRack()
         d.body = {
             setCombo,
             FileAction{ "LOAD", importSource,
-                        { juce::String(P::samplerSet) },   // refresh the SET combo after load
+                        { juce::String(lid(pre, P::samplerSet)) },   // refresh the SET combo after load
                         PresetIO::samplesFolder(), juce::String(SampleMapping::kAudioWildcard) + ";*.sfz",
                         /*pickDirectory*/ false, "sampler" },   // reopens where LOAD/FOLDER last picked
             // 12.2: import a whole folder as ONE multisample set (mapping derived from filenames
             // "Name_C3.wav" — or from an .sfz found inside the folder).
             FileAction{ "FOLDER", importSource,
-                        { juce::String(P::samplerSet) },
+                        { juce::String(lid(pre, P::samplerSet)) },
                         PresetIO::samplesFolder(), "*", /*pickDirectory*/ true, "sampler" },
-            Combo{ P::samplerMode, "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
+            Combo{ lid(pre, P::samplerMode), "MODE", juce::StringArray{ "One-Shot", "Loop", "Reverse", "Rev-Loop" } },
             // 12.3: pitch/time decoupling — grouped right beside MODE (both choose the playback
             // regime); renders caption-above like the knobs (review feedback 2026-08-04).
-            Toggle{ P::samplerStretch, "STRETCH" },
-            rootKnob, K(P::samplerStart, "START"), K(P::samplerEnd, "END"),
-            K(P::samplerSpeed, "SPEED"),
+            Toggle{ lid(pre, P::samplerStretch), "STRETCH" },
+            rootKnob, K(lid(pre, P::samplerStart), "START"), K(lid(pre, P::samplerEnd), "END"),
+            K(lid(pre, P::samplerSpeed), "SPEED"),
             relKnob,
-            Kmod(P::samplerLevel, "AMP", ModTarget::SamplerLevel),   // renamed from LEVEL (generator standard)
-            Kmod(P::samplerPan,   "PAN",   ModTarget::SamplerPan) };
+            Kmod(lid(pre, P::samplerLevel), "AMP", ModTarget::SamplerLevel),   // renamed from LEVEL (generator standard)
+            Kmod(lid(pre, P::samplerPan),   "PAN",   ModTarget::SamplerPan) };
         addRackModule(std::move(d));
     }
+    });
     // GRAIN (Story 17.1) — spec-driven, right after the SAMPLER whose SET it plays. Hidden by
     // default (the rack is full); the rack menu shows it. 17.2: with KEY on the grain rate is the
     // played note, so DENS greys out — same path as an LFO's RATE under Tempo-Sync (Bool reads 0/1).
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     {
-        auto d = makeModuleDescriptor(Modules::grain());
-        greyWhenSynced(d, P::grainDensity, P::grainKey);
+        auto d = makeModuleDescriptor(LS(Modules::grain()));
+        greyWhenSynced(d, lid(pre, P::grainDensity), lid(pre, P::grainKey));
         // The material is the SAMPLER's SET, chosen over there — say so in GRAIN's own header
         // (maintainer 2026-09-22: "woher sehe ich, welches Sample GRAIN verwendet?"). Same readout
         // hook as STEP SEQ's step counter; blank when no set is selected.
-        d.headerReadout = [&apvts]
+        d.headerReadout = [&apvts, pre]
         {
-            const int idx = (int) *apvts.getRawParameterValue(P::samplerSet);
+            const int idx = (int) *apvts.getRawParameterValue(lid(pre, P::samplerSet));
             if (const auto* set = SampleBankStore::instance().getSet(idx); set != nullptr)
                 return set->getName();
             return juce::String();
@@ -2406,6 +2519,7 @@ void SynthyEditor::buildRack()
         d.headerReadoutTooltip = "The SAMPLER set the cloud plays - pick it in the SAMPLER module";
         addRackModule(std::move(d));
     }
+    });
 
     // ---- MODULATION ----
     // ADSR: the second unit-row is the REAL EnvelopeDisplay (attack→decay→sustain→release
@@ -2414,28 +2528,32 @@ void SynthyEditor::buildRack()
     // 2026-08-31): folded the module is one knob row (W4H1) and the rack re-packs live.
     // It starts FOLDED — since the sequencers took the width, ADSR lives among the flat
     // modulators, and the curve is a look-up, not a thing to stare at (maintainer's call).
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     {
         ModuleDescriptor d;
         d.sizeClass = SizeClass::W4U7; d.type = ModuleType::Modulator;
         d.title = "ENVELOPE - ADSR";
         d.id = d.title.toLowerCase().retainCharacters("abcdefghijklmnopqrstuvwxyz0123456789");
         d.defaultZone = Rack::Zone::Modulation;
-        d.enableParam = P::adsrOn;
-        d.body = { K(P::attack, "ATK"), K(P::decay, "DEC"), K(P::sustain, "SUS"), K(P::release, "REL"),
-                   Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee))), 4 } };
+        d.enableParam = lid(pre, P::adsrOn);
+        d.body = { K(lid(pre, P::attack), "ATK"), K(lid(pre, P::decay), "DEC"), K(lid(pre, P::sustain), "SUS"), K(lid(pre, P::release), "REL"),
+                   Display{ rackOwned.add(new EnvelopeDisplay(apvts, juce::Colour(0xff22d3ee), pre)), 4 } };
         d.collapseTitle = "CURVE";
         d.collapsedSize = SizeClass::W4H1;
         d.startCollapsed = true;
         addRackModule(std::move(d));
     }
+    });
     // LFOs (indexed), ARP, GLIDE, PITCH ENV, MOD MATRIX — spec-driven. LFO 1 visible (id "lfo");
     // further LFOs hidden by default. MOD MATRIX builds its 4 SRC·DEST·AMT rows from the spec.
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     for (int i = 1; i <= kNumLFOs; ++i)
     {
-        auto d = makeModuleDescriptor(Modules::lfo(i));
-        greyWhenSynced(d, P::lfoRate(i), P::lfoSyncDiv(i));
+        auto d = makeModuleDescriptor(LS(Modules::lfo(i)));
+        greyWhenSynced(d, lid(pre, P::lfoRate(i)), lid(pre, P::lfoSyncDiv(i)));
         addRackModule(std::move(d));
     }
+    });
     addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
     // STEP SEQ (Story 15.1) — spec-driven; the editor only adds the mutual exclusion with the ARP.
     // Both REPLACE the held chord, so both running at once is not a thing; rather than a silent
@@ -2679,18 +2797,21 @@ void SynthyEditor::buildRack()
     }
     // BASS (Story 20.2, AD-15): the sequenced bass box beside the patch — pure spec, no hooks.
     addRackModule(makeModuleDescriptor(Modules::bass()));
-    addRackModule(makeModuleDescriptor(Modules::glide()));
-    addRackModule(makeModuleDescriptor(Modules::pitchEnv()));
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
+    addRackModule(makeModuleDescriptor(LS(Modules::glide())));
+    addRackModule(makeModuleDescriptor(LS(Modules::pitchEnv())));
+    });
     addRackModule(makeModuleDescriptor(Modules::chaos()));   // LFO expansion — Lorenz mod source
     // CROSS MOD — spec-driven; the editor injects the derived lit/dim predicate (reads apvts atomics,
     // which a static spec can't capture). Lit = mixModeOn AND both SELECTED operand OSCs enabled.
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     {
-        auto d = makeModuleDescriptor(Modules::crossmod());
-        auto* selA = apvts.getRawParameterValue (P::mixSrcA);
-        auto* selB = apvts.getRawParameterValue (P::mixSrcB);
-        std::array<std::atomic<float>*, 3> oscOn { apvts.getRawParameterValue (P::oscOn (1)),
-                                                   apvts.getRawParameterValue (P::oscOn (2)),
-                                                   apvts.getRawParameterValue (P::oscOn (3)) };
+        auto d = makeModuleDescriptor(LS(Modules::crossmod()));
+        auto* selA = apvts.getRawParameterValue (lid(pre, P::mixSrcA));
+        auto* selB = apvts.getRawParameterValue (lid(pre, P::mixSrcB));
+        std::array<std::atomic<float>*, 3> oscOn { apvts.getRawParameterValue (lid(pre, P::oscOn (1))),
+                                                   apvts.getRawParameterValue (lid(pre, P::oscOn (2))),
+                                                   apvts.getRawParameterValue (lid(pre, P::oscOn (3))) };
         d.enabledWhen = [selA, selB, oscOn]
         {
             const int a = juce::jlimit (0, 2, (int) selA->load());
@@ -2699,10 +2820,12 @@ void SynthyEditor::buildRack()
         };
         addRackModule(std::move(d));
     }
+    });
     // MOD MATRIX — APVTS params are spec-driven (ModMatrixSpecs.h), but the BODY is hand-built here:
     // each slot's PARAM combo is DEPENDENT on its MODULE selection (which params exist depends on the
     // picked module), and a static spec can't read APVTS. The editor supplies the per-slot provider +
     // ComboDependency (clamp PARAM if out of range, then re-list) where apvts is available.
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     {
         ModuleDescriptor d;
         // Full rack width since QUANT: a fifth control per slot makes 24 cells per row, and the
@@ -2714,7 +2837,7 @@ void SynthyEditor::buildRack()
         // geopfert". (176 px is reachable, but only by dropping the repeated captions.)
         d.sizeClass = SizeClass::W30U7; d.type = ModuleType::Modulator;   // 8 slots (4/row × 2),
         d.id = "modmatrix"; d.title = "MOD MATRIX"; d.defaultZone = Rack::Zone::Modulation;   // roomy combos + knobs
-        d.enableParam = P::modMatrixOn;
+        d.enableParam = lid(pre, P::modMatrixOn);
         d.defaultVisible = false;   // seed for RackLayout.json: Init switches the matrix OFF (2026-10-03). This
                                     // descriptor is hand-built, so the flag in ModMatrixSpecs.h does not reach it.
 
@@ -2737,9 +2860,9 @@ void SynthyEditor::buildRack()
 
         for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
         {
-            const juce::String modId = P::modSlotModule (n);
-            const juce::String parId = P::modSlotParam  (n);
-            d.body.push_back (C (P::modSlotSource (n), "SRC", srcItems));
+            const juce::String modId = lid(pre, P::modSlotModule (n));
+            const juce::String parId = lid(pre, P::modSlotParam  (n));
+            d.body.push_back (C (lid(pre, P::modSlotSource (n)), "SRC", srcItems));
             Combo modCombo = C (modId, "MOD", modItems);
             modCombo.indexIsValue = true;                       // position ≠ value: see modOrder above
             modCombo.itemValues   = [modOrder] { return modOrder; };
@@ -2768,7 +2891,7 @@ void SynthyEditor::buildRack()
             // dot keeps anchoring beside AMT (paintOverChildren anchors to the group's final cell)
             // and the four combos read as one cluster. The mask only acts on FREQ routings, so on
             // any other target the combo is greyed via activeWhen (maintainer, 2026-08-18).
-            Combo quantCombo = C (P::modSlotQuant (n), "QUANT",
+            Combo quantCombo = C (lid(pre, P::modSlotQuant (n)), "QUANT",
                                   juce::StringArray { "Off", "Chrom", "Major", "Minor", "Penta" });
             auto* qMod = apvts.getRawParameterValue (modId);
             auto* qPar = apvts.getRawParameterValue (parId);
@@ -2777,7 +2900,7 @@ void SynthyEditor::buildRack()
                 return ModDest::targetOf ((int) qMod->load(), (int) qPar->load()) == LFOTarget::Frequency;
             };
             d.body.push_back (quantCombo);
-            Knob amt = K (P::modSlotAmount (n), "AMT");
+            Knob amt = K (lid(pre, P::modSlotAmount (n)), "AMT");
             amt.slots = 2;
             d.body.push_back (amt);
             // MODULE changed → if PARAM is now beyond the new module's param count, snap it back to 0.
@@ -2795,30 +2918,33 @@ void SynthyEditor::buildRack()
         // SRC/MOD/PARAM/AMT/QUANT — the group ALSO drives the row layout's gap logic, so a stale
         // count here shifts every fifth control and clips the row's right edge).
         d.slotActivity.groupSize = 5;
-        d.slotActivity.isActive  = [this] (int slot)
+        d.slotActivity.isActive  = [this, pre] (int slot)
         {
-            return (int) processor.getAPVTS().getRawParameterValue (P::modSlotModule (slot + 1))->load() != 0;
+            return (int) processor.getAPVTS().getRawParameterValue (lid(pre, P::modSlotModule (slot + 1)))->load() != 0;
         };
         addRackModule (std::move (d));
     }
+    });
 
     // ---- PROCESSING (spec-driven) ----
-    addRackModule(makeModuleDescriptor(Modules::filter()));
+    patch([&] {   // 21.6: built for layer A here, again for layer B at the end
+    addRackModule(makeModuleDescriptor(LS(Modules::filter())));
     // PROCESSING — spec-driven (Modules::*). Display-only combo labels (e.g. DISTORTION
     // "Soft Clip") live in the spec's displayChoices; canonical strings stay in choices.
-    addRackModule(makeModuleDescriptor(Modules::formant()));
-    addRackModule(makeModuleDescriptor(Modules::distortion()));
-    addRackModule(makeModuleDescriptor(Modules::wavefold()));
-    addRackModule(makeModuleDescriptor(Modules::bitcrush()));
-    addRackModule(makeModuleDescriptor(Modules::phaser()));
-    addRackModule(makeModuleDescriptor(Modules::chorus()));
+    addRackModule(makeModuleDescriptor(LS(Modules::formant())));
+    addRackModule(makeModuleDescriptor(LS(Modules::distortion())));
+    addRackModule(makeModuleDescriptor(LS(Modules::wavefold())));
+    addRackModule(makeModuleDescriptor(LS(Modules::bitcrush())));
+    addRackModule(makeModuleDescriptor(LS(Modules::phaser())));
+    addRackModule(makeModuleDescriptor(LS(Modules::chorus())));
     {
         // DELAY's free-running knob is TIME rather than RATE, but the relationship is identical.
-        auto d = makeModuleDescriptor(Modules::delay());
-        greyWhenSynced(d, P::delayTime, P::delaySyncDiv);
+        auto d = makeModuleDescriptor(LS(Modules::delay()));
+        greyWhenSynced(d, lid(pre, P::delayTime), lid(pre, P::delaySyncDiv));
         addRackModule(std::move(d));
     }
-    addRackModule(makeModuleDescriptor(Modules::reverb()));
+    addRackModule(makeModuleDescriptor(LS(Modules::reverb())));
+    });
     // Real visualizers (own instances, separate from the legacy ones behind the rack —
     // one-parent rule). setShowTitle(false): the module header already shows the title.
     // Sharing the one WaveformCapture across instances is safe (updateSnapshot is idempotent
@@ -2856,6 +2982,12 @@ void SynthyEditor::buildRack()
     add(Rack::Zone::Input, SizeClass::W30H1, ModuleType::Generator, "KEYBOARD", P::keyboardOn,
         { Display{ keyboard.get(), 24 } },
         [] { });
+
+    // AD-16 (21.6): layer B's frames — every patch builder once more, with B's ids.
+    pre = Modules::kLayerBPrefix;
+    for (auto& build : patchBuilders)
+        build();
+    pre.clear();
 
     // Added LAST so the opaque rack covers the legacy body; the header chrome stays live.
     addAndMakeVisible(*rackBody);

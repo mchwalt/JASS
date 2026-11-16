@@ -263,6 +263,12 @@ public:
     // layerFocus: 0 = A, 1 = B, 2 = A+B (linked editing — the rack shows A, edits mirror to B).
     int  getLayerFocus() const { return juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerFocus)->load()); }
     bool isFocusB() const      { return getLayerFocus() == 1; }
+    // LAYERS · LEARN (21.6): arm, then the next played key is reported once (-1 = none yet).
+    void armSplitLearn (bool armed)  { learnedSplitNote.store (-1); splitLearnArmed.store (armed); }
+    bool isSplitLearnArmed() const   { return splitLearnArmed.load(); }
+    int  takeLearnedSplitNote()      { return learnedSplitNote.exchange (-1); }
+    std::atomic<bool> splitLearnArmed { false };
+    std::atomic<int>  learnedSplitNote { -1 };
 private:
     void applyLayerGain (int layer, juce::AudioBuffer<float>& b, int numSamples);
     juce::MidiKeyboardState keyboardState;

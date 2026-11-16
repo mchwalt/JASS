@@ -102,14 +102,103 @@ private:
 
     void paintPatternNote (int midiNote, juce::Graphics& g, juce::Rectangle<float> area) const
     {
+        // AD-16 SPLIT (21.6): layer B's keys (below the split point) carry B's violet; the split
+        // key itself gets a violet edge on its left side — where B ends and A begins.
+        if (splitNote >= 0)
+        {
+            if (midiNote < splitNote)
+            {
+                g.setColour (juce::Colour (0xff8b5cf6).withAlpha (0.22f));   // rack::kLayerBColour
+                g.fillRect (area);
+            }
+            else if (midiNote == splitNote)
+            {
+                g.setColour (juce::Colour (0xff8b5cf6));
+                g.fillRect (area.withWidth (3.0f));
+            }
+        }
         if (midiNote != patternNote)
             return;
         g.setColour (juce::Colour (0xff9384b6).withAlpha (0.75f));   // rack::typeColour(Modulator)
         g.fillRect (area.reduced (1.0f));
     }
 
+public:
+    // SPLIT on (21.6): -1 = no split shown. Paint state only.
+    void setSplitNote (int note)
+    {
+        if (note == splitNote) return;
+        splitNote = note;
+        repaint();
+    }
+
+private:
     int patternNote = -1;
     int hoverNote = -1;
+    int splitNote = -1;
+};
+
+// LAYERS (AD-16, Story 21.6): which layer the rack edits — two buttons, A and B, each on its own
+// or both together (A+B = linked editing: the rack shows A, every edit is mirrored to B). One of
+// them is always lit: clicking the only lit button does nothing. Writes `layerFocus`
+// (0 = A, 1 = B, 2 = A+B); polls it, so a preset load or RESET shows up here.
+class LayerSelector : public juce::Component, private juce::Timer
+{
+public:
+    explicit LayerSelector (juce::AudioProcessorValueTreeState& s) : apvts (s)
+    {
+        for (auto* b : { &btnA, &btnB })
+        {
+            addAndMakeVisible (*b);
+            b->setClickingTogglesState (false);
+            b->setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff334155));
+            b->setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.55f));
+            b->setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
+        }
+        btnA.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff22d3ee).darker (0.35f));
+        btnB.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8b5cf6));   // rack::kLayerBColour
+        btnA.setTooltip ("Edit layer A - with B lit too: edits go to both");
+        btnB.setTooltip ("Edit layer B - with A lit too: edits go to both");
+        btnA.onClick = [this] { toggle (true); };
+        btnB.onClick = [this] { toggle (false); };
+        sync();
+        startTimerHz (10);
+    }
+
+    void resized() override
+    {
+        auto r = getLocalBounds().reduced (2);
+        const int h = juce::jmin (r.getHeight(), 34);
+        r = r.withSizeKeepingCentre (r.getWidth(), h);
+        btnA.setBounds (r.removeFromLeft (r.getWidth() / 2).reduced (2, 0));
+        btnB.setBounds (r.reduced (2, 0));
+    }
+
+private:
+    void timerCallback() override { sync(); }
+
+    int focus() const { return juce::roundToInt (apvts.getRawParameterValue ("layerFocus")->load()); }
+
+    void sync()
+    {
+        const int f = focus();
+        btnA.setToggleState (f != 1, juce::dontSendNotification);
+        btnB.setToggleState (f != 0, juce::dontSendNotification);
+    }
+
+    void toggle (bool isA)
+    {
+        bool a = btnA.getToggleState(), b = btnB.getToggleState();
+        (isA ? a : b) = ! (isA ? a : b);
+        if (! a && ! b) return;   // one layer is always edited
+        const int f = (a && b) ? 2 : (b ? 1 : 0);
+        if (auto* p = apvts.getParameter ("layerFocus"))
+            p->setValueNotifyingHost (p->convertTo0to1 ((float) f));
+        sync();
+    }
+
+    juce::AudioProcessorValueTreeState& apvts;
+    juce::TextButton btnA { "A" }, btnB { "B" };
 };
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
@@ -120,13 +209,15 @@ private:
 class EnvelopeDisplay : public juce::Component, private juce::Timer
 {
 public:
-    EnvelopeDisplay(juce::AudioProcessorValueTreeState& apvts, juce::Colour colour)
+    // `layerPrefix` (AD-16, 21.6): "" = layer A's envelope, "b" = layer B's.
+    EnvelopeDisplay(juce::AudioProcessorValueTreeState& apvts, juce::Colour colour,
+                    const juce::String& layerPrefix = {})
         : col(colour)
     {
-        pA = apvts.getRawParameterValue("attack");
-        pD = apvts.getRawParameterValue("decay");
-        pS = apvts.getRawParameterValue("sustain");
-        pR = apvts.getRawParameterValue("release");
+        pA = apvts.getRawParameterValue(layerPrefix + Parameters::ID::attack);
+        pD = apvts.getRawParameterValue(layerPrefix + Parameters::ID::decay);
+        pS = apvts.getRawParameterValue(layerPrefix + Parameters::ID::sustain);
+        pR = apvts.getRawParameterValue(layerPrefix + Parameters::ID::release);
         startTimerHz(20);
     }
     ~EnvelopeDisplay() override { stopTimer(); }

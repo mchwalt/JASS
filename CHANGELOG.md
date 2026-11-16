@@ -24,6 +24,17 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
+- **LAYERS — layer B in the rack.** A module in the MASTER BUS zone (maintainer: the layer block
+  is a module, not header chrome): buttons **A** and **B** pick the layer the rack shows and
+  edits - B's modules carry a violet header, so a knob never leaves doubt about its layer. Both
+  lit is **linked editing**: the rack shows A and every change goes to B as well, knobs by the
+  same amount so B keeps its offset (the way to shape two layers that started as a copy). Also
+  in the module: B ON, LAYER / SPLIT, the split key with LEARN (the next played key), level and
+  balance per layer, LOAD B (any preset's sound into layer B, the rest stays) and A>B (copy).
+  In SPLIT the on-screen keyboard shows B's keys in violet. One rack layout serves both layers:
+  a module shows when it is on in A or in B, and switching layers never re-packs the rack.
+  RANDOM rolls the layer being edited (both, when both are lit); the auto-enable couplings
+  (MOD MATRIX sources and targets, CROSS MOD operands) work in layer B as in A (Story 21.6).
 - **Layer B — JASS becomes bitimbral (engine, routing and state; the controls follow).** The
   target of this season is the UDO Super Gemini: two complete sounds from one keyboard, layered
   or split. A DAW with two instances is two instruments, the BASS box is a fixed mono voice -

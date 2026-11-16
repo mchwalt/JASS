@@ -1345,6 +1345,16 @@ namespace rack
         g.setColour (typeColour (desc.type));
         g.fillRect (getLocalBounds().removeFromTop (2));
 
+        // AD-16 (21.6): a layer-B frame says so — violet header tint and a violet strip under the
+        // type strip. Violet, not red/green: readable with red-green colour vision.
+        if (desc.layerB)
+        {
+            g.setColour (kLayerBColour.withAlpha (0.20f));
+            g.fillRect (header);
+            g.setColour (kLayerBColour);
+            g.fillRect (getLocalBounds().removeFromTop (5).removeFromBottom (3));
+        }
+
         g.setColour (juce::Colours::black.withAlpha (0.5f));
         g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (0.5f), 6.0f, 1.0f);
         g.drawHorizontalLine (kHeaderH, 0.0f, (float) getWidth());
@@ -1691,8 +1701,9 @@ namespace rack
         // oscillator's ring amount, so a routing to a single OSC lights only that OSC's knob
         // (the global "Alle OSC" amount still arrives via byTarget).
         int oscIdx = -1;
-        if (desc.id.length() == 4 && desc.id.startsWith ("osc"))
-            if (const int d = desc.id[3] - '0'; d >= 1 && d <= 3) oscIdx = d - 1;
+        const juce::String baseId = desc.layerB ? desc.id.substring (1) : desc.id;   // 21.6: "bosc2" is OSC 2 too
+        if (baseId.length() == 4 && baseId.startsWith ("osc"))
+            if (const int d = baseId[3] - '0'; d >= 1 && d <= 3) oscIdx = d - 1;
 
         for (auto& rk : ringKnobs)
         {

@@ -285,6 +285,11 @@ void SynthyProcessor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, in
         return;
     }
 
+    // 21.6 LAYERS · LEARN: the next played key becomes the split point. Runs on the audio thread
+    // for MIDI, so only the note is handed over; the editor's timer writes the parameter.
+    if (splitLearnArmed.exchange(false))
+        learnedSplitNote.store(midiNote);
+
     // A real keypress silences the auto-play drone and, while held, drives the
     // FREQ-knob display to the played frequency (it reverts to base on release).
     autoPlayEnabled.store(false);
