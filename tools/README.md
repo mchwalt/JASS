@@ -47,3 +47,20 @@ Drives the SoundCraft fork's CLI (`D:\Projects\Rust\soundcraft`, see
 tracks with STEP SEQ on at 1/16, a long clip note as the root, a four-bar bounce, and every onset
 measured against the grid. Usage and the meaning of the numbers are in the script's docstring.
 Needs numpy and the rig folder `D:\Projects\Rust\soundcraft-rig`.
+
+## `rig/nulltest.py` — bit-exact null test of a refactor (Story 21.4)
+
+Renders presets through `build/Release/JASS_Render.exe` (target `JASS_Render`, a console exe on
+the shared code: one preset in, a fixed MIDI script, one 32-bit float WAV out, one process per
+preset) and compares two render folders sample for sample. Recipe: build `JASS_Render` *before*
+the change and copy the exe aside (e.g. `build/nulltest/ref/`), render the reference twice and
+compare (proves determinism), make the change, render again, compare against the reference.
+
+    python tools/rig/nulltest.py render  build/nulltest/ref/JASS_Render.exe build/nulltest/refA
+    python tools/rig/nulltest.py render  build/Release/JASS_Render.exe       build/nulltest/new
+    python tools/rig/nulltest.py compare build/nulltest/refA build/nulltest/new
+
+Without preset arguments it renders `%AppData%\JASS\Presets\*.jass` (copies — PresetIO migrates
+an old file in place). The renderer runs the host code path: no LiveState, no drone, MASTER
+locked; standalone-only behaviour still needs the app and an ear. Known non-deterministic
+sources: ARP Random, SAMPLER STRETCH.

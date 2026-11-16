@@ -820,6 +820,15 @@ The formal architecture spine lives at
      ~220 `std::atomic<float>*` once (A's ids or B's) and reads through them; idle voices are
      skipped. Today that is ~1,700 string-map lookups per block for 8 voices; doubled it would
      be ~3,400 (agent count 2026-11-11).
+     **S0 done 2026-11-16 (Story 21.4):** `Source/Audio/PatchEngine.{h,cpp}` owns synth, voice
+     roster, glide, display/GLOBAL LFOs, SAMPLER clock and the push; `Parameters::PatchParams`
+     holds the resolved atomics (`resolve(apvts, prefix)`, 103 scalar + 20 indexed families);
+     the processor has one `PatchEngine engine` (prefix empty) and calls `killAllVoices →
+     beginBlock → slideVoice/pluck → processGlide → render → endBlock` where the code used to
+     run. The generator mask stayed in the processor (it drives the drone, an instrument
+     concern). Idle voices are marked stale and pull the push in `startNote` (`refreshVoice`,
+     which replays the previous block's GLOBAL LFO value first — `setGlobalLfo` ramps from
+     it). Verified bit-exact on 24 presets with `JASS_Render` + `tools/rig/nulltest.py`.
   5. **Voices.** Each layer has its own pool of **8** voices (today's count), stock JUCE
      allocation and stealing inside the pool; B's pool renders only while `layerBOn`. Raising
      the count (the Gemini has 20 shared) is a later measurement, not part of this decision.

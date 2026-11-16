@@ -61,6 +61,17 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   means 2 Hz, a lane at 0 % used to mean 0.1 Hz and now means a 200 s period. Static values are
   unaffected.
 
+### Changed
+- **The patch runs in its own engine, and idle voices no longer cost a parameter update.** First
+  step towards a second, bitimbral layer (AD-16, Story 21.4): everything that belongs to the patch -
+  voices, glide, the GLOBAL LFOs, the SAMPLER loop clock - moved out of the processor into one
+  class that layer B will simply instantiate a second time. Its parameters are now resolved once
+  instead of looked up by name for every voice in every audio block (about 1,700 lookups per block
+  before, idle voices included), and only voices that play a note get the per-block update; a
+  voice that starts a note picks it up at that moment. Nothing is meant to sound different, and
+  every factory and user preset rendered bit-identical before and after (new offline renderer
+  `JASS_Render` + `tools/rig/nulltest.py`).
+
 ## [2026.11.0] – 2026-11-04
 
 ### Fixed
