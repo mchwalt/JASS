@@ -8,27 +8,7 @@ SynthyProcessor::SynthyProcessor()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "Parameters", Parameters::createLayout())
 {
-    patchParams.resolve(apvts, {});   // 21.4: layer A = today's ids (no prefix)
-
-    for (int i = 0; i < 8; ++i)
-        synth.addVoice(new SynthVoice());
-    synth.addSound(new SynthSound());
-
-    // Choke groups (Story 12.7) need sibling access: a voice knows only its own note, so a closed
-    // hi-hat could never reach the open one ringing in another voice. Build the roster ONCE here —
-    // the voice list never changes afterwards — and hand every voice a pointer to it. The roster is
-    // read-only on the audio thread; the synthesiser stays the sole owner of the voices.
-    voiceRoster.clear();
-    voiceRoster.reserve((size_t) synth.getNumVoices());
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* v = dynamic_cast<SynthVoice*>(synth.getVoice(i)))
-            voiceRoster.push_back(v);
-    for (auto* v : voiceRoster)
-        v->setVoicePeers(&voiceRoster);
-    // GRAIN (17.1): one random stream per voice — golden-ratio multiples spread the xorshift seeds
-    // apart, so a chord is several different clouds, not one cloud summed coherently (+6 dB).
-    for (size_t i = 0; i < voiceRoster.size(); ++i)
-        voiceRoster[i]->getGrain().seed(0x9E3779B9u * (uint32_t) (i + 1));
+    // Voices, choke-group roster and GRAIN seeds: PatchEngine's constructor (Story 21.4).
 
     // One-time rebrand of the app-data folder (%AppData%\Synthy -> JASS, *.synthy -> *.jass).
     // MUST run before anything touches jassFolder() (which would create JASS and suppress it).
@@ -865,25 +845,14 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     if (isHostedByDaw()) diagNote ("prepareToPlay");
 #endif
     Parameters::ID::warmIndexedIds();   // RT-safety: build the indexed-ID caches on the message thread
-    synth.setCurrentPlaybackSampleRate(sampleRate);
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
-        {
-            voice->prepareToPlay(sampleRate, samplesPerBlock);
-            voice->setGlideInfo(&glideInfo);   // poly-glide: shared per-block source ratios
-        }
-
-    // Pre-size the glide note lists so the audio thread never reallocates.
-    glideHeld.reserve(128); glideLastChord.reserve(128);
-    glideNewNotes.reserve(128); glideOffNotes.reserve(128);
-    arpKeptScratch.ensureSize(2048); glideRebuiltScratch.ensureSize(2048);   // RT: no per-block MidiBuffer growth
+    engine.prepare(sampleRate, samplesPerBlock);   // 21.4: voices, glide lists, display LFOs
+    arpKeptScratch.ensureSize(2048);   // RT: no per-block MidiBuffer growth
 
     stereoWidth.prepare(sampleRate);
     binauralRoom.prepare(sampleRate);
     wasKunstkopf = false;
     compressor.prepare(sampleRate);
     prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
-    for (auto& l : uiLfos) l.setSampleRate(sampleRate);
     chaos.setSampleRate(sampleRate);
     arp.prepare(sampleRate);
     stepSeq.prepare(sampleRate);
@@ -910,7 +879,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // RT-safe, and immune to the chord filter since no buffer event is involved.
     if (killVoicesRequested.exchange (false))
     {
-        synth.allNotesOff (0, false);
+        engine.killAllVoices();
         // The drone's voice just died with the rest — reset its bookkeeping too, or a patch that
         // WANTS the drone (no latch, nothing held) would stay silent: autoNoteOn would still say
         // "sounding" and nothing would ever re-trigger it. The noteOff clears the keyboard state;
@@ -925,11 +894,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Which sound generators are currently enabled (one bit each).
     unsigned mask = 0;
     for (int i = 1; i <= 3; ++i)
-        if (*apvts.getRawParameterValue(Parameters::ID::oscOn(i)) > 0.5f) mask |= (1u << i);
-    if (*apvts.getRawParameterValue(Parameters::ID::karplusOn)  > 0.5f) mask |= (1u << 4);
-    if (*apvts.getRawParameterValue(Parameters::ID::noiseOn)    > 0.5f) mask |= (1u << 5);
-    if (*apvts.getRawParameterValue(Parameters::ID::wavetableOn) > 0.5f) mask |= (1u << 6);
-    if (*apvts.getRawParameterValue(Parameters::ID::subOn)      > 0.5f) mask |= (1u << 7);
+        if (*engine.params().oscOn[(size_t) i - 1] > 0.5f) mask |= (1u << i);
+    if (*engine.params().karplusOn   > 0.5f) mask |= (1u << 4);
+    if (*engine.params().noiseOn     > 0.5f) mask |= (1u << 5);
+    if (*engine.params().wavetableOn > 0.5f) mask |= (1u << 6);
+    if (*engine.params().subOn       > 0.5f) mask |= (1u << 7);
 
     // A newly enabled generator re-arms the auto-play drone (rising edge) — but only while the
     // instrument is otherwise silent: never under a LATCHED figure (a held C4 under a running
@@ -1049,7 +1018,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // ── Global (master-bus) modulation offsets ──────────────────────────────────────────────
     // STEREO / MASTER / COMPRESSOR run on the SUMMED mix (further below), not per voice, so their
     // MOD MATRIX routings are applied HERE at block rate. Source values are the GLOBAL uiLfo values
-    // from the PREVIOUS block (lfoDisplayValues, advanced after the render) — a one-block lag that is
+    // from the PREVIOUS block (the engines display LFOs, advanced after the render) — a one-block lag that is
     // inaudible. LFO and Chaos sources drive global targets (Velocity/Envelope have no single global
     // value), which matches the editor's ring feed exactly, so ring == audio.
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
@@ -1057,16 +1026,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         using namespace Parameters;
         static constexpr int kLfoSrc[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                    (int) ModSource::LFO3, (int) ModSource::LFO4 };
-        if (*apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f)
+        const auto& pp = engine.params();
+        if (*pp.modMatrixOn > 0.5f)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
             {
-                const int mod = (int) *apvts.getRawParameterValue(ID::modSlotModule(n));
+                const int mod = (int) *pp.modSlotModule[(size_t) n - 1];
                 if (mod <= 0) continue;   // Off
-                const int   src = (int) *apvts.getRawParameterValue(ID::modSlotSource(n));
-                const int   par = (int) *apvts.getRawParameterValue(ID::modSlotParam(n));
-                const float amt = *apvts.getRawParameterValue(ID::modSlotAmount(n));
+                const int   src = (int) *pp.modSlotSource[(size_t) n - 1];
+                const int   par = (int) *pp.modSlotParam [(size_t) n - 1];
+                const float amt = *pp.modSlotAmount[(size_t) n - 1];
                 float sv = 0.0f;
-                for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = lfoDisplayValues[i].load();
+                for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = engine.getLfoDisplayValue(i);
                 if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
                 if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
                 const int tgt = (int) ModDest::targetOf(mod, par);
@@ -1079,97 +1049,19 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (! isHostedByDaw())
         syncBpm = juce::jlimit(40.0, 250.0, syncBpm + gMod[(size_t) LFOTarget::MasterTempo] * 90.0);
 
-    // Per-LFO effective rate (Tempo-Sync resolved once per block; Free => raw RATE knob).
-    double lfoRateHz[kNumLFOs];
-    bool   lfoGlobalActive[kNumLFOs];   // 20.1: on && GLOBAL => the processor's instance is the LFO
-    for (int i = 0; i < kNumLFOs; ++i)
-    {
-        const int div = (int) *apvts.getRawParameterValue(Parameters::ID::lfoSyncDiv(i + 1));
-        lfoRateHz[i] = SyncDivision::isSynced(div)
-                           ? SyncDivision::lfoRateHz(syncBpm, div)
-                           : (double) *apvts.getRawParameterValue(Parameters::ID::lfoRate(i + 1));
-        lfoGlobalActive[i] = *apvts.getRawParameterValue(Parameters::ID::lfoOn(i + 1)) > 0.5f
-                          && *apvts.getRawParameterValue(Parameters::ID::lfoGlobal(i + 1)) > 0.5f;
-    }
-
-    const int delayDiv = (int) *apvts.getRawParameterValue(Parameters::ID::delaySyncDiv);
-    const double delayTimeSec = SyncDivision::isSynced(delayDiv)
-                                    ? SyncDivision::delaySeconds(syncBpm, delayDiv)
-                                    : (double) *apvts.getRawParameterValue(Parameters::ID::delayTime);
-
-    SamplePlayer::resetSeekBudget();   // 12.3: per-block cap on note-on stretch pre-rolls
-
-    // Story 12.1: shared SAMPLER loop clock — ONE master phase advancing at the ROOT rate × SPEED
-    // through the START..END region. Loop-mode notes START at this phase (SamplePlayer::trigger),
-    // so simultaneous/late notes stay in step instead of each restarting the loop at START.
-    {
-        using namespace Parameters;
-        const auto* set = SampleBankStore::instance().getSet(
-            static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
-        const bool on = *apvts.getRawParameterValue(ID::samplerOn) > 0.5f;
-        // 12.2 (user request, tightened 2026-08-04): the clock runs only while at least one KEY
-        // is held (sustain pedal counts) — release TAILS no longer hold the round open, so the
-        // first note after letting go always hits the sample's attack without waiting for the
-        // previous tone to fully fade. Notes added while a key is still held keep joining the
-        // running round (beat-lock preserved). The auto-play drone holds its key permanently,
-        // so with auto-play on the clock free-runs as before.
-        bool anyVoiceSounding = false;
-        for (int vi = 0; vi < synth.getNumVoices() && ! anyVoiceSounding; ++vi)
-            if (auto* v = synth.getVoice(vi))
-                anyVoiceSounding = v->isVoiceActive() && (v->isKeyDown() || v->isSustainPedalDown());
-        // The clock's reference is the zone C4 would play — for a single sample that is THE zone
-        // (12.1 unchanged); for a mapped set it anchors the round on the centre zone (its own
-        // root, since the ROOT knob is inert for mapped sets).
-        const auto* zone = (set != nullptr) ? set->zoneFor(60) : nullptr;
-        if (zone != nullptr && on && anyVoiceSounding && zone->getLength() > 4)
-        {
-            const double root  = set->isMapped() ? (double) zone->rootKey
-                                                 : (double) *apvts.getRawParameterValue(ID::samplerRoot);
-            const double speed = *apvts.getRawParameterValue(ID::samplerSpeed);
-            const double s0 = *apvts.getRawParameterValue(ID::samplerStart);
-            const double s1 = *apvts.getRawParameterValue(ID::samplerEnd);
-            const double lenFile = std::abs(s1 - s0) * (double) (zone->getLength() - 1);
-            if (lenFile > 4.0)
-            {
-                // 12.3 STRETCH mode: the round advances on the TIME axis only (speed, no pitch
-                // factor) — voices walk it identically, so the clock must too. Tape mode keeps
-                // the root-rate round of 12.1.
-                const bool stretchOn = *apvts.getRawParameterValue(ID::samplerStretch) > 0.5f;
-                const double pitchPart = stretchOn ? 1.0 : std::pow(2.0, (60.0 - root) / 12.0);
-                const double rate = pitchPart * zone->fileSampleRate / getSampleRate() * speed;
-                samplerMasterFrac += (double) buffer.getNumSamples() * rate / lenFile;
-                samplerMasterFrac -= std::floor(samplerMasterFrac);
-            }
-        }
-        else
-            samplerMasterFrac = 0.0;   // off/empty/silent: clock parks at START
-    }
-
-    // Update all voice parameters
-    for (int i = 0; i < synth.getNumVoices(); ++i)
-        if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(i)))
-        {
-            voice->setChaosValues(chaosDisplay[0].load(), chaosDisplay[1].load());   // one orbit, all voices
-            for (int li = 0; li < kNumLFOs; ++li)   // 20.1: a GLOBAL LFO's value — the processor's instance,
-                voice->setGlobalLfo(li, lfoGlobalActive[li], lfoDisplayValues[li].load());   // one block behind, like the rings
-            voice->setAccentDepth(*apvts.getRawParameterValue(Parameters::ID::seqAccent));   // 15.2
-            Parameters::applyToVoice(patchParams, voice->getOscillators(),
-                                     voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
-                                     voice->getLFOs(), voice->getNoise(),
-                                     voice->getKarplus(), voice->getWavetable(),
-                                     voice->getSampler(), samplerMasterFrac,   // Story 12.1 (+ loop clock)
-                                     voice->getGrain(),                         // Story 17.1
-                                     voice->getMixMode(),
-                                     voice->getSubOsc(), voice->getSubOctaveRef(),
-                                     voice->getAdsrOnRef(), voice->getMixModeOnRef(),
-                                     voice->getMixSrcARef(), voice->getMixSrcBRef(),
-                                     voice->getPitchEnv(), voice->getPitchEnvAmountRef(),
-                                     voice->getPitchEnvOnRef(),
-                                     voice->getModSlots(), voice->getModMatrixOnRef(),
-                                     voice->getOutputModeRef(), voice->getGeneratorPan(),   // Epic 10
-                                     lfoRateHz, delayTimeSec,
-                                     voice->getFilterKeytrackRef());
-        }
+    // The patch's block start (Story 21.4): LFO rates, delay time, SAMPLER loop clock, and the
+    // parameter push into the voices — see PatchEngine::beginBlock.
+    PatchEngine::BlockContext patchCtx;
+    patchCtx.numSamples  = buffer.getNumSamples();
+    patchCtx.sampleRate  = getSampleRate();
+    patchCtx.syncBpm     = syncBpm;
+    patchCtx.chaosX      = chaosDisplay[0].load();
+    patchCtx.chaosY      = chaosDisplay[1].load();
+    patchCtx.accentDepth = *apvts.getRawParameterValue(Parameters::ID::seqAccent);   // 15.2
+    patchCtx.hosted      = hosted;
+    patchCtx.hostPlaying = hostPlaying;
+    patchCtx.hostPpq     = hostPpq;
+    engine.beginBlock(patchCtx);
 
     bassMidiScratch.clear();   // 20.2: the STEP SEQ's notes for the BASS box this block (render section consumes)
     // 20.2: with the STEP SEQ's BASS switch on, the editor's step preview (kAuditionChannel: a
@@ -1445,14 +1337,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     bass.slideTo((double) ev.semitones, ev.slide ? bassGlide : 0.0);
                     continue;
                 }
-                for (int v = 0; v < synth.getNumVoices(); ++v)
-                    if (auto* voice = static_cast<SynthVoice*>(synth.getVoice(v)))
-                        if (voice->isVoiceActive() && voice->getCurrentlyPlayingNote() == ev.note)
-                        {
-                            voice->slideTo((double) ev.semitones,
-                                           ev.slide ? StepSequencer::kSlideSeconds : 0.0);
-                            break;
-                        }
+                engine.slideVoice(ev.note, (double) ev.semitones,
+                                  ev.slide ? StepSequencer::kSlideSeconds : 0.0);
             }
             midiMessages.swapWith(kept);
         }
@@ -1532,104 +1418,18 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Don't let the auto-play drone pluck the Karplus string (it's played via
     // the keyboard). Suppress the pluck only for the drone's own note-on.
     if (droneJustTriggered)
-        for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
-                v->setPluckEnabled(false);
+        engine.setPluckEnabled(false);
 
     // Manual PLUCK (button / spacebar): re-excite the Karplus string on every voice.
     // RT-safe — the atomic flag is set on the message thread and consumed here.
     if (pluckRequested.exchange(false))
-        for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
-                v->pluckKarplus();
+        engine.pluck();
 
-    // Poly-glide (portamento): assign each newly-started note a predecessor pitch to glide
-    // FROM. Runs on the FINAL midi buffer (after the arpeggiator) so it glides arp steps too.
-    {
-        using namespace Parameters;
-        glideInfo.enabled = *apvts.getRawParameterValue(ID::glideOn) > 0.5f;
-        glideInfo.timeSec = *apvts.getRawParameterValue(ID::glideTime);
-        glideInfo.startRatio.fill(-1.0f);
+    // Poly-glide (portamento) and mono glide: on the FINAL midi buffer (after the arpeggiator) so
+    // it glides arp steps too — see PatchEngine::processGlide.
+    engine.processGlide(midiMessages, kDroneChannel);
 
-        glideNewNotes.clear();
-        glideOffNotes.clear();
-        for (const auto meta : midiMessages)
-        {
-            const auto m = meta.getMessage();
-            if (m.getChannel() == kDroneChannel) continue;   // never glide the auto-play drone
-            if (m.isNoteOn())       glideNewNotes.push_back(m.getNoteNumber());
-            else if (m.isNoteOff()) glideOffNotes.push_back(m.getNoteNumber());
-        }
-
-        if (glideInfo.enabled && ! glideNewNotes.empty())
-        {
-            // Source = chord held before this block; if nothing is held (a gap), glide from
-            // the last chord that WAS held. Pitch-sort both and map position-wise (i-th new
-            // glides from i-th old); surplus new notes glide from the highest old note.
-            const std::vector<int>& src0 = ! glideHeld.empty() ? glideHeld : glideLastChord;
-            if (! src0.empty())
-            {
-                std::vector<int> src = src0;
-                std::sort(src.begin(), src.end());
-                std::sort(glideNewNotes.begin(), glideNewNotes.end());
-                const double c4 = juce::MidiMessage::getMidiNoteInHertz(60);
-                for (int i = 0; i < (int) glideNewNotes.size(); ++i)
-                {
-                    const int from = src[(size_t) juce::jmin(i, (int) src.size() - 1)];
-                    const int note = glideNewNotes[(size_t) i];
-                    if (from != note && note >= 0 && note < 128)
-                        glideInfo.startRatio[(size_t) note] =
-                            (float) (juce::MidiMessage::getMidiNoteInHertz(from) / c4);
-                }
-            }
-        }
-
-        // Maintain the held-note set for the next block (always, so it is correct the moment
-        // glide is toggled on): drop note-offs, add note-ons (no duplicates).
-        for (int off : glideOffNotes)
-            glideHeld.erase(std::remove(glideHeld.begin(), glideHeld.end(), off), glideHeld.end());
-        for (int n : glideNewNotes)
-            if (std::find(glideHeld.begin(), glideHeld.end(), n) == glideHeld.end())
-                glideHeld.push_back(n);
-        if (! glideHeld.empty())
-            glideLastChord = glideHeld;
-
-        // Mono glide (default): monophonic last-note priority. When a new note starts, emit a
-        // REGULAR note-off for the previously sounding note, so the synth releases that voice
-        // itself (its normal envelope release — no click, no stuck notes, no fighting the voice
-        // manager). The new note still glides from the previous pitch (startRatio set above).
-        // Best for sequential playing; simultaneous chords in Mono collapse to last-note.
-        const bool glideMono = (int) *apvts.getRawParameterValue(ID::glideMode) == 0;
-        if (glideInfo.enabled && glideMono)
-        {
-            auto& rebuilt = glideRebuiltScratch; rebuilt.clear();   // reused member (no per-block alloc)
-            for (const auto meta : midiMessages)
-            {
-                const auto m = meta.getMessage();
-                const int  sp = meta.samplePosition;
-                if (m.isNoteOn() && m.getChannel() != kDroneChannel)
-                {
-                    if (monoSounding >= 0 && monoSounding != m.getNoteNumber())
-                        rebuilt.addEvent (juce::MidiMessage::noteOff (1, monoSounding), sp);
-                    monoSounding = m.getNoteNumber();
-                    rebuilt.addEvent (m, sp);
-                }
-                else if (m.isNoteOff() && m.getChannel() != kDroneChannel)
-                {
-                    if (m.getNoteNumber() == monoSounding)
-                        monoSounding = -1;
-                    rebuilt.addEvent (m, sp);
-                }
-                else
-                    rebuilt.addEvent (m, sp);
-            }
-            midiMessages.swapWith (rebuilt);
-        }
-        else
-            monoSounding = -1;   // keep state clean while in Poly
-    }
-
-    synth.renderNextBlock(buffer, midiMessages, 0, buffer.getNumSamples());
+    engine.render(buffer, midiMessages);
 
     // ---- PERC (Story 16.1): layer B, straight into the summed mix -----------------------------
     // Here and not inside a voice, which is the whole point: a voice would drag the kit through
@@ -1697,52 +1497,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     seqStepDisplay.store(stepSeq.enabled ? stepSeq.playingStep() : -1);
 
     if (droneJustTriggered)
-        for (int i = 0; i < synth.getNumVoices(); ++i)
-            if (auto* v = static_cast<SynthVoice*>(synth.getVoice(i)))
-                v->setPluckEnabled(true);
+        engine.setPluckEnabled(true);
 
-    // Advance the display LFOs so the editor can draw live modulation rings — and, since 20.1,
-    // because a GLOBAL LFO IS this instance: what the ring shows is what every voice hears.
-    // Mirrors the patch LFO params; runs regardless of whether a note sounds.
-    {
-        using namespace Parameters;
-        const bool rearm = rearmGlobalLfos.exchange(false);   // preset / DAW-state load (20.1)
-        for (int li = 0; li < kNumLFOs; ++li)
-        {
-            uiLfos[li].setRate(lfoRateHz[li]);   // mirror the effective (synced or free) rate
-            uiLfos[li].setDepth(*apvts.getRawParameterValue(ID::lfoDepth(li + 1)));
-            uiLfos[li].setWaveform((LFOWaveform)(int) *apvts.getRawParameterValue(ID::lfoWave(li + 1)));
-            const bool on = *apvts.getRawParameterValue(ID::lfoOn(li + 1)) > 0.5f;
-            uiLfos[li].setTarget(on ? (LFOTarget)((int) *apvts.getRawParameterValue(ID::lfoTarget(li + 1)) + 1)
-                                    : LFOTarget::Off);
-            // 20.1 GLOBAL: rearm on the rising edge of (on && GLOBAL) and on a load, so a global
-            // One-Shot sweeps once from "now" (a per-voice One-Shot is rearmed by the key instead).
-            // In a DAW with SYNC on the phase is pinned to the song position every block — bar-locked,
-            // so a locate or STOP/PLAY lands on the bar by construction — and it stands while the
-            // host stands. A global LFO with SYNC = Free keeps running: it is a movement, not a clock.
-            const bool global = lfoGlobalActive[li];
-            if (global && (rearm || ! lfoGlobalWasOn[li]))
-                uiLfos[li].reset();
-            lfoGlobalWasOn[li] = global;
-            const int  div    = (int) *apvts.getRawParameterValue(ID::lfoSyncDiv(li + 1));
-            // A One-Shot is never pinned: pinning would restart it every cycle, and its point is to
-            // sweep ONCE from the rearm (review 2026-11-08, maintainer's call). It still takes its
-            // sweep time from the synced rate.
-            const bool pinned = global && hosted && hostPpq.hasValue() && SyncDivision::isSynced(div)
-                             && uiLfos[li].getWaveform() != LFOWaveform::OneShot;
-            if (pinned)
-            {
-                double ph = std::fmod(*hostPpq / SyncDivision::beatsPerCycle(div), 1.0);
-                if (ph < 0.0) ph += 1.0;
-                uiLfos[li].setPhase(ph);
-            }
-            float v = lfoDisplayValues[li].load();   // held while a pinned LFO's host stands
-            if (! (pinned && ! hostPlaying))
-                for (int i = 0, n = buffer.getNumSamples(); i < n; ++i)
-                    v = uiLfos[li].process();
-            lfoDisplayValues[li].store(v);
-        }
-    }
+    // Advance the display / GLOBAL LFOs (20.1) — after the render, as before; see
+    // PatchEngine::endBlock.
+    engine.endBlock(patchCtx);
 
     // Master-bus compressor: glue the summed mono mix before it is widened.
     {
@@ -1960,7 +1719,7 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         diagNote ("setStateInformation");
 #endif
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
-        rearmGlobalLfos.store(true);    // 20.1: a restored project starts its global One-Shots afresh —
+        engine.requestGlobalLfoRearm(); // 20.1: a restored project starts its global One-Shots afresh —
                                         // AFTER the replace, or a block in between spends it on the old state
         PresetIO::resolveSetByName(apvts, samplerName, Parameters::ID::samplerSet, PresetIO::hooks(apvts).pendingSamplerSetName, 0);
         PresetIO::resolveSetByName(apvts, kitName,     Parameters::ID::percKit,    PresetIO::hooks(apvts).pendingPercKitName,    1);

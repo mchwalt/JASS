@@ -211,7 +211,7 @@ private:
     // transposeRatio is the TARGET; glideRatio is the smoothed value actually used for
     // pitch (equals the target instantly when glide is off / no predecessor).
     double transposeRatio = 1.0;
-    const GlideInfo* glideInfo = nullptr;   // poly-glide info (owned by the processor)
+    const GlideInfo* glideInfo = nullptr;   // poly-glide info (owned by the PatchEngine)
     juce::SmoothedValue<double, juce::ValueSmoothingTypes::Multiplicative> glideRatio;
     int subOctave = -1;           // sub-oscillator octave offset (-1 or -2)
 

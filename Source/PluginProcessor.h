@@ -4,6 +4,7 @@
 #include "Audio/SynthVoice.h"
 #include "Audio/SynthSound.h"
 #include "Audio/Parameters.h"
+#include "Audio/PatchEngine.h"   // Story 21.4: the patch's engine (AD-16: one per layer)
 #include "DSP/WaveformCapture.h"
 #include "DSP/StereoWidth.h"
 #include "DSP/BinauralRoom.h"
@@ -178,10 +179,10 @@ public:
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
-    float getLfoDisplayValue(int i) const { return lfoDisplayValues[i].load(); }   // per-LFO (for the rings)
+    float getLfoDisplayValue(int i) const { return engine.getLfoDisplayValue(i); }   // per-LFO (for the rings)
     // 20.1: a preset / DAW-state load restarts every GLOBAL LFO (a global One-Shot then sweeps once
     // from "now"). Message thread sets, the audio thread consumes it once.
-    void requestGlobalLfoRearm() noexcept { rearmGlobalLfos.store (true); }
+    void requestGlobalLfoRearm() noexcept { engine.requestGlobalLfoRearm(); }
     float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
@@ -237,13 +238,11 @@ private:
     // has arrived; `generation` guards against a preset that was loaded in the meantime.
     void selectSamplerSet (int index, int generation, const juce::String& targetParamId);
 
-    juce::Synthesiser synth;
-    // Flat list of the synth's voices, built once in the constructor and handed to every voice so a
-    // note-on can reach its siblings (Story 12.7 choke groups). Non-owning — the synthesiser owns
-    // them — and never mutated afterwards, so reading it on the audio thread needs no lock.
-    std::vector<SynthVoice*> voiceRoster;
     juce::AudioProcessorValueTreeState apvts;
-    Parameters::PatchParams patchParams;   // 21.4: the patch's atomics, resolved once in the constructor
+    // The patch (Story 21.4, S0 of AD-16): voices, glide, GLOBAL/display LFOs, the SAMPLER clock and
+    // the per-voice parameter push. Layer A = today's ids (no prefix). Declared right after apvts:
+    // it resolves its parameter pointers in its constructor.
+    PatchEngine engine { apvts, {} };
     juce::MidiKeyboardState keyboardState;
     // Snapshot length = the LONGEST scope window (100 ms) at the highest sample rate we
     // expect (96 kHz): 0.100 s × 96000 = 9600. The scope shows only the first N samples of
@@ -253,16 +252,8 @@ private:
     WaveformCapture waveformCapture { 9600 };
     StereoWidth stereoWidth;   // final pseudo-stereo stage (mono engine -> stereo)
     BinauralRoom binauralRoom; // Kunstkopf externalization: shared early-reflection stage (Story 10.4)
-    double samplerMasterFrac = 0.0;   // Story 12.1: shared SAMPLER loop phase (see processBlock)
     bool wasKunstkopf = false; // mode-transition edge -> reset the reflection ring (no stale audio)
     Compressor  compressor;    // master-bus compressor (runs on the summed mix, before width)
-    LFO uiLfos[kNumLFOs];      // display-only LFOs mirroring each patch LFO (for the rings)
-    std::atomic<float> lfoDisplayValues[kNumLFOs] {};
-    // GLOBAL LFOs (Story 20.1): uiLfos double as the ONE instance of a global LFO — what the rings
-    // show is what every voice hears. Rising edge of (on && GLOBAL) rearms it, so a global One-Shot
-    // starts when the LFO is switched on; a preset or DAW-state load rearms as well.
-    bool lfoGlobalWasOn[kNumLFOs] {};            // audio thread only
-    std::atomic<bool> rearmGlobalLfos { false };
     // CHAOS: ONE global Lorenz attractor (all voices move together — correlated, musical, cheap).
     // Advanced once per block; voices, master-bus targets and rings all read the same snapshot,
     // so display == audio by construction. Free-running: never reset (see DSP/ChaosLorenz.h).
@@ -330,16 +321,7 @@ private:
     std::atomic<bool> percKitPending { false };
     std::vector<int> arpHeldScratch;   // reused per block (no RT realloc)
     juce::MidiBuffer arpKeptScratch;       // RT-safety (11.1): reused per block instead of a fresh
-    juce::MidiBuffer glideRebuiltScratch;  // MidiBuffer (arp filter + mono-glide rebuild)
-
-    // Poly-glide (portamento): the processor assigns each newly-started note a predecessor
-    // pitch to glide FROM (pitch-sorted against the previous chord) and shares it with all
-    // voices via glideInfo. Held-note tracking excludes the auto-play drone.
-    GlideInfo glideInfo;
-    std::vector<int> glideHeld;        // notes currently held down
-    std::vector<int> glideLastChord;   // last non-empty held set (glide source after a gap)
-    std::vector<int> glideNewNotes, glideOffNotes;   // per-block scratch (no RT realloc)
-    int monoSounding = -1;             // Mono glide: the note currently sounding (last-note priority)
+                                           // MidiBuffer (arp filter); glide's lives in the engine
     bool autoNoteOn = false;
     std::atomic<bool> pluckRequested { false };   // set by pluckString(), consumed in processBlock
 

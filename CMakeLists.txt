@@ -57,6 +57,7 @@ target_sources(JASS PRIVATE
     # Audio engine
     Source/Audio/SynthVoice.cpp
     Source/Audio/SynthSound.cpp
+    Source/Audio/PatchEngine.cpp   # Story 21.4: one patch's engine (AD-16: one per layer)
 
     # DSP modules
     Source/DSP/Oscillator.cpp
