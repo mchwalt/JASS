@@ -19,7 +19,9 @@ namespace Modules
             // SPLIT: notes BELOW this go to B (the left hand), from it up to A. 48 = C3.
             { "splitNote",   "Split",  "SPLIT", ParamSpec::Kind::Int,   juce::NormalisableRange<float> (0.0f, 127.0f, 1.0f), 48.0f },
             // Which layer the rack edits (S2). A view choice, not sound: no automation lane.
-            { "layerFocus",  "Focus",  "EDIT",  ParamSpec::Kind::Choice, {}, 0.0f, { "A", "B" } },
+            // "A+B" (21.6, maintainer 2026-11-16): the rack shows A, and every edit is mirrored
+            // to B — relative for knobs, so B keeps its offset (linked editing). Append-only.
+            { "layerFocus",  "Focus",  "EDIT",  ParamSpec::Kind::Choice, {}, 0.0f, { "A", "B", "A+B" } },
             { "layerALevel", "ALevel", "A LVL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f },
             { "layerBLevel", "BLevel", "B LVL", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.0f, 1.0f, 0.001f), 1.0f },
             // Balance, not a mono pan: a layer is already stereo. 0 = both channels at unity.

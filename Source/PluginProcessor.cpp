@@ -65,23 +65,16 @@ SynthyProcessor::SynthyProcessor()
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
 
-    // Epic 5: keep the MIX MODE source selectors distinct (both standalone + plugin).
-    apvts.addParameterListener(Parameters::ID::mixSrcA, this);
-    apvts.addParameterListener(Parameters::ID::mixSrcB, this);
-    // CROSS MOD enable coupling: needs mixModeOn + the three oscOn to auto-enable / drop.
-    apvts.addParameterListener(Parameters::ID::mixModeOn, this);
-    for (int i = 1; i <= 3; ++i)
-        apvts.addParameterListener(Parameters::ID::oscOn(i), this);
-
-    // Convenience: auto-enable a matrix slot's SOURCE and TARGET modules when it starts routing
-    // (source picked + module != Off) — otherwise a route silently does nothing because the source
-    // (e.g. an LFO) or the target module is still bypassed. The enabled TARGET now depends on the
-    // MODULE selector (per-OSC → oscOn(N)), so listen on every slot's SRC + MOD selector.
-    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+    // Parameter couplings (MIX SRC distinctness, CROSS MOD and MOD MATRIX auto-enable) for BOTH
+    // layers, and linked editing (21.6): every layer-A patch parameter — see listenedParamIds().
+    // The A+B snapshot starts at the current values; parameterChanged keeps it current.
+    for (const auto& id : Modules::layeredParamIds())
     {
-        apvts.addParameterListener(Parameters::ID::modSlotSource(n), this);
-        apvts.addParameterListener(Parameters::ID::modSlotModule(n), this);
+        linkIndex[id] = (int) linkLastA.size();
+        linkLastA.push_back(apvts.getRawParameterValue(id)->load());
     }
+    for (const auto& id : listenedParamIds())
+        apvts.addParameterListener(id, this);
 
     // The shared LiveState bridges the two standalone apps (C# <-> C++). In a
     // plugin host (e.g. REAPER) the host owns project state, so leave it alone.
@@ -265,16 +258,8 @@ SynthyProcessor::~SynthyProcessor()
     samplePreload.stopThread (4000);
 
     keyboardState.removeListener(this);
-    apvts.removeParameterListener(Parameters::ID::mixSrcA, this);
-    apvts.removeParameterListener(Parameters::ID::mixSrcB, this);
-    apvts.removeParameterListener(Parameters::ID::mixModeOn, this);
-    for (int i = 1; i <= 3; ++i)
-        apvts.removeParameterListener(Parameters::ID::oscOn(i), this);
-    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-    {
-        apvts.removeParameterListener(Parameters::ID::modSlotSource(n), this);
-        apvts.removeParameterListener(Parameters::ID::modSlotModule(n), this);
-    }
+    for (const auto& id : listenedParamIds())
+        apvts.removeParameterListener(id, this);
     if (wrapperType == wrapperType_Standalone)
     {
         stopTimer();
@@ -400,16 +385,25 @@ void SynthyProcessor::updateMatrixModuleEnables()
 
     // Which modules does the matrix currently CLAIM? For every active slot (DEST != Off): its
     // SOURCE module (LFO/Envelope) AND its TARGET module (FILTER/FORMANT/WAVETABLE/WAVEFOLD).
+    // AD-16 (21.6): both layers' matrices — B's while B plays. A layer's patch modules are its own
+    // ("b"-prefixed for B); an instrument module (COMPRESSOR, STEREO, MASTER, CHAOS) is shared, so
+    // a claim from either layer keeps it on.
+    const bool bOn = *apvts.getRawParameterValue(ID::layerBOn) > 0.5f;
     std::set<juce::String> claimed;
-    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+    for (const juce::String pre : { juce::String(), juce::String(Modules::kLayerBPrefix) })
     {
-        const int mod = (int) *apvts.getRawParameterValue(ID::modSlotModule(n));
-        if (mod <= 0)   // 0 == "Off"
-            continue;
-        if (const auto s = matrixSourceEnableParam((int) *apvts.getRawParameterValue(ID::modSlotSource(n))); s.isNotEmpty())
-            claimed.insert(s);
-        if (const auto t = matrixModuleEnableParam(mod); t.isNotEmpty())   // per-OSC → oscNOn; "Alle OSC" → none
-            claimed.insert(t);
+        if (pre.isNotEmpty() && ! bOn) break;
+        auto L = [&pre] (const juce::String& id) { return Modules::isLayeredParamId(id) ? pre + id : id; };
+        for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+        {
+            const int mod = (int) *apvts.getRawParameterValue(L(ID::modSlotModule(n)));
+            if (mod <= 0)   // 0 == "Off"
+                continue;
+            if (const auto s = matrixSourceEnableParam((int) *apvts.getRawParameterValue(L(ID::modSlotSource(n)))); s.isNotEmpty())
+                claimed.insert(L(s));
+            if (const auto t = matrixModuleEnableParam(mod); t.isNotEmpty())   // per-OSC → oscNOn; "Alle OSC" → none
+                claimed.insert(L(t));
+        }
     }
 
     // Every module a slot can auto-drive: sources (LFO 1..4 + ADSR) and target modules — now incl.
@@ -427,7 +421,15 @@ void SynthyProcessor::updateMatrixModuleEnables()
                                      ID::compOn, ID::stereoOn, ID::masterOn,
                                      ID::chaosOn,     // LFO expansion: Chaos X/Y source
                                      ID::grainOn };   // Story 17.1: GRAIN targets
+    // ...for layer A as written, and layer B's copies of the patch ones (21.6).
+    juce::StringArray managedAll;
     for (const auto& id : managed)
+    {
+        managedAll.addIfNotAlreadyThere(id);
+        if (Modules::isLayeredParamId(id))
+            managedAll.add(juce::String(Modules::kLayerBPrefix) + id);
+    }
+    for (const auto& id : managedAll)
     {
         auto* p = apvts.getParameter(id);
         if (p == nullptr) continue;
@@ -449,38 +451,46 @@ void SynthyProcessor::updateMatrixModuleEnables()
     }
 }
 
-void SynthyProcessor::syncCrossModEnables(const juce::String& changed)
+void SynthyProcessor::syncCrossModEnables(const juce::String& changed, const juce::String& pre)
 {
     using namespace Parameters;
     auto isOn = [this](const juce::String& id) { return *apvts.getRawParameterValue(id) >= 0.5f; };
     auto setP = [this](const juce::String& id, float v)
                 { if (auto* p = apvts.getParameter(id)) p->setValueNotifyingHost(v); };
+    auto L = [&pre] (const juce::String& id) { return pre + id; };   // 21.6: the layer's own CROSS MOD
 
-    const int a = juce::jlimit(0, 2, (int) *apvts.getRawParameterValue(ID::mixSrcA));
-    const int b = juce::jlimit(0, 2, (int) *apvts.getRawParameterValue(ID::mixSrcB));
-    const juce::String oscA = ID::oscOn(a + 1);
-    const juce::String oscB = ID::oscOn(b + 1);
-    const bool mixOn = isOn(ID::mixModeOn);
+    const int a = juce::jlimit(0, 2, (int) *apvts.getRawParameterValue(L(ID::mixSrcA)));
+    const int b = juce::jlimit(0, 2, (int) *apvts.getRawParameterValue(L(ID::mixSrcB)));
+    const juce::String oscA = L(ID::oscOn(a + 1));
+    const juce::String oscB = L(ID::oscOn(b + 1));
+    const bool mixOn = isOn(L(ID::mixModeOn));
 
-    const bool oscChanged = (changed == ID::oscOn(1) || changed == ID::oscOn(2) || changed == ID::oscOn(3));
+    const bool oscChanged = (changed == L(ID::oscOn(1)) || changed == L(ID::oscOn(2)) || changed == L(ID::oscOn(3)));
 
     // A used operand OSC was switched OFF → CROSS MOD can no longer work, so switch it off too
     // (previously it was only shown dimmed while mixModeOn stayed set). Then undo the operands we
     // auto-enabled ourselves (an OSC that was on for its own sake keeps its state — see below).
+    // The auto-enable memory is keyed by full id, so A's and B's entries never mix; a layer only
+    // ever undoes its own (the prefix test below).
+    auto ownLayer = [&pre] (const juce::String& id)
+    {
+        const bool isB = id.startsWith(Modules::kLayerBPrefix)
+                      && Modules::isLayeredParamId(id.substring((int) std::strlen(Modules::kLayerBPrefix)));
+        return isB == pre.isNotEmpty();
+    };
     if (mixOn && oscChanged && (changed == oscA || changed == oscB) && (! isOn(oscA) || ! isOn(oscB)))
     {
-        setP(ID::mixModeOn, 0.0f);
+        setP(L(ID::mixModeOn), 0.0f);
         for (auto& kv : crossModAutoEnabled)
-            if (kv.second && isOn(kv.first))
-                setP(kv.first, 0.0f);
-        crossModAutoEnabled.clear();
+            if (ownLayer(kv.first) && kv.second && isOn(kv.first))
+                { setP(kv.first, 0.0f); kv.second = false; }
         return;
     }
 
     // CROSS MOD toggled or an operand re-selected: while on, keep BOTH operand OSCs enabled
     // (remember the ones we switch on); when off, undo exactly those again. An OSC that was
     // already on (its own voice) is not remembered, so it is never auto-disabled.
-    const bool routeChanged = (changed == ID::mixModeOn || changed == ID::mixSrcA || changed == ID::mixSrcB);
+    const bool routeChanged = (changed == L(ID::mixModeOn) || changed == L(ID::mixSrcA) || changed == L(ID::mixSrcB));
     if (routeChanged)
     {
         if (mixOn)
@@ -489,15 +499,17 @@ void SynthyProcessor::syncCrossModEnables(const juce::String& changed)
                 if (! isOn(osc)) { setP(osc, 1.0f); crossModAutoEnabled[osc] = true; }
             // an operand we auto-enabled earlier but no longer use (operand switched) → undo it
             for (auto& kv : crossModAutoEnabled)
-                if (kv.second && kv.first != oscA && kv.first != oscB && isOn(kv.first))
+                if (ownLayer(kv.first) && kv.second && kv.first != oscA && kv.first != oscB && isOn(kv.first))
                     { setP(kv.first, 0.0f); kv.second = false; }
         }
         else
         {
             for (auto& kv : crossModAutoEnabled)
-                if (kv.second && isOn(kv.first))
-                    setP(kv.first, 0.0f);
-            crossModAutoEnabled.clear();
+                if (ownLayer(kv.first) && kv.second)
+                {
+                    if (isOn(kv.first)) setP(kv.first, 0.0f);
+                    kv.second = false;
+                }
         }
     }
 }
@@ -506,23 +518,34 @@ namespace
 {
     // Encode a CROSS-MOD-relevant param id as a small int WITHOUT constructing a juce::String
     // (audio-thread safe). -1 = not a CROSS-MOD param. Reverse map below (message thread only).
+    // Codes 0..5 = layer A's six CROSS-MOD params, 6..11 = layer B's (21.6). The table is built
+    // once (warmed in the constructor, on the message thread), so the audio thread only compares.
+    const std::array<juce::String, 12>& crossModIdTable()
+    {
+        static const std::array<juce::String, 12> t = []
+        {
+            using namespace Parameters;
+            std::array<juce::String, 12> a;
+            const juce::String base[6] = { ID::mixModeOn, ID::mixSrcA, ID::mixSrcB, ID::oscOn(1), ID::oscOn(2), ID::oscOn(3) };
+            for (int i = 0; i < 6; ++i)
+            {
+                a[(size_t) i]     = base[i];
+                a[(size_t) i + 6] = juce::String(Modules::kLayerBPrefix) + base[i];
+            }
+            return a;
+        }();
+        return t;
+    }
     int crossModCode(const juce::String& id)
     {
-        using namespace Parameters;
-        if (id == ID::mixModeOn) return 0;
-        if (id == ID::mixSrcA)   return 1;
-        if (id == ID::mixSrcB)   return 2;
-        if (id == ID::oscOn(1))  return 3;   // ID::oscOn returns a cached ref (no alloc; warmed)
-        if (id == ID::oscOn(2))  return 4;
-        if (id == ID::oscOn(3))  return 5;
+        const auto& t = crossModIdTable();
+        for (int i = 0; i < 12; ++i)
+            if (id == t[(size_t) i]) return i;
         return -1;
     }
     juce::String crossModIdFromCode(int c)   // message thread (juce::String construction OK)
     {
-        using namespace Parameters;
-        switch (c) { case 0: return ID::mixModeOn; case 1: return ID::mixSrcA; case 2: return ID::mixSrcB;
-                     case 3: return ID::oscOn(1);  case 4: return ID::oscOn(2); case 5: return ID::oscOn(3); }
-        return {};
+        return juce::isPositiveAndBelow(c, 12) ? crossModIdTable()[(size_t) c] : juce::String();
     }
 }
 
@@ -533,6 +556,19 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     // reconciliation (atomic) and let reconcileParamCouplingsIfDirty() run it on the message thread.
     const bool onMsgThread = juce::MessageManager::existsAndIsCurrentThread();
 
+    // Linked editing (21.6, focus A+B): an edit of a layer-A patch parameter is mirrored to B —
+    // relative for knobs (B keeps its offset), absolute for switches and choices. The snapshot of
+    // A's last values is kept current on EVERY change (any thread, alloc-free), so the delta is
+    // always against what A was a moment ago. Mirroring itself is a message-thread gesture only:
+    // not under host automation, not while a preset lands, not during RANDOM.
+    if (auto it = linkIndex.find(paramId); it != linkIndex.end())
+    {
+        const float before = linkLastA[(size_t) it->second];
+        linkLastA[(size_t) it->second] = newValue;
+        if (onMsgThread && ! presetLoading.load() && ! linkSuspended && getLayerFocus() == 2)
+            mirrorToLayerB(paramId, newValue - before);
+    }
+
     // A preset being applied is a post-coupling snapshot — apply it verbatim, run no couplings
     // (see setPresetLoading). Without this guard the load itself triggered them against
     // half-applied states, and the auto-enable memories made the outcome depend on the patch
@@ -540,7 +576,9 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     if (presetLoading.load())
         return;
 
-    if (paramId.startsWith("modSlot"))   // startsWith(const char*) is alloc-free
+    // Either layer's slots (21.6: "bmodSlot…"), and B switching on or off (its claims count only
+    // while it plays).
+    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerBOn)
     {
         if (onMsgThread) updateMatrixModuleEnables();
         else             matrixEnablesDirty.store(true);
@@ -603,26 +641,59 @@ void SynthyProcessor::applyCrossModCoupling(const juce::String& paramId)
     if (fixingMixSrc.exchange(true))   // shared reentrancy guard: ignore our own write-backs
         return;
 
+    // 21.6: which layer's CROSS MOD — B's ids carry the prefix.
+    const juce::String pre = (crossModCode(paramId) >= 6) ? juce::String(Modules::kLayerBPrefix) : juce::String();
+    const juce::String srcA = pre + ID::mixSrcA, srcB = pre + ID::mixSrcB;
+
     // Keep the two operands distinct (Epic 5): a==b would be a no-op, so bump the OTHER to a free OSC.
-    if (paramId == ID::mixSrcA || paramId == ID::mixSrcB)
+    if (paramId == srcA || paramId == srcB)
     {
-        const int a = (int) *apvts.getRawParameterValue(ID::mixSrcA);
-        const int b = (int) *apvts.getRawParameterValue(ID::mixSrcB);
+        const int a = (int) *apvts.getRawParameterValue(srcA);
+        const int b = (int) *apvts.getRawParameterValue(srcB);
         if (a == b)
         {
-            const char* other = (paramId == ID::mixSrcA) ? ID::mixSrcB : ID::mixSrcA;
+            const juce::String& other = (paramId == srcA) ? srcB : srcA;
             if (auto* p = apvts.getParameter(other))
                 p->setValueNotifyingHost(p->convertTo0to1((float) (a == 0 ? 1 : 0)));   // first OSC != a
         }
     }
 
     // Enable coupling: auto on/off of the operand OSCs; drop CROSS MOD when an operand goes off.
-    syncCrossModEnables(paramId);
+    syncCrossModEnables(paramId, pre);
 
     fixingMixSrc = false;
 }
 
+// RANDOM rolls the layer being edited (21.6): A, B, or with A+B both, independently. Layer A's
+// roll is the long-standing one below (with all its guards); B's is that same roll, carried over
+// to B's parameters, with A and the instrument put back — one set of dice rules, not two.
 void SynthyProcessor::randomize()
+{
+    const juce::ScopedValueSetter<bool> noLink (linkSuspended, true);   // the rolls are not edits to mirror
+    const int focus = getLayerFocus();
+    if (focus != 0)
+    {
+        std::vector<float> keep;
+        for (auto* p : getParameters()) keep.push_back(p->getValue());
+        randomizeLayerA();
+        const juce::String bp (Modules::kLayerBPrefix);
+        for (const auto& id : Modules::layeredParamIds())
+            if (auto* a = apvts.getParameter(id))
+                if (auto* b = apvts.getParameter(bp + id))
+                    b->setValueNotifyingHost(a->getValue());
+        auto& params = getParameters();
+        for (int i = 0; i < params.size(); ++i)
+            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(params[i]))
+                if (! (rp->paramID.startsWith(bp) && Modules::isLayeredParamId(rp->paramID.substring(bp.length()))))
+                    rp->setValueNotifyingHost(keep[(size_t) i]);
+    }
+    if (focus != 1)
+        randomizeLayerA();
+    currentPresetName = "Random";
+    markPresetClean();   // a fresh random patch is its own "clean" state
+}
+
+void SynthyProcessor::randomizeLayerA()
 {
     using namespace Parameters;
     auto& rng = juce::Random::getSystemRandom();
@@ -782,8 +853,6 @@ void SynthyProcessor::randomize()
         }
     }
 
-    currentPresetName = "Random";
-    markPresetClean();   // a fresh random patch is its own "clean" state
 }
 
 void SynthyProcessor::resetToDefault()
@@ -1487,7 +1556,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         rs.layerBOn        = true;
         rs.split           = *apvts.getRawParameterValue(Parameters::ID::layerMode) > 0.5f;
         rs.splitNote       = (int) *apvts.getRawParameterValue(Parameters::ID::splitNote);
-        rs.focusB          = *apvts.getRawParameterValue(Parameters::ID::layerFocus) > 0.5f;
+        rs.focusB          = isFocusB();   // A+B edits through A: drone and preview stay on A
         rs.patternOwnsCh1  = patternOwnsCh1;
         rs.droneChannel    = kDroneChannel;
         rs.auditionChannel = kAuditionChannel;
@@ -1847,7 +1916,7 @@ juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 // AD-16 (Story 21.5): the layer the rack edits — the drone, PLUCK and the rings follow it.
 PatchEngine& SynthyProcessor::focusedEngine() noexcept
 {
-    return *apvts.getRawParameterValue(Parameters::ID::layerFocus) > 0.5f ? engineB : engineA;
+    return isFocusB() ? engineB : engineA;   // A+B (linked editing) shows and plays A
 }
 
 // Level × balance of one layer (AD-16 D2). Balance, not pan: a layer is already stereo, so the
@@ -1871,4 +1940,45 @@ void SynthyProcessor::applyLayerGain (int layer, juce::AudioBuffer<float>& b, in
     }
     prev[0] = g[0];
     prev[1] = g[1];
+}
+
+// Every parameter the processor listens to (constructor adds, destructor removes the same list):
+// layer A's patch parameters (linked editing, and A's couplings among them), layer B's coupling
+// params (MIX SRC / CROSS MOD / OSC on / matrix SRC + MOD), and LAYER B ON.
+juce::StringArray SynthyProcessor::listenedParamIds() const
+{
+    using namespace Parameters;
+    juce::StringArray ids (Modules::layeredParamIds());
+    const juce::String bp (Modules::kLayerBPrefix);
+    for (const juce::String id : { juce::String(ID::mixSrcA), juce::String(ID::mixSrcB), juce::String(ID::mixModeOn),
+                                   ID::oscOn(1), ID::oscOn(2), ID::oscOn(3) })
+        ids.add(bp + id);
+    for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+    {
+        ids.add(bp + ID::modSlotSource(n));
+        ids.add(bp + ID::modSlotModule(n));
+    }
+    ids.add(ID::layerBOn);
+    return ids;
+}
+
+// Linked editing (21.6): A's parameter `idA` moved by `deltaRaw` (in its own units); B follows.
+// Knobs move by the same amount, clamped — B keeps its offset; switches and choices take A's
+// value. Message thread only (parameterChanged checks).
+void SynthyProcessor::mirrorToLayerB (const juce::String& idA, float deltaRaw)
+{
+    auto* a = apvts.getParameter(idA);
+    auto* b = apvts.getParameter(juce::String(Modules::kLayerBPrefix) + idA);
+    if (a == nullptr || b == nullptr)
+        return;
+    const bool continuous = dynamic_cast<juce::AudioParameterFloat*>(a) != nullptr
+                         || dynamic_cast<juce::AudioParameterInt*>(a) != nullptr;
+    if (continuous)
+    {
+        const auto& range = b->getNormalisableRange();
+        const float rawB  = b->convertFrom0to1(b->getValue());
+        b->setValueNotifyingHost(b->convertTo0to1(juce::jlimit(range.start, range.end, rawB + deltaRaw)));
+    }
+    else
+        b->setValueNotifyingHost(a->getValue());
 }

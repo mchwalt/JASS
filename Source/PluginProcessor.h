@@ -25,6 +25,7 @@
 #include "DSP/ChaosLorenz.h"     // LFO expansion — global Lorenz mod source (Chaos X/Y)
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 class SynthyProcessor : public juce::AudioProcessor,
                         private juce::Timer,
@@ -183,7 +184,7 @@ public:
     // Per-LFO (for the rings) — of the layer the rack edits (AD-16: A unless the focus is B).
     float getLfoDisplayValue(int i) const
     {
-        return (*apvts.getRawParameterValue(Parameters::ID::layerFocus) > 0.5f ? engineB : engineA).getLfoDisplayValue(i);
+        return (isFocusB() ? engineB : engineA).getLfoDisplayValue(i);
     }
     // 20.1: a preset / DAW-state load restarts every GLOBAL LFO (a global One-Shot then sweeps once
     // from "now"). Message thread sets, the audio thread consumes it once. Both layers.
@@ -258,6 +259,11 @@ private:
     bool  layerBWasOn = false;                     // falling edge: stop B's voices
     float layerGainPrev[2][2] { { 1.0f, 1.0f }, { 1.0f, 1.0f } };   // [layer][L/R] last block's level×balance
     PatchEngine& focusedEngine() noexcept;         // the layer the rack edits (layerFocus)
+public:
+    // layerFocus: 0 = A, 1 = B, 2 = A+B (linked editing — the rack shows A, edits mirror to B).
+    int  getLayerFocus() const { return juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerFocus)->load()); }
+    bool isFocusB() const      { return getLayerFocus() == 1; }
+private:
     void applyLayerGain (int layer, juce::AudioBuffer<float>& b, int numSamples);
     juce::MidiKeyboardState keyboardState;
     // Snapshot length = the LONGEST scope window (100 ms) at the highest sample rate we
@@ -422,7 +428,7 @@ private:
     // CROSS MOD enable coupling: keep the two operand OSCs enabled while CROSS MOD is on (auto-on
     // with memory), and switch CROSS MOD off when a used operand OSC is turned off. Mirrors the
     // MOD-MATRIX auto-enable. matrixAutoEnabled's sibling for the two OSC operands.
-    void syncCrossModEnables(const juce::String& changedParamId);
+    void syncCrossModEnables(const juce::String& changedParamId, const juce::String& layerPrefix);
     std::map<juce::String, bool> crossModAutoEnabled;   // oscOn id -> true if CROSS MOD switched it on
 
     // Keep the matrix's SOURCE and TARGET modules in step with the routing: an active slot
@@ -434,6 +440,14 @@ private:
     // Targets Pitch/Amplitude are global (no module). Re-evaluated on every slot SRC/DEST change.
     void updateMatrixModuleEnables();
     std::map<juce::String, bool> matrixAutoEnabled;   // enable-param id -> true if auto-enable turned it on
+
+    // AD-16 / Story 21.6 — couplings for both layers, linked editing (focus A+B), RANDOM by focus.
+    juce::StringArray listenedParamIds() const;
+    void mirrorToLayerB (const juce::String& idA, float deltaRaw);
+    void randomizeLayerA();
+    std::unordered_map<juce::String, int> linkIndex;   // layer-A patch param id -> slot in linkLastA (built once)
+    std::vector<float> linkLastA;                      // A's last value per patch param (raw units)
+    bool linkSuspended = false;                        // RANDOM / bulk writes: nothing to mirror
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)

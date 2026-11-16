@@ -321,7 +321,7 @@ namespace Parameters
         constexpr const char* layerBOn    = "layerBOn";
         constexpr const char* layerMode   = "layerMode";    // 0 = Layer (both), 1 = Split
         constexpr const char* splitNote   = "splitNote";    // SPLIT: below → B, from it up → A
-        constexpr const char* layerFocus  = "layerFocus";   // 0 = A, 1 = B (which layer the rack edits)
+        constexpr const char* layerFocus  = "layerFocus";   // 0 = A, 1 = B, 2 = A+B linked (which layer the rack edits)
         constexpr const char* layerALevel = "layerALevel";
         constexpr const char* layerBLevel = "layerBLevel";
         constexpr const char* layerAPan   = "layerAPan";    // balance −1..1
