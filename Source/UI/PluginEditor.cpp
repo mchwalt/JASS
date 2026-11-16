@@ -2260,6 +2260,10 @@ void SynthyEditor::buildRack()
         rackOwned.add (selector);
         layerSelector = selector;   // keys 1 / 2 press its buttons
         Knob split = K (P::splitNote, "SPLIT");
+        split.alwaysFine = true;   // a key is aimed at, one semitone at a time (maintainer 2026-11-16)
+        auto* learn = new LearnButton ([this] { return processor.isSplitLearnArmed(); },
+                                       [this] (bool on) { processor.armSplitLearn (on); });
+        rackOwned.add (learn);
         split.textFromValue = [] (double v) { return juce::MidiMessage::getMidiNoteName (juce::roundToInt (v), true, true, 4); };
         split.tooltipFromValue = [] (double v)
         {
@@ -2275,7 +2279,7 @@ void SynthyEditor::buildRack()
             Toggle { P::layerBOn, "B ON" },
             Combo { P::layerMode, "MODE", juce::StringArray { "Layer", "Split" } },
             split,
-            Action { "LEARN", [this] { processor.armSplitLearn (! processor.isSplitLearnArmed()); }, {} },
+            Display { learn, 1 },
             K (P::layerALevel, "A LVL"), aPan,
             K (P::layerBLevel, "B LVL"), bPan,
             FileAction { "LOAD B", [this] (juce::File f)

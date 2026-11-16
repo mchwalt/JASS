@@ -84,9 +84,13 @@ public:
         Slider::mouseDown(e);
     }
 
+    // Always the Shift behaviour, Shift or not (21.6: the LAYERS SPLIT key — a key is aimed at,
+    // one semitone at a time, never swept past; maintainer 2026-11-16).
+    void setAlwaysFine (bool f) { alwaysFine = f; }
+
     void mouseDrag(const juce::MouseEvent& e) override
     {
-        if (e.mods.isShiftDown())
+        if (e.mods.isShiftDown() || alwaysFine)
             setVelocityModeParameters(0.05, 1, 0.05, false);
         else
             setVelocityModeParameters(1.0, 1, 0.1, false);
@@ -119,6 +123,13 @@ public:
         if (range <= 0.0) { juce::Slider::mouseWheelMove(e, wheel); return; }
 
         const double dir = wheel.deltaY >= 0.0f ? 1.0 : -1.0;
+
+        if (alwaysFine)   // one interval per notch, whatever the range (SPLIT: one key)
+        {
+            setValue(juce::jlimit(getMinimum(), getMaximum(), getValue() + dir * (interval > 0.0 ? interval : 1.0)),
+                     juce::sendNotificationSync);
+            return;
+        }
 
         // Coarse-quantum knobs (LEN, 768 positions): a notch jumps to the NEXT multiple of the
         // quantum, Shift moves one interval — mirrors the drag behaviour above.
@@ -168,4 +179,5 @@ private:
     int knobDiameter = KnobSize::Small;   // single standard size for all modules
     float modAmount = 0.0f;   // live LFO modulation for the ring (-1..+1)
     int coarseStep = 0;       // >0: un-shifted moves quantise to multiples of this many intervals
+    bool alwaysFine = false;  // see setAlwaysFine
 };

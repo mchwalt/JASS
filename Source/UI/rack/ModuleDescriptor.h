@@ -140,6 +140,8 @@ namespace rack
         // multiple — while Shift keeps the single-interval fine control. 0 = plain behaviour.
         // Editor-injected; the right-click text box always accepts exact values.
         int coarseStep = 0;
+        // Always the fine (Shift) feel: drag slow, one interval per wheel notch (21.6: SPLIT).
+        bool alwaysFine = false;
 
         // Layout width in body slots (a plain control = 1), exactly like Combo::slots. A knob grows
         // to fill its cell (see ModuleFrame::resized), and a 1-slot cell in a densely packed module

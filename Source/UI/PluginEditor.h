@@ -138,6 +138,30 @@ private:
     int splitNote = -1;
 };
 
+// LAYERS · LEARN (21.6): lit while it waits for a key — the next played key becomes the split
+// point. A second click cancels. Polls the processor's armed flag (the key may come over MIDI).
+class LearnButton : public juce::TextButton, private juce::Timer
+{
+public:
+    LearnButton (std::function<bool()> armedFn, std::function<void(bool)> armFn)
+        : juce::TextButton ("LEARN"), isArmed (std::move (armedFn)), arm (std::move (armFn))
+    {
+        setClickingTogglesState (false);
+        setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff334155));
+        setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8b5cf6));   // rack::kLayerBColour
+        setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.75f));
+        setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
+        setTooltip ("Click, then play a key: it becomes the split point (keys below play B)");
+        onClick = [this] { arm (! isArmed()); setToggleState (isArmed(), juce::dontSendNotification); };
+        startTimerHz (10);
+    }
+
+private:
+    void timerCallback() override { setToggleState (isArmed(), juce::dontSendNotification); }
+    std::function<bool()> isArmed;
+    std::function<void(bool)> arm;
+};
+
 // LAYERS (AD-16, Story 21.6): which layer the rack edits — two buttons, A and B, each on its own
 // or both together (A+B = linked editing: the rack shows A, every edit is mirrored to B). One of
 // them is always lit: clicking the only lit button does nothing. Writes `layerFocus`
