@@ -9,6 +9,7 @@ namespace Modules
     inline ModuleSpec sub()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "sub"; m.title = "SUB"; m.persistObject = "Sub"; m.enableParamId = "subOn";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W4H1;
         // Story 7.3: default-hidden. Enabled in NONE of the 17 presets we ship or keep locally, and

@@ -10,6 +10,7 @@ namespace Modules
     inline ModuleSpec delay()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "delay"; m.title = "DELAY"; m.persistObject = "Delay"; m.enableParamId = "delayOn";
         m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W5H1;

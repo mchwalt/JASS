@@ -10,6 +10,7 @@ namespace Modules
     inline ModuleSpec sampler()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "sampler"; m.title = "SAMPLER"; m.persistObject = "Sampler"; m.enableParamId = "samplerOn";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W12H1;
         m.params = {

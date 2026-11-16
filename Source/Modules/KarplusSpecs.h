@@ -8,6 +8,7 @@ namespace Modules
     inline ModuleSpec string()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "stringkarplus"; m.title = "STRING - KARPLUS"; m.persistObject = "Karplus"; m.enableParamId = "karplusOn";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W6H1;
         m.params = {

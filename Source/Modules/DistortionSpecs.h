@@ -8,6 +8,7 @@ namespace Modules
     inline ModuleSpec distortion()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "distortion"; m.title = "DISTORTION"; m.persistObject = "Distortion"; m.enableParamId = "distortionOn";
         m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W4H1;

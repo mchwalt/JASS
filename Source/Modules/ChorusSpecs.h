@@ -7,6 +7,7 @@ namespace Modules
     inline ModuleSpec chorus()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "chorus"; m.title = "CHORUS"; m.persistObject = "Chorus"; m.enableParamId = "chorusOn";
         m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W3H1;

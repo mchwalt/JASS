@@ -138,7 +138,7 @@ void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName,
                                                     const juce::String& targetParamId)
 {
     const juce::ScopedLock sl (requestLock);
-    int& gen = (targetParamId == Parameters::ID::samplerSet) ? genSampler : genPerc;
+    int& gen = generations[targetParamId];   // one counter per selector (A/B SAMPLER, PERC KIT)
     ++gen;   // anything still in flight for THIS selector is now stale
     for (auto& r : queue)
         if (r.target == targetParamId)     // one pending set per selector: replace, never queue up
@@ -152,7 +152,8 @@ void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName,
 int SynthyProcessor::SamplePreloadThread::currentGeneration (const juce::String& targetParamId) const
 {
     const juce::ScopedLock sl (requestLock);
-    return (targetParamId == Parameters::ID::samplerSet) ? genSampler : genPerc;
+    const auto it = generations.find (targetParamId);
+    return it != generations.end() ? it->second : 0;
 }
 
 // Load the set a preset asked for and select it — the ONE set the patch actually needs, so it
@@ -183,7 +184,7 @@ void SynthyProcessor::SamplePreloadThread::loadRequested (const Request& req)
             if (p == nullptr)
                 return;
             auto& h = PresetIO::hooks (p->apvts);
-            (target == Parameters::ID::samplerSet ? h.pendingSamplerSetName : h.pendingPercKitName).clear();
+            h.pendingFor (target).clear();
             // Give up waiting: PERC may sound again with whatever kit the index points at, rather
             // than staying silent forever because a preset named a set that is not installed.
             if (target == Parameters::ID::percKit)
@@ -249,8 +250,7 @@ void SynthyProcessor::selectSamplerSet (int index, int generation, const juce::S
     const int value = index + (targetParamId == Parameters::ID::percKit ? 1 : 0);
     if (auto* p = apvts.getParameter (targetParamId))
         p->setValueNotifyingHost (p->convertTo0to1 ((float) value));
-    (targetParamId == Parameters::ID::samplerSet ? PresetIO::hooks(apvts).pendingSamplerSetName
-                                                 : PresetIO::hooks(apvts).pendingPercKitName).clear();
+    PresetIO::hooks(apvts).pendingFor (targetParamId).clear();
     if (targetParamId == Parameters::ID::percKit)
         percKitPending.store (false);   // the kit is real now — PERC may sound
 }
@@ -655,8 +655,17 @@ void SynthyProcessor::randomize()
     for (size_t i = 0; i < sizeof (boxIds) / sizeof (boxIds[0]); ++i)
         keepBox[i] = *apvts.getRawParameterValue (boxIds[i]);
 
+    // AD-16 (S1): RANDOM rolls layer A only — layer B and the LAYERS switches stay as they are
+    // (S2 makes RANDOM act on the layer being edited).
+    auto isLayerBOrLayers = [] (const juce::String& id)
+    {
+        if (id.startsWith ("layer") || id == ID::splitNote) return true;
+        return id.startsWith (Modules::kLayerBPrefix)
+            && Modules::isLayeredParamId (id.substring ((int) std::strlen (Modules::kLayerBPrefix)));
+    };
     for (auto* p : getParameters())
-        p->setValueNotifyingHost(rng.nextFloat());
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p); rp == nullptr || ! isLayerBOrLayers (rp->paramID))
+            p->setValueNotifyingHost(rng.nextFloat());
 
     auto set = [this](const juce::String& id, float raw)
     {
@@ -845,7 +854,11 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     if (isHostedByDaw()) diagNote ("prepareToPlay");
 #endif
     Parameters::ID::warmIndexedIds();   // RT-safety: build the indexed-ID caches on the message thread
-    engine.prepare(sampleRate, samplesPerBlock);   // 21.4: voices, glide lists, display LFOs
+    engineA.prepare(sampleRate, samplesPerBlock);   // 21.4: voices, glide lists, display LFOs
+    engineB.prepare(sampleRate, samplesPerBlock);   // 21.5: layer B, ready whether or not it is on
+    layerMidiA.ensureSize(2048); layerMidiB.ensureSize(2048);   // RT: the router never grows them
+    layerBRender.setSize(2, juce::jmax(1, samplesPerBlock));   // B's render, summed into the mix
+    layerRouter.reset();
     arpKeptScratch.ensureSize(2048);   // RT: no per-block MidiBuffer growth
 
     stereoWidth.prepare(sampleRate);
@@ -879,7 +892,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // RT-safe, and immune to the chord filter since no buffer event is involved.
     if (killVoicesRequested.exchange (false))
     {
-        engine.killAllVoices();
+        engineA.killAllVoices();
+        engineB.killAllVoices();
         // The drone's voice just died with the rest — reset its bookkeeping too, or a patch that
         // WANTS the drone (no latch, nothing held) would stay silent: autoNoteOn would still say
         // "sounding" and nothing would ever re-trigger it. The noteOff clears the keyboard state;
@@ -894,11 +908,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Which sound generators are currently enabled (one bit each).
     unsigned mask = 0;
     for (int i = 1; i <= 3; ++i)
-        if (*engine.params().oscOn[(size_t) i - 1] > 0.5f) mask |= (1u << i);
-    if (*engine.params().karplusOn   > 0.5f) mask |= (1u << 4);
-    if (*engine.params().noiseOn     > 0.5f) mask |= (1u << 5);
-    if (*engine.params().wavetableOn > 0.5f) mask |= (1u << 6);
-    if (*engine.params().subOn       > 0.5f) mask |= (1u << 7);
+        if (*focusedEngine().params().oscOn[(size_t) i - 1] > 0.5f) mask |= (1u << i);
+    if (*focusedEngine().params().karplusOn   > 0.5f) mask |= (1u << 4);   // AD-16: the drone plays
+    if (*focusedEngine().params().noiseOn     > 0.5f) mask |= (1u << 5);   // the layer being edited
+    if (*focusedEngine().params().wavetableOn > 0.5f) mask |= (1u << 6);
+    if (*focusedEngine().params().subOn       > 0.5f) mask |= (1u << 7);
 
     // A newly enabled generator re-arms the auto-play drone (rising edge) — but only while the
     // instrument is otherwise silent: never under a LATCHED figure (a held C4 under a running
@@ -1026,7 +1040,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         using namespace Parameters;
         static constexpr int kLfoSrc[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                    (int) ModSource::LFO3, (int) ModSource::LFO4 };
-        const auto& pp = engine.params();
+        // AD-16 D3: both layers' matrices drive the master bus (B only while it plays); the
+        // offsets add. Layer A alone is the pre-AD-16 sum, in the same order.
+        const bool bOnForMod = *apvts.getRawParameterValue(ID::layerBOn) > 0.5f;
+        for (const PatchEngine* layer : { &engineA, &engineB })
+        {
+        if (layer == &engineB && ! bOnForMod) break;
+        const auto& pp = layer->params();
         if (*pp.modMatrixOn > 0.5f)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
             {
@@ -1036,12 +1056,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 const int   par = (int) *pp.modSlotParam [(size_t) n - 1];
                 const float amt = *pp.modSlotAmount[(size_t) n - 1];
                 float sv = 0.0f;
-                for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = engine.getLfoDisplayValue(i);
+                for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = layer->getLfoDisplayValue(i);
                 if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
                 if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
                 const int tgt = (int) ModDest::targetOf(mod, par);
                 if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
             }
+        }   // layers
     }
     // MASTER · TEMPO — wobble the Tempo-Sync BPM so synced LFOs/delay drift around the beat (applied
     // to the resolved tempo, ±40 BPM at full modulation). Standalone only: in a DAW the MASTER
@@ -1061,7 +1082,18 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     patchCtx.hosted      = hosted;
     patchCtx.hostPlaying = hostPlaying;
     patchCtx.hostPpq     = hostPpq;
-    engine.beginBlock(patchCtx);
+    engineA.beginBlock(patchCtx);
+    // Layer B (AD-16): not called at all while off — no push, no render, no LFO advance — so the
+    // instrument with B off is the pre-AD-16 one, bit for bit. Switching it off stops its voices.
+    const bool layerBOn = *apvts.getRawParameterValue(Parameters::ID::layerBOn) > 0.5f;
+    if (! layerBOn && layerBWasOn)
+    {
+        engineB.killAllVoices();
+        layerRouter.forgetLayerB();
+    }
+    layerBWasOn = layerBOn;
+    if (layerBOn)
+        engineB.beginBlock(patchCtx);
 
     bassMidiScratch.clear();   // 20.2: the STEP SEQ's notes for the BASS box this block (render section consumes)
     // 20.2: with the STEP SEQ's BASS switch on, the editor's step preview (kAuditionChannel: a
@@ -1090,6 +1122,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     }
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
+    bool patternOwnsCh1 = false;   // AD-16: see below
     {
         using namespace Parameters;
         // STEP SEQ (15.1) and the ARP both REPLACE the held chord, so they cannot both run. The
@@ -1146,6 +1179,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
         const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
+        // AD-16 (S1): while the ARP or the figure replaces the chord, channel 1 is theirs and plays
+        // layer A (the sequencers get an A|B target in S3). The figure on BASS leaves the keys alone.
+        patternOwnsCh1 = (seqOn && *apvts.getRawParameterValue(ID::seqToBass) <= 0.5f)
+                      || (! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f);
         bool arpOn = ! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
         if (seqOn)
         {
@@ -1337,8 +1374,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     bass.slideTo((double) ev.semitones, ev.slide ? bassGlide : 0.0);
                     continue;
                 }
-                engine.slideVoice(ev.note, (double) ev.semitones,
-                                  ev.slide ? StepSequencer::kSlideSeconds : 0.0);
+                engineA.slideVoice(ev.note, (double) ev.semitones,   // AD-16: the figure plays A (target: S3)
+                                   ev.slide ? StepSequencer::kSlideSeconds : 0.0);
             }
             midiMessages.swapWith(kept);
         }
@@ -1418,18 +1455,52 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Don't let the auto-play drone pluck the Karplus string (it's played via
     // the keyboard). Suppress the pluck only for the drone's own note-on.
     if (droneJustTriggered)
-        engine.setPluckEnabled(false);
+    {
+        engineA.setPluckEnabled(false);
+        engineB.setPluckEnabled(false);
+    }
 
     // Manual PLUCK (button / spacebar): re-excite the Karplus string on every voice.
     // RT-safe — the atomic flag is set on the message thread and consumed here.
     if (pluckRequested.exchange(false))
-        engine.pluck();
+        focusedEngine().pluck();   // AD-16: the layer being edited
 
     // Poly-glide (portamento) and mono glide: on the FINAL midi buffer (after the arpeggiator) so
     // it glides arp steps too — see PatchEngine::processGlide.
-    engine.processGlide(midiMessages, kDroneChannel);
+    // AD-16: B off — layer A gets the buffer untouched (the router only keeps its note memory).
+    // B on — the router splits the buffer into one per layer (LAYER: both, SPLIT: below → B).
+    if (! layerBOn)
+    {
+        layerRouter.track(midiMessages);
+        engineA.processGlide(midiMessages, kDroneChannel);
+        engineA.render(buffer, midiMessages);
+        applyLayerGain(0, buffer, buffer.getNumSamples());
+    }
+    else
+    {
+        LayerRouter::Settings rs;
+        rs.layerBOn        = true;
+        rs.split           = *apvts.getRawParameterValue(Parameters::ID::layerMode) > 0.5f;
+        rs.splitNote       = (int) *apvts.getRawParameterValue(Parameters::ID::splitNote);
+        rs.focusB          = *apvts.getRawParameterValue(Parameters::ID::layerFocus) > 0.5f;
+        rs.patternOwnsCh1  = patternOwnsCh1;
+        rs.droneChannel    = kDroneChannel;
+        rs.auditionChannel = kAuditionChannel;
+        layerRouter.route(midiMessages, layerMidiA, layerMidiB, rs);
 
-    engine.render(buffer, midiMessages);
+        engineA.processGlide(layerMidiA, kDroneChannel);
+        engineA.render(buffer, layerMidiA);
+        applyLayerGain(0, buffer, buffer.getNumSamples());
+
+        const int n = buffer.getNumSamples();
+        layerBRender.setSize(buffer.getNumChannels(), n, false, false, true);   // no realloc within capacity
+        layerBRender.clear();
+        engineB.processGlide(layerMidiB, kDroneChannel);
+        engineB.render(layerBRender, layerMidiB);
+        applyLayerGain(1, layerBRender, n);
+        for (int c = 0; c < buffer.getNumChannels(); ++c)
+            buffer.addFrom(c, 0, layerBRender, c, 0, n);
+    }
 
     // ---- PERC (Story 16.1): layer B, straight into the summed mix -----------------------------
     // Here and not inside a voice, which is the whole point: a voice would drag the kit through
@@ -1497,11 +1568,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     seqStepDisplay.store(stepSeq.enabled ? stepSeq.playingStep() : -1);
 
     if (droneJustTriggered)
-        engine.setPluckEnabled(true);
+    {
+        engineA.setPluckEnabled(true);
+        engineB.setPluckEnabled(true);
+    }
 
     // Advance the display / GLOBAL LFOs (20.1) — after the render, as before; see
     // PatchEngine::endBlock.
-    engine.endBlock(patchCtx);
+    engineA.endBlock(patchCtx);
+    if (layerBOn)
+        engineB.endBlock(patchCtx);
 
     // Master-bus compressor: glue the summed mono mix before it is widened.
     {
@@ -1580,6 +1656,12 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
     // is when the project opens (maintainer 2026-10-19, Bitwig: PERC came in late / not at all).
     xml->setAttribute("SamplerSetFile", PresetIO::currentSetName(apvts, Parameters::ID::samplerSet));
     xml->setAttribute("PercKitFile",    PresetIO::currentSetName(apvts, Parameters::ID::percKit));
+    // AD-16: layer B's SAMPLER set, by name for the same reason. Written only when it names one.
+    {
+        const juce::String bSet (juce::String (Modules::kLayerBPrefix) + Parameters::ID::samplerSet);
+        if (const auto n = PresetIO::currentSetName(apvts, bSet.toRawUTF8()); n.isNotEmpty())
+            xml->setAttribute("BSamplerSetFile", n);
+    }
     // The figure's latched root (15.5 for presets): a sequencer track comes back running on the
     // note it was running on, exactly as a preset does - without it a reopened project waited for
     // a note-on that Bitwig does not send for a note the playhead starts inside of.
@@ -1710,19 +1792,25 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         // nothing — or at another kit — until the list was complete.
         const juce::String samplerName = xml->getStringAttribute("SamplerSetFile");
         const juce::String kitName     = xml->getStringAttribute("PercKitFile");
+        const juce::String bSamplerName = xml->getStringAttribute("BSamplerSetFile");   // AD-16
         const int latchRoot = xml->getIntAttribute("SeqLatchRoot", -1);   // absent (older project) = -1 = none
         xml->removeAttribute("SamplerSetFile");
         xml->removeAttribute("PercKitFile");
+        xml->removeAttribute("BSamplerSetFile");
         xml->removeAttribute("SeqLatchRoot");
         seqLatchedRoot.store(latchRoot >= 0 ? juce::jlimit(0, 127, latchRoot) : -1);
 #if JASS_HOSTSYNC_DIAG
         diagNote ("setStateInformation");
 #endif
         apvts.replaceState(juce::ValueTree::fromXml(*xml));
-        engine.requestGlobalLfoRearm(); // 20.1: a restored project starts its global One-Shots afresh —
+        requestGlobalLfoRearm();        // 20.1: a restored project starts its global One-Shots afresh —
                                         // AFTER the replace, or a block in between spends it on the old state
         PresetIO::resolveSetByName(apvts, samplerName, Parameters::ID::samplerSet, PresetIO::hooks(apvts).pendingSamplerSetName, 0);
         PresetIO::resolveSetByName(apvts, kitName,     Parameters::ID::percKit,    PresetIO::hooks(apvts).pendingPercKitName,    1);
+        {
+            const juce::String bSet (juce::String (Modules::kLayerBPrefix) + Parameters::ID::samplerSet);
+            PresetIO::resolveSetByName(apvts, bSamplerName, bSet.toRawUTF8(), PresetIO::hooks(apvts).pendingBSamplerSetName, 0);
+        }
         // An editor that already exists was built against the state this one replaces — tell it
         // to apply the restored rack layout (see onStateReloaded, case 2). Posted, because a host
         // may hand the state over off the message thread.
@@ -1749,4 +1837,33 @@ juce::AudioProcessorEditor* SynthyProcessor::createEditor()
 juce::AudioProcessor* JUCE_CALLTYPE createPluginFilter()
 {
     return new SynthyProcessor();
+}
+
+// AD-16 (Story 21.5): the layer the rack edits — the drone, PLUCK and the rings follow it.
+PatchEngine& SynthyProcessor::focusedEngine() noexcept
+{
+    return *apvts.getRawParameterValue(Parameters::ID::layerFocus) > 0.5f ? engineB : engineA;
+}
+
+// Level × balance of one layer (AD-16 D2). Balance, not pan: a layer is already stereo, so the
+// centre leaves both channels at unity and a side only turns the OTHER channel down. Ramped from
+// the previous block. Layer A at its defaults (level 1, centre) is skipped entirely — the
+// pre-AD-16 signal, bit for bit.
+void SynthyProcessor::applyLayerGain (int layer, juce::AudioBuffer<float>& b, int numSamples)
+{
+    using namespace Parameters;
+    const float level = *apvts.getRawParameterValue(layer == 0 ? ID::layerALevel : ID::layerBLevel);
+    const float pan   = *apvts.getRawParameterValue(layer == 0 ? ID::layerAPan   : ID::layerBPan);
+    const float g[2]  = { level * (pan > 0.0f ? 1.0f - pan : 1.0f),     // left: down when panned right
+                          level * (pan < 0.0f ? 1.0f + pan : 1.0f) };   // right: down when panned left
+    auto& prev = layerGainPrev[layer];
+    if (g[0] == 1.0f && g[1] == 1.0f && prev[0] == 1.0f && prev[1] == 1.0f)
+        return;
+    for (int c = 0; c < b.getNumChannels(); ++c)
+    {
+        const int k = juce::jmin(c, 1);
+        b.applyGainRamp(c, 0, numSamples, prev[k], g[k]);
+    }
+    prev[0] = g[0];
+    prev[1] = g[1];
 }

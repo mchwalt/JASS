@@ -18,11 +18,31 @@ namespace Modules
         // the id strings (JUCE_FORCE_USE_LEGACY_PARAM_IDS is off), the state tree matches by id,
         // and the processor's per-run snapshots index getParameters() consistently within a run.
         auto mods = all();
-        std::stable_sort (mods.begin(), mods.end(), [] (const ModuleSpec& x, const ModuleSpec& y)
+        auto byZoneAndTitle = [] (const ModuleSpec& x, const ModuleSpec& y)
         {
             if (x.zone != y.zone) return (int) x.zone < (int) y.zone;
             return x.title.compareIgnoreCase (y.title) < 0;
-        });
+        };
+        std::stable_sort (mods.begin(), mods.end(), byZoneAndTitle);
+        // AD-16 (Story 21.5): layer B = every PATCH module once more, ids prefixed "b", titles
+        // "B <title>" (so the host names read "B FILTER Cutoff"). Appended after ALL of layer A's
+        // and the instrument's groups, in the same order among themselves, so a DAW lists B as
+        // a second block instead of interleaving it with A.
+        std::vector<ModuleSpec> layerB;
+        for (const auto& m : mods)
+            if (m.layered)
+            {
+                ModuleSpec b;
+                b.id = kLayerBPrefix + m.id;
+                b.title = "B " + m.title;
+                b.zone = m.zone;
+                b.params = m.params;
+                for (auto& p : b.params)
+                    p.id = kLayerBPrefix + p.id;
+                layerB.push_back (std::move (b));
+            }
+        for (auto& b : layerB)
+            mods.push_back (std::move (b));
         // ...and Cubase lists VST3 units by their NUMERIC id, not by index — and JUCE derives
         // that id from the group id string (hashCode & 0x7fffffff), so a sorted group order
         // alone still showed Cubase a hash-ordered folder list (maintainer 2026-10-11: "OSC 1,
@@ -71,14 +91,19 @@ namespace Modules
         return (double) v;
     }
 
-    void writeState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root)
+    // Which modules a pass covers: the preset ROOT (layer A + instrument) or one layer's patch part.
+    enum class Pass { Root, LayerOnly };
+
+    static void writeModules (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix,
+                              Pass pass, juce::DynamicObject& root)
     {
         for (const auto& m : all())
         {
+            if (pass == Pass::LayerOnly && ! m.layered) continue;
             auto* obj = new juce::DynamicObject();
             for (const auto& p : m.params)
             {
-                auto* raw = apvts.getRawParameterValue (p.id);
+                auto* raw = apvts.getRawParameterValue (prefix + p.id);
                 if (raw == nullptr) continue;
                 const float v = raw->load();
                 switch (p.kind)
@@ -101,10 +126,12 @@ namespace Modules
         }
     }
 
-    void readState (juce::AudioProcessorValueTreeState& apvts, const juce::var& root)
+    static void readModules (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix,
+                             Pass pass, const juce::var& root)
     {
         for (const auto& m : all())
         {
+            if (pass == Pass::LayerOnly && ! m.layered) continue;
             const juce::var obj = root[juce::Identifier (m.persistObject)];
             if (! obj.isObject()) continue;
             for (const auto& p : m.params)
@@ -113,7 +140,7 @@ namespace Modules
                 if (val.isVoid() && p.legacyPersistKey.isNotEmpty())
                     val = obj[juce::Identifier (p.legacyPersistKey)];   // renamed key: old presets still load
                 if (val.isVoid()) continue;   // missing field => keep factory default
-                auto* param = apvts.getParameter (p.id);
+                auto* param = apvts.getParameter (prefix + p.id);
                 if (param == nullptr) continue;
                 float raw;
                 switch (p.kind)
@@ -135,5 +162,44 @@ namespace Modules
                 param->setValueNotifyingHost (param->convertTo0to1 (raw));
             }
         }
+    }
+
+    void writeState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root)
+    {
+        writeModules (apvts, {}, Pass::Root, root);
+    }
+
+    void readState (juce::AudioProcessorValueTreeState& apvts, const juce::var& root)
+    {
+        readModules (apvts, {}, Pass::Root, root);
+    }
+
+    void writeLayerState (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, juce::DynamicObject& root)
+    {
+        writeModules (apvts, prefix, Pass::LayerOnly, root);
+    }
+
+    void readLayerState (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, const juce::var& root)
+    {
+        readModules (apvts, prefix, Pass::LayerOnly, root);
+    }
+
+    const juce::StringArray& layeredParamIds()
+    {
+        static const juce::StringArray ids = []
+        {
+            juce::StringArray a;
+            for (const auto& m : all())
+                if (m.layered)
+                    for (const auto& p : m.params)
+                        a.add (p.id);
+            return a;
+        }();
+        return ids;
+    }
+
+    bool isLayeredParamId (const juce::String& id)
+    {
+        return layeredParamIds().contains (id);
     }
 }

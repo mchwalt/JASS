@@ -13,6 +13,7 @@ namespace Modules
     inline ModuleSpec grain()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "grain"; m.title = "GRAIN"; m.persistObject = "Grain"; m.enableParamId = "grainOn";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W10H1;   // eight cells; W12 was loose (maintainer 2026-09-21)
         m.defaultVisible = false;   // the rack is full; shown from the rack menu like PERC/CHAOS

@@ -5,6 +5,7 @@
 #include "Audio/SynthSound.h"
 #include "Audio/Parameters.h"
 #include "Audio/PatchEngine.h"   // Story 21.4: the patch's engine (AD-16: one per layer)
+#include "Audio/LayerRouter.h"   // Story 21.5: LAYER / SPLIT in front of the two engines
 #include "DSP/WaveformCapture.h"
 #include "DSP/StereoWidth.h"
 #include "DSP/BinauralRoom.h"
@@ -179,10 +180,14 @@ public:
     // Current LFO oscillation value (-1..+1, already scaled by depth) for the
     // editor's live modulation rings. Driven by a dedicated display LFO that
     // mirrors the patch's LFO params and runs even when no note sounds.
-    float getLfoDisplayValue(int i) const { return engine.getLfoDisplayValue(i); }   // per-LFO (for the rings)
+    // Per-LFO (for the rings) — of the layer the rack edits (AD-16: A unless the focus is B).
+    float getLfoDisplayValue(int i) const
+    {
+        return (*apvts.getRawParameterValue(Parameters::ID::layerFocus) > 0.5f ? engineB : engineA).getLfoDisplayValue(i);
+    }
     // 20.1: a preset / DAW-state load restarts every GLOBAL LFO (a global One-Shot then sweeps once
-    // from "now"). Message thread sets, the audio thread consumes it once.
-    void requestGlobalLfoRearm() noexcept { engine.requestGlobalLfoRearm(); }
+    // from "now"). Message thread sets, the audio thread consumes it once. Both layers.
+    void requestGlobalLfoRearm() noexcept { engineA.requestGlobalLfoRearm(); engineB.requestGlobalLfoRearm(); }
     float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
@@ -230,7 +235,8 @@ private:
         SynthyProcessor& owner;
         juce::CriticalSection requestLock;
         std::vector<Request> queue;             // at most one entry per selector
-        int genSampler = 0, genPerc = 0;        // guarded by requestLock
+        // Generation per selector (samplerSet, bsamplerSet, percKit — AD-16 added the third).
+        std::map<juce::String, int> generations;   // guarded by requestLock
     };
     SamplePreloadThread samplePreload { *this };
 
@@ -239,10 +245,20 @@ private:
     void selectSamplerSet (int index, int generation, const juce::String& targetParamId);
 
     juce::AudioProcessorValueTreeState apvts;
-    // The patch (Story 21.4, S0 of AD-16): voices, glide, GLOBAL/display LFOs, the SAMPLER clock and
-    // the per-voice parameter push. Layer A = today's ids (no prefix). Declared right after apvts:
-    // it resolves its parameter pointers in its constructor.
-    PatchEngine engine { apvts, {} };
+    // The two patches (AD-16; Story 21.4 made the engine, 21.5 the second one): voices, glide,
+    // GLOBAL/display LFOs, the SAMPLER clock and the per-voice parameter push. Layer A = today's ids
+    // (no prefix), layer B = the same ids prefixed "b". Declared right after apvts (they resolve their
+    // parameter pointers in their constructors) and A FIRST: every LFO draws its random seed from a
+    // process-wide counter, so A must keep the seeds it had before layer B existed.
+    PatchEngine engineA { apvts, {} };
+    PatchEngine engineB { apvts, Modules::kLayerBPrefix };
+    LayerRouter layerRouter;                       // 21.5: LAYER / SPLIT, note-offs follow their note-on
+    juce::MidiBuffer layerMidiA, layerMidiB;       // the router's two outputs (pre-sized, audio thread)
+    juce::AudioBuffer<float> layerBRender;         // B renders here, then joins the mix (pre-sized)
+    bool  layerBWasOn = false;                     // falling edge: stop B's voices
+    float layerGainPrev[2][2] { { 1.0f, 1.0f }, { 1.0f, 1.0f } };   // [layer][L/R] last block's level×balance
+    PatchEngine& focusedEngine() noexcept;         // the layer the rack edits (layerFocus)
+    void applyLayerGain (int layer, juce::AudioBuffer<float>& b, int numSamples);
     juce::MidiKeyboardState keyboardState;
     // Snapshot length = the LONGEST scope window (100 ms) at the highest sample rate we
     // expect (96 kHz): 0.100 s × 96000 = 9600. The scope shows only the first N samples of

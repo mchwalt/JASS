@@ -7,6 +7,7 @@ namespace Modules
     inline ModuleSpec noise()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "noise"; m.title = "NOISE"; m.persistObject = "Noise"; m.enableParamId = "noiseOn";
         m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W4H1;

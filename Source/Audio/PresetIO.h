@@ -487,6 +487,14 @@ namespace PresetIO
         std::function<void(const juce::String& setName, const juce::String& targetParamId)> requestSamplerSet;
         juce::String pendingSamplerSetName;
         juce::String pendingPercKitName;      // the same guard for PERC's kit (Story 16.1)
+        juce::String pendingBSamplerSetName;  // ...and for layer B's SAMPLER (AD-16, Story 21.5)
+        // The pending name that belongs to a set selector (samplerSet, bsamplerSet, percKit).
+        juce::String& pendingFor (const juce::String& paramId)
+        {
+            if (paramId == Parameters::ID::percKit) return pendingPercKitName;
+            if (paramId == juce::String (Modules::kLayerBPrefix) + Parameters::ID::samplerSet) return pendingBSamplerSetName;
+            return pendingSamplerSetName;
+        }
         std::function<int()>     seqLatchRoot;
         std::function<void(int)> applySeqLatchRoot;
         std::function<float(const juce::String& paramId)> presetBaseline01;
@@ -596,6 +604,93 @@ namespace PresetIO
     // ── Export ──
     // `modified` flags an unsaved working state (only meaningful for LiveState;
     // a freshly saved named preset is by definition unmodified).
+    // The NAME of the set a selector points at (or is still fetching): what a patch persists
+    // beside the session-local index (toVar), and since 2026-10-19 what a DAW project persists
+    // too. An index into a store whose contents and ORDER depend on what is installed, and on
+    // what has finished loading, is no identity for a drum kit.
+    inline juce::String currentSetName (APVTS& a, const char* paramId)
+    {
+        const bool perc = (juce::String (paramId) == Parameters::ID::percKit);
+        const int idx = static_cast<int> (*a.getRawParameterValue (paramId)) - (perc ? 1 : 0);   // KIT counts from 1
+        const auto& pending = hooks(a).pendingFor (paramId);
+        if (pending.isNotEmpty())
+            return pending;   // a set still being fetched for this patch wins over the index
+        const auto* set = SampleBankStore::instance().getSet (idx);
+        return set != nullptr ? set->getName() : juce::String();
+    }
+
+    // ── The patch part of a preset (AD-16, Story 21.5) ──────────────────────────────────────
+    // What a PATCH writes beyond its spec-driven module objects: the SAMPLER set's name and the
+    // MOD MATRIX routings as an array. One routine for both layers — layer A on the preset root
+    // (prefix ""), layer B inside "LayerB" (prefix "b"), under the same object and field names.
+    inline void writePatchExtras (APVTS& a, const juce::String& prefix, juce::DynamicObject& root)
+    {
+        using namespace detail;
+        // SAMPLER (Story 12.1): persist the selected sample's NAME alongside the session-local SET
+        // index, so applyVar can re-resolve it from the Samples folder across sessions. A set
+        // still being fetched for this patch wins over whatever the index points at right now
+        // (see pendingSamplerSetName) — otherwise a save during the load would rewrite the patch
+        // to a different instrument.
+        {
+            const juce::String setParam = prefix + ID::samplerSet;
+            const juce::String setName = currentSetName (a, setParam.toRawUTF8());
+            if (setName.isNotEmpty())
+                if (auto* mod = root.getProperty("Sampler").getDynamicObject())
+                    mod->setProperty("File", setName);
+        }
+
+        // MOD MATRIX routings as an ARRAY of slot objects (FormatVersion 9), same reasoning. The
+        // flat SlotNSource/… keys the spec pass wrote move into one object per slot: "Source" and
+        // "Module" keep their label form (the append-only combo contract is unchanged), "Param"
+        // stays the persisted INT index into the module's param list — "ParamName" spells it out
+        // for the reader and is ignored by the loader, like the STEP SEQ "Name" — then "Amount"
+        // and "Quant".
+        if (auto* mod = root.getProperty("ModMatrix").getDynamicObject())
+        {
+            int nSlots = 0;
+            while (mod->hasProperty("Slot" + juce::String(nSlots + 1) + "Source")) ++nSlots;
+            juce::Array<juce::var> slots;
+            for (int n = 1; n <= nSlots; ++n)
+            {
+                const juce::String k = "Slot" + juce::String(n);
+                const juce::String module = mod->getProperty(k + "Module").toString();
+                // An "Off" slot is factory state and stays OUT of the file (maintainer
+                // 2026-09-02, the step-array cure applied here): the reader factory-resets
+                // first, so a missing slot IS off. Survivors compact upward on reload —
+                // slot order carries no meaning, only the routings do. The flat keys are
+                // still removed for EVERY slot below, or they would be written flat.
+                if (module != "Off")
+                {
+                    auto* sl = new juce::DynamicObject();
+                    sl->setProperty("Source", mod->getProperty(k + "Source"));
+                    sl->setProperty("Module", module);
+                    const int pi = (int) mod->getProperty(k + "Param");
+                    sl->setProperty("Param", pi);
+                    if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
+                        sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));
+                    sl->setProperty("Amount", mod->getProperty(k + "Amount"));
+                    sl->setProperty("Quant", mod->getProperty(k + "Quant"));
+                    slots.add(juce::var(sl));
+                }
+                for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
+                    mod->removeProperty(k + f);
+            }
+            mod->setProperty("Slots", juce::var(slots));
+        }
+
+    }
+
+    // Layer B differs from a fresh layer? (Then it is written even while switched off — a parked
+    // second sound survives a save.)
+    inline bool layerBIsDefault (APVTS& a)
+    {
+        for (const auto& id : Modules::layeredParamIds())
+            if (auto* p = a.getParameter (juce::String (Modules::kLayerBPrefix) + id))
+                if (std::abs (p->getValue() - p->getDefaultValue()) > 1.0e-6f)
+                    return false;
+        return true;
+    }
+
     inline juce::var toVar(APVTS& a, const juce::String& name, bool modified = false)
     {
         using namespace detail;
@@ -613,21 +708,6 @@ namespace PresetIO
         // omitted (clean preset, missing⇒default on load; the C# app ignores the unknown field).
         if (auto s = a.state.getProperty(juce::Identifier("rackLayout")).toString(); s.isNotEmpty())
             root->setProperty("RackLayout", juce::JSON::parse(s));
-
-        // SAMPLER (Story 12.1): persist the selected sample's NAME alongside the session-local SET
-        // index, so applyVar can re-resolve it from the Samples folder across sessions.
-        {
-            const int idx = static_cast<int>(*a.getRawParameterValue(ID::samplerSet));
-            const auto* set = SampleBankStore::instance().getSet(idx);
-            // A set still being fetched for this patch wins over whatever the index points at
-            // right now (see pendingSamplerSetName) — otherwise a save during the load would
-            // rewrite the patch to a different instrument.
-            const juce::String setName = hooks(a).pendingSamplerSetName.isNotEmpty() ? hooks(a).pendingSamplerSetName
-                                       : (set != nullptr ? set->getName() : juce::String());
-            if (setName.isNotEmpty())
-                if (auto* mod = root->getProperty("Sampler").getDynamicObject())
-                    mod->setProperty("File", setName);
-        }
 
         // PERC (Story 16.1): the same treatment for the drum kit, and for the same reason — KIT is
         // an index into a store whose contents depend on what is installed locally. A preset that
@@ -754,43 +834,16 @@ namespace PresetIO
             mod->setProperty("Lanes", juce::var(lanes));
         }
 
-        // MOD MATRIX routings as an ARRAY of slot objects (FormatVersion 9), same reasoning. The
-        // flat SlotNSource/… keys the spec pass wrote move into one object per slot: "Source" and
-        // "Module" keep their label form (the append-only combo contract is unchanged), "Param"
-        // stays the persisted INT index into the module's param list — "ParamName" spells it out
-        // for the reader and is ignored by the loader, like the STEP SEQ "Name" — then "Amount"
-        // and "Quant".
-        if (auto* mod = root->getProperty("ModMatrix").getDynamicObject())
+        writePatchExtras(a, {}, *root);   // layer A: sampler name + matrix slots, on the root
+
+        // Layer B (AD-16): the patch modules once more, same object/field names, inside "LayerB".
+        // Omitted while B is off AND untouched — a single-layer preset stays the file it was.
+        if (*a.getRawParameterValue(ID::layerBOn) > 0.5f || ! layerBIsDefault(a))
         {
-            int nSlots = 0;
-            while (mod->hasProperty("Slot" + juce::String(nSlots + 1) + "Source")) ++nSlots;
-            juce::Array<juce::var> slots;
-            for (int n = 1; n <= nSlots; ++n)
-            {
-                const juce::String k = "Slot" + juce::String(n);
-                const juce::String module = mod->getProperty(k + "Module").toString();
-                // An "Off" slot is factory state and stays OUT of the file (maintainer
-                // 2026-09-02, the step-array cure applied here): the reader factory-resets
-                // first, so a missing slot IS off. Survivors compact upward on reload —
-                // slot order carries no meaning, only the routings do. The flat keys are
-                // still removed for EVERY slot below, or they would be written flat.
-                if (module != "Off")
-                {
-                    auto* sl = new juce::DynamicObject();
-                    sl->setProperty("Source", mod->getProperty(k + "Source"));
-                    sl->setProperty("Module", module);
-                    const int pi = (int) mod->getProperty(k + "Param");
-                    sl->setProperty("Param", pi);
-                    if (const int mi = ModDest::moduleIndexForLabel(module.toRawUTF8()); mi >= 0)
-                        sl->setProperty("ParamName", ModDest::paramLabel(mi, pi));
-                    sl->setProperty("Amount", mod->getProperty(k + "Amount"));
-                    sl->setProperty("Quant", mod->getProperty(k + "Quant"));
-                    slots.add(juce::var(sl));
-                }
-                for (const auto* f : { "Source", "Module", "Param", "Amount", "Quant" })
-                    mod->removeProperty(k + f);
-            }
-            mod->setProperty("Slots", juce::var(slots));
+            auto* lb = new juce::DynamicObject();
+            Modules::writeLayerState(a, Modules::kLayerBPrefix, *lb);
+            writePatchExtras(a, Modules::kLayerBPrefix, *lb);
+            root->setProperty("LayerB", juce::var(lb));
         }
 
         return juce::var(root);
@@ -807,21 +860,6 @@ namespace PresetIO
     // ── Import (LEGACY FLAT reader, v<3) ──
     // Reads the OLD flat .synthy format. Retained ONLY to convert existing presets to v3 once
     // (see convertLegacyPresetsToV3). New code uses applyVar (nested) below.
-    // The NAME of the set a selector points at (or is still fetching): what a patch persists
-    // beside the session-local index (toVar), and since 2026-10-19 what a DAW project persists
-    // too. An index into a store whose contents and ORDER depend on what is installed, and on
-    // what has finished loading, is no identity for a drum kit.
-    inline juce::String currentSetName (APVTS& a, const char* paramId)
-    {
-        const bool perc = (juce::String (paramId) == Parameters::ID::percKit);
-        const int idx = static_cast<int> (*a.getRawParameterValue (paramId)) - (perc ? 1 : 0);   // KIT counts from 1
-        const auto& pending = perc ? hooks(a).pendingPercKitName : hooks(a).pendingSamplerSetName;
-        if (pending.isNotEmpty())
-            return pending;   // a set still being fetched for this patch wins over the index
-        const auto* set = SampleBankStore::instance().getSet (idx);
-        return set != nullptr ? set->getName() : juce::String();
-    }
-
     // Re-resolve a set by NAME into `paramId` — the body of applyVar's resolveSet, shared with the
     // DAW-state restore (setStateInformation). Already loaded ⇒ select it; otherwise the background
     // loader (12.6) fetches it first and selects it when it lands, `pending` guarding the LiveState
@@ -1049,6 +1087,37 @@ namespace PresetIO
     }
 
     // ── Import (nested v3 — the live reader) ──
+    // MOD MATRIX "Slots" from the v9 ARRAY (see writePatchExtras): rebuild the flat keys the spec
+    // pass understands and run it on just that module — the label → index mapping keeps living in
+    // ModuleRegistry. `prefix` picks the layer (AD-16): "" = A, "b" = B. Older files carry the flat
+    // keys directly and were read by the spec pass already.
+    inline void readMatrixSlots (APVTS& a, const juce::String& prefix, const juce::var& src)
+    {
+        auto* mod = src["ModMatrix"].getDynamicObject();
+        if (mod == nullptr)
+            return;
+        auto* slots = mod->getProperty("Slots").getArray();
+        if (slots == nullptr)
+            return;
+        auto* flat = new juce::DynamicObject();
+        for (int n = 0; n < slots->size(); ++n)
+        {
+            const auto& sl = slots->getReference(n);
+            if (! sl.isObject()) continue;
+            const juce::String k = "Slot" + juce::String(n + 1);
+            flat->setProperty(k + "Source", sl["Source"]);
+            flat->setProperty(k + "Module", sl["Module"]);
+            flat->setProperty(k + "Param",  sl["Param"]);   // "ParamName" is reader-only
+            flat->setProperty(k + "Amount", sl["Amount"]);
+            if (! sl["Quant"].isVoid())
+                flat->setProperty(k + "Quant", sl["Quant"]);   // omitted = "Off" (default)
+        }
+        auto* rt = new juce::DynamicObject();
+        rt->setProperty("ModMatrix", juce::var(flat));
+        if (prefix.isEmpty()) Modules::readState(a, juce::var(rt));
+        else                  Modules::readLayerState(a, prefix, juce::var(rt));
+    }
+
     inline void applyVar(APVTS& a, const juce::var& v)
     {
         if (! v.isObject())
@@ -1159,24 +1228,7 @@ namespace PresetIO
                         }
                 }
             }
-            if (auto* mod = v["ModMatrix"].getDynamicObject())
-                if (auto* slots = mod->getProperty("Slots").getArray())
-                {
-                    auto* flat = new juce::DynamicObject();
-                    for (int n = 0; n < slots->size(); ++n)
-                    {
-                        const auto& sl = slots->getReference(n);
-                        if (! sl.isObject()) continue;
-                        const juce::String k = "Slot" + juce::String(n + 1);
-                        flat->setProperty(k + "Source", sl["Source"]);
-                        flat->setProperty(k + "Module", sl["Module"]);
-                        flat->setProperty(k + "Param",  sl["Param"]);   // "ParamName" is reader-only
-                        flat->setProperty(k + "Amount", sl["Amount"]);
-                        if (! sl["Quant"].isVoid())
-                            flat->setProperty(k + "Quant", sl["Quant"]);   // omitted = "Off" (default)
-                    }
-                    respell("ModMatrix", flat);
-                }
+            readMatrixSlots(a, {}, v);   // layer A
         }
 
         if (v.hasProperty("RackLayout"))
@@ -1206,6 +1258,16 @@ namespace PresetIO
         };
         resolveSet (v, "Sampler", "File", ID::samplerSet, hooks(a).pendingSamplerSetName);
         resolveSet (v, "Perc",    "File", ID::percKit,    hooks(a).pendingPercKitName, 1);
+
+        // Layer B (AD-16, Story 21.5): the patch modules under "LayerB", same names as on the root.
+        // Missing ⇒ B stays at the defaults the reset above gave it, and off.
+        if (const auto lb = v["LayerB"]; lb.isObject())
+        {
+            Modules::readLayerState(a, Modules::kLayerBPrefix, lb);
+            readMatrixSlots(a, Modules::kLayerBPrefix, lb);
+            resolveSet (lb, "Sampler", "File", (juce::String (Modules::kLayerBPrefix) + ID::samplerSet).toRawUTF8(),
+                        hooks(a).pendingBSamplerSetName);
+        }
 
         // STEP SEQ latch (15.5): a patch saved with a figure running comes back running, on the note
         // it was running on. Missing field ⇒ -1 ⇒ no latch, which also CLEARS whatever the previous
@@ -1419,6 +1481,53 @@ namespace PresetIO
 
         r.ok = true;
         return r;
+    }
+
+    // ── AD-16 layer actions (Story 21.5; the buttons come with S2) ──────────────────────────
+    // LOAD INTO B: a preset's PATCH (its root patch modules + SAMPLER set name + matrix slots) lands
+    // in layer B's parameters. The instrument — master bus, sequencers, PERC, BASS, LAYERS, the
+    // latch — and layer A stay as they are, so any single-layer preset is layer material. Only
+    // current-format files: an older one would need the migration pass, which rewrites the file
+    // for layer A (every file in the Presets folder is converted at startup anyway). Message thread.
+    inline LoadResult loadIntoLayerB(APVTS& a, const juce::File& file)
+    {
+        LoadResult r;
+        if (! file.existsAsFile())
+            return r;
+        const auto v = juce::JSON::parse(file.loadFileAsString());
+        if (! v.isObject())
+            return r;
+        r.fileVersion = (int) v.getProperty("FormatVersion", 1);
+        if (r.fileVersion < kFormatVersion)
+            return r;   // ok = false: the caller says "open and save it once"
+
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);   // couplings off + voices stopped
+        const juce::String bp (Modules::kLayerBPrefix);
+        for (const auto& id : Modules::layeredParamIds())   // B is a complete snapshot too: defaults first
+            if (auto* p = a.getParameter(bp + id))
+                p->setValueNotifyingHost(p->getDefaultValue());
+        Modules::readLayerState(a, bp, v);     // the ROOT's patch modules, into the b ids
+        readMatrixSlots(a, bp, v);
+        if (auto* mod = v["Sampler"].getDynamicObject())
+            resolveSetByName(a, mod->getProperty("File").toString(), (bp + ID::samplerSet).toRawUTF8(),
+                             hooks(a).pendingBSamplerSetName, 0);
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
+        r.ok = true;
+        return r;
+    }
+
+    // COPY A → B: layer B becomes an exact copy of layer A's patch (SAMPLER set included, also one
+    // still being fetched). Message thread.
+    inline void copyLayerAToB(APVTS& a)
+    {
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);
+        const juce::String bp (Modules::kLayerBPrefix);
+        for (const auto& id : Modules::layeredParamIds())
+            if (auto* src = a.getParameter(id))
+                if (auto* dst = a.getParameter(bp + id))
+                    dst->setValueNotifyingHost(src->getValue());
+        hooks(a).pendingBSamplerSetName = hooks(a).pendingSamplerSetName;
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
     }
 
     // Reads just the "Name" field of a preset file (empty if absent/unreadable).

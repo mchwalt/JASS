@@ -20,6 +20,10 @@ struct ModuleSpec
     rack::SizeClass  size {};
     bool defaultVisible = true;
     bool alignRight = false;     // pack right within the zone row (MASTER BUS: STEREO/MASTER/COMPRESSOR)
+    // AD-16 (Story 21.5): a PATCH module — it exists once per layer. Layer A keeps the ids as written,
+    // layer B gets the same params with every id prefixed "b" (createParameterLayout's second walk).
+    // false = an INSTRUMENT module (master bus, sequencers, boxes, displays, keyboard): one for both.
+    bool layered = false;
     std::vector<ParamSpec> params;
 
     // Optional hooks for the few non-pure modules (CROSS MOD, STRING, WAVETABLE, displays):

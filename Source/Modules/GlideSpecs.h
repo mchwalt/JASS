@@ -7,6 +7,7 @@ namespace Modules
     inline ModuleSpec glide()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "glide"; m.title = "GLIDE"; m.persistObject = "Glide"; m.enableParamId = "glideOn";
         m.type = rack::ModuleType::Modulator; m.zone = rack::Zone::Modulation; m.size = rack::SizeClass::W3H1;
         m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning

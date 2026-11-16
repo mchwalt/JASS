@@ -1,6 +1,13 @@
 // JASS_Render — headless offline renderer for null tests (Story 21.4, S0 of AD-16).
 //
-//   JASS_Render.exe <preset.jass> <out.wav> [seconds]
+//   JASS_Render.exe <preset.jass> <out.wav> [seconds] [options]
+//
+//   --b <preset.jass>   AD-16 (21.5): load that preset's patch into layer B and turn B on (LAYER)
+//   --split <note>      SPLIT at <note> instead of LAYER (below → B)
+//   --solo a|b          mute the other layer (its LEVEL to 0) — compare one engine alone
+//   --roundtrip         after loading: preset (toVar → applyVar) and DAW state (get/setState) into a
+//                       fresh processor; every parameter must come back identical (exit 3 if not)
+//   --save <file.jass>  write the loaded state back as a preset (round-trip a file byte for byte)
 //
 // Loads ONE preset through the normal PresetIO path into a fresh processor, waits for the sample
 // sets the preset asks for, renders a fixed MIDI script at 48 kHz in 512-sample blocks and writes
@@ -43,11 +50,56 @@ namespace
         return e;
     }
 
+    struct Options
+    {
+        double     seconds = 10.0;
+        juce::File layerB;           // empty = B stays as the preset left it
+        int        split   = -1;     // -1 = LAYER
+        int        solo    = 0;      // 0 = both, 1 = A only, 2 = B only
+        bool       roundtrip = false;
+        juce::File saveTo;
+    };
+
+    void setParam (SynthyProcessor& p, const juce::String& id, float raw)
+    {
+        if (auto* prm = p.getAPVTS().getParameter (id))
+            prm->setValueNotifyingHost (prm->convertTo0to1 (raw));
+    }
+
+    // A MOD MATRIX slot whose MODULE is Off is factory state: the preset leaves it out on purpose
+    // and the survivors compact upward on reload (PresetIO), so its other fields do not round-trip.
+    bool isUnusedMatrixSlotParam (SynthyProcessor& p, const juce::String& id)
+    {
+        const juce::String bp (Modules::kLayerBPrefix);
+        const juce::String prefix = id.startsWith (bp + "modSlot") ? bp : juce::String();
+        const auto rest = id.substring (prefix.length());
+        if (! rest.startsWith ("modSlot")) return false;
+        const int n = rest.substring (7).getIntValue();
+        if (n < 1) return false;
+        auto* module = p.getAPVTS().getRawParameterValue (prefix + "modSlot" + juce::String (n) + "Module");
+        return module != nullptr && *module < 0.5f;
+    }
+
+    // Every parameter of `b` equals `a`'s (by id). Returns the number of mismatches, prints a few.
+    int compareParams (SynthyProcessor& a, SynthyProcessor& b, const char* what)
+    {
+        int bad = 0;
+        for (auto* p : a.getParameters())
+            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p); rp != nullptr && ! isUnusedMatrixSlotParam (a, rp->paramID))
+                if (auto* q = b.getAPVTS().getParameter (rp->paramID); q == nullptr || q->getValue() != rp->getValue())
+                {
+                    if (bad++ < 5)
+                        std::cerr << "  " << what << " mismatch: " << rp->paramID << " " << rp->getValue()
+                                  << " vs " << (q != nullptr ? q->getValue() : -1.0f) << std::endl;
+                }
+        return bad;
+    }
+
     class Job : private juce::Timer
     {
     public:
-        Job (juce::File presetIn, juce::File wavOut, double secondsIn)
-            : preset (std::move (presetIn)), out (std::move (wavOut)), seconds (secondsIn)
+        Job (juce::File presetIn, juce::File wavOut, Options o)
+            : preset (std::move (presetIn)), out (std::move (wavOut)), opt (std::move (o)), seconds (opt.seconds)
         {
             juce::PluginHostType::jucePlugInClientCurrentWrapperType = juce::AudioProcessor::wrapperType_Undefined;
             proc = std::make_unique<SynthyProcessor>();
@@ -56,6 +108,19 @@ namespace
 
             const auto res = PresetIO::loadFromFile (proc->getAPVTS(), preset);
             if (! res.ok) { fail ("cannot load preset " + preset.getFullPathName()); return; }
+            if (opt.layerB != juce::File())
+            {
+                if (! PresetIO::loadIntoLayerB (proc->getAPVTS(), opt.layerB).ok)
+                { fail ("cannot load into layer B (format older than current?) " + opt.layerB.getFullPathName()); return; }
+                setParam (*proc, Parameters::ID::layerBOn, 1.0f);
+            }
+            if (opt.split >= 0)
+            {
+                setParam (*proc, Parameters::ID::layerMode, 1.0f);
+                setParam (*proc, Parameters::ID::splitNote, (float) opt.split);
+            }
+            if (opt.solo == 1) setParam (*proc, Parameters::ID::layerBLevel, 0.0f);
+            if (opt.solo == 2) setParam (*proc, Parameters::ID::layerALevel, 0.0f);
             proc->requestGlobalLfoRearm();          // what the editor does after a load (20.1)
             started = juce::Time::getMillisecondCounterHiRes();
             startTimer (50);
@@ -74,14 +139,41 @@ namespace
         void timerCallback() override
         {
             auto& h = PresetIO::hooks (proc->getAPVTS());
-            const bool pending = h.pendingSamplerSetName.isNotEmpty() || h.pendingPercKitName.isNotEmpty();
+            const bool pending = h.pendingSamplerSetName.isNotEmpty() || h.pendingPercKitName.isNotEmpty()
+                              || h.pendingBSamplerSetName.isNotEmpty();
             if (pending && juce::Time::getMillisecondCounterHiRes() - started < 180000.0)
                 return;                              // sample sets still arriving
             stopTimer();
             if (pending)
                 std::cerr << "JASS_Render: warning, sample set still pending after 180 s" << std::endl;
+            if (opt.saveTo != juce::File())
+                PresetIO::saveToFile (proc->getAPVTS(), opt.saveTo, PresetIO::nameFromFile (preset));
+            if (opt.roundtrip)
+                roundtrip();
             render();
             juce::MessageManager::getInstance()->stopDispatchLoop();
+        }
+
+        // AC 2 of Story 21.5: the state survives a preset and a DAW-state round trip, layer B included.
+        void roundtrip()
+        {
+            auto& a = proc->getAPVTS();
+            int bad = 0;
+            {
+                auto fresh = std::make_unique<SynthyProcessor>();
+                const auto json = juce::JSON::toString (PresetIO::toVar (a, "rt"), false, 12);
+                PresetIO::applyVar (fresh->getAPVTS(), juce::JSON::parse (json));
+                bad += compareParams (*proc, *fresh, "preset");
+            }
+            {
+                auto fresh = std::make_unique<SynthyProcessor>();
+                juce::MemoryBlock state;
+                proc->getStateInformation (state);
+                fresh->setStateInformation (state.getData(), (int) state.getSize());
+                bad += compareParams (*proc, *fresh, "daw-state");
+            }
+            std::cout << "roundtrip " << (bad == 0 ? "ok" : "FAILED") << " (" << bad << " mismatches)" << std::endl;
+            if (bad != 0) exitCode = 3;
         }
 
         void render()
@@ -129,6 +221,7 @@ namespace
         }
 
         juce::File preset, out;
+        Options opt;
         double seconds;
         double started = 0.0;
         std::unique_ptr<SynthyProcessor> proc;
@@ -139,16 +232,40 @@ int main (int argc, char* argv[])
 {
     if (argc < 3)
     {
-        std::cerr << "usage: JASS_Render <preset.jass> <out.wav> [seconds]" << std::endl;
+        std::cerr << "usage: JASS_Render <preset.jass> <out.wav> [seconds] [--b preset] [--split note] "
+                     "[--solo a|b] [--roundtrip] [--save file]" << std::endl;
         return 2;
     }
     juce::ScopedJuceInitialiser_GUI juce;
-    const double seconds = argc > 3 ? std::atof (argv[3]) : 10.0;
+    const auto cwd = juce::File::getCurrentWorkingDirectory();
+    Options opt;
+    for (int i = 3; i < argc; ++i)
+    {
+        const juce::String a = juce::String::fromUTF8 (argv[i]);
+        const bool hasNext = i + 1 < argc;
+        if      (a == "--b"     && hasNext) opt.layerB = cwd.getChildFile (juce::String::fromUTF8 (argv[++i]));
+        else if (a == "--split" && hasNext) opt.split  = juce::String (argv[++i]).getIntValue();
+        else if (a == "--solo"  && hasNext) opt.solo   = juce::String (argv[++i]).equalsIgnoreCase ("b") ? 2 : 1;
+        else if (a == "--save"  && hasNext) opt.saveTo = cwd.getChildFile (juce::String::fromUTF8 (argv[++i]));
+        else if (a == "--roundtrip")        opt.roundtrip = true;
+        else if (a == "--info")
+        {
+            juce::PluginHostType::jucePlugInClientCurrentWrapperType = juce::AudioProcessor::wrapperType_Undefined;
+            SynthyProcessor p;
+            int automatable = 0;
+            for (auto* prm : p.getParameters()) automatable += prm->isAutomatable() ? 1 : 0;
+            std::cout << "parameters " << p.getParameters().size() << " (automatable " << automatable
+                      << "), per layer " << Modules::layeredParamIds().size() << std::endl;
+            return 0;
+        }
+        else if (! a.startsWith ("--"))     opt.seconds = a.getDoubleValue();
+        else { std::cerr << "JASS_Render: unknown option " << a << std::endl; return 2; }
+    }
     int code = 0;
     {
-        Job job (juce::File::getCurrentWorkingDirectory().getChildFile (juce::String::fromUTF8 (argv[1])),
-                 juce::File::getCurrentWorkingDirectory().getChildFile (juce::String::fromUTF8 (argv[2])),
-                 seconds);
+        Job job (cwd.getChildFile (juce::String::fromUTF8 (argv[1])),
+                 cwd.getChildFile (juce::String::fromUTF8 (argv[2])),
+                 opt);
         if (job.exitCode == 0)
             juce::MessageManager::getInstance()->runDispatchLoop();
         code = job.exitCode;

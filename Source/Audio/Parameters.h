@@ -316,6 +316,17 @@ namespace Parameters
         // Warm every indexed-ID static cache on the MESSAGE thread (call from prepareToPlay) so the
         // audio thread never triggers a first-call static initialisation (which would take a one-time
         // guard lock). After this, all indexed-ID lookups on the audio thread are alloc- and lock-free.
+        // LAYERS (AD-16, Story 21.5) — instrument-level. Layer B's patch params are not listed
+        // here: they are A's ids with Modules::kLayerBPrefix in front, made by the spec walk.
+        constexpr const char* layerBOn    = "layerBOn";
+        constexpr const char* layerMode   = "layerMode";    // 0 = Layer (both), 1 = Split
+        constexpr const char* splitNote   = "splitNote";    // SPLIT: below → B, from it up → A
+        constexpr const char* layerFocus  = "layerFocus";   // 0 = A, 1 = B (which layer the rack edits)
+        constexpr const char* layerALevel = "layerALevel";
+        constexpr const char* layerBLevel = "layerBLevel";
+        constexpr const char* layerAPan   = "layerAPan";    // balance −1..1
+        constexpr const char* layerBPan   = "layerBPan";
+
         inline void warmIndexedIds()
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); lfoGlobal(i); }
@@ -388,7 +399,10 @@ namespace Parameters
         {
             auto get = [&] (const juce::String& id)
             {
-                auto* a = apvts.getRawParameterValue (prefix + id);
+                // AD-16: only patch-module params exist per layer. An instrument param the patch
+                // reads (STEREO's outputMode) is the same atomic for both layers.
+                const bool perLayer = Modules::isLayeredParamId (id);
+                auto* a = apvts.getRawParameterValue (perLayer ? prefix + id : id);
                 jassert (a != nullptr);
                 return a;
             };

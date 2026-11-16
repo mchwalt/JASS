@@ -9,6 +9,7 @@ namespace Modules
     inline ModuleSpec filter()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "filter"; m.title = "FILTER"; m.persistObject = "Filter"; m.enableParamId = "filterOn";
         m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
         m.type = rack::ModuleType::Processor;

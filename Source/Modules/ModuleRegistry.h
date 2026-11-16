@@ -14,6 +14,20 @@ namespace Modules
     // Nested .synthy (v3): each module writes/reads ONE object keyed by its persistObject, whose
     // fields are the params keyed by persistKey. Choice values are stored as their canonical
     // choice string; bools as bool; floats/ints as numbers. Spec-driven — no hand field lists.
+    // Writes/reads layer A and the instrument modules (the preset ROOT, unchanged since v3).
     void writeState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root);
     void readState  (juce::AudioProcessorValueTreeState& apvts, const juce::var& root);
+
+    // ── AD-16 (Story 21.5): layers ──────────────────────────────────────────────────────────
+    // The id prefix of layer B's copy of every patch-module parameter ("filterCutoff" → "bfilterCutoff").
+    inline const char* const kLayerBPrefix = "b";
+    // Is `id` (a layer-A id, unprefixed) a parameter of a patch module, i.e. does it exist per layer?
+    // False for instrument modules (master bus, sequencers, boxes, displays, keyboard, LAYERS).
+    bool isLayeredParamId (const juce::String& id);
+    // Every patch-module parameter id, unprefixed (layer A's spelling), in spec order.
+    const juce::StringArray& layeredParamIds();
+    // The patch modules only, ids prefixed with `prefix`, persisted under the SAME object and field
+    // names as layer A — so a layer is "a preset's patch part", wherever it is stored (`LayerB`).
+    void writeLayerState (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, juce::DynamicObject& root);
+    void readLayerState  (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, const juce::var& root);
 }

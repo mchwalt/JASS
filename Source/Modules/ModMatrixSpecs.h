@@ -16,6 +16,7 @@ namespace Modules
     inline ModuleSpec modMatrix()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "modmatrix"; m.title = "MOD MATRIX"; m.persistObject = "ModMatrix"; m.enableParamId = "modMatrixOn";
         m.defaultVisible = false;   // seed for RackLayout.json: Init switches the matrix OFF (2026-10-03), so the stock rack hides it; a preset that routes through it reveals it (on => visible)
         // Size here is nominal — the editor hand-builds the MOD MATRIX body and its descriptor

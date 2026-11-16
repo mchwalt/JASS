@@ -36,6 +36,7 @@
 #include "ChaosSpecs.h"
 #include "GrainSpecs.h"
 #include "BassSpecs.h"
+#include "LayersSpecs.h"
 
 namespace Modules
 {
@@ -57,6 +58,7 @@ namespace Modules
             chaos(),        // LFO expansion — ditto (Lorenz mod source)
             grain(),        // Story 17.1 — ditto (granular cloud on the SAMPLER's set)
             bass(),         // Story 20.2 — ditto (the sequenced bass box beside the patch, AD-15)
+            layers(),       // Story 21.5 (AD-16) — B on, LAYER/SPLIT, split note, focus, level/balance
         };
     }
 }

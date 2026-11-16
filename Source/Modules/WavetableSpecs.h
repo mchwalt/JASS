@@ -9,6 +9,7 @@ namespace Modules
     inline ModuleSpec wavetable()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "wavetable"; m.title = "WAVETABLE"; m.persistObject = "Wavetable"; m.enableParamId = "wavetableOn";
         m.type = rack::ModuleType::Generator; m.zone = rack::Zone::Generators; m.size = rack::SizeClass::W14H1;   // NOTE: WAVETABLE's rack size is set in the editor's hand-built add() (this spec size is unused for it)
         m.params = {

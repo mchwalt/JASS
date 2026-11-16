@@ -13,6 +13,7 @@ namespace Modules
     {
         const juce::String p = "lfo" + juce::String (i);
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id     = (i == 1) ? juce::String ("lfo") : p;   // id "lfo" for LFO 1 (stable layout key)
         m.helpId = "lfo";                                 // LFO 1..4 share ONE help text (lfo.md)
         m.title  = "LFO " + juce::String (i);

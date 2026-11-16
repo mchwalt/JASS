@@ -7,6 +7,7 @@ namespace Modules
     inline ModuleSpec phaser()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "phaser"; m.title = "PHASER"; m.persistObject = "Phaser"; m.enableParamId = "phaserOn";
         m.type = rack::ModuleType::Processor; m.zone = rack::Zone::Processing; m.size = rack::SizeClass::W6H1;
         m.defaultVisible = false;   // Story 7.3: used by no preset — see SubSpecs.h for the reasoning

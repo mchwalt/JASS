@@ -9,6 +9,7 @@ namespace Modules
     inline ModuleSpec crossmod()
     {
         ModuleSpec m;
+        m.layered = true;   // AD-16: part of the patch — exists for layer A and (prefix b) layer B
         m.id = "mixmode"; m.title = "CROSS MOD"; m.persistObject = "CrossMod"; m.enableParamId = "mixModeOn";
         // CROSS MOD shapes the oscillators (RingMod/FM) — it is a modulator, not a sound source,
         // so it lives in the MODULATION zone (user decision 2026-07-19).
