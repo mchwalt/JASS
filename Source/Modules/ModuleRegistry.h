@@ -29,5 +29,9 @@ namespace Modules
     // The patch modules only, ids prefixed with `prefix`, persisted under the SAME object and field
     // names as layer A — so a layer is "a preset's patch part", wherever it is stored (`LayerB`).
     void writeLayerState (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, juce::DynamicObject& root);
+    // FormatVersion 11: the instrument modules only (master bus, sequencers, boxes, displays,
+    // keyboard, LAYERS) — the preset's "Instrument" object.
+    void writeInstrumentState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root);
+    void readInstrumentState  (juce::AudioProcessorValueTreeState& apvts, const juce::var& root);
     void readLayerState  (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, const juce::var& root);
 }

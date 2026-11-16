@@ -1153,7 +1153,29 @@ void SynthyEditor::setPresetName(const juce::String& name)
 // surfaces a format migration. (Was inline in loadBtn.onClick; extracted for reuse.)
 void SynthyEditor::loadPresetFile(const juce::File& f)
 {
-    const auto res = PresetIO::loadFromFile(processor.getAPVTS(), f);
+    // AD-16 (21.6): the LAYERS selection decides what the load reaches — A only: instrument + A,
+    // B kept; B only: the file's sound into B; A + B: the whole file (PresetIO::LoadScope).
+    const int focus = processor.getLayerFocus();
+    const auto scope = focus == 1 ? PresetIO::LoadScope::IntoLayerB
+                     : focus == 2 ? PresetIO::LoadScope::Whole
+                                  : PresetIO::LoadScope::KeepLayerB;
+    const auto res = PresetIO::loadPreset(processor.getAPVTS(), f, scope);
+    if (! res.ok && scope == PresetIO::LoadScope::IntoLayerB && f.existsAsFile())
+    {
+        juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "B",
+            currentLang == "DE"
+                ? "â" + f.getFileNameWithoutExtension() + "â ist in einem alten Format. Einmal mit A laden und speichern, dann in B laden."
+                : "\"" + f.getFileNameWithoutExtension() + "\" is in an older format. Load it with A once and save it, then load it into B.");
+        return;
+    }
+    if (res.ok && scope == PresetIO::LoadScope::IntoLayerB)
+    {
+        // Only layer B changed: the instrument keeps its name and its clean baseline, the rack shows
+        // what B now uses. The header then reads "Current State" — the state is no file any more.
+        processor.requestGlobalLfoRearm();
+        if (rackBody) rackBody->revealAfterLayerLoad();
+        return;
+    }
     if (! res.ok)
     {
         // Fail LOUDLY — a corrupt / non-JASS / missing file must not silently reset to defaults.
@@ -2248,13 +2270,14 @@ void SynthyEditor::buildRack()
     // LAYERS (AD-16, Story 21.6; maintainer 2026-11-16: "der Layer Block ist ein Modul und gehört
     // auf den MasterBus") — an instrument module: which layer the rack edits (A, B or both =
     // linked editing), B ON, LAYER/SPLIT with the split point (+ LEARN: the next played key), each
-    // layer's level and balance, LOAD B (a preset's patch into B) and A>B (copy). No module
+    // layer's level and balance. Loading a preset into a layer is the header's LOAD, which follows
+    // the A/B selection (maintainer 2026-11-16) — no extra load/copy buttons here. No module
     // enable: A's level and the selection matter with B off too, so nothing here may dim.
     {
         ModuleDescriptor d;
         d.id = "layers"; d.title = "LAYERS";
         d.pinnedOnReset = true;   // back on screen after every reset (maintainer 2026-11-16)
-        d.sizeClass = SizeClass::W14H1; d.type = ModuleType::Processor;
+        d.sizeClass = SizeClass::W12H1; d.type = ModuleType::Processor;
         d.defaultZone = Rack::Zone::MasterBus;
         auto* selector = new LayerSelector (apvts);
         rackOwned.add (selector);
@@ -2282,22 +2305,6 @@ void SynthyEditor::buildRack()
             Display { learn, 1 },
             K (P::layerALevel, "A LVL"), aPan,
             K (P::layerBLevel, "B LVL"), bPan,
-            FileAction { "LOAD B", [this] (juce::File f)
-                         {
-                             if (PresetIO::loadIntoLayerB (processor.getAPVTS(), f).ok)
-                             {
-                                 if (rackBody != nullptr) rackBody->revealAfterLayerLoad();
-                             }
-                             else
-                                 juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "LOAD B",
-                                     "\"" + f.getFileName() + "\" is in an older format. Load it once and save it, then load it into B.");
-                         },
-                         {}, PresetIO::presetsFolder(), "*.jass", false, "layerb" },
-            Action { "A>B", [this]
-                     {
-                         PresetIO::copyLayerAToB (processor.getAPVTS());
-                         if (rackBody != nullptr) rackBody->revealAfterLayerLoad();
-                     }, {} },
         };
         addRackModule (std::move (d));
     }

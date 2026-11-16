@@ -40,7 +40,11 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 10;  // v10 = every field is ALWAYS written, defaults included
+    constexpr int kFormatVersion = 11;  // v11 (AD-16, 2026-11-16) = grouped by layer: "Instrument",
+                                        //       "LayerA", "LayerB" (maintainer: "das .jass-Format um eine
+                                        //       Gruppierung nach Layer aufbohren"). v10 kept everything
+                                        //       but layer B on the root; readers take both.
+                                        // v10 = every field is ALWAYS written, defaults included
                                         //       (maintainer 2026-08-29: "beim Lesen kenne ich die
                                         //       Defaults nicht" — a terse file is only terse for the
                                         //       writer). Readers still accept omissions (missing ⇒
@@ -699,8 +703,14 @@ namespace PresetIO
         root->setProperty("Name", name);
         root->setProperty("Modified", modified);
 
-        // Every module writes its own nested object (spec-driven; Source/Modules/*Specs.h).
-        Modules::writeState(a, *root);
+        // Every module writes its own nested object (spec-driven; Source/Modules/*Specs.h), grouped
+        // by what it belongs to (v11): the instrument, layer A's patch, layer B's patch (below).
+        auto* inst = new juce::DynamicObject();
+        auto* layerA = new juce::DynamicObject();
+        Modules::writeInstrumentState(a, *inst);
+        Modules::writeLayerState(a, {}, *layerA);
+        root->setProperty("Instrument", juce::var(inst));
+        root->setProperty("LayerA", juce::var(layerA));
 
         // Rack layout (Story 4.3, AD-11): append-only. The editor's Rack stores the custom
         // layout as a JSON string on apvts.state ("rackLayout"); mirror it into the preset as
@@ -721,7 +731,7 @@ namespace PresetIO
             // "File", not "Kit": the module's own writeState already puts the session-local INDEX
             // under "Kit". The name goes beside it, exactly as the SAMPLER stores "Set" + "File".
             if (kitName.isNotEmpty())
-                if (auto* mod = root->getProperty("Perc").getDynamicObject())
+                if (auto* mod = inst->getProperty("Perc").getDynamicObject())
                     mod->setProperty("File", kitName);
         }
 
@@ -733,7 +743,7 @@ namespace PresetIO
         // loads silent, which is every preset written before this field existed.
         if (hooks(a).seqLatchRoot)
             if (const int n = hooks(a).seqLatchRoot(); n >= 0)
-                if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
+                if (auto* mod = inst->getProperty("StepSeq").getDynamicObject())
                     mod->setProperty("LatchRoot", n);
 
         // STEP SEQ steps as an ARRAY of note objects (FormatVersion 7, story 15.2) — a figure in
@@ -746,7 +756,7 @@ namespace PresetIO
         // latch root written just above — or C3 (48), the keyboard's default C, for a patch saved
         // without a running figure. applyVar reverses the same rule, so offsets round-trip
         // exactly and the figure still transposes with the played key.
-        if (auto* mod = root->getProperty("StepSeq").getDynamicObject())
+        if (auto* mod = inst->getProperty("StepSeq").getDynamicObject())
         {
             const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
             // The figure comes from the PatternStore (AD-14), not from parameters. Only the USED
@@ -800,7 +810,7 @@ namespace PresetIO
         // generated purely for the reader — the loader ignores it, so number and name can never
         // diverge), "Amp", "Pan", and "Steps" — the step row as one string, 'X' = hit,
         // '.' = rest, exactly the row the PERC grid shows.
-        if (auto* mod = root->getProperty("Perc").getDynamicObject())
+        if (auto* mod = inst->getProperty("Perc").getDynamicObject())
         {
             int nLanes = 0;   // counted, not assumed — the spec is the single source
             while (mod->hasProperty("Note" + juce::String(nLanes + 1))) ++nLanes;
@@ -834,7 +844,7 @@ namespace PresetIO
             mod->setProperty("Lanes", juce::var(lanes));
         }
 
-        writePatchExtras(a, {}, *root);   // layer A: sampler name + matrix slots, on the root
+        writePatchExtras(a, {}, *layerA);   // layer A: sampler name + matrix slots
 
         // Layer B (AD-16): the patch modules once more, same object/field names, inside "LayerB".
         // Omitted while B is off AND untouched — a single-layer preset stays the file it was.
@@ -1132,14 +1142,26 @@ namespace PresetIO
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
         if (hooks(a).patterns) { hooks(a).patterns->perc.clear(); hooks(a).patterns->step.clear(); }   // AD-14: part of the snapshot too
 
-        Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
+        // v11 groups the file by layer ("Instrument", "LayerA", "LayerB"); up to v10 the instrument
+        // AND layer A sat on the root. Everything below reads from `instSrc` / `layerASrc`, which
+        // are the root itself for an older file.
+        const bool grouped = v["Instrument"].isObject() && v["LayerA"].isObject();
+        const juce::var instSrc   = grouped ? v["Instrument"] : v;
+        const juce::var layerASrc = grouped ? v["LayerA"]     : v;
+        if (grouped)
+        {
+            Modules::readInstrumentState(a, instSrc);
+            Modules::readLayerState(a, {}, layerASrc);
+        }
+        else
+            Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
 
         // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
         // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when
         // none) restores the engine's offset; "Name" is readability only and deliberately
         // ignored — the number is canonical. A pre-v7 file carries flat Pitch<n>/Step<n> keys —
         // until 18.5 the spec pass read those as parameters; now this is their one reader.
-        if (auto* seq = v["StepSeq"].getDynamicObject())
+        if (auto* seq = instSrc["StepSeq"].getDynamicObject())
         {
             const int ref = seq->hasProperty("LatchRoot")
                                 ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
@@ -1193,7 +1215,7 @@ namespace PresetIO
                 rt->setProperty(object, juce::var(flat));
                 Modules::readState(a, juce::var(rt));
             };
-            if (auto* mod = v["Perc"].getDynamicObject())
+            if (auto* mod = instSrc["Perc"].getDynamicObject())
             {
                 if (auto* lanes = mod->getProperty("Lanes").getArray())
                 {
@@ -1228,7 +1250,7 @@ namespace PresetIO
                         }
                 }
             }
-            readMatrixSlots(a, {}, v);   // layer A
+            readMatrixSlots(a, {}, layerASrc);   // layer A
         }
 
         if (v.hasProperty("RackLayout"))
@@ -1256,8 +1278,8 @@ namespace PresetIO
             // is what kept the window from appearing for ten seconds. See resolveSetByName.
             resolveSetByName (a, mod->getProperty (field).toString(), paramId, pending, valueOffset);
         };
-        resolveSet (v, "Sampler", "File", ID::samplerSet, hooks(a).pendingSamplerSetName);
-        resolveSet (v, "Perc",    "File", ID::percKit,    hooks(a).pendingPercKitName, 1);
+        resolveSet (layerASrc, "Sampler", "File", ID::samplerSet, hooks(a).pendingSamplerSetName);
+        resolveSet (instSrc,   "Perc",    "File", ID::percKit,    hooks(a).pendingPercKitName, 1);
 
         // Layer B (AD-16, Story 21.5): the patch modules under "LayerB", same names as on the root.
         // Missing ⇒ B stays at the defaults the reset above gave it, and off.
@@ -1276,7 +1298,7 @@ namespace PresetIO
         if (hooks(a).applySeqLatchRoot)
         {
             int latch = -1;
-            if (auto* seq = v["StepSeq"].getDynamicObject())
+            if (auto* seq = instSrc["StepSeq"].getDynamicObject())
                 if (seq->hasProperty ("LatchRoot"))
                     latch = (int) seq->getProperty ("LatchRoot");
             hooks(a).applySeqLatchRoot (latch);
@@ -1489,7 +1511,13 @@ namespace PresetIO
     // latch — and layer A stay as they are, so any single-layer preset is layer material. Only
     // current-format files: an older one would need the migration pass, which rewrites the file
     // for layer A (every file in the Presets folder is converted at startup anyway). Message thread.
-    inline LoadResult loadIntoLayerB(APVTS& a, const juce::File& file)
+    // LOAD A (2026-11-16, maintainer: "ich kann das Preset Piano nicht laden, weil es mir die
+    // Settings für B überschreibt") is the same routine for the other layer: the header's LOAD
+    // stays "the whole instrument", LOAD A / LOAD B put just a preset's sound into one layer.
+    // The source is the file's layer A ("LayerA" in v11, the root up to v10). v10 and later only:
+    // older files need the migration pass, which rewrites the file (every file in the Presets
+    // folder is converted at startup anyway).
+    inline LoadResult loadIntoLayer(APVTS& a, const juce::File& file, const juce::String& prefix)
     {
         LoadResult r;
         if (! file.existsAsFile())
@@ -1498,23 +1526,69 @@ namespace PresetIO
         if (! v.isObject())
             return r;
         r.fileVersion = (int) v.getProperty("FormatVersion", 1);
-        if (r.fileVersion < kFormatVersion)
+        if (r.fileVersion < 10)
             return r;   // ok = false: the caller says "open and save it once"
+        const juce::var src = (v["Instrument"].isObject() && v["LayerA"].isObject()) ? v["LayerA"] : v;
 
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);   // couplings off + voices stopped
-        const juce::String bp (Modules::kLayerBPrefix);
-        for (const auto& id : Modules::layeredParamIds())   // B is a complete snapshot too: defaults first
-            if (auto* p = a.getParameter(bp + id))
+        for (const auto& id : Modules::layeredParamIds())   // a layer is a complete snapshot too: defaults first
+            if (auto* p = a.getParameter(prefix + id))
                 p->setValueNotifyingHost(p->getDefaultValue());
-        Modules::readLayerState(a, bp, v);     // the ROOT's patch modules, into the b ids
-        readMatrixSlots(a, bp, v);
-        if (auto* mod = v["Sampler"].getDynamicObject())
-            resolveSetByName(a, mod->getProperty("File").toString(), (bp + ID::samplerSet).toRawUTF8(),
-                             hooks(a).pendingBSamplerSetName, 0);
+        Modules::readLayerState(a, prefix, src);
+        readMatrixSlots(a, prefix, src);
+        const juce::String setParam = prefix + ID::samplerSet;
+        if (auto* mod = src["Sampler"].getDynamicObject())
+            resolveSetByName(a, mod->getProperty("File").toString(), setParam.toRawUTF8(),
+                             hooks(a).pendingFor(setParam), 0);
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
         r.ok = true;
         return r;
     }
+    inline LoadResult loadIntoLayerA(APVTS& a, const juce::File& file) { return loadIntoLayer(a, file, {}); }
+
+    // What a preset LOAD reaches follows the LAYERS selection (maintainer 2026-11-16: "Preset load
+    // geht je nachdem wie A und B geschaltet sind"):
+    //   A only  — the file's instrument and layer A; layer B stays as it is (and B's LAYERS
+    //             settings with it), so a single-layer preset no longer wipes a B you built;
+    //   B only  — just the file's sound, into layer B (loadIntoLayer);
+    //   A + B   — the whole file, both layers and the instrument.
+    // The selection itself is a view choice and never changes with a load.
+    enum class LoadScope { KeepLayerB, IntoLayerB, Whole };
+
+    inline LoadResult loadPreset(APVTS& a, const juce::File& file, LoadScope scope)
+    {
+        if (scope == LoadScope::IntoLayerB)
+            return loadIntoLayer(a, file, Modules::kLayerBPrefix);
+
+        // What survives the load: the selection always; with A only, layer B and every LAYERS
+        // setting (B ON, mode, split, levels) as well.
+        std::vector<std::pair<juce::String, float>> keep;
+        auto keepId = [&] (const juce::String& id) { if (auto* p = a.getParameter(id)) keep.push_back({ id, p->getValue() }); };
+        keepId(ID::layerFocus);
+        juce::String keepPendingB;
+        if (scope == LoadScope::KeepLayerB)
+        {
+            for (const auto& id : Modules::layeredParamIds()) keepId(juce::String(Modules::kLayerBPrefix) + id);
+            for (const char* id : { ID::layerBOn, ID::layerMode, ID::splitNote, ID::layerALevel, ID::layerBLevel,
+                                    ID::layerAPan, ID::layerBPan })
+                keepId(id);
+            keepPendingB = hooks(a).pendingBSamplerSetName;
+        }
+
+        const auto r = loadFromFile(a, file);
+        if (! r.ok)
+            return r;
+
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);   // the restore is no gesture either
+        for (const auto& [id, v01] : keep)
+            if (auto* p = a.getParameter(id))
+                p->setValueNotifyingHost(v01);
+        if (scope == LoadScope::KeepLayerB)
+            hooks(a).pendingBSamplerSetName = keepPendingB;
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
+        return r;
+    }
+    inline LoadResult loadIntoLayerB(APVTS& a, const juce::File& file) { return loadIntoLayer(a, file, Modules::kLayerBPrefix); }
 
     // COPY A → B: layer B becomes an exact copy of layer A's patch (SAMPLER set included, also one
     // still being fetched). Message thread.

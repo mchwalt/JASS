@@ -30,7 +30,10 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   lit is **linked editing**: the rack shows A and every change goes to B as well, knobs by the
   same amount so B keeps its offset (the way to shape two layers that started as a copy). Also
   in the module: B ON, LAYER / SPLIT, the split key with LEARN (the next played key), level and
-  balance per layer, LOAD B (any preset's sound into layer B, the rest stays) and A>B (copy).
+  balance per layer. **Loading a preset follows the selection** (maintainer's
+  proposal): A only loads the preset and keeps layer B - a single-layer preset no longer wipes a B
+  you built; B only puts just the preset's sound into layer B; A and B load the whole file. The
+  selection itself never changes with a load.
   In SPLIT the on-screen keyboard shows B's keys in violet. One rack layout serves both layers:
   a module shows when it is on in A or in B, and switching layers never re-packs the rack.
   LAYERS itself is back on screen after every reset (header RESET, the MODULES layout reset). RANDOM rolls the layer being edited (both, when both are lit); the auto-enable couplings
@@ -46,9 +49,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   balance. Master bus, ARP, STEP SEQ, PERC and BASS stay single - the ARP and the figure play
   layer A until they get their own target. Presets keep their root as it was (layer A plus the
   instrument) and add `Layers` and, when B is in use, `LayerB`; every existing preset and DAW
-  project loads exactly as before, with B off (verified bit-identical on all presets). **There is
-  no control for it in the rack yet** - the A|B switch in the header, LOAD INTO B and COPY A→B
-  arrive with the next step (Story 21.5, S1 of AD-16). The DAW parameter list grows from 254 to
+  project loads exactly as before, with B off (verified bit-identical on all presets). It is played and edited through the LAYERS module
+  (below). The DAW parameter list grows from 254 to
   456 entries; B's sit after all of A's.
 - **BASS — a second voice beside the patch, and a BASS switch on the STEP SEQ.** JASS is
   monotimbral, and the STEP SEQ takes the held chord over: a pad on the keyboard and a figure from
@@ -88,6 +90,12 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   unaffected.
 
 ### Changed
+- **Presets are grouped by layer (FormatVersion 11).** A file now reads as three parts:
+  `Instrument` (master bus, sequencers, PERC, BASS, LAYERS), `LayerA` and `LayerB` - the same
+  module objects as before, only no longer mixed on one level with layer A on the root and B as an
+  extra (maintainer: "das .jass-Format um eine Gruppierung nach Layer aufbohren"). Older files load
+  as before and are converted on first use, with a copy in `PresetsBackup`; an older JASS opening a
+  v11 file finds no modules on the root and falls back to Init.
 - **A module's ↺ goes back to the loaded preset; Shift + ↺ to the factory values.** The ↺ used to
   jump to factory values nobody had chosen: load *Matrix Demo*, reset OSC 2, and it no longer
   sounded like the preset (maintainer 2026-11-16). It now does what the knob double-click already

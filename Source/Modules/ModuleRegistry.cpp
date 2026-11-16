@@ -92,7 +92,7 @@ namespace Modules
     }
 
     // Which modules a pass covers: the preset ROOT (layer A + instrument) or one layer's patch part.
-    enum class Pass { Root, LayerOnly };
+    enum class Pass { Root, LayerOnly, InstrumentOnly };
 
     static void writeModules (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix,
                               Pass pass, juce::DynamicObject& root)
@@ -100,6 +100,7 @@ namespace Modules
         for (const auto& m : all())
         {
             if (pass == Pass::LayerOnly && ! m.layered) continue;
+            if (pass == Pass::InstrumentOnly && m.layered) continue;
             auto* obj = new juce::DynamicObject();
             for (const auto& p : m.params)
             {
@@ -132,6 +133,7 @@ namespace Modules
         for (const auto& m : all())
         {
             if (pass == Pass::LayerOnly && ! m.layered) continue;
+            if (pass == Pass::InstrumentOnly && m.layered) continue;
             const juce::var obj = root[juce::Identifier (m.persistObject)];
             if (! obj.isObject()) continue;
             for (const auto& p : m.params)
@@ -182,6 +184,16 @@ namespace Modules
     void readLayerState (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, const juce::var& root)
     {
         readModules (apvts, prefix, Pass::LayerOnly, root);
+    }
+
+    void writeInstrumentState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root)
+    {
+        writeModules (apvts, {}, Pass::InstrumentOnly, root);
+    }
+
+    void readInstrumentState (juce::AudioProcessorValueTreeState& apvts, const juce::var& root)
+    {
+        readModules (apvts, {}, Pass::InstrumentOnly, root);
     }
 
     const juce::StringArray& layeredParamIds()

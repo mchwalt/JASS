@@ -1,4 +1,4 @@
-# JASS `.jass` Preset Format (nested, v10)
+# JASS `.jass` Preset Format (nested, v11)
 
 JASS stores patches as **JSON** files with the extension `.jass`. The format is
 **nested** (one object per module) and versioned; the current version is
@@ -43,47 +43,45 @@ nested format on load.
 
 ```jsonc
 {
-  "FormatVersion": 10,
+  "FormatVersion": 11,
   "Name": "Matrix Demo",
   "Modified": false,        // LiveState only: true = unsaved working state (header shows "Current State")
 
-  // One nested object per module (spec-driven; field names come from Source/Modules/*Specs.h).
-  // Examples — the actual set follows the installed modules:
-  "Filter":     { "Enabled": true,  "Type": "Lowpass", "Cutoff": 500.0, "Resonance": 2.5 },
-  "Compressor": { "Enabled": false, "Threshold": -18.0, "Ratio": 2.0, "Attack": 10.0, "Release": 120.0, "Makeup": 0.0 },
-  "Stereo":     { "Enabled": true,  "Width": 0.5, "Time": 12.0 },
-  "Master":     { "On": true, "Volume": 0.5, "Tempo": 130.0 },
-  "Sub":        { "Enabled": false, "Waveform": "Sine", "Octave": "-1 Oct", "Amp": 0.5 },   // "Amp" was "Level" until 2026-08; the old key is still read (legacyPersistKey fallback)
-  "Noise":      { "Enabled": false, "Type": "White", "Amount": 0.5 },
-  "Formant":    { "Enabled": false, "Vowel": 0.0, "Resonance": 0.5, "Mix": 1.0 },
-  "Distortion": { "Enabled": false, "Type": "SoftClip", "Drive": 0.5, "Mix": 1.0 },
-  "Wavefold":   { "Enabled": false, "Drive": 0.3, "Symmetry": 0.0, "Mix": 1.0 },
-  "Bitcrush":   { "Enabled": false, "Bits": 8.0, "Rate": 1.0, "Mix": 1.0 },
-  // … Oscillators, Wavetable, LFOs (indexed 1..4), ModMatrix (8 slots),
-  //   ADSR, PitchEnv, Glide, Arp, Delay, Chorus, Reverb, Karplus, CrossMod, etc.
+  // v11: grouped by what a module belongs to (AD-16). One nested object per module inside each
+  // group (spec-driven; field names come from Source/Modules/*Specs.h, `layered` decides the group).
+  "Instrument": {           // exists once: master bus, sequencers, boxes, displays, keyboard, LAYERS
+    "Master":     { "On": true, "Volume": 0.5, "Tempo": 130.0 },
+    "Stereo":     { "Enabled": true, "Width": 0.5, "Time": 12.0 },
+    "Compressor": { "Enabled": false, "Threshold": -18.0, … },
+    "StepSeq":    { …, "LatchRoot": 46, "Steps": [ … ] },
+    "Perc":       { …, "File": "RoboterDrums", "Lanes": [ … ] },
+    "Layers":     { "BOn": false, "Mode": "Layer", "Split": 48, "Focus": "A",
+                    "ALevel": 1.0, "BLevel": 1.0, "APan": 0.0, "BPan": 0.0 }
+    // … Arp, Bass, Chaos, Scope, Spectrum, Keyboard, PresetBank
+  },
+  "LayerA": {               // layer A's patch: the 27 patch modules
+    "Filter":  { "Enabled": true, "Type": "Lowpass", "Cutoff": 500.0, "Resonance": 2.5, "Track": 0.0 },
+    "Osc1":    { … },
+    "Sampler": { …, "File": "Splendid" },
+    "ModMatrix": { "Enabled": true, "Slots": [ … ] }
+    // … Osc2/3, Sub, Noise, Karplus, Wavetable, Grain, CrossMod, Adsr, PitchEnv, Glide,
+    //   Lfo1..4, Formant, Distortion, Wavefold, Bitcrush, Phaser, Chorus, Delay, Reverb
+  },
+  // Optional. Layer B's patch, same object and field names as LayerA. Written when B is on or
+  // differs from a fresh layer; absent ⇒ B at defaults, off.
+  "LayerB": { … },
 
   // Optional. Only present when the rack layout differs from the factory default.
-  "RackLayout": { "GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ], … },   // by zone, in rack order
-
-  // AD-16 (Story 21.5): the bitimbral switches — instrument-level, always written.
-  "Layers": { "BOn": false, "Mode": "Layer", "Split": 48, "Focus": "A",
-              "ALevel": 1.0, "BLevel": 1.0, "APan": 0.0, "BPan": 0.0 },
-
-  // Optional. Layer B's patch: the PATCH modules once more, with exactly the object and field
-  // names the root uses for layer A ("Filter", "Osc1", "ModMatrix.Slots", "Sampler.File", …).
-  // Written when B is on or differs from a fresh layer; absent ⇒ B at defaults, off.
-  "LayerB": { "Filter": { … }, "Osc1": { … }, … , "Sampler": { …, "File": "Splendid" } }
+  "RackLayout": { "GENERATORS": [ { "id": "osc1", "vis": true, "alignR": false }, … ], … }   // by zone, in rack order
 }
 ```
 
-**Layers (AD-16).** The root keeps its meaning: instrument modules (master bus, ARP, STEP SEQ,
-PERC, BASS, CHAOS, displays, keyboard, LAYERS) **plus layer A's patch** — every file written
-before AD-16 is therefore a valid single-layer preset, and an older JASS reading a new file sees
-layer A and ignores `Layers` and `LayerB`. Which module is a patch module is the spec's `layered`
-flag (`Source/Modules/*Specs.h`); in the APVTS, layer B's parameters are layer A's ids with the
-prefix `b` (`filterCutoff` → `bfilterCutoff`). No `FormatVersion` bump: new fields only.
-**LOAD INTO B** reads a preset's *root* patch modules into layer B and leaves everything else
-alone (current-format files only).
+**Layers (AD-16).** v11 groups the file: `Instrument`, `LayerA`, `LayerB`. Up to v10 the
+instrument modules and layer A's modules sat together on the root (B, when present, in `LayerB`);
+readers take both shapes — a v10 file is a valid single-layer preset. Which module is a patch
+module is the spec's `layered` flag; in the APVTS layer B's parameters are layer A's ids with the
+prefix `b`. **Loading follows the LAYERS selection:** A only = instrument + `LayerA`, B kept;
+B only = the file's `LayerA` into layer B; A + B = the whole file.
 
 Field renames never break old files: a `ParamSpec` may carry a `legacyPersistKey`, and the
 reader falls back to it when the current key is missing. Writes always use the current key.
@@ -128,6 +126,8 @@ on/off/accent/pitch values ARE parameters and do take part in RANDOM.)
   `v10` writes **every field, defaults included** — a reader should not need
   to know the defaults by heart. Loading still accepts omissions (missing ⇒
   default), only the writer stopped producing them.
+  `v11` groups the modules into `Instrument`, `LayerA`, `LayerB` (AD-16;
+  structure only — every value is unchanged).
   This integer contract is independent of the app's CalVer version.
 - **Migration & backups.** Presets older than the current `FormatVersion` are
   upgraded to the current format — both by the startup batch pass (`convertOldPresets`)

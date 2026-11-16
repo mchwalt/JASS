@@ -6,7 +6,6 @@ Zwei komplette Klänge gleichzeitig — Layer **A** und Layer **B**, gespielt vo
 - **SPLIT** — die Split-Taste, ein Halbton pro Bewegung. **LEARN** (leuchtet, solange es wartet), dann eine Taste spielen: diese Taste wird der Split-Punkt; nochmal klicken bricht ab.
 - **A LVL / B LVL** — Lautstärke je Layer.
 - **A PAN / B PAN** — Balance je Layer: Mitte lässt den Layer, wie er ist, eine Seite macht die andere leiser.
-- **LOAD B** — den Klang eines Presets in Layer B laden; Layer A, die Sequenzer und der Master-Bus bleiben.
-- **A>B** — Layer B wird eine Kopie von A.
+- **Preset laden** (LOAD, F-Tasten) folgt A / B: **A** lädt das Preset und behält deinen Layer B; **B** lädt nur den Klang des Presets nach B; **beide** laden die ganze Datei mit beiden Layern.
 
 ARP und STEP SEQ spielen Layer A. RANDOM würfelt den bearbeiteten Layer (beide, wenn beide an sind); RESET in der Kopfzeile geht auf Init mit B aus.
