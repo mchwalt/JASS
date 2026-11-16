@@ -8,6 +8,8 @@ SynthyProcessor::SynthyProcessor()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
       apvts(*this, nullptr, "Parameters", Parameters::createLayout())
 {
+    patchParams.resolve(apvts, {});   // 21.4: layer A = today's ids (no prefix)
+
     for (int i = 0; i < 8; ++i)
         synth.addVoice(new SynthVoice());
     synth.addSound(new SynthSound());
@@ -1151,7 +1153,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             for (int li = 0; li < kNumLFOs; ++li)   // 20.1: a GLOBAL LFO's value — the processor's instance,
                 voice->setGlobalLfo(li, lfoGlobalActive[li], lfoDisplayValues[li].load());   // one block behind, like the rings
             voice->setAccentDepth(*apvts.getRawParameterValue(Parameters::ID::seqAccent));   // 15.2
-            Parameters::applyToVoice(apvts, voice->getOscillators(),
+            Parameters::applyToVoice(patchParams, voice->getOscillators(),
                                      voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                                      voice->getLFOs(), voice->getNoise(),
                                      voice->getKarplus(), voice->getWavetable(),

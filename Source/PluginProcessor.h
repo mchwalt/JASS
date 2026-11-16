@@ -243,6 +243,7 @@ private:
     // them — and never mutated afterwards, so reading it on the audio thread needs no lock.
     std::vector<SynthVoice*> voiceRoster;
     juce::AudioProcessorValueTreeState apvts;
+    Parameters::PatchParams patchParams;   // 21.4: the patch's atomics, resolved once in the constructor
     juce::MidiKeyboardState keyboardState;
     // Snapshot length = the LONGEST scope window (100 ms) at the highest sample rate we
     // expect (96 kHz): 0.100 s × 96000 = 9600. The scope shows only the first N samples of

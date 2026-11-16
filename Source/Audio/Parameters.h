@@ -337,8 +337,72 @@ namespace Parameters
         return Modules::createParameterLayout();
     }
 
+    // Story 21.4 (S0 of AD-16): the patch's parameters, resolved ONCE to their atomics instead of
+    // looked up by string per voice per block (~1,700 hash-map lookups per block before). `prefix`
+    // is empty for layer A (today's ids); layer B will resolve the same list with "b" (AD-16 rule 3).
+    // Reading `*p.x` is exactly what `*apvts.getRawParameterValue(ID::x)` returned - the same atomic.
+    // The lists hold what applyToVoice and the processor's per-patch block code read; instrument
+    // modules (ARP, STEP SEQ, PERC, BASS, CHAOS, master bus) are not part of a patch.
+    #define JASS_PATCH_SCALAR_PARAMS(X) \
+        X(modMatrixOn) X(mixMode) X(mixSrcA) X(mixSrcB) X(adsrOn) X(mixModeOn) \
+        X(pitchEnvOn) X(pitchEnvAmount) X(pitchEnvTime) X(attack) X(decay) X(sustain) \
+        X(release) X(filterOn) X(filterType) X(filterCutoff) X(filterReso) X(filterTrack) \
+        X(distortionOn) X(distortionType) X(distortionDrive) X(distortionMix) X(wavefoldOn) X(wavefoldDrive) \
+        X(wavefoldSymmetry) X(wavefoldMix) X(bitcrushOn) X(bitcrushBits) X(bitcrushRate) X(bitcrushMix) \
+        X(phaserOn) X(phaserType) X(phaserRate) X(phaserDepth) X(phaserFeedback) X(phaserMix) \
+        X(delayOn) X(delayFeedback) X(delayMix) X(chorusOn) X(chorusRate) X(chorusDepth) \
+        X(chorusMix) X(reverbOn) X(reverbRoom) X(reverbDamp) X(reverbMix) X(formantOn) \
+        X(formantVowel) X(formantReso) X(formantMix) X(outputMode) X(subPan) X(noisePan) \
+        X(karplusPan) X(wavetablePan) X(samplerPan) X(samplerSet) X(grainPan) X(noiseOn) \
+        X(noiseType) X(noiseAmp) X(karplusOn) X(karplusFreq) X(karplusAmp) X(karplusDamping) \
+        X(karplusStretch) X(samplerOn) X(samplerRoot) X(samplerStart) X(samplerEnd) X(samplerMode) \
+        X(samplerLevel) X(samplerSpeed) X(samplerStretch) X(samplerRelease) X(grainOn) X(grainPos) \
+        X(grainSpray) X(grainSize) X(grainDensity) X(grainPitch) X(grainQuant) X(grainAmp) \
+        X(grainKey) X(wavetableOn) X(wavetableBank) X(wavetablePosition) X(wavetableFreq) X(wavetableAmp) \
+        X(wavetableUniVoices) X(wavetableUniDetune) X(wavetableFeedback) X(subOn) X(subWave) X(subLevel) \
+        X(subFeedback) X(subOctave) X(delaySyncDiv) X(delayTime) X(glideOn) X(glideTime) \
+        X(glideMode) \
+
+    #define JASS_PATCH_INDEXED_PARAMS(X) \
+        X(oscOn, 3) X(oscWave, 3) X(oscFreq, 3) \
+        X(oscAmp, 3) X(oscUniVoices, 3) X(oscUniDetune, 3) \
+        X(oscFeedback, 3) X(oscPan, 3) X(lfoDepth, kNumLFOs) \
+        X(lfoOn, kNumLFOs) X(lfoTarget, kNumLFOs) X(lfoWave, kNumLFOs) \
+        X(lfoRate, kNumLFOs) X(lfoSyncDiv, kNumLFOs) X(lfoGlobal, kNumLFOs) \
+        X(modSlotSource, ModMatrixConfig::kNumSlots) X(modSlotModule, ModMatrixConfig::kNumSlots) X(modSlotParam, ModMatrixConfig::kNumSlots) \
+        X(modSlotAmount, ModMatrixConfig::kNumSlots) X(modSlotQuant, ModMatrixConfig::kNumSlots) \
+
+
+    struct PatchParams
+    {
+        #define JASS_DECL_S(n)    std::atomic<float>* n = nullptr;
+        #define JASS_DECL_I(n, c) std::array<std::atomic<float>*, (size_t) (c)> n {};
+        JASS_PATCH_SCALAR_PARAMS (JASS_DECL_S)
+        JASS_PATCH_INDEXED_PARAMS (JASS_DECL_I)
+        #undef JASS_DECL_S
+        #undef JASS_DECL_I
+
+        // Message thread, once (processor constructor). A missing id is a startup assert, not a
+        // silent zero on the audio thread.
+        void resolve (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix)
+        {
+            auto get = [&] (const juce::String& id)
+            {
+                auto* a = apvts.getRawParameterValue (prefix + id);
+                jassert (a != nullptr);
+                return a;
+            };
+            #define JASS_RES_S(n)    n = get (ID::n);
+            #define JASS_RES_I(n, c) for (int k = 0; k < (int) (c); ++k) n[(size_t) k] = get (ID::n (k + 1));
+            JASS_PATCH_SCALAR_PARAMS (JASS_RES_S)
+            JASS_PATCH_INDEXED_PARAMS (JASS_RES_I)
+            #undef JASS_RES_S
+            #undef JASS_RES_I
+        }
+    };
+
     // Apply all parameters to a voice
-    inline void applyToVoice(juce::AudioProcessorValueTreeState& apvts,
+    inline void applyToVoice(const PatchParams& p,   // 21.4: resolved once, no string lookups
                               Oscillator* oscillators, AdsrEnvelope& env,
                               std::array<ChannelStrip, kMaxOutChannels>& strips,   // Epic 10: per-channel FX
                               LFO* lfos, NoiseGenerator& noise,
@@ -354,48 +418,48 @@ namespace Parameters
                               double& filterKeytrackOut)   // filter keytracking amount 0..1
     {
         // Modulation matrix (Story 8.1): read the master enable + N slots into the voice.
-        modMatrixOn = *apvts.getRawParameterValue(ID::modMatrixOn) > 0.5f;
+        modMatrixOn = *p.modMatrixOn > 0.5f;
         for (int n = 0; n < ModMatrixConfig::kNumSlots; ++n)
         {
-            const int mod = (int) *apvts.getRawParameterValue(ID::modSlotModule(n + 1));
-            const int par = (int) *apvts.getRawParameterValue(ID::modSlotParam (n + 1));
-            modSlots[n].source   = (int) *apvts.getRawParameterValue(ID::modSlotSource(n + 1));
+            const int mod = (int) *p.modSlotModule[n];
+            const int par = (int) *p.modSlotParam[n];
+            modSlots[n].source   = (int) *p.modSlotSource[n];
             modSlots[n].target   = (int) ModDest::targetOf(mod, par);   // (module,param) → LFOTarget
             modSlots[n].oscIndex = ModDest::oscIndexOf(mod);            // 0..2 per-OSC; -1 global
-            modSlots[n].amount   = *apvts.getRawParameterValue(ID::modSlotAmount(n + 1));
-            modSlots[n].quant    = (int) *apvts.getRawParameterValue(ID::modSlotQuant(n + 1));   // scale mask (0 = Off)
+            modSlots[n].amount   = *p.modSlotAmount[n];
+            modSlots[n].quant    = (int) *p.modSlotQuant[n];   // scale mask (0 = Off)
         }
 
-        mixMode = static_cast<MixMode>(static_cast<int>(*apvts.getRawParameterValue(ID::mixMode)));
-        mixSrcA = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcA));   // Epic 5
-        mixSrcB = static_cast<int>(*apvts.getRawParameterValue(ID::mixSrcB));
+        mixMode = static_cast<MixMode>(static_cast<int>(*p.mixMode));
+        mixSrcA = static_cast<int>(*p.mixSrcA);   // Epic 5
+        mixSrcB = static_cast<int>(*p.mixSrcB);
         // Behavioural gates (Story 2.4): ADSR off => bypass envelope; Mix-Mode off => additive.
-        adsrOn    = *apvts.getRawParameterValue(ID::adsrOn)    > 0.5f;
-        mixModeOn = *apvts.getRawParameterValue(ID::mixModeOn) > 0.5f;
+        adsrOn    = *p.adsrOn    > 0.5f;
+        mixModeOn = *p.mixModeOn > 0.5f;
 
         // Pitch envelope (one-shot pitch sweep). Amount/on are read by the voice per sample;
         // the decay time lives on the envelope object.
-        pitchEnvOn     = *apvts.getRawParameterValue(ID::pitchEnvOn) > 0.5f;
-        pitchEnvAmount = *apvts.getRawParameterValue(ID::pitchEnvAmount);
-        pitchEnv.setDecay(*apvts.getRawParameterValue(ID::pitchEnvTime));
+        pitchEnvOn     = *p.pitchEnvOn > 0.5f;
+        pitchEnvAmount = *p.pitchEnvAmount;
+        pitchEnv.setDecay(*p.pitchEnvTime);
 
         for (int o = 0; o < 3; ++o)
         {
-            oscillators[o].setEnabled(*apvts.getRawParameterValue(ID::oscOn(o + 1)) > 0.5f);
+            oscillators[o].setEnabled(*p.oscOn[o] > 0.5f);
             oscillators[o].setWaveform(static_cast<WaveformType>(
-                static_cast<int>(*apvts.getRawParameterValue(ID::oscWave(o + 1)))));
-            oscillators[o].setFrequency(*apvts.getRawParameterValue(ID::oscFreq(o + 1)));
-            oscillators[o].setAmplitude(*apvts.getRawParameterValue(ID::oscAmp(o + 1)));
-            oscillators[o].setUnisonCount(static_cast<int>(*apvts.getRawParameterValue(ID::oscUniVoices(o + 1))));
+                static_cast<int>(*p.oscWave[o])));
+            oscillators[o].setFrequency(*p.oscFreq[o]);
+            oscillators[o].setAmplitude(*p.oscAmp[o]);
+            oscillators[o].setUnisonCount(static_cast<int>(*p.oscUniVoices[o]));
             // Detune param is 0..1 (=±1 semitone); oscillator works in cents.
-            oscillators[o].setDetuneAmount(*apvts.getRawParameterValue(ID::oscUniDetune(o + 1)) * 100.0);
-            oscillators[o].setFeedback(*apvts.getRawParameterValue(ID::oscFeedback(o + 1)));   // Self-FM
+            oscillators[o].setDetuneAmount(*p.oscUniDetune[o] * 100.0);
+            oscillators[o].setFeedback(*p.oscFeedback[o]);   // Self-FM
         }
 
-        env.setAttack(*apvts.getRawParameterValue(ID::attack));
-        env.setDecay(*apvts.getRawParameterValue(ID::decay));
-        env.setSustain(*apvts.getRawParameterValue(ID::sustain));
-        env.setRelease(*apvts.getRawParameterValue(ID::release));
+        env.setAttack(*p.attack);
+        env.setDecay(*p.decay);
+        env.setSustain(*p.sustain);
+        env.setRelease(*p.release);
 
         // Effect base config → set on EVERY channel strip identically (Epic 10). Local aliases keep the
         // existing lines verbatim; strip 0 is the mono / Pseudo-Stereo chain, strips 1.. the pan channels.
@@ -407,69 +471,69 @@ namespace Parameters
 
         // The choice params no longer carry an "Off" entry — a separate <x>On bool gates
         // them. When on, the choice index maps to the enum +1 (the enum keeps its Off=0).
-        const bool filterOn = *apvts.getRawParameterValue(ID::filterOn) > 0.5f;
-        filter.setType(filterOn ? static_cast<FilterType>(static_cast<int>(*apvts.getRawParameterValue(ID::filterType)) + 1)
+        const bool filterOn = *p.filterOn > 0.5f;
+        filter.setType(filterOn ? static_cast<FilterType>(static_cast<int>(*p.filterType) + 1)
                                  : FilterType::Off);
-        filter.setCutoff(*apvts.getRawParameterValue(ID::filterCutoff));
-        filter.setResonance(*apvts.getRawParameterValue(ID::filterReso));
+        filter.setCutoff(*p.filterCutoff);
+        filter.setResonance(*p.filterReso);
         // Keytracking amount 0..1 (the voice applies it to baseCutoff with the played ratio, so
         // the note is factored in per block on top of this fixed cutoff, LFO/matrix and accent).
-        filterKeytrackOut = *apvts.getRawParameterValue(ID::filterTrack) / 100.0;
+        filterKeytrackOut = *p.filterTrack / 100.0;
 
-        const bool distortionOn = *apvts.getRawParameterValue(ID::distortionOn) > 0.5f;
-        distortion.type  = distortionOn ? static_cast<DistortionType>(static_cast<int>(*apvts.getRawParameterValue(ID::distortionType)) + 1)
+        const bool distortionOn = *p.distortionOn > 0.5f;
+        distortion.type  = distortionOn ? static_cast<DistortionType>(static_cast<int>(*p.distortionType) + 1)
                                         : DistortionType::Off;
-        distortion.drive = *apvts.getRawParameterValue(ID::distortionDrive);
-        distortion.mix   = *apvts.getRawParameterValue(ID::distortionMix);
+        distortion.drive = *p.distortionDrive;
+        distortion.mix   = *p.distortionMix;
 
-        wavefolder.enabled  = *apvts.getRawParameterValue(ID::wavefoldOn) > 0.5f;
-        wavefolder.drive    = *apvts.getRawParameterValue(ID::wavefoldDrive);
-        wavefolder.symmetry = *apvts.getRawParameterValue(ID::wavefoldSymmetry);
-        wavefolder.mix      = *apvts.getRawParameterValue(ID::wavefoldMix);
+        wavefolder.enabled  = *p.wavefoldOn > 0.5f;
+        wavefolder.drive    = *p.wavefoldDrive;
+        wavefolder.symmetry = *p.wavefoldSymmetry;
+        wavefolder.mix      = *p.wavefoldMix;
 
-        bitcrusher.enabled = *apvts.getRawParameterValue(ID::bitcrushOn) > 0.5f;
-        bitcrusher.bits    = *apvts.getRawParameterValue(ID::bitcrushBits);
-        bitcrusher.rate    = *apvts.getRawParameterValue(ID::bitcrushRate);
-        bitcrusher.mix     = *apvts.getRawParameterValue(ID::bitcrushMix);
+        bitcrusher.enabled = *p.bitcrushOn > 0.5f;
+        bitcrusher.bits    = *p.bitcrushBits;
+        bitcrusher.rate    = *p.bitcrushRate;
+        bitcrusher.mix     = *p.bitcrushMix;
 
-        phaser.enabled  = *apvts.getRawParameterValue(ID::phaserOn) > 0.5f;
-        phaser.type     = static_cast<PhaserType>(static_cast<int>(*apvts.getRawParameterValue(ID::phaserType)));
-        phaser.rate     = *apvts.getRawParameterValue(ID::phaserRate);
-        phaser.depth    = *apvts.getRawParameterValue(ID::phaserDepth);
-        phaser.feedback = *apvts.getRawParameterValue(ID::phaserFeedback);
-        phaser.mix      = *apvts.getRawParameterValue(ID::phaserMix);
+        phaser.enabled  = *p.phaserOn > 0.5f;
+        phaser.type     = static_cast<PhaserType>(static_cast<int>(*p.phaserType));
+        phaser.rate     = *p.phaserRate;
+        phaser.depth    = *p.phaserDepth;
+        phaser.feedback = *p.phaserFeedback;
+        phaser.mix      = *p.phaserMix;
 
-        delay.enabled  = *apvts.getRawParameterValue(ID::delayOn) > 0.5f;
+        delay.enabled  = *p.delayOn > 0.5f;
         delay.time     = delayTimeSec;   // Tempo-Sync: resolved in processBlock (Free => raw knob, else BPM division)
-        delay.feedback = *apvts.getRawParameterValue(ID::delayFeedback);
-        delay.mix      = *apvts.getRawParameterValue(ID::delayMix);
+        delay.feedback = *p.delayFeedback;
+        delay.mix      = *p.delayMix;
 
-        chorus.enabled = *apvts.getRawParameterValue(ID::chorusOn) > 0.5f;
-        chorus.rate    = *apvts.getRawParameterValue(ID::chorusRate);
-        chorus.depth   = *apvts.getRawParameterValue(ID::chorusDepth);
-        chorus.mix     = *apvts.getRawParameterValue(ID::chorusMix);
+        chorus.enabled = *p.chorusOn > 0.5f;
+        chorus.rate    = *p.chorusRate;
+        chorus.depth   = *p.chorusDepth;
+        chorus.mix     = *p.chorusMix;
 
-        reverb.enabled  = *apvts.getRawParameterValue(ID::reverbOn) > 0.5f;
-        reverb.roomSize = *apvts.getRawParameterValue(ID::reverbRoom);
-        reverb.damping  = *apvts.getRawParameterValue(ID::reverbDamp);
-        reverb.mix      = *apvts.getRawParameterValue(ID::reverbMix);
+        reverb.enabled  = *p.reverbOn > 0.5f;
+        reverb.roomSize = *p.reverbRoom;
+        reverb.damping  = *p.reverbDamp;
+        reverb.mix      = *p.reverbMix;
 
-        formant.enabled   = *apvts.getRawParameterValue(ID::formantOn) > 0.5f;
-        formant.vowel     = *apvts.getRawParameterValue(ID::formantVowel);
-        formant.resonance = *apvts.getRawParameterValue(ID::formantReso);
-        formant.mix       = *apvts.getRawParameterValue(ID::formantMix);
+        formant.enabled   = *p.formantOn > 0.5f;
+        formant.vowel     = *p.formantVowel;
+        formant.resonance = *p.formantReso;
+        formant.mix       = *p.formantMix;
         }   // end per-strip effect config (Epic 10)
 
         // Spatialization (Epic 10): output mode + the 7 generator pans → the voice (used at the top of
         // renderNextBlock to build per-channel gains). Append-only; missing ⇒ Pseudo-Stereo / center.
-        outputModeOut = (int) *apvts.getRawParameterValue(ID::outputMode);
-        generatorPanOut[PanOsc1]      = *apvts.getRawParameterValue(ID::oscPan(1));
-        generatorPanOut[PanOsc2]      = *apvts.getRawParameterValue(ID::oscPan(2));
-        generatorPanOut[PanOsc3]      = *apvts.getRawParameterValue(ID::oscPan(3));
-        generatorPanOut[PanSub]       = *apvts.getRawParameterValue(ID::subPan);
-        generatorPanOut[PanNoise]     = *apvts.getRawParameterValue(ID::noisePan);
-        generatorPanOut[PanKarplus]   = *apvts.getRawParameterValue(ID::karplusPan);
-        generatorPanOut[PanWavetable] = *apvts.getRawParameterValue(ID::wavetablePan);
+        outputModeOut = (int) *p.outputMode;
+        generatorPanOut[PanOsc1]      = *p.oscPan[0];
+        generatorPanOut[PanOsc2]      = *p.oscPan[1];
+        generatorPanOut[PanOsc3]      = *p.oscPan[2];
+        generatorPanOut[PanSub]       = *p.subPan;
+        generatorPanOut[PanNoise]     = *p.noisePan;
+        generatorPanOut[PanKarplus]   = *p.karplusPan;
+        generatorPanOut[PanWavetable] = *p.wavetablePan;
         // SAMPLER (12.1): a stereo set spreads its L/R sub-sources around the PAN knob (the whole
         // stereo image moves with the knob); a mono set sits at the plain pan on slot L.
         // Spread per mode (Störton fix 2026-08-04, MEASURED — scratchpad stoerton3.py): in the
@@ -481,16 +545,16 @@ namespace Parameters
         // spread 1.0. The binaural/Kunstkopf modes keep ±0.5: their sub-sources are decorrelated
         // by ITD/HRIR before summing (no coherent comb), and the ±0.5 image is the 12.1 choice.
         {
-            const float sPan   = *apvts.getRawParameterValue(ID::samplerPan);
+            const float sPan   = *p.samplerPan;
             const auto* set    = SampleBankStore::instance().getSet(
-                                     static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet)));
+                                     static_cast<int>(*p.samplerSet));
             const auto  mode   = static_cast<OutputMode>(outputModeOut);
             const bool  hrir   = (mode == OutputMode::Binaural || mode == OutputMode::Kunstkopf);
             const float spread = (set != nullptr && set->isStereo()) ? (hrir ? 0.5f : 1.0f) : 0.0f;
             generatorPanOut[PanSamplerL] = juce::jlimit(-1.0f, 1.0f, sPan - spread);
             generatorPanOut[PanSamplerR] = juce::jlimit(-1.0f, 1.0f, sPan + spread);
             // GRAIN (17.1) reads the same set, so the same stereo rule applies to its L/R pair.
-            const float gPan = *apvts.getRawParameterValue(ID::grainPan);
+            const float gPan = *p.grainPan;
             generatorPanOut[PanGrainL] = juce::jlimit(-1.0f, 1.0f, gPan - spread);
             generatorPanOut[PanGrainR] = juce::jlimit(-1.0f, 1.0f, gPan + spread);
         }
@@ -498,69 +562,69 @@ namespace Parameters
         // LFOs — one loop for all (Tempo-Sync resolved per LFO in processBlock => lfoRateHz[i]).
         for (int i = 0; i < kNumLFOs; ++i)
         {
-            lfos[i].setWaveform(static_cast<LFOWaveform>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoWave(i + 1)))));
+            lfos[i].setWaveform(static_cast<LFOWaveform>(static_cast<int>(*p.lfoWave[i])));
             lfos[i].setRate(lfoRateHz[i]);
-            lfos[i].setDepth(*apvts.getRawParameterValue(ID::lfoDepth(i + 1)));
-            const bool on = *apvts.getRawParameterValue(ID::lfoOn(i + 1)) > 0.5f;
-            lfos[i].setTarget(on ? static_cast<LFOTarget>(static_cast<int>(*apvts.getRawParameterValue(ID::lfoTarget(i + 1))) + 1)
+            lfos[i].setDepth(*p.lfoDepth[i]);
+            const bool on = *p.lfoOn[i] > 0.5f;
+            lfos[i].setTarget(on ? static_cast<LFOTarget>(static_cast<int>(*p.lfoTarget[i]) + 1)
                                  : LFOTarget::Off);
         }
 
-        const bool noiseOn = *apvts.getRawParameterValue(ID::noiseOn) > 0.5f;
-        noise.setType(noiseOn ? static_cast<NoiseType>(static_cast<int>(*apvts.getRawParameterValue(ID::noiseType)) + 1)
+        const bool noiseOn = *p.noiseOn > 0.5f;
+        noise.setType(noiseOn ? static_cast<NoiseType>(static_cast<int>(*p.noiseType) + 1)
                               : NoiseType::Off);
-        noise.setAmplitude(*apvts.getRawParameterValue(ID::noiseAmp));
+        noise.setAmplitude(*p.noiseAmp);
 
-        karplus.setEnabled(*apvts.getRawParameterValue(ID::karplusOn) > 0.5f);
-        karplus.setFrequency(*apvts.getRawParameterValue(ID::karplusFreq));
-        karplus.setAmplitude(*apvts.getRawParameterValue(ID::karplusAmp));
-        karplus.setDamping(*apvts.getRawParameterValue(ID::karplusDamping));
-        karplus.setStretch(*apvts.getRawParameterValue(ID::karplusStretch));
+        karplus.setEnabled(*p.karplusOn > 0.5f);
+        karplus.setFrequency(*p.karplusFreq);
+        karplus.setAmplitude(*p.karplusAmp);
+        karplus.setDamping(*p.karplusDamping);
+        karplus.setStretch(*p.karplusStretch);
 
         // Sampler (Story 12.1): source set + playback params. The set pointer stays valid for the
         // whole block (never-freed store, same contract as the wavetable bank below).
-        sampler.setEnabled(*apvts.getRawParameterValue(ID::samplerOn) > 0.5f);
+        sampler.setEnabled(*p.samplerOn > 0.5f);
         sampler.setSource(SampleBankStore::instance().getSet(
-            static_cast<int>(*apvts.getRawParameterValue(ID::samplerSet))));
-        sampler.setRootKey(static_cast<int>(*apvts.getRawParameterValue(ID::samplerRoot)));
-        sampler.setRegion(*apvts.getRawParameterValue(ID::samplerStart),
-                          *apvts.getRawParameterValue(ID::samplerEnd));
+            static_cast<int>(*p.samplerSet)));
+        sampler.setRootKey(static_cast<int>(*p.samplerRoot));
+        sampler.setRegion(*p.samplerStart,
+                          *p.samplerEnd);
         sampler.setMode(static_cast<SamplePlayer::Mode>(
-            static_cast<int>(*apvts.getRawParameterValue(ID::samplerMode))));
-        sampler.setLevel(*apvts.getRawParameterValue(ID::samplerLevel));
-        sampler.setSpeed(*apvts.getRawParameterValue(ID::samplerSpeed));
-        sampler.setStretchMode(*apvts.getRawParameterValue(ID::samplerStretch) > 0.5f);   // 12.3
-        sampler.setReleaseFallback(*apvts.getRawParameterValue(ID::samplerRelease));      // 12.4
+            static_cast<int>(*p.samplerMode)));
+        sampler.setLevel(*p.samplerLevel);
+        sampler.setSpeed(*p.samplerSpeed);
+        sampler.setStretchMode(*p.samplerStretch > 0.5f);   // 12.3
+        sampler.setReleaseFallback(*p.samplerRelease);      // 12.4
         sampler.setLoopSyncPhase(samplerLoopFrac);
 
         // GRAIN (Story 17.1): the cloud's per-block parameters. Its material (zone + pitch factor)
         // is set at note-on by the voice from the sampler's zone pick — nothing to do here.
-        grain.setEnabled(*apvts.getRawParameterValue(ID::grainOn) > 0.5f);
-        grain.setPosition(*apvts.getRawParameterValue(ID::grainPos));
-        grain.setSpray(*apvts.getRawParameterValue(ID::grainSpray));
-        grain.setSizeMs(*apvts.getRawParameterValue(ID::grainSize));
-        grain.setDensity(*apvts.getRawParameterValue(ID::grainDensity));
-        grain.setPitchSpread(*apvts.getRawParameterValue(ID::grainPitch));
-        grain.setQuant(static_cast<int>(*apvts.getRawParameterValue(ID::grainQuant)));
-        grain.setLevel(*apvts.getRawParameterValue(ID::grainAmp));
-        grain.setKeyMode(*apvts.getRawParameterValue(ID::grainKey) > 0.5f);   // 17.2
+        grain.setEnabled(*p.grainOn > 0.5f);
+        grain.setPosition(*p.grainPos);
+        grain.setSpray(*p.grainSpray);
+        grain.setSizeMs(*p.grainSize);
+        grain.setDensity(*p.grainDensity);
+        grain.setPitchSpread(*p.grainPitch);
+        grain.setQuant(static_cast<int>(*p.grainQuant));
+        grain.setLevel(*p.grainAmp);
+        grain.setKeyMode(*p.grainKey > 0.5f);   // 17.2
 
-        wavetable.setEnabled(*apvts.getRawParameterValue(ID::wavetableOn) > 0.5f);
+        wavetable.setEnabled(*p.wavetableOn > 0.5f);
         wavetable.setBank(WavetableBankStore::instance().getBank(
-            static_cast<int>(*apvts.getRawParameterValue(ID::wavetableBank))));
-        wavetable.setPosition(*apvts.getRawParameterValue(ID::wavetablePosition));
-        wavetable.setFrequency(*apvts.getRawParameterValue(ID::wavetableFreq));
-        wavetable.setAmplitude(*apvts.getRawParameterValue(ID::wavetableAmp));
-        wavetable.setUnisonCount(static_cast<int>(*apvts.getRawParameterValue(ID::wavetableUniVoices)));
-        wavetable.setDetuneAmount(*apvts.getRawParameterValue(ID::wavetableUniDetune) * 100.0);
-        wavetable.setFeedback(*apvts.getRawParameterValue(ID::wavetableFeedback));
+            static_cast<int>(*p.wavetableBank)));
+        wavetable.setPosition(*p.wavetablePosition);
+        wavetable.setFrequency(*p.wavetableFreq);
+        wavetable.setAmplitude(*p.wavetableAmp);
+        wavetable.setUnisonCount(static_cast<int>(*p.wavetableUniVoices));
+        wavetable.setDetuneAmount(*p.wavetableUniDetune * 100.0);
+        wavetable.setFeedback(*p.wavetableFeedback);
 
-        subOsc.setEnabled(*apvts.getRawParameterValue(ID::subOn) > 0.5f);
-        subOsc.setWaveform(static_cast<int>(*apvts.getRawParameterValue(ID::subWave)) == 0
+        subOsc.setEnabled(*p.subOn > 0.5f);
+        subOsc.setWaveform(static_cast<int>(*p.subWave) == 0
                                ? WaveformType::Sine : WaveformType::Square);
-        subOsc.setAmplitude(*apvts.getRawParameterValue(ID::subLevel));
-        subOsc.setFeedback(*apvts.getRawParameterValue(ID::subFeedback));
+        subOsc.setAmplitude(*p.subLevel);
+        subOsc.setFeedback(*p.subFeedback);
         // Choice 0 -> -1 octave, 1 -> -2 octaves
-        subOctave = -(static_cast<int>(*apvts.getRawParameterValue(ID::subOctave)) + 1);
+        subOctave = -(static_cast<int>(*p.subOctave) + 1);
     }
 }
