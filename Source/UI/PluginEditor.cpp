@@ -1693,6 +1693,13 @@ void SynthyEditor::releaseComputerKeys()
 
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
 {
+    // LAYERS (21.6, maintainer 2026-11-16): keys 1 and 2 are the A and B buttons — the same toggle,
+    // so 1 + 2 lights both (linked editing) and the last lit one stays lit.
+    if (layerSelector != nullptr && ! key.getModifiers().isAnyModifierKeyDown())
+    {
+        if (key.getTextCharacter() == '1') { layerSelector->press (true);  return true; }
+        if (key.getTextCharacter() == '2') { layerSelector->press (false); return true; }
+    }
     // ESC closes an open help panel (Story 6.1) — fallback in case the panel lost focus.
     if (key == juce::KeyPress::escapeKey && helpPanel && helpPanel->isVisible())
     {
@@ -2246,10 +2253,12 @@ void SynthyEditor::buildRack()
     {
         ModuleDescriptor d;
         d.id = "layers"; d.title = "LAYERS";
+        d.pinnedOnReset = true;   // back on screen after every reset (maintainer 2026-11-16)
         d.sizeClass = SizeClass::W14H1; d.type = ModuleType::Processor;
         d.defaultZone = Rack::Zone::MasterBus;
         auto* selector = new LayerSelector (apvts);
         rackOwned.add (selector);
+        layerSelector = selector;   // keys 1 / 2 press its buttons
         Knob split = K (P::splitNote, "SPLIT");
         split.textFromValue = [] (double v) { return juce::MidiMessage::getMidiNoteName (juce::roundToInt (v), true, true, 4); };
         split.tooltipFromValue = [] (double v)

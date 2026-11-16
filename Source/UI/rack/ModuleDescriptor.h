@@ -308,6 +308,10 @@ namespace rack
         // marks itself (violet header tint + top strip) so it is never in doubt which layer a knob
         // belongs to. `id` is "b<layer A id>", `helpId` the layer-A module's help.
         bool layerB = false;
+        // Shown after every reset — header RESET, MODULES layout reset, zone reset — and in the
+        // default layout, whatever RackLayout.json says (LAYERS, maintainer 2026-11-16: "muss bei
+        // globalem Reset bzw. bei Modules-Reset ausgewählt sein"). It can still be hidden by hand.
+        bool pinnedOnReset = false;
 
         // Horizontal alignment WITHIN the zone row. false (default) => the module packs flush
         // left; true => it is shifted (as a block with the other right-aligned modules) to hug

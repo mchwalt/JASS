@@ -186,6 +186,11 @@ private:
         btnB.setToggleState (f != 0, juce::dontSendNotification);
     }
 
+public:
+    // Keys 1 / 2 (21.6): exactly a click on A / B.
+    void press (bool isA) { toggle (isA); }
+
+private:
     void toggle (bool isA)
     {
         bool a = btnA.getToggleState(), b = btnB.getToggleState();
@@ -384,6 +389,7 @@ private:
     void releaseComputerKeys();                    // note-off everything we started
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
+    LayerSelector* layerSelector = nullptr;        // 21.6: owned by rackOwned; keys 1 / 2 press it
 
     // Without a TooltipWindow instance JUCE shows NO tooltips at all — every setTooltip in the
     // rack (module reset/info buttons, the full-text knob read-outs) was silent until this line.

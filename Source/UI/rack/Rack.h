@@ -323,6 +323,9 @@ namespace rack
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
         std::vector<Placed> placedB;               // 21.6: layer A id -> layer B's frame (patch modules)
         bool layerFocusB = false;
+        std::vector<juce::String> pinnedIds;       // descriptor pinnedOnReset (LAYERS)
+        // Pinned modules visible in `entries` — returns true if anything changed.
+        bool showPinned (std::vector<RackLayoutEntry>& entries) const;
         // Both layers' frames of a module (B's only where one exists) — visibility couples to
         // BOTH enables (D4: shown if on in A or B, hidden ⇒ silent in both).
         std::vector<const Placed*> allLayersById (const juce::String& id) const;

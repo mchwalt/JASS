@@ -1,6 +1,6 @@
 Two complete sounds at once — layer **A** and layer **B**, played from one keyboard.
 
-- **A / B** — which layer the rack shows and edits. B's modules have a violet header. Light **both**: the rack shows A, and every change goes to B too — knobs move B by the same amount, so B keeps its offset.
+- **A / B** (keys **1** / **2**) — which layer the rack shows and edits. B's modules have a violet header. Light **both**: the rack shows A, and every change goes to B too — knobs move B by the same amount, so B keeps its offset.
 - **B ON** — layer B sounds. Off: only A plays (B's settings stay).
 - **MODE** — **Layer**: every key plays both. **Split**: keys below SPLIT play B, from SPLIT up A. The keyboard shows B's keys in violet.
 - **SPLIT** — the split key. **LEARN**, then play a key: that key becomes the split point.

@@ -264,6 +264,7 @@ namespace rack
         const auto id   = desc.id;
         const bool vis  = desc.defaultVisible;              // factory visibility (Story 4.3)
         const bool alignR = desc.alignRight;                // per-module H-alignment within the zone
+        if (desc.pinnedOnReset) pinnedIds.push_back (id);
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
@@ -523,6 +524,7 @@ namespace rack
         // an id the rack no longer has is ignored. The current model follows: this runs at
         // build time, before any stored layout is applied on top (reloadLayoutFromState).
         forEachLayoutItem (fileEntries, [this] (const LayoutItem& it) { mergeLayoutItem (defaultLayout, it); });
+        showPinned (defaultLayout);   // a pinned module is part of every default (21.6: LAYERS)
         layoutModel = defaultLayout;
         relayout();
     }
@@ -530,6 +532,7 @@ namespace rack
     void Rack::adoptCurrentAsDefault()
     {
         defaultLayout = layoutModel;   // what is on screen now IS the default from here on
+        showPinned (defaultLayout);
         writeLayoutToState();          // model == default ⇒ the state property clears
         if (onDefaultLayoutChanged) onDefaultLayoutChanged (defaultLayoutToVar());
     }
@@ -586,6 +589,15 @@ namespace rack
         if (onLayoutChanged) onLayoutChanged();
     }
 
+    bool Rack::showPinned (std::vector<RackLayoutEntry>& entries) const
+    {
+        bool changed = false;
+        for (auto& e : entries)
+            if (! e.visible && std::find (pinnedIds.begin(), pinnedIds.end(), e.id) != pinnedIds.end())
+            { e.visible = true; changed = true; }
+        return changed;
+    }
+
     void Rack::showFactoryReset (bool factory)
     {
         for (auto* f : frames)
@@ -605,8 +617,10 @@ namespace rack
                 f->doReset();
 
         // Layout untouched — except that what Init switched on must be visible (invariant), so a
-        // preset that had hidden the oscillators does not leave RESET sounding like nothing.
-        if (revealEnabledModules())
+        // preset that had hidden the oscillators does not leave RESET sounding like nothing —
+        // and a pinned module (LAYERS, 21.6) is back on screen.
+        const bool pinnedShown = showPinned (layoutModel);
+        if (revealEnabledModules() || pinnedShown)
         {
             relayout();
             writeLayoutToState();
