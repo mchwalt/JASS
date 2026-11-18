@@ -376,7 +376,8 @@ namespace rack
         if (layerFocusB == b) return;
         layerFocusB = b;
         relayout();   // the same zones and order, the other layer's frames and visible set (21.6 review)
-        if (onLayoutChanged) onLayoutChanged();
+        // No onLayoutChanged: the window is sized for the taller layer already (preferredHeight),
+        // so a focus switch never resizes it.
     }
 
     juce::String Rack::zoneName (Zone zone) { return zoneText (zone); }
@@ -589,9 +590,39 @@ namespace rack
         // `Sampler Demo` and every other older preset showed it too (maintainer 2026-10-02).
         // A preset with no layout at all already took this route (reloadLayoutFromState).
         layoutModel = defaultLayout;
-        forEachLayoutItem (v, [this] (const LayoutItem& it) { mergeLayoutItem (layoutModel, it); });
+        std::vector<juce::String> noVisB;   // patch modules stored before visibility was per layer
+        forEachLayoutItem (v, [this, &noVisB] (const LayoutItem& it)
+        {
+            mergeLayoutItem (layoutModel, it);
+            if (it.visB.isVoid() && ! it.vis.isVoid() && hasLayerB (it.id)) noVisB.push_back (it.id);
+        });
+        splitLegacyVisibility (noVisB);
         relayout();
         if (onLayoutChanged) onLayoutChanged();
+    }
+
+    void Rack::splitLegacyVisibility (const std::vector<juce::String>& ids)
+    {
+        // Layout data from before 2026-11-19 has ONE visibility, written under "shown if on in A or
+        // in B" — a module B uses (B's Init LFO 1 + MOD MATRIX) was stored visible for A as well.
+        // Split it once by who uses it: on in B only ⇒ B's module, gone from A; on in A only ⇒ gone
+        // from B; on in both or neither ⇒ as stored (the player's choice). Saved per layer from now on.
+        auto isOn = [this] (const juce::String& id, bool layerB)
+        {
+            const auto* p = placedIn (id, layerB);
+            if (p == nullptr || p->frame == nullptr) return false;
+            const auto pid = p->frame->enableParamId();
+            if (pid.isEmpty()) return true;   // nothing to read: treat as used
+            const auto* raw = apvts.getRawParameterValue (pid);
+            return raw != nullptr && raw->load() > 0.5f;
+        };
+        for (auto& e : layoutModel)
+            if (std::find (ids.begin(), ids.end(), e.id) != ids.end() && e.visible)
+            {
+                const bool a = isOn (e.id, false), b = isOn (e.id, true);
+                if (b && ! a) e.visible  = false;
+                if (a && ! b) e.visibleB = false;
+            }
     }
 
     bool Rack::isDefaultLayout() const
@@ -807,8 +838,17 @@ namespace rack
     int Rack::preferredHeight (int width) const
     {
         // layout() does not mutate when apply == false, but it is non-const (it writes
-        // member scratch only when applying) — measure via a const_cast-free copy path:
-        return const_cast<Rack*> (this)->layout (width, /*apply*/ false);
+        // member scratch only when applying) — measure via a const_cast-free copy path.
+        // The TALLER of the two layers' visible sets (maintainer 2026-11-19: switching A/B must not
+        // resize the window), so the window stays put and the shorter layer leaves room below.
+        auto* self = const_cast<Rack*> (this);
+        const bool focus = self->layerFocusB;
+        self->layerFocusB = false;
+        const int hA = self->layout (width, /*apply*/ false);
+        self->layerFocusB = true;
+        const int hB = self->layout (width, /*apply*/ false);
+        self->layerFocusB = focus;
+        return juce::jmax (hA, hB);
     }
 
     int Rack::maxHeight (int width) const

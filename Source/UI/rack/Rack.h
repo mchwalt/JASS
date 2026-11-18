@@ -181,7 +181,8 @@ namespace rack
         std::function<void(const juce::String& id)> onModuleHelp;
 
         // Total stacked height the current population needs at `width` — lets the
-        // editor size/verify the fixed window without scrolling (AC4).
+        // editor size/verify the fixed window without scrolling (AC4). The taller of the two
+        // layers' visible sets, so switching A/B never resizes the window (2026-11-19).
         int preferredHeight (int width) const;
 
         // Worst-case height: what the rack would need at `width` with EVERY module visible.
@@ -327,6 +328,7 @@ namespace rack
         static void mergeLayoutItem (std::vector<RackLayoutEntry>& into, const LayoutItem& it);   // by id; unknown ids ignored
         juce::var layoutToVar() const;                  // model → JSON var
         void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)
+        void splitLegacyVisibility (const std::vector<juce::String>& ids);   // pre-2026-11-19 data: one flag → per layer
         bool isDefaultLayout() const;                   // model == captured defaults?
         void writeLayoutToState();                      // persist to apvts.state (or clear when default)
         static Zone zoneFromName (const juce::String& name);   // inverse of zoneName
