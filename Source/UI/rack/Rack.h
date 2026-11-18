@@ -329,6 +329,7 @@ namespace rack
         juce::var layoutToVar() const;                  // model → JSON var
         void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)
         void splitLegacyVisibility (const std::vector<juce::String>& ids);   // pre-2026-11-19 data: one flag → per layer
+        int  zoneRowsIn (Zone zone, bool layerB) const;   // rows a layer's visible modules fill in a zone
         bool isDefaultLayout() const;                   // model == captured defaults?
         void writeLayoutToState();                      // persist to apvts.state (or clear when default)
         static Zone zoneFromName (const juce::String& name);   // inverse of zoneName

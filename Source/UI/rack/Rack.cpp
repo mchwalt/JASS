@@ -923,9 +923,11 @@ namespace rack
         {
             // Derived zone visibility (Story 4.2): a zone with no visible module contributes
             // NO header band, no modules, no height — the header disappears automatically.
+            // 21.6 review (maintainer 2026-11-19): a zone shows when EITHER layer has a module in
+            // it, so the zone headers and separators stand still when A/B is switched.
             bool anyVisible = false;
             for (const auto& e : layoutModel)
-                if (e.zone == zone && shown (e)) { anyVisible = true; break; }
+                if (e.zone == zone && (shownIn (e, false) || shownIn (e, true))) { anyVisible = true; break; }
             if (! anyVisible)
                 continue;
 
@@ -1084,7 +1086,9 @@ namespace rack
                 }
             }
 
-            const int rowsUsed = maxRowUsed + 1;
+            // ...and it is as tall as the taller layer's packing, so every zone below starts at the
+            // same y in A and B — only a zone's CONTENT changes on a switch, nothing jumps.
+            const int rowsUsed = juce::jmax (maxRowUsed + 1, zoneRowsIn (zone, ! layerFocusB));
             if (rowsUsed > 0)
                 y = zoneTopY + rowsUsed * kHu + (rowsUsed - 1) * kGutter;
             y += kGutter;   // gap before the next zone
@@ -1109,6 +1113,48 @@ namespace rack
         }
 
         return y + kPad;
+    }
+
+    int Rack::zoneRowsIn (Zone zone, bool layerB) const
+    {
+        // The same first-fit packing as layout(), for one layer's visible modules of one zone,
+        // counting rows only (no bounds, no alignment shift — that is horizontal).
+        std::vector<const RackLayoutEntry*> es;
+        for (const auto& e : layoutModel)
+            if (e.zone == zone && shownIn (e, layerB))
+                es.push_back (&e);
+        std::stable_sort (es.begin(), es.end(),
+                          [] (const RackLayoutEntry* a, const RackLayoutEntry* b) { return a->position < b->position; });
+        std::stable_partition (es.begin(), es.end(), [] (const RackLayoutEntry* e) { return ! e->alignRight; });
+        std::vector<std::vector<char>> occ;
+        int maxRow = -1;
+        for (const auto* e : es)
+        {
+            const auto* pl = placedIn (e->id, layerB);
+            if (pl == nullptr || pl->frame == nullptr) continue;
+            const int fcols = juce::jmin (pl->cols, cols), funits = pl->units;
+            auto fits = [&] (int r, int c)
+            {
+                for (int rr = r; rr < r + funits; ++rr)
+                {
+                    if (rr >= (int) occ.size()) continue;
+                    for (int cc = c; cc < c + fcols; ++cc)
+                        if (occ[(size_t) rr][(size_t) cc]) return false;
+                }
+                return true;
+            };
+            int fr = 0, fc = 0;
+            for (bool found = false; ! found; ++fr)
+                for (int c = 0; c + fcols <= cols; ++c)
+                    if (fits (fr, c)) { fc = c; found = true; break; }
+            --fr;
+            while ((int) occ.size() <= fr + funits - 1) occ.emplace_back ((size_t) cols, (char) 0);
+            for (int rr = fr; rr < fr + funits; ++rr)
+                for (int cc = fc; cc < fc + fcols; ++cc)
+                    occ[(size_t) rr][(size_t) cc] = 1;
+            maxRow = juce::jmax (maxRow, fr + funits - 1);
+        }
+        return maxRow + 1;
     }
 
     void Rack::resized()
