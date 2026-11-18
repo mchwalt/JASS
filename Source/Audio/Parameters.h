@@ -107,6 +107,7 @@ namespace Parameters
         constexpr const char* arpMode    = "arpMode";
         constexpr const char* arpOctaves = "arpOctaves";
         constexpr const char* arpGate    = "arpGate";
+        constexpr const char* arpTarget  = "arpTarget";   // 21.7: Auto | A | B | A+B
 
         // STEP SEQ (Story 15.1) — an authored 16-step figure. Per-step params are indexed like the
         // oscillators/LFOs so the audio thread never builds a String (RT-safety, Story 11.1).
@@ -150,6 +151,7 @@ namespace Parameters
         constexpr const char* bassLevel  = "bassLevel";
         constexpr const char* bassPan    = "bassPan";
         constexpr const char* seqToBass  = "seqToBass";
+        constexpr const char* seqTarget  = "seqTarget";   // 21.7: Auto | A | B | A+B
         // The grid cells (percStep<lane>_<step>) are NO LONGER parameters (AD-14, Story 18.5):
         // they live in PatternStore::perc. A DAW state saved before 18.5 still carries them as
         // <PARAM> elements; PluginProcessor::setStateInformation folds those into the store once.

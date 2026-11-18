@@ -10,9 +10,10 @@
 //
 // A note-off goes where ITS note-on went — the router remembers, per channel and note, which
 // layers a note-on reached. Moving the split point or switching LAYER/SPLIT while keys are held
-// therefore never hangs a voice. The drone and the step preview go to the focused layer; while
-// the ARP or the STEP SEQ replaces the chord, channel 1 belongs to layer A (the sequencers get
-// their A|B target in S3). Everything that is not a note (all-notes-off, controllers) reaches both.
+// therefore never hangs a voice. The drone and the step preview go to the focused layer. The ARP
+// and the STEP SEQ play on their own channel (patternChannel, Story 21.7), routed by their TARGET,
+// not by pitch — an arpeggio crossing the split note stays in its layer; the keys on channel 1 are
+// the live hand. Everything that is not a note (all-notes-off, controllers) reaches both.
 //
 // Audio thread only. No allocation: the two output buffers are the caller's, pre-sized.
 class LayerRouter
@@ -27,8 +28,8 @@ public:
         bool split         = false;   // with both: false = DUAL (every key to both)
         int  splitNote     = 48;
         bool focusB        = false;   // drone + step preview go to the edited layer
-        bool patternOwnsCh1 = false;  // ARP / STEP SEQ (not to BASS) plays channel 1 ...
-        bool patternToB    = false;   // ... into B (Single with B selected) instead of A
+        std::uint8_t patternDest = kA; // ARP / STEP SEQ notes (patternChannel) go here (21.7 TARGET)
+        int  patternChannel = 14;
         int  droneChannel  = 16;
         int  auditionChannel = 15;
     };
@@ -82,14 +83,22 @@ public:
 
     void reset() { for (auto& ch : held) ch.fill (kNone); }
 
+    // Did a note-on of this note reach a layer and is it still held there? (21.7: a key the
+    // pattern swallowed never did — its note-off is swallowed too; a key that played live keeps
+    // its note-off, whatever the pattern does meanwhile.)
+    bool isRouted (int channel, int note) const
+    {
+        return held[(size_t) juce::jlimit (1, 16, channel) - 1][(size_t) (note & 127)] != kNone;
+    }
+
 private:
     std::uint8_t destForNoteOn (const juce::MidiMessage& m, const Settings& s) const
     {
         const int ch = m.getChannel();
         if (ch == s.droneChannel || ch == s.auditionChannel)
             return s.focusB ? kB : kA;
-        if (ch == 1 && s.patternOwnsCh1)
-            return s.patternToB ? kB : kA;
+        if (ch == s.patternChannel)
+            return s.patternDest != kNone ? s.patternDest : kA;
         if (s.playA && s.playB)
             return ! s.split ? kBoth : (m.getNoteNumber() < s.splitNote ? kB : kA);
         return s.playB ? kB : kA;

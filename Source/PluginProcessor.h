@@ -77,6 +77,10 @@ public:
     // recognise it: a drone note is not a played key, so it must not be written into a STEP SEQ
     // step while a figure is being recorded (Story 15.4).
     static constexpr int kDroneChannel = 16;
+    // The ARP's and the STEP SEQ's own output channel (AD-16 S3, Story 21.7): the router sends it to
+    // the sequencer's TARGET layer(s), whatever the pitch, while channel 1 stays the live keys. The
+    // synth is channel-blind (SynthSound applies to every channel), so this changes no sound.
+    static constexpr int kPatternChannel = 14;
 
     // While the editor is recording a figure into STEP SEQ (Story 15.4), a played key WRITES a step
     // instead of playing the pattern: the sequencer must not take it as its root, or every entered
@@ -269,6 +273,19 @@ public:
     bool isFocusB() const      { return getLayerFocus() == 1; }
     // Which layers take notes (21.6): SINGLE — the selection (A, B, or both); DUAL / SPLIT — both.
     struct LayersPlaying { bool a = true, b = false; };
+    // Where the running ARP / STEP SEQ plays and which keys feed it (21.7), resolved once per block.
+    // `filtered`: in a Split with one target layer only that layer's key range feeds the pattern —
+    // the other hand plays live. Not filtered = every channel-1 key feeds it (as before S3).
+    struct PatternRoute
+    {
+        bool active = false;          // ARP or STEP SEQ (not on BASS) is replacing keys
+        std::uint8_t dest = LayerRouter::kA;
+        bool filtered = false;
+        int  lo = 0, hi = 127;        // the pattern hand's key range when filtered
+        bool feeds (int note) const noexcept { return ! filtered || (note >= lo && note <= hi); }
+    };
+    PatternRoute resolvePatternRoute (const LayersPlaying& playing) const;
+    PatternRoute patRoute;   // 21.7: this block's pattern target + key range (audio thread)
     LayersPlaying layersPlaying() const
     {
         const int mode = juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerMode)->load());

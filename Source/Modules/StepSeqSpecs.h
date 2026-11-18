@@ -79,6 +79,10 @@ namespace Modules
         // body rows at equal width, and AD-15 closes the list of boxes, so there is no third target.
         m.params.push_back ({ "seqToBass", "ToBass", "BASS", ParamSpec::Kind::Bool, {}, 0.0f });
         m.params.back().hostName = "To BASS";
+        // TARGET (AD-16 S3, Story 21.7, appended): the layer(s) the figure plays — as the ARP's.
+        // Ignored while BASS is on (the figure then plays the BASS box).
+        m.params.push_back ({ "seqTarget", "LayerTarget", "TARGET", ParamSpec::Kind::Choice, {}, 0.0f,
+                              juce::StringArray { "Auto", "A", "B", "A+B" } });
 
         // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
         // The body shows ONE PAGE (kPageSteps knobs); "step:<n>" is a pattern cell (a knob bound
@@ -86,7 +90,7 @@ namespace Modules
         // with patternStep = n-1). ModuleFrame rebinds these cells to the shown page's steps
         // (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
         for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
-        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate", "" });   // "" = spacer (20.2: row 2 gained BASS)
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate", "seqTarget" });   // TARGET (21.7) fills the spacer row 2 gained with BASS (20.2)
         for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent", "seqToBass" });
         return m;

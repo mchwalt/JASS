@@ -16,6 +16,10 @@ namespace Modules
             { "arpRate",    "Rate",    "RATE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (1.0f, 16.0f, 0.1f), 8.0f },
             { "arpOctaves", "Octaves", "OCT",  ParamSpec::Kind::Int,   juce::NormalisableRange<float> (1.0f, 4.0f, 1.0f),  2.0f },
             { "arpGate",    "Gate",    "GATE", ParamSpec::Kind::Float, juce::NormalisableRange<float> (0.05f, 1.0f, 0.01f), 0.5f },
+            // TARGET (AD-16 S3, Story 21.7, appended): the layer(s) the ARP plays. Auto = the
+            // layers that play (Single: the selected one, Dual: both, Split: B, the left hand);
+            // in a Split only the target layer's keys feed the ARP, the other hand plays live.
+            { "arpTarget",  "LayerTarget", "TARGET", ParamSpec::Kind::Choice, {}, 0.0f, { "Auto", "A", "B", "A+B" } },
         };
         return m;
     }

@@ -34,6 +34,10 @@ info** so nothing is hidden and every control explains itself.
   lands on the next step — SPACE leaves a rest. Up to 768 steps with accents,
   **TIE** and the 303's **SLIDE**; a `.mid` transcription loads as a playing
   figure and saves back out for the DAW.
+- **Two sounds from one keyboard.** Every patch exists twice, layer **A** and
+  layer **B**, like a bitimbral hardware synth: **Single** switches between them
+  live, **Dual** stacks them, **Split** puts B under the left hand. A sequenced
+  bass in B under the left hand while the right hand plays A — from one instance.
 - **One JASS plays a whole piece.** The patch under your hands, **PERC** drums and
   a sequenced **BASS** underneath — the two boxes run beside the patch, dry into
   the master bus, so the drums never get dragged through your filter.
@@ -112,6 +116,21 @@ info** so nothing is hidden and every control explains itself.
   **Pseudo-stereo** (Haas widener), **Stereo-Pan**, **Binaural** and
   **Kunstkopf (HRTF)**. PAN is a matrix target, so any source can move a
   generator around the head. **ROOM** adds the binaural early reflections.
+
+**Two layers (bitimbral)**
+- **Layer A and B** — two complete patches, 8 voices each. The **LAYERS** module
+  (MASTER BUS) picks the layer you edit (keys **1** / **2**; both lit = linked
+  editing) and the **MODE**: **Single** (the selected layer plays, the one you
+  leave rings out), **Dual** (both on every key), **Split** (below the split key
+  B, from it up A). Level and balance per layer.
+- **SPLIT** button on the on-screen keyboard (key **3**): click, play a key — done.
+  The keyboard shows both ranges in the layers' colours.
+- **TARGET** for the ARP and the STEP SEQ: Auto / A / B / A+B. In a Split the
+  pattern takes only its layer's keys and the other hand plays live; an arpeggio
+  crossing the split stays in its layer.
+- **Presets** carry both layers; loading follows the A / B selection, and an older
+  single-layer preset keeps your layer B. **RESET** gives B its own Init sound — a
+  punchy saw bass — so a Split sounds right away.
 
 **Playing & workflow**
 - **On-screen keyboard** (mouse and computer keys) and **MIDI** input with velocity

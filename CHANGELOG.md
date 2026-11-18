@@ -42,6 +42,17 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   A or in B, and switching layers never re-packs the rack; LAYERS itself is back on screen after
   every reset. RANDOM rolls the layer being edited; the auto-enable couplings (MOD MATRIX, CROSS
   MOD) work in layer B as in A (Story 21.6).
+- **ARP and STEP SEQ get a TARGET - a sequenced bass under the left hand, the right hand live.**
+  Until now a running pattern took every key: in a Split both hands fed the figure and nothing
+  played live, and the pattern always went to layer A. **TARGET** (Auto / A / B / A+B) in each
+  module sets the layer; Auto follows the mode (Single: the selected layer, Dual: both, Split: B,
+  the left hand as on a split-keyboard hardware synth). In a Split with one target only that
+  layer's keys feed the pattern and the other hand plays its layer live - the Gemini setup. The
+  pattern plays on its own MIDI channel and is routed by target, not by pitch, so an arpeggio
+  over four octaves stays in its layer when it crosses the split; the figure's TIE/SLIDE follows
+  it. With B off nothing changes (24 of 24 presets render bit-identical). Measured with 2 x 8 voices, every
+  voice 3 oscillators x 7 unison: about a third of one core at the busiest point, so the voice
+  count stays 8 per layer with no VOICES knob (Story 21.7).
 - **Init has a layer B that sounds — a punchy saw bass under A's bright saw stack.** RESET left B
   without oscillators (only A's were switched on), so a Split after RESET played nothing below the
   split key. B's Init is now its own sound for the left hand, fitted on the render rig to a

@@ -871,6 +871,53 @@ void SynthyProcessor::randomizeLayerA()
 
 }
 
+// AD-16 S3 (Story 21.7): where the running ARP / STEP SEQ plays, and which keys feed it.
+//   TARGET Auto  Single: the selected layer(s) - Dual: both - Split: B, the left hand
+//          A / B / A+B as chosen.
+// In a Split with ONE target layer only that layer's keys feed the pattern (B: below the split
+// note, A: from it up); the other hand plays its layer live - the classic split-keyboard setup.
+// A+B in a Split, and every other mode, takes all keys as before S3.
+SynthyProcessor::PatternRoute SynthyProcessor::resolvePatternRoute (const LayersPlaying& playing) const
+{
+    using namespace Parameters;
+    PatternRoute r;
+    const bool seqOn  = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
+    const bool toBass = *apvts.getRawParameterValue(ID::seqToBass) > 0.5f;
+    const bool arpOn  = *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
+    int target = 0;
+    if (seqOn)
+    {
+        if (toBass) return r;   // the figure plays the BASS box; the keys stay the patch's
+        target = juce::roundToInt (apvts.getRawParameterValue(ID::seqTarget)->load());
+    }
+    else if (arpOn)
+        target = juce::roundToInt (apvts.getRawParameterValue(ID::arpTarget)->load());
+    else
+        return r;
+    r.active = true;
+
+    const int mode = juce::roundToInt (apvts.getRawParameterValue(ID::layerMode)->load());
+    switch (target)
+    {
+        case 1:  r.dest = LayerRouter::kA;    break;
+        case 2:  r.dest = LayerRouter::kB;    break;
+        case 3:  r.dest = LayerRouter::kBoth; break;
+        default: // Auto
+            if (mode == 2) r.dest = LayerRouter::kB;
+            else r.dest = (std::uint8_t) ((playing.a ? LayerRouter::kA : 0) | (playing.b ? LayerRouter::kB : 0));
+            if (r.dest == LayerRouter::kNone) r.dest = LayerRouter::kA;
+            break;
+    }
+    if (mode == 2 && r.dest != LayerRouter::kBoth)
+    {
+        const int split = juce::roundToInt (apvts.getRawParameterValue(ID::splitNote)->load());
+        r.filtered = true;
+        if (r.dest == LayerRouter::kB) { r.lo = 0;     r.hi = split - 1; }
+        else                           { r.lo = split; r.hi = 127; }
+    }
+    return r;
+}
+
 const std::vector<std::pair<juce::String, float>>& SynthyProcessor::initPatchOverrides()
 {
     static const std::vector<std::pair<juce::String, float>> table = []
@@ -1227,7 +1274,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // 21.6 SINGLE / DUAL / SPLIT: B renders while it takes notes, and on after that until its last
     // release tail has faded — switching SINGLE from B to A lets B's notes ring out, not cut.
     const auto playing = layersPlaying();
-    const bool layerBOn = playing.b || engineB.isSounding();
+    patRoute = resolvePatternRoute(playing);   // 21.7: the pattern's layer(s) and key range
+    // A pattern aimed at B makes B render even where B takes no live keys (Single on A, TARGET B).
+    const bool layerBOn = playing.b || engineB.isSounding()
+                       || (patRoute.active && (patRoute.dest & LayerRouter::kB) != 0);
     if (layerBOn)
         engineB.beginBlock(patchCtx);
 
@@ -1258,7 +1308,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     }
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
-    bool patternOwnsCh1 = false;   // AD-16: see below
     {
         using namespace Parameters;
         // STEP SEQ (15.1) and the ARP both REPLACE the held chord, so they cannot both run. The
@@ -1315,10 +1364,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         }
 
         const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
-        // AD-16 (S1): while the ARP or the figure replaces the chord, channel 1 is theirs and plays
-        // layer A (the sequencers get an A|B target in S3). The figure on BASS leaves the keys alone.
-        patternOwnsCh1 = (seqOn && *apvts.getRawParameterValue(ID::seqToBass) <= 0.5f)
-                      || (! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f);
         bool arpOn = ! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
         if (seqOn)
         {
@@ -1359,14 +1404,14 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             if (! seqRecordArmed.load())
             {
                 for (int n = 0; n < 128 && root < 0; ++n)
-                    if (keyboardState.isNoteOn(1, n)) root = n;
+                    if (keyboardState.isNoteOn(1, n) && patRoute.feeds(n)) root = n;   // 21.7: the pattern hand
                 // A note whose note-off lands in the SAME block is already up by now and the
                 // search above never sees it — a short clip note in a DAW, or a tapped key. It
                 // still latches: take the lowest channel-1 note-on of this block (maintainer
                 // 2026-10-19, Bitwig: the figure started "nur manchmal" — a block-alignment lottery).
                 if (root < 0)
                     for (const auto meta : midiMessages)
-                        if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == 1)
+                        if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == 1 && patRoute.feeds(m.getNoteNumber()))
                             if (root < 0 || m.getNoteNumber() < root)
                                 root = m.getNoteNumber();
             }
@@ -1388,6 +1433,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 {
                     const auto m = meta.getMessage();
                     if (m.getChannel() != 1) continue;
+                    if ((m.isNoteOn() || m.isNoteOff()) && ! patRoute.feeds(m.getNoteNumber()))
+                        continue;   // 21.7: the live hand does not anchor the figure
                     if (m.isNoteOff() || (m.isNoteOn() && m.getVelocity() == 0))
                         seqHostKeysDown.reset ((size_t) m.getNoteNumber());
                     else if (m.isNoteOn())
@@ -1449,8 +1496,13 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 auto m = meta.getMessage();
                 if (m.getChannel() == 1)
                 {
-                    if (! toBass && (m.isNoteOn() || m.isNoteOff()))
-                        continue;   // the figure replaces the chord — unless it plays the BASS box (20.2)
+                    // The figure replaces the chord — unless it plays the BASS box (20.2). 21.7: in a
+                    // Split with one target only the pattern hand's keys are taken; the other hand's
+                    // reach the router and play live, and a note-off follows its note-on there.
+                    if (! toBass && m.isNoteOn() && patRoute.feeds(m.getNoteNumber()))
+                        continue;
+                    if (! toBass && m.isNoteOff() && ! layerRouter.isRouted(1, m.getNoteNumber()))
+                        continue;
                     if (toBass && writing && m.isNoteOn())
                         continue;   // an entry, not a note (above)
                 }
@@ -1458,7 +1510,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
             if (toBass != seqWasToBass)   // 20.2: the figure changed its instrument mid-flight
             {
-                stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : kept, 1);   // close the old one's note
+                stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : kept, seqWasToBass ? 1 : kPatternChannel);   // close the old one's note
                 if (seqWasToBass) bass.allNotesOff();   // ...and a preview the box may still hold (review 2026-11-08)
                 seqWasToBass = toBass;
             }
@@ -1491,7 +1543,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                       diagPostDelay = stepSeq.clockStartDelay();
 #endif
             const bool seqRuns = hostRunning ? (playRoot >= 0) : (root >= 0 && playRoot >= 0);
-            stepSeq.processBlock(buffer.getNumSamples(), toBass ? bassMidiScratch : kept, 1, seqRuns);
+            stepSeq.processBlock(buffer.getNumSamples(), toBass ? bassMidiScratch : kept,
+                                 toBass ? 1 : kPatternChannel, seqRuns);   // 21.7: the pattern's own channel
 #if JASS_HOSTSYNC_DIAG
             diagSeqPre[0] = diagPreIdx; diagSeqPre[1] = diagPreCnt;
             diagSeqPost[0] = diagPostIdx; diagSeqPost[1] = diagPostCnt; diagSeqPost[2] = diagPostDelay;
@@ -1510,15 +1563,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     bass.slideTo((double) ev.semitones, ev.slide ? bassGlide : 0.0);
                     continue;
                 }
-                engineA.slideVoice(ev.note, (double) ev.semitones,   // AD-16: the figure plays A (target: S3)
-                                   ev.slide ? StepSequencer::kSlideSeconds : 0.0);
+                const double secs = ev.slide ? StepSequencer::kSlideSeconds : 0.0;
+                if (patRoute.dest & LayerRouter::kA) engineA.slideVoice(ev.note, (double) ev.semitones, secs);   // 21.7: TARGET
+                if (patRoute.dest & LayerRouter::kB) engineB.slideVoice(ev.note, (double) ev.semitones, secs);
             }
             midiMessages.swapWith(kept);
         }
         else if (stepSeq.enabled)
         {
             stepSeq.enabled = false;       // just switched off => release its note
-            stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : midiMessages, 1);   // 20.2: whichever instrument holds it
+            stepSeq.releaseAll(seqWasToBass ? bassMidiScratch : midiMessages, seqWasToBass ? 1 : kPatternChannel);   // 20.2: whichever instrument holds it
             stepSeq.reset();
             seqLatchedRoot.store(-1);      // the switch is the transport: off forgets the root
             seqKeyWasHeld = false;
@@ -1564,7 +1618,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // just updated above). The drone lives on channel 16, so it's excluded.
             arpHeldScratch.clear();
             for (int n = 0; n < 128; ++n)
-                if (keyboardState.isNoteOn(1, n)) arpHeldScratch.push_back(n);
+                if (keyboardState.isNoteOn(1, n) && patRoute.feeds(n)) arpHeldScratch.push_back(n);   // 21.7: the pattern hand
             arp.setHeldNotes(arpHeldScratch);
 
             // Drop the raw chord (channel-1 note on/off) so only the arp sounds;
@@ -1573,17 +1627,22 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
-                if ((m.isNoteOn() || m.isNoteOff()) && m.getChannel() == 1)
-                    continue;
+                if (m.getChannel() == 1)   // 21.7: as for the figure — the live hand passes
+                {
+                    if (m.isNoteOn() && patRoute.feeds(m.getNoteNumber()))
+                        continue;
+                    if (m.isNoteOff() && ! layerRouter.isRouted(1, m.getNoteNumber()))
+                        continue;
+                }
                 kept.addEvent(m, meta.samplePosition);
             }
-            arp.processBlock(buffer.getNumSamples(), kept, 1);
+            arp.processBlock(buffer.getNumSamples(), kept, kPatternChannel);
             midiMessages.swapWith(kept);
         }
         else if (arp.enabled)
         {
             arp.enabled = false;           // just switched off → release its note
-            arp.releaseAll(midiMessages, 1);
+            arp.releaseAll(midiMessages, kPatternChannel);   // 21.7: where its notes play
             arp.reset();
         }
     }
@@ -1618,10 +1677,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         rs.playA           = playing.a;
         rs.playB           = playing.b;
         rs.split           = juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerMode)->load()) == 2;
-        rs.patternToB      = ! playing.a && playing.b;   // SINGLE on B: the figure / ARP plays B
         rs.splitNote       = (int) *apvts.getRawParameterValue(Parameters::ID::splitNote);
         rs.focusB          = isFocusB();   // A+B edits through A: drone and preview stay on A
-        rs.patternOwnsCh1  = patternOwnsCh1;
+        rs.patternDest     = patRoute.dest;      // 21.7: the ARP / STEP SEQ TARGET
+        rs.patternChannel  = kPatternChannel;
         rs.droneChannel    = kDroneChannel;
         rs.auditionChannel = kAuditionChannel;
         layerRouter.route(midiMessages, layerMidiA, layerMidiB, rs);

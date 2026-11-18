@@ -7,4 +7,4 @@ Two complete sounds at once — layer **A** and layer **B**, played from one key
 - **A PAN / B PAN** — each layer's balance: centre leaves the layer as it is, a side turns the other side down.
 - **Loading a preset** (LOAD, F-keys) follows A / B: **A** loads the preset and keeps your layer B; **B** puts only the preset's sound into B; **both** load the whole file, both layers — a preset without a layer B (all older ones) keeps your B.
 
-ARP and STEP SEQ play layer A (in Single with B: layer B). RANDOM rolls the layer you edit (both when both are lit); RESET in the header returns to Init: A a bright saw stack, B a punchy saw bass — a Split plays two different sounds right away.
+ARP and STEP SEQ play the layer set by their **TARGET** (Auto: the selected layer, both in Dual, B in a Split — there the left hand feeds the pattern and the right hand plays A live). RANDOM rolls the layer you edit (both when both are lit); RESET in the header returns to Init: A a bright saw stack, B a punchy saw bass — a Split plays two different sounds right away.
