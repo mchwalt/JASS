@@ -1054,6 +1054,20 @@ void SynthyProcessor::markPresetClean()
     cleanStepRevision = patterns.step.revision.load();
 }
 
+void SynthyProcessor::markLayerBClean()
+{
+    // A load into B (21.6): B's module resets and double-clicks go back to the sound just loaded,
+    // A's stay on A's preset. Without a baseline (a modified LiveState) there is nothing to anchor.
+    auto& params = getParameters();
+    if (cleanSnapshot.size() != (size_t) params.size())
+        return;
+    const juce::String bp (Modules::kLayerBPrefix);
+    for (int i = 0; i < params.size(); ++i)
+        if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(params[i]))
+            if (rp->paramID.startsWith(bp) && Modules::isLayeredParamId(rp->paramID.substring(bp.length())))
+                cleanSnapshot[(size_t) i] = rp->getValue();
+}
+
 bool SynthyProcessor::isPresetModified() const
 {
     auto& params = getParameters();

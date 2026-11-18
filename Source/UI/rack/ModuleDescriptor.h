@@ -57,6 +57,7 @@ namespace rack
     // AD-16 (21.6): layer B's colour — its frames, the B button of LAYERS, B's keys on the keyboard.
     // Violet: apart from the type tints and from red/green (red-green colour vision).
     inline const juce::Colour kLayerBColour { 0xff8b5cf6 };
+    inline const juce::Colour kLayerAColour { 0xff22d3ee };   // A's cyan (keyboard tint, A button); one pair for the whole UI
 
     inline juce::Colour typeColour (ModuleType t) noexcept
     {

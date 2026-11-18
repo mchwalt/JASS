@@ -218,6 +218,7 @@ public:
     // "clear after load" and leave the flag permanently set.
     bool isPresetModified() const;
     void markPresetClean();                       // snapshot current values as the clean baseline
+    void markLayerBClean();                       // ...for layer B only, after a load into B (keeps A's)
     void restoreModifiedState(bool modified);     // on LiveState load: clean baseline, or force "modified"
 
 private:

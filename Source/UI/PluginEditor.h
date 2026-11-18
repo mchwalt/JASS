@@ -90,8 +90,8 @@ public:
                 g.setFont (juce::FontOptions (24.0f, juce::Font::bold));
                 g.drawText (t, box, juce::Justification::centred);
             };
-            label ("B", getRangeStart(), splitNote - 1, juce::Colour (0xff8b5cf6));
-            label ("A", splitNote, getRangeEnd(), juce::Colour (0xff0e7490));
+            label ("B", getRangeStart(), splitNote - 1, rack::kLayerBColour);
+            label ("A", splitNote, getRangeEnd(), rack::kLayerAColour.darker (0.9f));   // darker: legible on the white keys
         }
         if (hoverNote < 0)
             return;
@@ -123,8 +123,8 @@ private:
         // B ends and A begins. The letters are drawn over the whole range in paint().
         if (splitNote >= 0)
         {
-            g.setColour (midiNote < splitNote ? juce::Colour (0xff8b5cf6).withAlpha (0.24f)    // rack::kLayerBColour
-                                              : juce::Colour (0xff22d3ee).withAlpha (0.14f));  // A's colour
+            g.setColour (midiNote < splitNote ? rack::kLayerBColour.withAlpha (0.24f)
+                                              : rack::kLayerAColour.withAlpha (0.14f));
             g.fillRect (area);
             if (midiNote == splitNote)
             {
@@ -156,7 +156,7 @@ public:
         splitButton.setWantsKeyboardFocus (false);
         splitButton.setMouseClickGrabsKeyboardFocus (false);   // the keys keep playing
         splitButton.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff334155));
-        splitButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8b5cf6));   // rack::kLayerBColour
+        splitButton.setColour (juce::TextButton::buttonOnColourId, rack::kLayerBColour);
         splitButton.setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.75f));
         splitButton.setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
         splitButton.setTooltip ("Split (key 3): click, then play a key - it becomes the split key. Click again to cancel");
@@ -199,8 +199,8 @@ public:
             b->setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.55f));
             b->setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
         }
-        btnA.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff22d3ee).darker (0.35f));
-        btnB.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8b5cf6));   // rack::kLayerBColour
+        btnA.setColour (juce::TextButton::buttonOnColourId, rack::kLayerAColour.darker (0.35f));
+        btnB.setColour (juce::TextButton::buttonOnColourId, rack::kLayerBColour);
         btnA.setTooltip ("Edit layer A - with B lit too: edits go to both");
         btnB.setTooltip ("Edit layer B - with A lit too: edits go to both");
         btnA.onClick = [this] { toggle (true); };
@@ -221,7 +221,11 @@ public:
 private:
     void timerCallback() override { sync(); }
 
-    int focus() const { return juce::roundToInt (apvts.getRawParameterValue ("layerFocus")->load()); }
+    int focus() const
+    {
+        const auto* f = apvts.getRawParameterValue (Parameters::ID::layerFocus);
+        return f != nullptr ? juce::roundToInt (f->load()) : 0;
+    }
 
     void sync()
     {
@@ -237,12 +241,17 @@ public:
 private:
     void toggle (bool isA)
     {
+        sync();   // the buttons may be up to one timer tick behind the parameter (review)
         bool a = btnA.getToggleState(), b = btnB.getToggleState();
         (isA ? a : b) = ! (isA ? a : b);
         if (! a && ! b) return;   // one layer is always edited
         const int f = (a && b) ? 2 : (b ? 1 : 0);
-        if (auto* p = apvts.getParameter ("layerFocus"))
+        if (auto* p = apvts.getParameter (Parameters::ID::layerFocus))
+        {
+            p->beginChangeGesture();
             p->setValueNotifyingHost (p->convertTo0to1 ((float) f));
+            p->endChangeGesture();
+        }
         sync();
     }
 

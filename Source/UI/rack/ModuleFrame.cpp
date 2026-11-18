@@ -1057,6 +1057,22 @@ namespace rack
                     if (const float b = PresetIO::hooks (apvts).presetBaseline01 (id); b >= 0.0f)
                         v01 = b;   // no clean snapshot (modified LiveState at startup) ⇒ factory
                 p->setValueNotifyingHost (v01);
+                // A+B linked editing (21.6 review): A's reset is mirrored to B as a DELTA, which
+                // leaves B at neither its preset nor its factory value — put B on its OWN baseline.
+                if (! desc.layerB && Modules::isLayeredParamId (id))
+                    if (auto* f = apvts.getRawParameterValue (Parameters::ID::layerFocus); f != nullptr && juce::roundToInt (f->load()) == 2)
+                    {
+                        const juce::String bid = juce::String (Modules::kLayerBPrefix) + id;
+                        if (auto* pb = apvts.getParameter (bid))
+                        {
+                            float b01 = pb->getDefaultValue();
+                            if (PresetIO::hooks (apvts).factoryValue01)
+                                if (const float fv = PresetIO::hooks (apvts).factoryValue01 (bid); fv >= 0.0f) b01 = fv;
+                            if (toPreset && PresetIO::hooks (apvts).presetBaseline01)
+                                if (const float bb = PresetIO::hooks (apvts).presetBaseline01 (bid); bb >= 0.0f) b01 = bb;
+                            pb->setValueNotifyingHost (b01);
+                        }
+                    }
             }
         };
 
@@ -1114,7 +1130,11 @@ namespace rack
         // user-loaded banks). Run it, then re-poll any dynamic-provider combo so its item list
         // reflects the post-reset state (e.g. the BANK list shrinks back to the built-ins) and the
         // now-default selection is re-applied.
-        if (toPreset) { if (desc.onPresetReset) desc.onPresetReset(); }   // 7.6: never the factory extra
+        if (toPreset)   // 7.6: never the factory extra — but a display (scope time-base) has no preset state
+        {
+            if (desc.onPresetReset) desc.onPresetReset();
+            else if (desc.visualOnly && desc.onReset) desc.onReset();
+        }
         else if (desc.onReset) desc.onReset();
         for (auto& dc : dynCombos)
             refreshCombo (dc.paramId);

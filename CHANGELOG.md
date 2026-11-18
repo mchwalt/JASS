@@ -39,8 +39,10 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   never seems dead. Level and balance per layer. **Loading a preset follows
   the selection** (maintainer's proposal): A only loads the preset and keeps layer B - a
   single-layer preset no longer wipes a B you built; B only puts just the preset's sound into B;
-  A and B load the whole file. One rack layout serves both layers: a module shows when it is on in
-  A or in B, and switching layers never re-packs the rack; LAYERS itself is back on screen after
+  A and B load the whole file. One rack layout serves both layers (zones and order), but each
+  layer shows the modules that are on in IT - switching A/B swaps the visible set (maintainer
+  2026-11-19, once B's Init bass used LFO 1 and the MOD MATRIX: greyed-out B modules in A's rack
+  only confused; showing or hiding a module acts on the layer you edit); LAYERS itself is back on screen after
   every reset. RANDOM rolls the layer being edited; the auto-enable couplings (MOD MATRIX, CROSS
   MOD) work in layer B as in A (Story 21.6).
 - **ARP and STEP SEQ get a TARGET - a sequenced bass under the left hand, the right hand live.**
@@ -61,7 +63,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   an A-only load or a load into B no longer lets a sample set that was still loading land on B
   afterwards; a sound saved after RESET stays a single-layer file (B's Init bass is "untouched",
   and comes back as Init when a file has no B), so loading it with A and B lit keeps your B; the
-  2026-11-16 develop files with B switched off load as Single. Measured with 2 x 8 voices, every
+  2026-11-16 develop files with B switched off load as Single. The third part, the rack: a module
+  reset in linked A+B puts B on its own preset or factory value (not A's change mirrored), a load
+  into B makes B's resets return to that sound, group reset and group bypass act on the layer
+  shown, B's SAMPLER set list fills while sets load, picking a set in B no longer switches the
+  instrument's output mode while A plays, OSCILLOSCOPE / SPECTRUM reset works again with a plain
+  click, the German load-into-B message is readable, and Shift in another program no longer
+  turns JASS's reset icons amber. Measured with 2 x 8 voices, every
   voice 3 oscillators x 7 unison: about a third of one core at the busiest point, so the voice
   count stays 8 per layer with no VOICES knob (Story 21.7).
 - **Init has a layer B that sounds — a punchy saw bass under A's bright saw stack.** RESET left B

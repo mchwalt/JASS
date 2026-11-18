@@ -888,7 +888,11 @@ void SynthyEditor::timerCallback()
         // LEARN: the key the processor saw becomes the split point (written here, message thread).
         if (const int n = processor.takeLearnedSplitNote(); n >= 0)
             if (auto* p = a.getParameter (Parameters::ID::splitNote))
+            {
+                p->beginChangeGesture();   // a one-shot edit a DAW can record (review)
                 p->setValueNotifyingHost (p->convertTo0to1 ((float) n));
+                p->endChangeGesture();
+            }
         // The SPLIT button is lit while it waits; the caught key turns it off (processor side).
         if (keyboard != nullptr)
             keyboard->setSplitArmed (processor.isSplitLearnArmed());
@@ -899,7 +903,8 @@ void SynthyEditor::timerCallback()
     // Story 7.6: while Shift is held every module ↺ shows "factory values" (amber + dot) — the
     // modifier has no event of its own for an unfocused rack, so it is polled with the timer.
     {
-        const bool shift = juce::ModifierKeys::getCurrentModifiersRealtime().isShiftDown();
+        const bool shift = juce::ModifierKeys::getCurrentModifiersRealtime().isShiftDown()
+                        && juce::Process::isForegroundProcess();   // not Shift typed in another app (review)
         if (shift != shiftShownOnReset && rackBody != nullptr)
         {
             shiftShownOnReset = shift;
@@ -1065,6 +1070,8 @@ void SynthyEditor::timerCallback()
         {
             if (auto* f = rackBody->moduleById("sampler"))
                 f->refreshCombo(Parameters::ID::samplerSet);
+            if (auto* f = rackBody->moduleById(juce::String(Modules::kLayerBPrefix) + "sampler"))   // layer B's (review)
+                f->refreshCombo(juce::String(Modules::kLayerBPrefix) + Parameters::ID::samplerSet);
             // ...and PERC's KIT, for exactly the same reason. Without this its list stayed as it was
             // built — at startup that is EMPTY apart from "(no kit)" — so the combo could not show
             // the kit the patch was actually playing: the parameter pointed at a real set, the
@@ -1166,11 +1173,15 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
                      : focus == 2 ? PresetIO::LoadScope::Whole
                                   : PresetIO::LoadScope::KeepLayerB;
     const auto res = PresetIO::loadPreset(processor.getAPVTS(), f, scope);
-    if (! res.ok && scope == PresetIO::LoadScope::IntoLayerB && f.existsAsFile())
+    // Only a file that is really too OLD gets the "load it with A once" advice; a corrupt or
+    // foreign file falls through to the loud generic error below (review 2026-11-18).
+    if (! res.ok && scope == PresetIO::LoadScope::IntoLayerB && res.fileVersion > 0 && res.fileVersion < 10)
     {
-        juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon, "B",
+        juce::NativeMessageBox::showMessageBoxAsync(juce::MessageBoxIconType::WarningIcon,
+            currentLang == "DE" ? "In Layer B laden" : "Load into layer B",
             currentLang == "DE"
-                ? "â" + f.getFileNameWithoutExtension() + "â ist in einem alten Format. Einmal mit A laden und speichern, dann in B laden."
+                ? juce::String::fromUTF8 ("\xe2\x80\x9e") + f.getFileNameWithoutExtension() + juce::String::fromUTF8 ("\xe2\x80\x9c")
+                      + " ist in einem alten Format. Einmal mit A laden und speichern, dann in B laden."
                 : "\"" + f.getFileNameWithoutExtension() + "\" is in an older format. Load it with A once and save it, then load it into B.");
         return;
     }
@@ -1179,6 +1190,7 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
         // Only layer B changed: the instrument keeps its name and its clean baseline, the rack shows
         // what B now uses. The header then reads "Current State" — the state is no file any more.
         processor.requestGlobalLfoRearm();
+        processor.markLayerBClean();   // B's ↺ / double-click now return to THIS sound (review)
         if (rackBody) rackBody->revealAfterLayerLoad();
         return;
     }
@@ -1732,7 +1744,11 @@ void SynthyEditor::pressSplitButton()
     {
         if (auto* m = processor.getAPVTS().getParameter (Parameters::ID::layerMode))
             if (juce::roundToInt (m->convertFrom0to1 (m->getValue())) != 2)
+            {
+                m->beginChangeGesture();
                 m->setValueNotifyingHost (m->convertTo0to1 (2.0f));
+                m->endChangeGesture();
+            }
         processor.armSplitLearn (true);
     }
     if (keyboard != nullptr)
@@ -2383,7 +2399,13 @@ void SynthyEditor::buildRack()
           Kmod(lid(pre, P::wavetableFeedback), "FB", ModTarget::WavetableFeedback),   // Self-FM depth (body order matches OSC: … DETUNE, FB, AMP, PAN)
           Kmod(lid(pre, P::wavetableAmp), "AMP", ModTarget::WavetableAmp),   // AMP·PAN grouped last as the output stage (rack-wide convention)
           Kmod(lid(pre, P::wavetablePan), "PAN", ModTarget::WavetablePan) },   // Epic 10: stereo placement + auto-pan target
-        [] { WavetableBankStore::instance().resetToBuiltIns(); },    // ↺ drops user-loaded banks → back to the standard list
+        [this, pre]   // ↺ (Shift) drops user-loaded banks → back to the standard list —
+        {             // unless the OTHER layer plays one of them (21.6 review)
+            const juce::String other = pre.isEmpty() ? juce::String (Modules::kLayerBPrefix) : juce::String();
+            auto& store = WavetableBankStore::instance();
+            if ((int) processor.getAPVTS().getRawParameterValue (other + P::wavetableBank)->load() < store.getBuiltInCount())
+                store.resetToBuiltIns();
+        },
         /*visualOnly*/ false, /*defaultVisible*/ false);             // hidden until switched on (2026-10-03)
     });
     // SAMPLER (Story 12.1) — recordings as a generator: dynamic SET combo over the session's
@@ -2447,6 +2469,12 @@ void SynthyEditor::buildRack()
                 const bool otherGenOn = isOn (lid(pre, P::oscOn (1))) || isOn (lid(pre, P::oscOn (2))) || isOn (lid(pre, P::oscOn (3)))
                                      || isOn (lid(pre, P::subOn)) || isOn (lid(pre, P::noiseOn))
                                      || isOn (lid(pre, P::karplusOn)) || isOn (lid(pre, P::wavetableOn));
+                // The OUTPUT MODE is the instrument's: only when the other layer sounds nothing
+                // either (review 2026-11-18 — a B pick must not re-spatialise A's oscillators).
+                const juce::String other = pre.isEmpty() ? juce::String (Modules::kLayerBPrefix) : juce::String();
+                const bool otherLayerOn = isOn (other + P::oscOn (1)) || isOn (other + P::oscOn (2)) || isOn (other + P::oscOn (3))
+                                       || isOn (other + P::subOn) || isOn (other + P::noiseOn) || isOn (other + P::karplusOn)
+                                       || isOn (other + P::wavetableOn) || isOn (other + P::samplerOn);
                 if (! otherGenOn)
                 {
                     if (auto* pa = processor.getAPVTS().getParameter (lid(pre, P::adsrOn)))
@@ -2455,8 +2483,9 @@ void SynthyEditor::buildRack()
                     // that renders a stereo recording untouched (hard L/R). Kunstkopf/Binaural
                     // re-spatialise through HRIR/ITD — audibly wrong on a piano (user 2026-08-04);
                     // Mono/Pseudo-Stereo sum the mic channels (comb). Same guard: sole generator.
-                    if (auto* po = processor.getAPVTS().getParameter (lid(pre, P::outputMode)))
-                        po->setValueNotifyingHost (po->convertTo0to1 ((float) (int) OutputMode::StereoPan));
+                    if (! otherLayerOn)
+                        if (auto* po = processor.getAPVTS().getParameter (lid(pre, P::outputMode)))
+                            po->setValueNotifyingHost (po->convertTo0to1 ((float) (int) OutputMode::StereoPan));
                 }
             }
         };

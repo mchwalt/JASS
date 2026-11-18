@@ -131,7 +131,7 @@ namespace rack
         enableable = 0; on = 0;
         for (const auto& e : layoutModel)
         {
-            if (e.zone != zone || ! e.visible) continue;
+            if (e.zone != zone || ! shown (e)) continue;
             const auto* p = placedById (e.id);
             if (p == nullptr || p->frame == nullptr) continue;
             if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
@@ -157,7 +157,7 @@ namespace rack
             if (zh != nullptr) zh->bypassSnapshot.clear();
             for (const auto& e : layoutModel)
             {
-                if (e.zone != zone || ! e.visible) continue;
+                if (e.zone != zone || ! shown (e)) continue;
                 const auto* p = placedById (e.id);
                 if (p == nullptr || p->frame == nullptr) continue;
                 if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
@@ -165,7 +165,9 @@ namespace rack
                 if (pid.isEmpty()) continue;
                 if (auto* param = apvts.getParameter (pid))
                 {
-                    if (zh != nullptr) zh->bypassSnapshot[e.id] = param->getValue();   // remember
+                    // Keyed by the ENABLE id, not the layout id: a bypass made in B must not be
+                    // restored into A's enables (21.6 review).
+                    if (zh != nullptr) zh->bypassSnapshot[pid] = param->getValue();   // remember
                     param->setValueNotifyingHost (0.0f);
                 }
             }
@@ -175,7 +177,7 @@ namespace rack
             const bool haveSnapshot = (zh != nullptr && ! zh->bypassSnapshot.empty());
             for (const auto& e : layoutModel)
             {
-                if (e.zone != zone || ! e.visible) continue;
+                if (e.zone != zone || ! shown (e)) continue;
                 const auto* p = placedById (e.id);
                 if (p == nullptr || p->frame == nullptr) continue;
                 if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
@@ -186,7 +188,7 @@ namespace rack
                     float val = 1.0f;   // fallback: turn the whole group on
                     if (haveSnapshot)
                     {
-                        auto it = zh->bypassSnapshot.find (e.id);
+                        auto it = zh->bypassSnapshot.find (pid);
                         val = (it != zh->bypassSnapshot.end()) ? it->second : 0.0f;
                     }
                     param->setValueNotifyingHost (val);
@@ -210,6 +212,7 @@ namespace rack
                     e.zone     = d.zone;
                     e.position = d.position;
                     e.visible  = d.visible;
+                    e.visibleB = d.visibleB;
                     break;
                 }
 
@@ -219,23 +222,27 @@ namespace rack
         // on). Using getDefaultValue() blindly would silence OSC/most generators (their declared
         // default is 0), which is exactly the "reset turns everything off" bug. Knobs untouched.
         if (auto* zh = zoneHeaderFor (zone)) zh->bypassSnapshot.clear();   // drop any stashed bypass
+        // Both layers (21.6 review): each layer's frame gets its factory (Init) enable where the
+        // module is shown in that layer.
         for (const auto& e : layoutModel)
-        {
-            if (e.zone != zone || ! e.visible) continue;
-            const auto* p = placedById (e.id);
-            if (p == nullptr || p->frame == nullptr) continue;
-            if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
-            const auto pid = p->frame->enableParamId();
-            if (pid.isEmpty()) continue;
-            if (auto* param = apvts.getParameter (pid))
+            for (const bool layerB : { false, true })
             {
-                float val = param->getDefaultValue();
-                if (auto it = factoryEnableByParam.find (pid); it != factoryEnableByParam.end())
-                    val = it->second;
-                param->setValueNotifyingHost (val);
+                if (e.zone != zone || (layerB && ! hasLayerB (e.id)) || ! shownIn (e, layerB)) continue;
+                const auto* p = placedIn (e.id, layerB);
+                if (p == nullptr || p->frame == nullptr) continue;
+                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                const auto pid = p->frame->enableParamId();
+                if (pid.isEmpty()) continue;
+                if (auto* param = apvts.getParameter (pid))
+                {
+                    float val = param->getDefaultValue();
+                    if (auto it = factoryEnableByParam.find (pid); it != factoryEnableByParam.end())
+                        val = it->second;
+                    param->setValueNotifyingHost (val);
+                }
             }
-        }
 
+        revealEnabledModules();      // what Init switches on must be visible (as resetAllModules does)
         relayout();
         writeLayoutToState();
         enforceHiddenDisabled();     // factory-hidden modules must stay silent (invariant)
@@ -294,8 +301,8 @@ namespace rack
         int pos = 0;
         for (const auto& e : layoutModel)
             if (e.zone == zone) ++pos;
-        layoutModel.push_back ({ id, zone, pos, vis, alignR });
-        defaultLayout.push_back ({ id, zone, pos, vis, alignR });   // stock layout (for reset + isDefault)
+        layoutModel.push_back ({ id, zone, pos, vis, alignR, vis });
+        defaultLayout.push_back ({ id, zone, pos, vis, alignR, vis });   // stock layout (for reset + isDefault)
     }
 
     const Rack::Placed* Rack::placedById (const juce::String& id) const
@@ -317,6 +324,28 @@ namespace rack
         for (const auto& p : placed)  if (p.id == id) out.push_back (&p);
         for (const auto& p : placedB) if (p.id == id) out.push_back (&p);
         return out;
+    }
+
+    bool Rack::hasLayerB (const juce::String& id) const
+    {
+        for (const auto& p : placedB)
+            if (p.id == id) return true;
+        return false;
+    }
+
+    bool Rack::shownIn (const RackLayoutEntry& e, bool layerB) const
+    {
+        return (layerB && hasLayerB (e.id)) ? e.visibleB : e.visible;
+    }
+
+    const Rack::Placed* Rack::placedIn (const juce::String& id, bool layerB) const
+    {
+        if (layerB)
+            for (const auto& p : placedB)
+                if (p.id == id) return &p;
+        for (const auto& p : placed)
+            if (p.id == id) return &p;
+        return nullptr;
     }
 
     void Rack::addLayerBModule (const juce::String& layerAId, ModuleDescriptor desc)
@@ -346,7 +375,8 @@ namespace rack
     {
         if (layerFocusB == b) return;
         layerFocusB = b;
-        relayout();   // same layout, the other layer's frames
+        relayout();   // the same zones and order, the other layer's frames and visible set (21.6 review)
+        if (onLayoutChanged) onLayoutChanged();
     }
 
     juce::String Rack::zoneName (Zone zone) { return zoneText (zone); }
@@ -362,15 +392,19 @@ namespace rack
         // hide  => force the module disabled (it's "not present" for the synth);
         // show  => restore its FACTORY-DEFAULT enable state, NOT force-on — e.g. CROSS MOD
         //          defaults to disabled, so re-showing it must leave it disabled.
-        // AD-16 (21.6): one layout for both layers, so showing/hiding drives BOTH layers' enables.
-        for (const auto* p : allLayersById (id))
-        {
-            if (p->frame == nullptr || p->frame->isHostLocked()) continue;   // AD-13: never write a host-locked enable
-            const auto pid = p->frame->enableParamId();
-            if (pid.isNotEmpty())
-                if (auto* param = apvts.getParameter (pid))
-                    param->setValueNotifyingHost (show ? param->getDefaultValue() : 0.0f);
-        }
+        // 21.6 review: visibility is per layer, so a show/hide drives the edited layer's enable.
+        driveEnableLayer (id, layerFocusB, show);
+    }
+
+    void Rack::driveEnableLayer (const juce::String& id, bool layerB, bool show)
+    {
+        if (layerB && ! hasLayerB (id)) layerB = false;   // an instrument module has one frame
+        const auto* p = placedIn (id, layerB);
+        if (p == nullptr || p->frame == nullptr || p->frame->isHostLocked()) return;   // AD-13: never write a host-locked enable
+        const auto pid = p->frame->enableParamId();
+        if (pid.isNotEmpty())
+            if (auto* param = apvts.getParameter (pid))
+                param->setValueNotifyingHost (show ? param->getDefaultValue() : 0.0f);
     }
 
     void Rack::setModuleVisible (const juce::String& id, bool visible)
@@ -379,9 +413,9 @@ namespace rack
         // show ⇒ enable once). Order is owned by the list, so position is kept.
         bool changed = false;
         for (auto& e : layoutModel)
-            if (e.id == id && e.visible != visible) { e.visible = visible; changed = true; }
+            if (e.id == id && shown (e) != visible) { visFlag (e, layerFocusB) = visible; changed = true; }
         if (! changed) return;
-        driveEnable (id, visible);
+        driveEnable (id, visible);   // the edited layer's enable
         relayout();
         writeLayoutToState();
         if (onLayoutChanged) onLayoutChanged();
@@ -458,6 +492,8 @@ namespace rack
                 auto* o = new juce::DynamicObject();
                 o->setProperty ("id",     e->id);
                 o->setProperty ("vis",    e->visible);
+                if (hasLayerB (e->id))
+                    o->setProperty ("visB", e->visibleB);   // 21.6 review: B's own visibility
                 o->setProperty ("alignR", e->alignRight);
                 arr.add (juce::var (o));
             }
@@ -483,6 +519,7 @@ namespace rack
                         it.zone   = prop.name.toString();
                         it.pos    = i;
                         it.vis    = item.getProperty ("vis", {});
+                        it.visB   = item.getProperty ("visB", {});
                         it.alignR = item.getProperty ("alignR", {});
                         if (it.id.isNotEmpty()) fn (it);
                     }
@@ -509,6 +546,10 @@ namespace rack
                 if (it.zone.isNotEmpty())  e.zone       = zoneFromName (it.zone);
                 if (! it.pos.isVoid())     e.position   = (int)  it.pos;
                 if (! it.vis.isVoid())     e.visible    = (bool) it.vis;
+                // B's own flag; data from before it (2026-11-19) copies A's - the load's reveal /
+                // hide passes then settle B on what B actually uses.
+                if (! it.visB.isVoid())    e.visibleB   = (bool) it.visB;
+                else if (! it.vis.isVoid()) e.visibleB  = (bool) it.vis;
                 if (! it.alignR.isVoid())  e.alignRight = (bool) it.alignR;
                 return;
             }
@@ -562,6 +603,7 @@ namespace rack
                 if (d.id == e.id)
                 {
                     if (d.zone != e.zone || d.position != e.position || e.visible != d.visible
+                        || (hasLayerB (e.id) && e.visibleB != d.visibleB)
                         || e.alignRight != d.alignRight) return false;
                     matched = true; break;
                 }
@@ -664,26 +706,19 @@ namespace rack
     {
         bool changed = false;
         for (auto& e : layoutModel)
-        {
-            if (! e.visible) continue;
-            if (e.zone == Zone::MasterBus || e.zone == Zone::Input) continue;   // infrastructure, not patch
-            if (isVisualOnly (e.id)) continue;                                   // the player's scope, not the preset's
-            // D4 (21.6): hidden only when the module is off in EVERY layer that has it.
-            bool anyOn = false, readable = false;
-            for (const auto* p : allLayersById (e.id))
+            for (const bool layerB : { false, true })   // per layer (21.6 review)
             {
-                if (p->frame == nullptr || p->frame->isHostLocked()) { anyOn = true; break; }   // AD-13: leave it
+                if (layerB && ! hasLayerB (e.id)) continue;
+                if (! shownIn (e, layerB)) continue;
+                if (e.zone == Zone::MasterBus || e.zone == Zone::Input) continue;   // infrastructure, not patch
+                if (isVisualOnly (e.id)) continue;                                   // the player's scope, not the preset's
+                const auto* p = placedIn (e.id, layerB);
+                if (p == nullptr || p->frame == nullptr || p->frame->isHostLocked()) continue;   // AD-13: leave it
                 const auto pid = p->frame->enableParamId();
-                if (pid.isEmpty()) { anyOn = true; break; }   // nothing to read — leave it
-                if (auto* param = apvts.getParameter (pid))
-                {
-                    readable = true;
-                    anyOn = anyOn || param->getValue() > 0.5f;
-                }
+                if (pid.isEmpty()) continue;   // nothing to read — leave it
+                if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() <= 0.5f)
+                { visFlag (e, layerB) = false; changed = true; }   // off in this layer ⇒ hidden there
             }
-            if (readable && ! anyOn)
-            { e.visible = false; changed = true; }   // off everywhere ⇒ hidden (the enables are already off)
-        }
         return changed;
     }
 
@@ -691,8 +726,9 @@ namespace rack
     {
         if (hosted) return;   // the host owns the state; the editor only reads it (see setHosted)
         for (const auto& e : layoutModel)
-            if (! e.visible)
-                driveEnable (e.id, false);   // hidden ⇒ silent (invariant)
+            for (const bool layerB : { false, true })   // per layer (21.6 review)
+                if ((! layerB || hasLayerB (e.id)) && ! shownIn (e, layerB))
+                    driveEnableLayer (e.id, layerB, false);   // hidden ⇒ silent (invariant)
     }
 
     bool Rack::isVisualOnly (const juce::String& id) const
@@ -705,19 +741,20 @@ namespace rack
     {
         bool changed = false;
         for (auto& e : layoutModel)
-            // A hidden VISUAL-ONLY module stays hidden: the user put the scope away, and no preset
-            // is entitled to bring back the 266 px that bought. Its enable param is driven off by
-            // enforceHiddenDisabled, which for a display only stops it drawing.
-            if (! e.visible && ! isVisualOnly (e.id))
-                // D4 (21.6): on in EITHER layer ⇒ shown.
-                for (const auto* p : allLayersById (e.id))
-                {
-                    if (p->frame == nullptr || p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
-                    const auto pid = p->frame->enableParamId();
-                    if (pid.isNotEmpty())
-                        if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() > 0.5f)
-                        { e.visible = true; changed = true; break; }   // enabled ⇒ show (leave the enable as-is)
-                }
+            for (const bool layerB : { false, true })   // per layer (21.6 review): on in a layer ⇒ shown there
+            {
+                if (layerB && ! hasLayerB (e.id)) continue;
+                // A hidden VISUAL-ONLY module stays hidden: the user put the scope away, and no preset
+                // is entitled to bring back the 266 px that bought. Its enable param is driven off by
+                // enforceHiddenDisabled, which for a display only stops it drawing.
+                if (shownIn (e, layerB) || isVisualOnly (e.id)) continue;
+                const auto* p = placedIn (e.id, layerB);
+                if (p == nullptr || p->frame == nullptr || p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                const auto pid = p->frame->enableParamId();
+                if (pid.isNotEmpty())
+                    if (auto* param = apvts.getParameter (pid); param != nullptr && param->getValue() > 0.5f)
+                    { visFlag (e, layerB) = true; changed = true; }   // enabled ⇒ show (leave the enable as-is)
+            }
         return changed;
     }
 
@@ -728,10 +765,10 @@ namespace rack
         // Each member's enable is coupled too (hide ⇒ disable, show ⇒ enable once).
         bool changed = false;
         for (auto& e : layoutModel)
-            if (e.zone == zone && e.visible != visible)
+            if (e.zone == zone && shown (e) != visible)
             {
-                e.visible = visible;
-                driveEnable (e.id, visible);
+                visFlag (e, layerFocusB) = visible;
+                driveEnable (e.id, visible);   // the edited layer's enable
                 changed = true;
             }
         if (! changed) return;
@@ -743,7 +780,7 @@ namespace rack
     bool Rack::isModuleVisible (const juce::String& id) const
     {
         for (const auto& e : layoutModel)
-            if (e.id == id) return e.visible;
+            if (e.id == id) return shown (e);
         return false;
     }
 
@@ -762,7 +799,7 @@ namespace rack
             juce::String title = e->id;
             if (const auto* p = placedById (e->id); p != nullptr && p->frame != nullptr)
                 title = p->frame->moduleTitle();
-            out.push_back ({ e->id, title, e->visible, e->alignRight });
+            out.push_back ({ e->id, title, shown (*e), e->alignRight });
         }
         return out;
     }
@@ -793,9 +830,14 @@ namespace rack
         auto* self  = const_cast<Rack*> (this);
         auto  saved = self->layoutModel;
         for (auto& e : self->layoutModel)
+        {
+            // Worst case over BOTH layers (21.6 review): the rack must fit whichever is edited.
+            if (hasLayerB (e.id)) e.visible = e.visible || e.visibleB;
             if (! e.visible && ! isVisualOnly (e.id))
                 for (const auto& d : defaultLayout)
-                    if (d.id == e.id) { e.visible = d.visible; break; }
+                    if (d.id == e.id) { e.visible = d.visible || d.visibleB; break; }
+            e.visibleB = e.visible;
+        }
         // A folded display (16.2) measures at its EXPANDED footprint, so unfolding it can
         // never overflow the window the way a preset-revealed module could — the same
         // worst-case principle PR #27 established for visibility.
@@ -843,7 +885,7 @@ namespace rack
             // NO header band, no modules, no height — the header disappears automatically.
             bool anyVisible = false;
             for (const auto& e : layoutModel)
-                if (e.zone == zone && e.visible) { anyVisible = true; break; }
+                if (e.zone == zone && shown (e)) { anyVisible = true; break; }
             if (! anyVisible)
                 continue;
 
@@ -926,7 +968,7 @@ namespace rack
             // call order (addModule), so the default layout packs identically to before.
             std::vector<const RackLayoutEntry*> entries;
             for (const auto& e : layoutModel)
-                if (e.zone == zone && e.visible)
+                if (e.zone == zone && shown (e))
                     entries.push_back (&e);
             std::stable_sort (entries.begin(), entries.end(),
                               [] (const RackLayoutEntry* a, const RackLayoutEntry* b)

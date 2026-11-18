@@ -46,7 +46,7 @@ namespace rack
         // Which layer the rack shows: false = A (also for A+B, linked editing), true = B.
         void setLayerFocusB (bool b);
         bool isLayerFocusB() const noexcept { return layerFocusB; }
-        // After LOAD B / A>B: what layer B now uses must be visible ("on ⇒ visible", D4).
+        // After a load into B: what layer B now uses must be visible in B ("on ⇒ visible").
         void revealAfterLayerLoad()
         {
             if (revealEnabledModules())
@@ -243,6 +243,10 @@ namespace rack
             int  position = 0;      // within-zone order
             bool visible  = true;
             bool alignRight = false;// pack right within the zone row (user-editable; persisted)
+            // 21.6 review (maintainer 2026-11-19): visibility PER LAYER for a patch module — the
+            // rack shows what is on in the layer being edited, not in "A or B". Zone and order stay
+            // one layout. `visible` is layer A's (and an instrument module's only) value.
+            bool visibleB = true;
         };
         struct ZoneBand { juce::String text; ModuleType tag; juce::Rectangle<int> bounds;
                           int lineStartX = 0; int lineEndX = 0; };
@@ -291,7 +295,15 @@ namespace rack
         // show ⇒ restore the module's FACTORY-DEFAULT enable state (not force-on — e.g. CROSS MOD
         // defaults to disabled). Writes the module's enableParam if it has one. NOT used on
         // load/reset (there visibility + enables are restored independently).
-        void driveEnable (const juce::String& id, bool show);
+        void driveEnable (const juce::String& id, bool show);             // the layer being edited
+        void driveEnableLayer (const juce::String& id, bool layerB, bool show);
+        // Per-layer visibility (21.6 review): does the module have a B frame, is it shown in a
+        // layer / in the layer being edited, and the flag to write for a layer.
+        bool hasLayerB (const juce::String& id) const;
+        bool shownIn (const RackLayoutEntry& e, bool layerB) const;
+        bool shown (const RackLayoutEntry& e) const { return shownIn (e, layerFocusB); }
+        bool& visFlag (RackLayoutEntry& e, bool layerB) const { return (layerB && hasLayerB (e.id)) ? e.visibleB : e.visible; }
+        const Placed* placedIn (const juce::String& id, bool layerB) const;
 
         // Preset-load reconciliation (complement of enforceHiddenDisabled): a module the loaded
         // preset left ENABLED must be visible — you can't play through a module you can't see, and
@@ -309,7 +321,7 @@ namespace rack
         // --- Layout persistence helpers (Story 4.3) ---
         // One item of persisted layout data in either shape (grouped object or legacy array);
         // a void field means "not in the data" and leaves the entry's current value alone.
-        struct LayoutItem { juce::String id, zone; juce::var pos, vis, alignR; };
+        struct LayoutItem { juce::String id, zone; juce::var pos, vis, alignR, visB; };
         juce::var entriesToVar (const std::vector<RackLayoutEntry>& entries) const;   // → {"ZONE": [{id,vis,alignR}, …], …} in render order
         static void forEachLayoutItem (const juce::var& v, const std::function<void (const LayoutItem&)>& fn);
         static void mergeLayoutItem (std::vector<RackLayoutEntry>& into, const LayoutItem& it);   // by id; unknown ids ignored
@@ -326,8 +338,7 @@ namespace rack
         std::vector<juce::String> pinnedIds;       // descriptor pinnedOnReset (LAYERS)
         // Pinned modules visible in `entries` — returns true if anything changed.
         bool showPinned (std::vector<RackLayoutEntry>& entries) const;
-        // Both layers' frames of a module (B's only where one exists) — visibility couples to
-        // BOTH enables (D4: shown if on in A or B, hidden ⇒ silent in both).
+        // Both layers' frames of a module (B's only where one exists).
         std::vector<const Placed*> allLayersById (const juce::String& id) const;
         std::vector<RackLayoutEntry> layoutModel;  // AD-10 single source of truth for placement
         std::vector<RackLayoutEntry> defaultLayout;// descriptor defaults, captured at build (for reset + isDefault)

@@ -859,8 +859,10 @@ The formal architecture spine lives at
      focus. Implementation preference: **two frame sets** for the patch modules (B's frames are
      built against B's ids) swapped on focus — no rebinding of `ModuleFrame` attachments, of
      its cached atomics or of the editor's captured lambdas (PAN gating, CROSS MOD
-     `enabledWhen`, the hand-built MOD MATRIX body). One rack layout for both layers (positions
-     and visibility are the module id's, AD-10/11). Mod rings, scope and spectrum follow the
+     `enabledWhen`, the hand-built MOD MATRIX body). One rack layout for both layers (zone and
+     position are the module id's, AD-10/11); **visibility is per layer** (revised 2026-11-19,
+     code review: a module shows in the layer where it is on — `visible` / `visibleB` per layout
+     entry, persisted as `vis` / `visB`; hide ⇒ silent in that layer only). Mod rings, scope and spectrum follow the
      focus. RANDOM and the LOAD-into-layer act on the focused layer; RESET and preset LOAD act
      on the instrument.
   9. **Preset = instrument + layer A + optional layer B.** The file keeps its root as today

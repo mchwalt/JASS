@@ -297,6 +297,7 @@ public:
     }
 
     int getNumBanks() const { return count.load(std::memory_order_acquire); }
+    int getBuiltInCount() const { return builtInCount; }
 
     const WavetableBank* getBank(int index) const
     {

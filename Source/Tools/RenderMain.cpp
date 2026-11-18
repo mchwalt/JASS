@@ -369,6 +369,23 @@ namespace
             PresetIO::loadPreset (r.p->getAPVTS(), tmpB, PresetIO::LoadScope::Whole);
             expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 1234.0f) < 0.5f, "A+B load of a file with LayerB replaces B");
         }
+        {
+            // LOAD with B selected: the file's sound lands on B's ids; A and the instrument stay.
+            Rig ref;   // what the file's layer A looks like, loaded the ordinary way
+            PresetIO::loadPreset (ref.p->getAPVTS(), tmpOld, PresetIO::LoadScope::KeepLayerB);
+            Rig r;
+            setParam (*r.p, ID::filterCutoff, 777.0f);
+            setParam (*r.p, ID::layerMode, 2.0f);
+            PresetIO::loadPreset (r.p->getAPVTS(), tmpOld, PresetIO::LoadScope::IntoLayerB);
+            int bad = 0;
+            for (const auto& id : Modules::layeredParamIds())
+                if (id != ID::samplerSet)   // a set index is session-local; resolved by name, maybe still loading
+                    if (std::abs (rawOf (*r.p, b + id) - rawOf (*ref.p, id)) > 1.0e-4f)
+                        if (bad++ < 5) std::cerr << "        B differs from the file: " << id << std::endl;
+            expect (bad == 0, "load into B: the file's sound is on layer B");
+            expect (std::abs (rawOf (*r.p, ID::filterCutoff) - 777.0f) < 0.5f && juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 2,
+                    "load into B: layer A and the mode untouched");
+        }
         tmpOld.deleteFile();
         tmpB.deleteFile();
     }
