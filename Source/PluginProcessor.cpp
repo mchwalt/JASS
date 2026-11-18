@@ -62,6 +62,17 @@ SynthyProcessor::SynthyProcessor()
         return -1.0f;
     };
 
+    // Shift+reset's target (21.6): the Init patch, which differs from the declared defaults
+    // where initPatchOverrides() says so — layer B's bass above all.
+    PresetIO::hooks(apvts).factoryValue01 = [this] (const juce::String& id) -> float
+    {
+        for (const auto& [oid, plain] : initPatchOverrides())
+            if (oid == id)
+                if (auto* p = apvts.getParameter (id))
+                    return p->convertTo0to1 (plain);
+        return -1.0f;
+    };
+
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
 
@@ -860,6 +871,49 @@ void SynthyProcessor::randomizeLayerA()
 
 }
 
+const std::vector<std::pair<juce::String, float>>& SynthyProcessor::initPatchOverrides()
+{
+    static const std::vector<std::pair<juce::String, float>> table = []
+    {
+        namespace ID = Parameters::ID;
+        const juce::String b (Modules::kLayerBPrefix);
+        std::vector<std::pair<juce::String, float>> t;
+        for (const juce::String pre : { juce::String(), b })
+        {
+            // MOD MATRIX off in Init (maintainer 2026-10-03): with every slot empty it does nothing
+            // to the sound, and a module that is on must be visible — so an on-but-unused matrix
+            // would sit in every Init rack. Its PARAM default stays 1 on purpose: presets from
+            // before the enable existed carry no "ModMatrixOn" and must keep routing (missing ⇒
+            // default, AD-11 pattern).
+            t.push_back({ pre + ID::modMatrixOn, 0.0f });
+        }
+        // Layer A: the octave stack OSC 1..3 (saw C4, sine C5, sine C3), all on.
+        for (int i = 1; i <= 3; ++i)
+            t.push_back({ ID::oscOn(i), 1.0f });
+        // Layer B (maintainer 2026-11-18: both layers sound at once in a Split, and clearly
+        // differently): B sits below the split, the left hand — a dark, short square bass under
+        // A's bright held saw stack. Square at the key + square an octave below, OSC 3 off, a
+        // closed lowpass with some resonance, a plucky envelope.
+        t.push_back({ b + ID::oscOn(1),   1.0f });
+        t.push_back({ b + ID::oscWave(1), 2.0f });      // Square
+        t.push_back({ b + ID::oscFreq(1), 261.63f });   // at the key (C4)
+        t.push_back({ b + ID::oscOn(2),   1.0f });
+        t.push_back({ b + ID::oscWave(2), 2.0f });      // Square
+        t.push_back({ b + ID::oscFreq(2), 130.81f });   // an octave below
+        t.push_back({ b + ID::oscOn(3),   0.0f });
+        t.push_back({ b + ID::filterOn,     1.0f });
+        t.push_back({ b + ID::filterType,   0.0f });    // Lowpass
+        t.push_back({ b + ID::filterCutoff, 400.0f });
+        t.push_back({ b + ID::filterReso,   2.0f });
+        t.push_back({ b + ID::attack,  0.005f });
+        t.push_back({ b + ID::decay,   0.25f });
+        t.push_back({ b + ID::sustain, 0.3f });
+        t.push_back({ b + ID::release, 0.15f });
+        return t;
+    }();
+    return table;
+}
+
 void SynthyProcessor::resetToDefault()
 {
     // Reset every parameter to its default, then enable all three oscillators
@@ -870,16 +924,9 @@ void SynthyProcessor::resetToDefault()
     patterns.perc.clear();   // AD-14: the patterns are no parameters, so the loop above cannot reach them
     patterns.step.clear();
 
-    for (int i = 1; i <= 3; ++i)
-        if (auto* oscOn = apvts.getParameter(Parameters::ID::oscOn(i)))
-            oscOn->setValueNotifyingHost(1.0f);
-
-    // MOD MATRIX off in Init (maintainer 2026-10-03): with every slot empty it does nothing to
-    // the sound, and a module that is on must be visible — so an on-but-unused matrix would sit
-    // in every Init rack. Its PARAM default stays 1 on purpose: presets from before the enable
-    // existed carry no "ModMatrixOn" and must keep routing (missing ⇒ default, AD-11 pattern).
-    if (auto* mm = apvts.getParameter(Parameters::ID::modMatrixOn))
-        mm->setValueNotifyingHost(0.0f);
+    for (const auto& [id, plain] : initPatchOverrides())
+        if (auto* p = apvts.getParameter(id))
+            p->setValueNotifyingHost(p->convertTo0to1(plain));
 
     autoPlayEnabled.store(true);
     currentPresetName = "Init";

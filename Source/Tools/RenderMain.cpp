@@ -1,6 +1,7 @@
 // JASS_Render — headless offline renderer for null tests (Story 21.4, S0 of AD-16).
 //
 //   JASS_Render.exe <preset.jass> <out.wav> [seconds] [options]
+//   (preset "init" = the Init patch, as RESET leaves it — both layers)
 //
 //   --b <preset.jass>   AD-16 (21.5): load that preset's patch into layer B and turn B on (LAYER)
 //   --split <note>      SPLIT at <note> instead of LAYER (below → B)
@@ -106,8 +107,10 @@ namespace
             proc->setRateAndBufferSizeDetails (kSampleRate, kBlock);
             proc->prepareToPlay (kSampleRate, kBlock);
 
-            const auto res = PresetIO::loadFromFile (proc->getAPVTS(), preset);
-            if (! res.ok) { fail ("cannot load preset " + preset.getFullPathName()); return; }
+            if (preset.getFileName() == "init")   // the Init patch itself (RESET), no file
+                proc->resetToDefault();
+            else if (const auto res = PresetIO::loadFromFile (proc->getAPVTS(), preset); ! res.ok)
+            { fail ("cannot load preset " + preset.getFullPathName()); return; }
             if (opt.layerB != juce::File())
             {
                 if (! PresetIO::loadIntoLayerB (proc->getAPVTS(), opt.layerB).ok)

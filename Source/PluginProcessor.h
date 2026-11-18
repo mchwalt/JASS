@@ -114,6 +114,11 @@ public:
 
     // Reset everything to defaults, then enable only OSC 1 (auto-play drone).
     void resetToDefault();
+    // The Init patch where it differs from the parameters' declared defaults (plain values), for
+    // both layers: A = OSC 1..3 on, MATRIX off; B (21.6) = a dark square bass, so a Split sounds
+    // two clearly different sounds at once. The declared defaults stay untouched (old presets
+    // read missing => default). RESET applies it, Shift+reset and zone resets go back to it.
+    static const std::vector<std::pair<juce::String, float>>& initPatchOverrides();
 
     // Pitch ratio of the note currently being played (relative to C4 = note 60);
     // 1.0 when only the drone or nothing sounds. Used by the editor so the OSC

@@ -502,6 +502,7 @@ namespace PresetIO
         std::function<int()>     seqLatchRoot;
         std::function<void(int)> applySeqLatchRoot;
         std::function<float(const juce::String& paramId)> presetBaseline01;
+        std::function<float(const juce::String& paramId)> factoryValue01;   // the Init value (normalised), -1 = the declared default
         std::function<void(bool)> setPresetLoading;
         PatternStore* patterns = nullptr;
     };

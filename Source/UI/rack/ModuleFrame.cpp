@@ -1050,6 +1050,9 @@ namespace rack
             if (auto* p = apvts.getParameter (id))
             {
                 float v01 = p->getDefaultValue();
+                if (PresetIO::hooks (apvts).factoryValue01)   // Init differs from the default (21.6)
+                    if (const float f = PresetIO::hooks (apvts).factoryValue01 (id); f >= 0.0f)
+                        v01 = f;
                 if (toPreset && PresetIO::hooks (apvts).presetBaseline01)
                     if (const float b = PresetIO::hooks (apvts).presetBaseline01 (id); b >= 0.0f)
                         v01 = b;   // no clean snapshot (modified LiveState at startup) ⇒ factory

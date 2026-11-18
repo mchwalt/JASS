@@ -42,6 +42,14 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   A or in B, and switching layers never re-packs the rack; LAYERS itself is back on screen after
   every reset. RANDOM rolls the layer being edited; the auto-enable couplings (MOD MATRIX, CROSS
   MOD) work in layer B as in A (Story 21.6).
+- **Init has a layer B that sounds — a dark square bass under A's bright saw stack.** RESET left B
+  without oscillators (only A's were switched on), so a Split after RESET played nothing below the
+  split key. B's Init is now its own sound, built to contrast with A where a Split puts it, under
+  the left hand: two squares (at the key and an octave below), OSC 3 off, a closed lowpass with
+  some resonance, a short envelope. Measured on the render rig: B's centre of brightness ~500 Hz
+  against A's ~6 kHz, and B falls ~8 dB within a held note where A holds. Shift+reset on a B
+  module and a group reset return to the same values; the parameters' declared defaults are
+  untouched, so existing presets load exactly as before (24 of 24 renders bit-identical).
 - **Layer B — JASS becomes bitimbral (engine, routing and state; the controls follow).** The
   target of this season is the UDO Super Gemini: two complete sounds from one keyboard, layered
   or split. A DAW with two instances is two instruments, the BASS box is a fixed mono voice -

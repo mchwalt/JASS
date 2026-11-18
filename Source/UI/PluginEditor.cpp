@@ -708,9 +708,10 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
         // Tell the rack which enable params ship "on" in the Init patch despite a declared
         // default of 0 (mirrors SynthyProcessor::resetToDefault): OSC 1..3. A zone RESET then
         // reproduces the factory enable state instead of silencing the oscillators.
-        for (int i = 1; i <= 3; ++i)
-            rackBody->setFactoryEnableDefault(Parameters::ID::oscOn(i), 1.0f);
-        rackBody->setFactoryEnableDefault(Parameters::ID::modMatrixOn, 0.0f);   // Init: matrix OFF (param default stays 1 for old presets)
+        // The same table RESET applies (both layers, 21.6); only the enables matter to the rack.
+        for (const auto& [id, plain] : SynthyProcessor::initPatchOverrides())
+            if (auto* p = processor.getAPVTS().getParameter(id))
+                rackBody->setFactoryEnableDefault(id, p->convertTo0to1(plain));
         // The DEFAULT rack is data: %AppData%\JASS\RackLayout.json (2026-10-03). First run seeds
         // it from the descriptor defaults so it is there to edit; afterwards the file wins, and
         // "Save as default" in the MODULES panel rewrites it. Done BEFORE the stored layout is
