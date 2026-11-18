@@ -2,7 +2,7 @@
 
 JASS stores patches as **JSON** files with the extension `.jass`. The format is
 **nested** (one object per module) and versioned; the current version is
-**`FormatVersion: 10`** (defined as `PresetIO::kFormatVersion`).
+**`FormatVersion: 11`** (defined as `PresetIO::kFormatVersion`).
 
 - **Format:** JSON, UTF‑8. File extension `.jass`.
 - **Canonical source:** each module declares its own parameters and JSON shape in
@@ -55,7 +55,7 @@ nested format on load.
     "Compressor": { "Enabled": false, "Threshold": -18.0, … },
     "StepSeq":    { …, "LatchRoot": 46, "Steps": [ … ] },
     "Perc":       { …, "File": "RoboterDrums", "Lanes": [ … ] },
-    "Layers":     { "BOn": false, "Mode": "Layer", "Split": 48, "Focus": "A",
+    "Layers":     { "Mode": "Single", "Split": 48, "Focus": "A",
                     "ALevel": 1.0, "BLevel": 1.0, "APan": 0.0, "BPan": 0.0 }
     // … Arp, Bass, Chaos, Scope, Spectrum, Keyboard, PresetBank
   },
@@ -81,7 +81,12 @@ instrument modules and layer A's modules sat together on the root (B, when prese
 readers take both shapes — a v10 file is a valid single-layer preset. Which module is a patch
 module is the spec's `layered` flag; in the APVTS layer B's parameters are layer A's ids with the
 prefix `b`. **Loading follows the LAYERS selection:** A only = instrument + `LayerA`, B kept;
-B only = the file's `LayerA` into layer B; A + B = the whole file.
+B only = the file's `LayerA` into layer B; A + B = the whole file — except that a file without
+`LayerB` (every preset from before the layers) says nothing about B, so B and the LAYERS settings
+stay as they are. `LayerB` is written only when B differs from its Init sound or a mode other
+than Single is set, so a single-layer sound stays a single-layer file; read without the header's
+LOAD (LiveState, a fresh load), a missing `LayerB` puts B at its Init sound. `Layers.Mode` is Single / Dual / Split; develop files of 2026-11-16 carried a
+`BOn` switch instead (B on + `Layer` = Dual, B on + `Split` = Split, B off = Single).
 
 Field renames never break old files: a `ParamSpec` may carry a `legacyPersistKey`, and the
 reader falls back to it when the current key is missing. Writes always use the current key.

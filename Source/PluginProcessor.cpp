@@ -31,6 +31,10 @@ SynthyProcessor::SynthyProcessor()
         samplePreload.request (setName, target);
         samplePreload.notify();   // wake it if it is idling
     };
+    PresetIO::hooks(apvts).cancelSamplerSet = [this] (const juce::String& target)
+    {
+        samplePreload.cancel (target);
+    };
     samplePreload.startThread (juce::Thread::Priority::background);
 
     // STEP SEQ latch (15.5): saving a patch stores the note a running figure is latched to, loading
@@ -159,6 +163,14 @@ void SynthyProcessor::SamplePreloadThread::request (const juce::String& setName,
             return;
         }
     queue.push_back ({ setName, targetParamId, gen });
+}
+
+void SynthyProcessor::SamplePreloadThread::cancel (const juce::String& targetParamId)
+{
+    const juce::ScopedLock sl (requestLock);
+    ++generations[targetParamId];   // a fetch already running lands stale and is dropped
+    queue.erase (std::remove_if (queue.begin(), queue.end(),
+                                 [&] (const Request& r) { return r.target == targetParamId; }), queue.end());
 }
 
 int SynthyProcessor::SamplePreloadThread::currentGeneration (const juce::String& targetParamId) const

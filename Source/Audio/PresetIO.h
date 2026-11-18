@@ -489,6 +489,9 @@ namespace PresetIO
     struct InstanceHooks
     {
         std::function<void(const juce::String& setName, const juce::String& targetParamId)> requestSamplerSet;
+        // Withdraw whatever set is still being fetched for that selector (review 2026-11-18): a
+        // request outlives the load that issued it, and must not land on a layer reset since.
+        std::function<void(const juce::String& targetParamId)> cancelSamplerSet;
         juce::String pendingSamplerSetName;
         juce::String pendingPercKitName;      // the same guard for PERC's kit (Story 16.1)
         juce::String pendingBSamplerSetName;  // ...and for layer B's SAMPLER (AD-16, Story 21.5)
@@ -685,14 +688,26 @@ namespace PresetIO
 
     }
 
-    // Layer B differs from a fresh layer? (Then it is written even while switched off — a parked
-    // second sound survives a save.)
+    // Layer B differs from a fresh layer? (Then it is written even while it does not play — a parked
+    // second sound survives a save.) "Fresh" is B's Init — RESET gives B its own bass since
+    // 2026-11-18, and applyVar puts that Init back when a file has no LayerB — so a single-layer
+    // sound saved after RESET stays a single-layer file, and an A+B load of it keeps the player's
+    // B (review 2026-11-18). A B at the bare declared defaults (an older state) differs from Init
+    // and is written as it is, so it round-trips exactly.
     inline bool layerBIsDefault (APVTS& a)
     {
         for (const auto& id : Modules::layeredParamIds())
-            if (auto* p = a.getParameter (juce::String (Modules::kLayerBPrefix) + id))
-                if (std::abs (p->getValue() - p->getDefaultValue()) > 1.0e-6f)
+        {
+            const juce::String bid = juce::String (Modules::kLayerBPrefix) + id;
+            if (auto* p = a.getParameter (bid))
+            {
+                float init = p->getDefaultValue();
+                if (hooks (a).factoryValue01)
+                    if (const float f = hooks (a).factoryValue01 (bid); f >= 0.0f) init = f;
+                if (std::abs (p->getValue() - init) > 1.0e-6f)
                     return false;
+            }
+        }
         return true;
     }
 
@@ -889,6 +904,8 @@ namespace PresetIO
             return;
         }
         pending.clear();
+        if (hooks(a).cancelSamplerSet)
+            hooks(a).cancelSamplerSet (paramId);   // an older request for this selector must not land on top
         if (idx < 0)
         {
             auto matches = samplesFolder().findChildFiles (juce::File::findFiles, false, name + ".*");
@@ -1159,9 +1176,13 @@ namespace PresetIO
         // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Layer" is
         // DUAL now, B ON + "Split" is SPLIT, B off is SINGLE (the default the read left).
         if (auto* lay = instSrc["Layers"].getDynamicObject(); lay != nullptr && lay->hasProperty("BOn"))
-            if ((bool) lay->getProperty("BOn"))
-                if (auto* p = a.getParameter(ID::layerMode))
-                    p->setValueNotifyingHost(p->convertTo0to1(lay->getProperty("Mode").toString() == "Split" ? 2.0f : 1.0f));
+            if (auto* p = a.getParameter(ID::layerMode))
+            {
+                // The read above matched "Split" in the new list already — B off must undo that.
+                const float mode = ! (bool) lay->getProperty("BOn") ? 0.0f
+                                 : (lay->getProperty("Mode").toString() == "Split" ? 2.0f : 1.0f);
+                p->setValueNotifyingHost(p->convertTo0to1(mode));
+            }
 
         // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
         // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when
@@ -1289,13 +1310,26 @@ namespace PresetIO
         resolveSet (instSrc,   "Perc",    "File", ID::percKit,    hooks(a).pendingPercKitName, 1);
 
         // Layer B (AD-16, Story 21.5): the patch modules under "LayerB", same names as on the root.
-        // Missing ⇒ B stays at the defaults the reset above gave it, and off.
+        // Missing ⇒ B is a fresh layer: its Init sound (RESET's bass, 2026-11-18), not the bare
+        // declared defaults — toVar leaves an untouched Init B out of the file, so this is what
+        // brings it back (a LiveState after a restart, a DAW-less round trip). A LOAD from the
+        // header keeps the player's B instead (loadPreset), whatever this sets.
         if (const auto lb = v["LayerB"]; lb.isObject())
         {
             Modules::readLayerState(a, Modules::kLayerBPrefix, lb);
             readMatrixSlots(a, Modules::kLayerBPrefix, lb);
             resolveSet (lb, "Sampler", "File", (juce::String (Modules::kLayerBPrefix) + ID::samplerSet).toRawUTF8(),
                         hooks(a).pendingBSamplerSetName);
+        }
+        else if (hooks(a).factoryValue01)
+        {
+            for (const auto& id : Modules::layeredParamIds())
+            {
+                const juce::String bid = juce::String (Modules::kLayerBPrefix) + id;
+                if (const float f = hooks(a).factoryValue01 (bid); f >= 0.0f)
+                    if (auto* p = a.getParameter (bid))
+                        p->setValueNotifyingHost (f);
+            }
         }
 
         // STEP SEQ latch (15.5): a patch saved with a figure running comes back running, on the note
@@ -1512,18 +1546,13 @@ namespace PresetIO
         return r;
     }
 
-    // ── AD-16 layer actions (Story 21.5; the buttons come with S2) ──────────────────────────
-    // LOAD INTO B: a preset's PATCH (its root patch modules + SAMPLER set name + matrix slots) lands
-    // in layer B's parameters. The instrument — master bus, sequencers, PERC, BASS, LAYERS, the
-    // latch — and layer A stay as they are, so any single-layer preset is layer material. Only
-    // current-format files: an older one would need the migration pass, which rewrites the file
-    // for layer A (every file in the Presets folder is converted at startup anyway). Message thread.
-    // LOAD A (2026-11-16, maintainer: "ich kann das Preset Piano nicht laden, weil es mir die
-    // Settings für B überschreibt") is the same routine for the other layer: the header's LOAD
-    // stays "the whole instrument", LOAD A / LOAD B put just a preset's sound into one layer.
-    // The source is the file's layer A ("LayerA" in v11, the root up to v10). v10 and later only:
+    // ── AD-16: a preset's SOUND into one layer (Story 21.5/21.6) ─────────────────────────────
+    // The file's layer A ("LayerA" in v11, the root up to v10) — patch modules, SAMPLER set name,
+    // matrix slots — lands in the layer `prefix` names; the instrument (master bus, sequencers,
+    // PERC, BASS, LAYERS, the latch) and the other layer stay as they are, so any single-layer
+    // preset is layer material. The header's LOAD uses it with B selected. v10 and later only:
     // older files need the migration pass, which rewrites the file (every file in the Presets
-    // folder is converted at startup anyway).
+    // folder is converted at startup anyway). Message thread.
     inline LoadResult loadIntoLayer(APVTS& a, const juce::File& file, const juce::String& prefix)
     {
         LoadResult r;
@@ -1544,14 +1573,22 @@ namespace PresetIO
         Modules::readLayerState(a, prefix, src);
         readMatrixSlots(a, prefix, src);
         const juce::String setParam = prefix + ID::samplerSet;
+        juce::String setName;
         if (auto* mod = src["Sampler"].getDynamicObject())
-            resolveSetByName(a, mod->getProperty("File").toString(), setParam.toRawUTF8(),
-                             hooks(a).pendingFor(setParam), 0);
+            setName = mod->getProperty("File").toString();
+        if (setName.isNotEmpty())
+            resolveSetByName(a, setName, setParam.toRawUTF8(), hooks(a).pendingFor(setParam), 0);
+        else
+        {
+            // The file names no set: a set still being fetched for this layer's PREVIOUS sound
+            // must not land on the new one (review 2026-11-18).
+            hooks(a).pendingFor(setParam).clear();
+            if (hooks(a).cancelSamplerSet) hooks(a).cancelSamplerSet(setParam);
+        }
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
         r.ok = true;
         return r;
     }
-    inline LoadResult loadIntoLayerA(APVTS& a, const juce::File& file) { return loadIntoLayer(a, file, {}); }
 
     // What a preset LOAD reaches follows the LAYERS selection (maintainer 2026-11-16: "Preset load
     // geht je nachdem wie A und B geschaltet sind"):
@@ -1575,7 +1612,7 @@ namespace PresetIO
             scope = LoadScope::KeepLayerB;
 
         // What survives the load: the selection always; with A only, layer B and every LAYERS
-        // setting (B ON, mode, split, levels) as well.
+        // setting (mode, split, levels, balance) as well.
         std::vector<std::pair<juce::String, float>> keep;
         auto keepId = [&] (const juce::String& id) { if (auto* p = a.getParameter(id)) keep.push_back({ id, p->getValue() }); };
         keepId(ID::layerFocus);
@@ -1598,25 +1635,19 @@ namespace PresetIO
             if (auto* p = a.getParameter(id))
                 p->setValueNotifyingHost(v01);
         if (scope == LoadScope::KeepLayerB)
+        {
+            // The file's own B (if it has one) asked for ITS set while loading; that request must
+            // not land on the B we kept (review 2026-11-18). Re-issue the kept B's own pending
+            // request, or withdraw whatever is in flight for B.
+            const juce::String bSet = juce::String(Modules::kLayerBPrefix) + ID::samplerSet;
             hooks(a).pendingBSamplerSetName = keepPendingB;
+            if (keepPendingB.isNotEmpty() && hooks(a).requestSamplerSet) hooks(a).requestSamplerSet(keepPendingB, bSet);
+            else if (hooks(a).cancelSamplerSet)                         hooks(a).cancelSamplerSet(bSet);
+        }
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
         return r;
     }
     inline LoadResult loadIntoLayerB(APVTS& a, const juce::File& file) { return loadIntoLayer(a, file, Modules::kLayerBPrefix); }
-
-    // COPY A → B: layer B becomes an exact copy of layer A's patch (SAMPLER set included, also one
-    // still being fetched). Message thread.
-    inline void copyLayerAToB(APVTS& a)
-    {
-        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);
-        const juce::String bp (Modules::kLayerBPrefix);
-        for (const auto& id : Modules::layeredParamIds())
-            if (auto* src = a.getParameter(id))
-                if (auto* dst = a.getParameter(bp + id))
-                    dst->setValueNotifyingHost(src->getValue());
-        hooks(a).pendingBSamplerSetName = hooks(a).pendingSamplerSetName;
-        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
-    }
 
     // Reads just the "Name" field of a preset file (empty if absent/unreadable).
     inline juce::String nameFromFile(const juce::File& file)

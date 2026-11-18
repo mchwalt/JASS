@@ -1,10 +1,10 @@
 #pragma once
 #include "ModuleSpec.h"
 
-// LAYERS (AD-16, Story 21.5) — the instrument-level switches of the bitimbral JASS: layer B on,
-// LAYER or SPLIT, the split point, which layer the rack edits, and level + balance per layer.
-// Not a rack module: the editor builds its rack from explicit addRackModule calls, and S2 puts
-// these controls into the header. Defaults are the pre-AD-16 instrument (B off, A at unity).
+// LAYERS (AD-16, Stories 21.5/21.6) — the instrument-level switches of the bitimbral JASS: MODE
+// (Single / Dual / Split), the split point, which layer the rack edits, and level + balance per
+// layer. The editor hand-builds the LAYERS rack module (MASTER BUS zone) from these params.
+// Defaults are the pre-AD-16 instrument: Single on A, A at unity.
 namespace Modules
 {
     inline ModuleSpec layers()

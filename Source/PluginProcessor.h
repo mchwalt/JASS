@@ -241,6 +241,8 @@ private:
         // asking for an instrument and a kit issues two requests, and a single counter would let
         // the second declare the first one stale.
         int  currentGeneration (const juce::String& targetParamId) const;
+        // Withdraw the pending request for that selector (queued or already loading).
+        void cancel (const juce::String& targetParamId);
 
     private:
         struct Request { juce::String name, target; int gen = 0; };

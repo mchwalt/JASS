@@ -57,7 +57,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   All-Notes-Off missed the pattern notes, a DAW project loaded with A and B lit shifted layer B,
   switching Single to A edited B, RANDOM on B could nudge A and rolled the TARGET. All fixed;
   `JASS_Render --selftest` now checks the router, the Split key filter and the pattern channel,
-  and each check was shown to fail with its bug put back. Measured with 2 x 8 voices, every
+  and each check was shown to fail with its bug put back. The second part of the review, presets:
+  an A-only load or a load into B no longer lets a sample set that was still loading land on B
+  afterwards; a sound saved after RESET stays a single-layer file (B's Init bass is "untouched",
+  and comes back as Init when a file has no B), so loading it with A and B lit keeps your B; the
+  2026-11-16 develop files with B switched off load as Single. Measured with 2 x 8 voices, every
   voice 3 oscillators x 7 unison: about a third of one core at the busiest point, so the voice
   count stays 8 per layer with no VOICES knob (Story 21.7).
 - **Init has a layer B that sounds — a punchy saw bass under A's bright saw stack.** RESET left B

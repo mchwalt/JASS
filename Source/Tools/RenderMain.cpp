@@ -9,7 +9,8 @@
 //   --roundtrip         after loading: preset (toVar → applyVar) and DAW state (get/setState) into a
 //                       fresh processor; every parameter must come back identical (exit 3 if not)
 //   --note <n>          play only note n (held 0.35 s, three times) instead of the fixed script
-//   JASS_Render.exe --selftest   router / Split filter / pattern channel checks, exit 4 on a failure
+//   JASS_Render.exe --selftest   router / Split filter / pattern channel / layer-B preset checks
+//                                (run from the repo root: it reads DemoPresets), exit 4 on a failure
 //   --over-init         start from Init, then load as the app does with A+B lit (the whole file)
 //   --save <file.jass>  write the loaded state back as a preset (round-trip a file byte for byte)
 //
@@ -308,6 +309,70 @@ namespace
         void run (double seconds) { for (int i = 0; i < (int) (seconds * kSampleRate / kBlock); ++i) block(); }
     };
 
+    // Layer B in presets (review group 2): a B that differs from Init survives a save/load, an
+    // untouched B is not written, and the LOAD scopes keep or replace B as documented.
+    void presetChecks()
+    {
+        using namespace Parameters;
+        const juce::String b (Modules::kLayerBPrefix);
+        std::cout << "Presets with layer B" << std::endl;
+        auto rawOf = [] (SynthyProcessor& p, const juce::String& id) { return p.getAPVTS().getRawParameterValue (id)->load(); };
+
+        Rig built;   // a layer B of its own: cutoff, a matrix routing, Split
+        setParam (*built.p, b + ID::filterCutoff, 1234.0f);
+        setParam (*built.p, b + ID::modSlotModule (2), 1.0f);   // a routing in slot 2
+        setParam (*built.p, ID::layerMode, 2.0f);
+        const auto json = juce::JSON::toString (PresetIO::toVar (built.p->getAPVTS(), "st"), false, 12);
+        expect (juce::JSON::parse (json)["LayerB"].isObject(), "a B of its own is written as LayerB");
+        // Every parameter but PERC's KIT: a fresh processor may still be fetching its kit in the
+        // background, and the file then carries the pending name - a load-timing matter, not B's.
+        auto sameState = [] (SynthyProcessor& x, SynthyProcessor& y)
+        {
+            int bad = 0;
+            for (auto* p : x.getParameters())
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*> (p); rp != nullptr && rp->paramID != Parameters::ID::percKit)
+                    if (auto* q = y.getAPVTS().getParameter (rp->paramID); q == nullptr || std::abs (q->getValue() - rp->getValue()) > 1.0e-6f)
+                        if (bad++ < 5) std::cerr << "        differs: " << rp->paramID << std::endl;
+            return bad;
+        };
+        {
+            Rig fresh;
+            PresetIO::applyVar (fresh.p->getAPVTS(), juce::JSON::parse (json));
+            expect (sameState (*built.p, *fresh.p) == 0, "save -> load: every parameter back, B included");
+        }
+        {
+            Rig init;   // RESET: B carries its Init bass, untouched
+            const auto v = PresetIO::toVar (init.p->getAPVTS(), "init");
+            expect (! v["LayerB"].isObject(), "B at its Init sound is not written (single-layer file)");
+            Rig other;
+            setParam (*other.p, b + ID::filterCutoff, 555.0f);   // a different B before the load
+            PresetIO::applyVar (other.p->getAPVTS(), juce::JSON::parse (juce::JSON::toString (v, false, 12)));
+            expect (sameState (*init.p, *other.p) == 0, "a file without LayerB loads B as its Init sound (LiveState after a restart)");
+        }
+
+        // LOAD scopes on a copy of a shipped v10 demo (no LayerB) and on the file written above.
+        const auto demo = juce::File::getCurrentWorkingDirectory().getChildFile ("DemoPresets/Matrix Demo.jass");
+        if (! demo.existsAsFile()) { expect (false, "DemoPresets/Matrix Demo.jass found (run from the repo root)"); return; }
+        const auto tmpOld = juce::File::createTempFile (".jass");
+        const auto tmpB   = juce::File::createTempFile (".jass");
+        demo.copyFileTo (tmpOld);
+        tmpB.replaceWithText (json);
+        {
+            Rig r;   // the player's B: cutoff 777, Split
+            setParam (*r.p, b + ID::filterCutoff, 777.0f);
+            setParam (*r.p, ID::layerMode, 2.0f);
+            PresetIO::loadPreset (r.p->getAPVTS(), tmpOld, PresetIO::LoadScope::Whole);
+            expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 777.0f) < 0.5f && juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 2,
+                    "A+B load of a file without LayerB keeps B and the mode");
+            PresetIO::loadPreset (r.p->getAPVTS(), tmpB, PresetIO::LoadScope::KeepLayerB);
+            expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 777.0f) < 0.5f, "A-only load of a file WITH LayerB keeps B");
+            PresetIO::loadPreset (r.p->getAPVTS(), tmpB, PresetIO::LoadScope::Whole);
+            expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 1234.0f) < 0.5f, "A+B load of a file with LayerB replaces B");
+        }
+        tmpOld.deleteFile();
+        tmpB.deleteFile();
+    }
+
     void processorChecks()
     {
         using namespace Parameters;
@@ -376,6 +441,7 @@ int main (int argc, char* argv[])
         juce::ScopedJuceInitialiser_GUI juceInit;
         routerChecks();
         processorChecks();
+        presetChecks();
         std::cout << (fails == 0 ? "selftest: all passed" : "selftest: FAILED") << std::endl;
         return fails == 0 ? 0 : 4;
     }

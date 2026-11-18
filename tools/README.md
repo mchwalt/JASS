@@ -73,7 +73,17 @@ times), `--over-init` loads like the app with A and B lit on top of Init, and a 
 corpus presets are Single / layer A: the router's destinations (split boundary, a note-off after
 the split moved, the pattern channel by TARGET), a live tap above the split while the ARP plays B,
 mono GLIDE's note-off channel, and a host All-Notes-Off on a latched STEP SEQ note. Exit 4 on a
-failure. Run it after every change to the routing.
+failure. Run it after every change to the routing. It also saves and loads a layer B (round
+trip, an Init B stays out of the file) and checks the LOAD scopes on a copy of a shipped demo —
+run it from the repo root, it reads `DemoPresets/`.
+
+**After a FormatVersion bump** the AppData presets are already converted, so a default null test
+only exercises the new reader. Also render the shipped demos (still the old format) with an exe
+from before the bump and with the new one:
+
+    python tools/rig/nulltest.py render  build/nulltest/ref/JASS_Render.exe build/nulltest/demo_ref DemoPresets
+    python tools/rig/nulltest.py render  build/Release/JASS_Render.exe       build/nulltest/demo_new DemoPresets
+    python tools/rig/nulltest.py compare build/nulltest/demo_ref build/nulltest/demo_new
 
 Without preset arguments it renders `%AppData%\JASS\Presets\*.jass` (copies — PresetIO migrates
 an old file in place). The renderer runs the host code path: no LiveState, no drone, MASTER
