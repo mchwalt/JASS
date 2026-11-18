@@ -8,6 +8,7 @@
 //   --solo a|b          mute the other layer (its LEVEL to 0) — compare one engine alone
 //   --roundtrip         after loading: preset (toVar → applyVar) and DAW state (get/setState) into a
 //                       fresh processor; every parameter must come back identical (exit 3 if not)
+//   --note <n>          play only note n (held 0.35 s, three times) instead of the fixed script
 //   --over-init         start from Init, then load as the app does with A+B lit (the whole file)
 //   --save <file.jass>  write the loaded state back as a preset (round-trip a file byte for byte)
 //
@@ -36,10 +37,16 @@ namespace
     // The fixed MIDI script. Covers: a single note, a chord starting mid-block, more notes than
     // voices (stealing), a long silence (voices go idle, then a voice is re-used), legato steps
     // (glide), and velocity spread. Times in seconds; channel 1.
-    std::vector<Ev> midiScript()
+    std::vector<Ev> midiScript (int singleNote = -1)
     {
         std::vector<Ev> e;
         auto note = [&e] (double on, double off, int n, float v) { e.push_back ({ on, n, v, true }); e.push_back ({ off, n, 0.0f, false }); };
+        if (singleNote >= 0)   // --note: one note, held 0.35 s, three times (a bass hit to measure)
+        {
+            for (int i = 0; i < 3; ++i)
+                note (0.10 + i * 1.0, 0.45 + i * 1.0, singleNote, 0.80f);
+            return e;
+        }
         note (0.10, 0.90, 60, 0.80f);                                   // single note
         note (1.0047, 2.20, 48, 0.60f); note (1.0047, 2.20, 52, 0.70f); // chord, mid-block start
         note (1.0047, 2.20, 55, 0.90f);
@@ -61,6 +68,7 @@ namespace
         bool       roundtrip = false;
         juce::File saveTo;
         bool       overInit = false; // load like the app with A+B lit, on top of Init (LoadScope::Whole)
+        int        note     = -1;    // --note: play only this note instead of the fixed script
     };
 
     void setParam (SynthyProcessor& p, const juce::String& id, float raw)
@@ -189,7 +197,7 @@ namespace
 
         void render()
         {
-            const auto script = midiScript();
+            const auto script = midiScript (opt.note);
             const int total = (int) std::ceil (seconds * kSampleRate);
             juce::AudioBuffer<float> all (2, total);
             all.clear();
@@ -260,6 +268,7 @@ int main (int argc, char* argv[])
         else if (a == "--save"  && hasNext) opt.saveTo = cwd.getChildFile (juce::String::fromUTF8 (argv[++i]));
         else if (a == "--roundtrip")        opt.roundtrip = true;
         else if (a == "--over-init")        opt.overInit  = true;
+        else if (a == "--note"  && hasNext) opt.note   = juce::String (argv[++i]).getIntValue();
         else if (a == "--info")
         {
             juce::PluginHostType::jucePlugInClientCurrentWrapperType = juce::AudioProcessor::wrapperType_Undefined;

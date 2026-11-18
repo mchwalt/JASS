@@ -878,37 +878,49 @@ const std::vector<std::pair<juce::String, float>>& SynthyProcessor::initPatchOve
         namespace ID = Parameters::ID;
         const juce::String b (Modules::kLayerBPrefix);
         std::vector<std::pair<juce::String, float>> t;
-        for (const juce::String pre : { juce::String(), b })
-        {
-            // MOD MATRIX off in Init (maintainer 2026-10-03): with every slot empty it does nothing
-            // to the sound, and a module that is on must be visible — so an on-but-unused matrix
-            // would sit in every Init rack. Its PARAM default stays 1 on purpose: presets from
-            // before the enable existed carry no "ModMatrixOn" and must keep routing (missing ⇒
-            // default, AD-11 pattern).
-            t.push_back({ pre + ID::modMatrixOn, 0.0f });
-        }
+        // MOD MATRIX off in layer A's Init (maintainer 2026-10-03): with every slot empty it does
+        // nothing to the sound, and a module that is on must be visible — so an on-but-unused
+        // matrix would sit in every Init rack. Its PARAM default stays 1 on purpose: presets from
+        // before the enable existed carry no "ModMatrixOn" and must keep routing (missing ⇒
+        // default, AD-11 pattern). Layer B's Init USES its matrix (below).
+        t.push_back({ ID::modMatrixOn, 0.0f });
         // Layer A: the octave stack OSC 1..3 (saw C4, sine C5, sine C3), all on.
         for (int i = 1; i <= 3; ++i)
             t.push_back({ ID::oscOn(i), 1.0f });
-        // Layer B (maintainer 2026-11-18: both layers sound at once in a Split, and clearly
-        // differently): B sits below the split, the left hand — a dark, short square bass under
-        // A's bright held saw stack. Square at the key + square an octave below, OSC 3 off, a
-        // closed lowpass with some resonance, a plucky envelope.
+        // Layer B (maintainer 2026-11-18: both layers sound at once in a Split, clearly different,
+        // and the bass "satt" like the maintainer's reference bass.wav). B sits below the split,
+        // under the left hand. Fitted on the render rig against that reference (E2, harmonics in
+        // four time windows, level): one sawtooth (its attack spectrum is a plain 1/n series, no
+        // sub), a lowpass that a SEPARATE envelope sweeps from ~3 octaves open down to the
+        // fundamental within ~0.3 s — the punch — while the amp envelope holds the note. The
+        // shared ADSR cannot do both (closing the filter fast enough dropped the level 10 dB by
+        // 200 ms), so the filter sweep is LFO 1 in One-Shot mode through MOD MATRIX slot 1.
+        // TRACK 100 % keeps the sweep the same across the keys (a fixed 80 Hz choked the upper
+        // notes, -9 dB against A); 250 Hz at C4 = ~80 Hz at E2.
         t.push_back({ b + ID::oscOn(1),   1.0f });
-        t.push_back({ b + ID::oscWave(1), 2.0f });      // Square
+        t.push_back({ b + ID::oscWave(1), 1.0f });      // Sawtooth
         t.push_back({ b + ID::oscFreq(1), 261.63f });   // at the key (C4)
-        t.push_back({ b + ID::oscOn(2),   1.0f });
-        t.push_back({ b + ID::oscWave(2), 2.0f });      // Square
-        t.push_back({ b + ID::oscFreq(2), 130.81f });   // an octave below
+        t.push_back({ b + ID::oscAmp(1),  1.0f });      // one oscillator against A's three
+        t.push_back({ b + ID::oscOn(2),   0.0f });
         t.push_back({ b + ID::oscOn(3),   0.0f });
         t.push_back({ b + ID::filterOn,     1.0f });
         t.push_back({ b + ID::filterType,   0.0f });    // Lowpass
-        t.push_back({ b + ID::filterCutoff, 400.0f });
-        t.push_back({ b + ID::filterReso,   2.0f });
-        t.push_back({ b + ID::attack,  0.005f });
-        t.push_back({ b + ID::decay,   0.25f });
-        t.push_back({ b + ID::sustain, 0.3f });
-        t.push_back({ b + ID::release, 0.15f });
+        t.push_back({ b + ID::filterCutoff, 250.0f });
+        t.push_back({ b + ID::filterReso,   0.9f });
+        t.push_back({ b + ID::filterTrack,  100.0f });
+        t.push_back({ b + ID::attack,  0.003f });
+        t.push_back({ b + ID::decay,   0.4f });
+        t.push_back({ b + ID::sustain, 0.6f });
+        t.push_back({ b + ID::release, 0.12f });
+        t.push_back({ b + ID::lfoOn(1),    1.0f });
+        t.push_back({ b + ID::lfoWave(1),  5.0f });     // One-Shot: 1 -> 0 once per note
+        t.push_back({ b + ID::lfoRate(1),  3.5f });     // ~0.29 s sweep
+        t.push_back({ b + ID::lfoDepth(1), 1.0f });
+        t.push_back({ b + ID::modMatrixOn, 1.0f });
+        t.push_back({ b + ID::modSlotSource(1), 0.0f });   // LFO 1
+        t.push_back({ b + ID::modSlotModule(1), (float) ModDest::moduleIndexForLabel ("FILTER") });
+        t.push_back({ b + ID::modSlotParam(1),  0.0f });   // CUTOFF
+        t.push_back({ b + ID::modSlotAmount(1), 1.0f });   // +3 octaves at the attack
         return t;
     }();
     return table;

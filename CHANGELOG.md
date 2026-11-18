@@ -42,14 +42,18 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   A or in B, and switching layers never re-packs the rack; LAYERS itself is back on screen after
   every reset. RANDOM rolls the layer being edited; the auto-enable couplings (MOD MATRIX, CROSS
   MOD) work in layer B as in A (Story 21.6).
-- **Init has a layer B that sounds — a dark square bass under A's bright saw stack.** RESET left B
+- **Init has a layer B that sounds — a punchy saw bass under A's bright saw stack.** RESET left B
   without oscillators (only A's were switched on), so a Split after RESET played nothing below the
-  split key. B's Init is now its own sound, built to contrast with A where a Split puts it, under
-  the left hand: two squares (at the key and an octave below), OSC 3 off, a closed lowpass with
-  some resonance, a short envelope. Measured on the render rig: B's centre of brightness ~500 Hz
-  against A's ~6 kHz, and B falls ~8 dB within a held note where A holds. Shift+reset on a B
-  module and a group reset return to the same values; the parameters' declared defaults are
-  untouched, so existing presets load exactly as before (24 of 24 renders bit-identical).
+  split key. B's Init is now its own sound for the left hand, fitted on the render rig to a
+  reference bass the maintainer picked as "satt" (a first static square bass sounded flat - hollow
+  odd harmonics that never moved). The reference is one sawtooth whose lowpass snaps from wide
+  open to the fundamental within ~0.3 s while the note holds; JASS's one ADSR cannot do both
+  (closing the filter that fast dropped the level 10 dB by 200 ms), so the sweep is LFO 1 in
+  One-Shot mode through MOD MATRIX slot 1, the ADSR keeps the level, and TRACK 100 % keeps the
+  sweep alike across the keys. Result on E2: harmonics within 2.3 dB of the reference over the
+  first 250 ms, same level. Shift+reset on a B module and a group reset return to the same
+  values; the parameters' declared defaults are untouched, so existing presets load exactly as
+  before (24 of 24 renders bit-identical).
 - **A preset without a layer B keeps your B, also with A and B lit.** Loading the whole file reset
   layer B to the bare defaults when the file had no B part - every preset from before the layers -
   which left B without oscillators: a Split after loading an older sound was silent below the

@@ -7,4 +7,4 @@ Zwei komplette Klänge gleichzeitig — Layer **A** und Layer **B**, gespielt vo
 - **A PAN / B PAN** — Balance je Layer: Mitte lässt den Layer, wie er ist, eine Seite macht die andere leiser.
 - **Preset laden** (LOAD, F-Tasten) folgt A / B: **A** lädt das Preset und behält deinen Layer B; **B** lädt nur den Klang des Presets nach B; **beide** laden die ganze Datei mit beiden Layern — ein Preset ohne Layer B (alle älteren) behält deinen B.
 
-ARP und STEP SEQ spielen Layer A (in Single mit B: Layer B). RANDOM würfelt den bearbeiteten Layer (beide, wenn beide an sind); RESET in der Kopfzeile geht auf Init: A ein heller Sägezahn-Stapel, B ein dunkler Square-Bass — ein Split spielt sofort zwei verschiedene Klänge.
+ARP und STEP SEQ spielen Layer A (in Single mit B: Layer B). RANDOM würfelt den bearbeiteten Layer (beide, wenn beide an sind); RESET in der Kopfzeile geht auf Init: A ein heller Sägezahn-Stapel, B ein knackiger Sägezahn-Bass — ein Split spielt sofort zwei verschiedene Klänge.
