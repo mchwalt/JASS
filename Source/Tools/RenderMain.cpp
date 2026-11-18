@@ -8,6 +8,7 @@
 //   --solo a|b          mute the other layer (its LEVEL to 0) — compare one engine alone
 //   --roundtrip         after loading: preset (toVar → applyVar) and DAW state (get/setState) into a
 //                       fresh processor; every parameter must come back identical (exit 3 if not)
+//   --over-init         start from Init, then load as the app does with A+B lit (the whole file)
 //   --save <file.jass>  write the loaded state back as a preset (round-trip a file byte for byte)
 //
 // Loads ONE preset through the normal PresetIO path into a fresh processor, waits for the sample
@@ -59,6 +60,7 @@ namespace
         int        solo    = 0;      // 0 = both, 1 = A only, 2 = B only
         bool       roundtrip = false;
         juce::File saveTo;
+        bool       overInit = false; // load like the app with A+B lit, on top of Init (LoadScope::Whole)
     };
 
     void setParam (SynthyProcessor& p, const juce::String& id, float raw)
@@ -109,6 +111,12 @@ namespace
 
             if (preset.getFileName() == "init")   // the Init patch itself (RESET), no file
                 proc->resetToDefault();
+            else if (opt.overInit)
+            {
+                proc->resetToDefault();
+                if (! PresetIO::loadPreset (proc->getAPVTS(), preset, PresetIO::LoadScope::Whole).ok)
+                { fail ("cannot load preset " + preset.getFullPathName()); return; }
+            }
             else if (const auto res = PresetIO::loadFromFile (proc->getAPVTS(), preset); ! res.ok)
             { fail ("cannot load preset " + preset.getFullPathName()); return; }
             if (opt.layerB != juce::File())
@@ -251,6 +259,7 @@ int main (int argc, char* argv[])
         else if (a == "--solo"  && hasNext) opt.solo   = juce::String (argv[++i]).equalsIgnoreCase ("b") ? 2 : 1;
         else if (a == "--save"  && hasNext) opt.saveTo = cwd.getChildFile (juce::String::fromUTF8 (argv[++i]));
         else if (a == "--roundtrip")        opt.roundtrip = true;
+        else if (a == "--over-init")        opt.overInit  = true;
         else if (a == "--info")
         {
             juce::PluginHostType::jucePlugInClientCurrentWrapperType = juce::AudioProcessor::wrapperType_Undefined;

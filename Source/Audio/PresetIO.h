@@ -1567,6 +1567,13 @@ namespace PresetIO
         if (scope == LoadScope::IntoLayerB)
             return loadIntoLayer(a, file, Modules::kLayerBPrefix);
 
+        // A file without a layer B (every preset from before AD-16, and one saved with B off and
+        // untouched) says nothing about B — so even "the whole file" leaves B as it is, exactly
+        // like A only (maintainer 2026-11-18: "alte Presets ueberschreiben immer nur Layer A").
+        // Before, A + B reset B to the declared defaults: no oscillators, a silent B in a Split.
+        if (scope == LoadScope::Whole && ! juce::JSON::parse(file)["LayerB"].isObject())
+            scope = LoadScope::KeepLayerB;
+
         // What survives the load: the selection always; with A only, layer B and every LAYERS
         // setting (B ON, mode, split, levels) as well.
         std::vector<std::pair<juce::String, float>> keep;

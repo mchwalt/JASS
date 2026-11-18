@@ -50,6 +50,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   against A's ~6 kHz, and B falls ~8 dB within a held note where A holds. Shift+reset on a B
   module and a group reset return to the same values; the parameters' declared defaults are
   untouched, so existing presets load exactly as before (24 of 24 renders bit-identical).
+- **A preset without a layer B keeps your B, also with A and B lit.** Loading the whole file reset
+  layer B to the bare defaults when the file had no B part - every preset from before the layers -
+  which left B without oscillators: a Split after loading an older sound was silent below the
+  split key. A file without B says nothing about B, so it now loads like A only: layer B and the
+  LAYERS settings stay. A file that carries a B still loads both layers (maintainer 2026-11-18).
 - **Layer B — JASS becomes bitimbral (engine, routing and state; the controls follow).** The
   target of this season is the UDO Super Gemini: two complete sounds from one keyboard, layered
   or split. A DAW with two instances is two instruments, the BASS box is a fixed mono voice -
