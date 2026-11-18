@@ -11,6 +11,12 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **JUCE 9.0.2 → 9.0.5.** The framework's Windows MIDI fixes reach JASS: devices that are
+  unplugged and plugged back (9.0.4: device disconnection handling, 9.0.5: WinMM fixes - the
+  maintainer plays through a USB MIDI interface), Direct2D drawing fixes on Windows, and hardening
+  against malformed WAV, AIFF, XML, JSON and ValueTree data - the paths a SAMPLER recording, a
+  preset and a DAW project come in through. None of the breaking changes touches JASS's code;
+  every preset renders bit-identical before and after (24 of 24, the 12 shipped demos 12 of 12).
 - **The MOD MATRIX's MOD list is sorted again.** The destination catalog is append-only (its
   index is what a DAW project stores), so every module added since the matrix shipped -
   COMPRESSOR, KARPLUS, MASTER, NOISE, PITCH ENV, STEREO, SAMPLER, GRAIN - had piled up behind

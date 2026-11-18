@@ -111,7 +111,7 @@ project(JASS VERSION ${JASS_CALVER})  # numeric CalVer, month unpadded
 ### 3.1 JUCE (the only third-party *code* dependency)
 
 - Git submodule at `JUCE/`, url `https://github.com/juce-framework/JUCE.git`,
-  pinned by commit (currently tag **9.0.2**). License: JUCE is dual-licensed
+  pinned by commit (currently tag **9.0.5**). License: JUCE is dual-licensed
   (AGPLv3 / commercial since JUCE 8/9); JASS is AGPLv3, which covers free JUCE use.
 - **Update procedure:**
 
