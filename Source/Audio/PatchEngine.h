@@ -10,7 +10,7 @@
 // per-voice parameter push. The processor keeps the instrument: MIDI pre-processing (drone, ARP,
 // STEP SEQ, BASS routing, host anchors), PERC, BASS, CHAOS, compressor, master, stereo stages.
 //
-// S0 has ONE engine (layer A, today's parameter ids). AD-16 S1 adds a second with prefix "b".
+// Two of them since AD-16 S1: layer A (today's parameter ids) and layer B (prefix "b").
 // The processor calls the block methods in the order the code ran when it lived in processBlock;
 // the cut was verified bit-exact with tools/rig/nulltest.py.
 class PatchEngine
@@ -38,6 +38,17 @@ public:
 
     // ── block, in call order ─────────────────────────────────────────────────────────────────
     void killAllVoices()                     { synth.allNotesOff (0, false); }
+    // Release every voice playing on `channel` (21.7 review: a host All-Notes-Off on channel 1 must
+    // also stop the ARP / STEP SEQ voices, which play on the pattern channel).
+    void releaseChannel (int channel)        { synth.allNotesOff (channel, true); }
+    // Voices whose key is still down (not in their release) — the --selftest's hang / mono check.
+    int keysDown() const
+    {
+        int n = 0;
+        for (auto* v : voiceRoster)
+            if (v->isVoiceActive() && v->isKeyDown()) ++n;
+        return n;
+    }
     // A voice still plays (a held note or a release tail) — a layer that stopped taking notes
     // (SINGLE switched to the other one) keeps rendering until this is false.
     bool isSounding() const
@@ -70,7 +81,6 @@ public:
     void  requestGlobalLfoRearm() noexcept   { rearmGlobalLfos.store (true); }
 
 private:
-    juce::AudioProcessorValueTreeState& apvts;
     Parameters::PatchParams p;
 
     // Construction order matters for the null test: every LFO draws its random seed from a
@@ -112,6 +122,7 @@ private:
     std::vector<int> glideNewNotes, glideOffNotes;   // per-block scratch (no RT realloc)
     juce::MidiBuffer glideRebuiltScratch;            // mono-glide rebuild (no per-block alloc)
     int monoSounding = -1;             // Mono glide: the note currently sounding (last-note priority)
+    int monoSoundingChannel = 1;       // ...and its channel: live keys play 1, ARP / STEP SEQ the pattern channel
 
     JUCE_DECLARE_NON_COPYABLE (PatchEngine)
 };

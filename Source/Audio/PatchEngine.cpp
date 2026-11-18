@@ -1,8 +1,7 @@
 #include "PatchEngine.h"
 #include "../DSP/SyncDivision.h"
 
-PatchEngine::PatchEngine (juce::AudioProcessorValueTreeState& s, const juce::String& idPrefix)
-    : apvts (s)
+PatchEngine::PatchEngine (juce::AudioProcessorValueTreeState& apvts, const juce::String& idPrefix)
 {
     p.resolve (apvts, idPrefix);
 
@@ -64,8 +63,6 @@ void PatchEngine::beginBlock (const BlockContext& ctx)
     blockDelayTimeSec = SyncDivision::isSynced(delayDiv)
                                     ? SyncDivision::delaySeconds(ctx.syncBpm, delayDiv)
                                     : (double) *p.delayTime;
-
-    SamplePlayer::resetSeekBudget();   // 12.3: per-block cap on note-on stretch pre-rolls
 
     // Story 12.1: shared SAMPLER loop clock — ONE master phase advancing at the ROOT rate × SPEED
     // through the START..END region. Loop-mode notes START at this phase (SamplePlayer::trigger),
@@ -260,14 +257,17 @@ void PatchEngine::processGlide (juce::MidiBuffer& midiMessages, int droneChannel
             const int  sp = meta.samplePosition;
             if (m.isNoteOn() && m.getChannel() != droneChannel)
             {
-                if (monoSounding >= 0 && monoSounding != m.getNoteNumber())
-                    rebuilt.addEvent (juce::MidiMessage::noteOff (1, monoSounding), sp);
+                // On the channel the sounding note STARTED on — the synth matches note-offs by
+                // channel, and ARP / STEP SEQ notes play on the pattern channel (21.7 review).
+                if (monoSounding >= 0 && (monoSounding != m.getNoteNumber() || monoSoundingChannel != m.getChannel()))
+                    rebuilt.addEvent (juce::MidiMessage::noteOff (monoSoundingChannel, monoSounding), sp);
                 monoSounding = m.getNoteNumber();
+                monoSoundingChannel = m.getChannel();
                 rebuilt.addEvent (m, sp);
             }
             else if (m.isNoteOff() && m.getChannel() != droneChannel)
             {
-                if (m.getNoteNumber() == monoSounding)
+                if (m.getNoteNumber() == monoSounding && m.getChannel() == monoSoundingChannel)
                     monoSounding = -1;
                 rebuilt.addEvent (m, sp);
             }

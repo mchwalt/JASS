@@ -9,6 +9,7 @@
 //   --roundtrip         after loading: preset (toVar → applyVar) and DAW state (get/setState) into a
 //                       fresh processor; every parameter must come back identical (exit 3 if not)
 //   --note <n>          play only note n (held 0.35 s, three times) instead of the fixed script
+//   JASS_Render.exe --selftest   router / Split filter / pattern channel checks, exit 4 on a failure
 //   --over-init         start from Init, then load as the app does with A+B lit (the whole file)
 //   --save <file.jass>  write the loaded state back as a preset (round-trip a file byte for byte)
 //
@@ -247,8 +248,137 @@ namespace
     };
 }
 
+namespace
+{
+    // --selftest (code review 2026-11-18): the routing the null test cannot see — all 24 presets
+    // are Single / layer A, so the router, the Split key filter and the pattern channel never run
+    // there. Asserts destinations and "no key left down"; exit 4 on the first failure.
+    int fails = 0;
+    void expect (bool ok, const char* what)
+    {
+        std::cout << (ok ? "  ok    " : "  FAIL  ") << what << std::endl;
+        if (! ok) ++fails;
+    }
+
+    void routerChecks()
+    {
+        std::cout << "LayerRouter" << std::endl;
+        LayerRouter r;
+        LayerRouter::Settings s;
+        s.playA = s.playB = true; s.split = true; s.splitNote = 60;
+        s.patternChannel = SynthyProcessor::kPatternChannel;
+        s.droneChannel = SynthyProcessor::kDroneChannel; s.auditionChannel = SynthyProcessor::kAuditionChannel;
+        juce::MidiBuffer in, a, b;
+        auto one = [&] (const juce::MidiMessage& m) { in.clear(); in.addEvent (m, 0); r.route (in, a, b, s); };
+        one (juce::MidiMessage::noteOn (1, 59, 0.8f));  expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "split 60: key 59 -> B only");
+        one (juce::MidiMessage::noteOn (1, 60, 0.8f));  expect (a.getNumEvents() == 1 && b.getNumEvents() == 0, "split 60: key 60 -> A only");
+        s.splitNote = 40;   // the split moves while both keys are held
+        one (juce::MidiMessage::noteOff (1, 59));       expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "split moved: 59's note-off still -> B");
+        one (juce::MidiMessage::noteOff (1, 60));       expect (a.getNumEvents() == 1 && b.getNumEvents() == 0, "split moved: 60's note-off still -> A");
+        s.splitNote = 60; s.patternDest = LayerRouter::kB;
+        one (juce::MidiMessage::noteOn (SynthyProcessor::kPatternChannel, 84, 0.8f));
+        expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "pattern note 84 (above the split), TARGET B -> B only");
+        s.split = false;   // DUAL, then back to SPLIT while the key is held
+        one (juce::MidiMessage::noteOn (1, 70, 0.8f));  expect (a.getNumEvents() == 1 && b.getNumEvents() == 1, "dual: key -> both");
+        s.split = true;
+        one (juce::MidiMessage::noteOff (1, 70));       expect (a.getNumEvents() == 1 && b.getNumEvents() == 1, "dual -> split while held: note-off -> both");
+    }
+
+    struct Rig
+    {
+        std::unique_ptr<SynthyProcessor> p;
+        juce::AudioBuffer<float> buf { 2, kBlock };
+        Rig()
+        {
+            juce::PluginHostType::jucePlugInClientCurrentWrapperType = juce::AudioProcessor::wrapperType_Undefined;
+            p = std::make_unique<SynthyProcessor>();
+            p->setRateAndBufferSizeDetails (kSampleRate, kBlock);
+            p->prepareToPlay (kSampleRate, kBlock);
+            p->resetToDefault();
+        }
+        void set (const char* id, float raw) { setParam (*p, id, raw); }
+        // One block with the given events (sample offsets), returns nothing; buffer discarded.
+        void block (std::initializer_list<std::pair<int, juce::MidiMessage>> ev = {})
+        {
+            juce::MidiBuffer m;
+            for (const auto& [pos, msg] : ev) m.addEvent (msg, pos);
+            buf.clear();
+            p->processBlock (buf, m);
+        }
+        void run (double seconds) { for (int i = 0; i < (int) (seconds * kSampleRate / kBlock); ++i) block(); }
+    };
+
+    void processorChecks()
+    {
+        using namespace Parameters;
+        std::cout << "Split + ARP (TARGET Auto = B): a live tap above the split" << std::endl;
+        {
+            Rig r;
+            r.set (ID::layerMode, 2.0f); r.set (ID::splitNote, 60.0f); r.set (ID::arpOn, 1.0f);
+            r.run (0.1);
+            r.block ({ { 10, juce::MidiMessage::noteOn (1, 72, 0.8f) }, { 200, juce::MidiMessage::noteOff (1, 72) } });
+            r.run (0.5);
+            expect (r.p->layerKeysDown (false) == 0, "tap (on + off in one block) leaves no key down in A");
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 48, 0.8f) } });   // the left hand feeds the ARP in B
+            r.run (0.5);
+            const int bDown = r.p->layerKeysDown (true), aDown = r.p->layerKeysDown (false);
+            expect (bDown >= 1 && aDown == 0, "left-hand key: the ARP plays in B, nothing in A");
+            r.block ({ { 0, juce::MidiMessage::noteOff (1, 48) } });
+            r.run (1.0);
+            expect (r.p->layerKeysDown (true) == 0 && r.p->layerKeysDown (false) == 0, "key released: no key left down");
+        }
+        std::cout << "Mono GLIDE: the forced note-off goes to the sounding note's channel" << std::endl;
+        {
+            // Directly at an engine: two overlapping pattern-channel notes, GLIDE Mono on. The
+            // rebuilt buffer must release the first one ON the pattern channel (the synth matches
+            // note-offs by channel; a channel-1 note-off would leave it sounding).
+            Rig r;
+            r.set (ID::glideOn, 1.0f); r.set (ID::glideMode, 0.0f);
+            PatchEngine e (r.p->getAPVTS(), {});
+            const int pc = SynthyProcessor::kPatternChannel;
+            juce::MidiBuffer m;
+            m.addEvent (juce::MidiMessage::noteOn (pc, 60, 0.8f), 0);
+            e.processGlide (m, SynthyProcessor::kDroneChannel);
+            m.clear();
+            m.addEvent (juce::MidiMessage::noteOn (pc, 64, 0.8f), 0);
+            e.processGlide (m, SynthyProcessor::kDroneChannel);
+            bool offOnPattern = false;
+            for (const auto meta : m)
+                if (const auto msg = meta.getMessage(); msg.isNoteOff() && msg.getNoteNumber() == 60)
+                    offOnPattern = msg.getChannel() == pc;
+            expect (offOnPattern, "note 60 released on the pattern channel when 64 starts");
+        }
+        std::cout << "Host panic on channel 1 stops a latched STEP SEQ note" << std::endl;
+        {
+            // One long step (free rate 0.5 steps/s = 2 s, gate 1): the figure latches and keeps its
+            // note down; only the panic can release it inside the step.
+            Rig r;
+            auto& st = r.p->getPatterns().step;
+            st.setOn (0, true); st.setPitch (0, 0);
+            r.set (ID::seqLength, 1.0f); r.set (ID::seqSync, 0.0f); r.set (ID::seqRate, 0.5f); r.set (ID::seqGate, 1.0f);
+            r.set (ID::seqOn, 1.0f);
+            r.run (0.1);
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            r.block ({ { 0, juce::MidiMessage::noteOff (1, 60) } });   // released: the figure is latched
+            r.run (0.3);
+            expect (r.p->layerKeysDown (false) >= 1, "figure note sounding (latched) before the panic");
+            r.block ({ { 0, juce::MidiMessage::allNotesOff (1) } });
+            r.run (0.6);   // allNotesOff tails off (the voice keeps its key flag until it ends) - past the 0.25 s release
+            expect (r.p->layerKeysDown (false) == 0, "All-Notes-Off on channel 1: the pattern note has ended (step is 2 s long)");
+        }
+    }
+}
+
 int main (int argc, char* argv[])
 {
+    if (argc >= 2 && juce::String (argv[1]) == "--selftest")
+    {
+        juce::ScopedJuceInitialiser_GUI juceInit;
+        routerChecks();
+        processorChecks();
+        std::cout << (fails == 0 ? "selftest: all passed" : "selftest: FAILED") << std::endl;
+        return fails == 0 ? 0 : 4;
+    }
     if (argc < 3)
     {
         std::cerr << "usage: JASS_Render <preset.jass> <out.wav> [seconds] [--b preset] [--split note] "

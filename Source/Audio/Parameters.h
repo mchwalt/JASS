@@ -315,9 +315,6 @@ namespace Parameters
 
         #undef JASS_INDEXED_ID
 
-        // Warm every indexed-ID static cache on the MESSAGE thread (call from prepareToPlay) so the
-        // audio thread never triggers a first-call static initialisation (which would take a one-time
-        // guard lock). After this, all indexed-ID lookups on the audio thread are alloc- and lock-free.
         // LAYERS (AD-16, Story 21.5) — instrument-level. Layer B's patch params are not listed
         // here: they are A's ids with Modules::kLayerBPrefix in front, made by the spec walk.
         constexpr const char* layerMode   = "layerMode";    // 0 = Single, 1 = Dual, 2 = Split
@@ -328,6 +325,9 @@ namespace Parameters
         constexpr const char* layerAPan   = "layerAPan";    // balance −1..1
         constexpr const char* layerBPan   = "layerBPan";
 
+        // Warm every indexed-ID static cache on the MESSAGE thread (call from prepareToPlay) so the
+        // audio thread never triggers a first-call static initialisation (which would take a one-time
+        // guard lock). After this, all indexed-ID lookups on the audio thread are alloc- and lock-free.
         inline void warmIndexedIds()
         {
             for (int i = 1; i <= kNumLFOs; ++i) { lfoOn(i); lfoWave(i); lfoRate(i); lfoDepth(i); lfoTarget(i); lfoSyncDiv(i); lfoGlobal(i); }

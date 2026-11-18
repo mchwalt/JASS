@@ -73,14 +73,6 @@ public:
         }
     }
 
-    // Layer B was switched off (its voices are stopped): no note of it is held any more.
-    void forgetLayerB()
-    {
-        for (auto& ch : held)
-            for (auto& d : ch)
-                d = (std::uint8_t) (d & ~kB);
-    }
-
     void reset() { for (auto& ch : held) ch.fill (kNone); }
 
     // Did a note-on of this note reach a layer and is it still held there? (21.7: a key the

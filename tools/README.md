@@ -65,7 +65,15 @@ and turns B on (LAYER), `--split <note>` splits instead (below the note → B), 
 the other layer, `--roundtrip` checks that every parameter survives a preset and a DAW-state
 round trip into a fresh processor (exit 3 otherwise; unused MOD MATRIX slots are skipped — they
 are left out of a preset by design), `--save <file>` writes the loaded state back as a preset,
-`--info` prints the parameter counts.
+`--info` prints the parameter counts, `--note <n>` plays only that note (held 0.35 s, three
+times), `--over-init` loads like the app with A and B lit on top of Init, and a preset named
+`init` renders the Init patch itself.
+
+`JASS_Render --selftest` (code review 2026-11-18) checks what the null test cannot reach — all
+corpus presets are Single / layer A: the router's destinations (split boundary, a note-off after
+the split moved, the pattern channel by TARGET), a live tap above the split while the ARP plays B,
+mono GLIDE's note-off channel, and a host All-Notes-Off on a latched STEP SEQ note. Exit 4 on a
+failure. Run it after every change to the routing.
 
 Without preset arguments it renders `%AppData%\JASS\Presets\*.jass` (copies — PresetIO migrates
 an old file in place). The renderer runs the host code path: no LiveState, no drone, MASTER

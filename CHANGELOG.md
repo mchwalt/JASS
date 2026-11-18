@@ -31,7 +31,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   the on-screen keyboard shows the two ranges in the layers' colours with a big A and B. Buttons
   **A** and **B** (keys 1 and 2) pick the layer you edit - B's modules carry a violet header; both
   lit is **linked editing**: the rack shows A and every change goes to B as well, knobs by the
-  same amount so B keeps its offset. The split key moves one semitone at a time, or click
+  same distance on the knob so B keeps its offset (an octave on A's cutoff is about an octave on
+  B's, not the same number of Hz), a sample set or wavetable bank as the same pick. The split key moves one semitone at a time, or click
   **SPLIT** at the top left of the on-screen keyboard (key **3**) and play a key - a button where
   the split is shown beats a hidden hold-and-play gesture, and keys 1, 2 and 3 now all press a
   visible button. A second click cancels; outside Split the button switches MODE to Split, so it
@@ -50,7 +51,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   layer's keys feed the pattern and the other hand plays its layer live - the Gemini setup. The
   pattern plays on its own MIDI channel and is routed by target, not by pitch, so an arpeggio
   over four octaves stays in its layer when it crosses the split; the figure's TIE/SLIDE follows
-  it. With B off nothing changes (24 of 24 presets render bit-identical). Measured with 2 x 8 voices, every
+  it. With B off nothing changes (24 of 24 presets render bit-identical). A code review of the
+  whole layer rebuild then caught what the null test cannot see: a live key tapped in a Split
+  while a pattern runs hung, mono GLIDE no longer cut the previous pattern note, a host's
+  All-Notes-Off missed the pattern notes, a DAW project loaded with A and B lit shifted layer B,
+  switching Single to A edited B, RANDOM on B could nudge A and rolled the TARGET. All fixed;
+  `JASS_Render --selftest` now checks the router, the Split key filter and the pattern channel,
+  and each check was shown to fail with its bug put back. Measured with 2 x 8 voices, every
   voice 3 oscillators x 7 unison: about a third of one core at the busiest point, so the voice
   count stays 8 per layer with no VOICES knob (Story 21.7).
 - **Init has a layer B that sounds — a punchy saw bass under A's bright saw stack.** RESET left B

@@ -3,6 +3,8 @@
 #include "Audio/PresetIO.h"
 #include <set>
 
+namespace { const std::array<juce::String, 12>& crossModIdTable(); }   // defined below
+
 SynthyProcessor::SynthyProcessor()
     : AudioProcessor(BusesProperties()
                      .withOutput("Output", juce::AudioChannelSet::stereo(), true)),
@@ -76,13 +78,19 @@ SynthyProcessor::SynthyProcessor()
     // Listen for keypresses so the auto-play drone can step aside when played.
     keyboardState.addListener(this);
 
+    crossModIdTable();   // build the CROSS MOD id table here, on the message thread, never on the audio thread (review)
+
     // Parameter couplings (MIX SRC distinctness, CROSS MOD and MOD MATRIX auto-enable) for BOTH
     // layers, and linked editing (21.6): every layer-A patch parameter — see listenedParamIds().
     // The A+B snapshot starts at the current values; parameterChanged keeps it current.
-    for (const auto& id : Modules::layeredParamIds())
     {
-        linkIndex[id] = (int) linkLastA.size();
-        linkLastA.push_back(apvts.getRawParameterValue(id)->load());
+        const auto& ids = Modules::layeredParamIds();
+        linkLastA = std::vector<std::atomic<float>>(ids.size());   // atomics: written from any thread (review)
+        for (size_t i = 0; i < ids.size(); ++i)
+        {
+            linkIndex[ids[i]] = (int) i;
+            linkLastA[i].store(apvts.getRawParameterValue(ids[i])->load());
+        }
     }
     for (const auto& id : listenedParamIds())
         apvts.addParameterListener(id, this);
@@ -401,14 +409,21 @@ void SynthyProcessor::updateMatrixModuleEnables()
 
     // Which modules does the matrix currently CLAIM? For every active slot (DEST != Off): its
     // SOURCE module (LFO/Envelope) AND its TARGET module (FILTER/FORMANT/WAVETABLE/WAVEFOLD).
-    // AD-16 (21.6): both layers' matrices — B's while B plays. A layer's patch modules are its own
-    // ("b"-prefixed for B); an instrument module (COMPRESSOR, STEREO, MASTER, CHAOS) is shared, so
-    // a claim from either layer keeps it on.
-    const bool bOn = layersPlaying().b;
+    // AD-16 (21.6): both layers' matrices. A layer's patch modules are its own ("b"-prefixed for B)
+    // and B's claims on them count ALWAYS - switching Single to A must not edit B's patch (review
+    // 2026-11-18). An instrument module (COMPRESSOR, STEREO, MASTER, CHAOS) is shared: B's claim on
+    // it counts while B sounds (live keys or a pattern aimed at it); a claim from either keeps it on.
+    const auto playingNow = layersPlaying();
+    const auto pat = resolvePatternRoute(playingNow);
+    const bool bOn = playingNow.b || (pat.active && (pat.dest & LayerRouter::kB) != 0);
     std::set<juce::String> claimed;
     for (const juce::String pre : { juce::String(), juce::String(Modules::kLayerBPrefix) })
     {
-        if (pre.isNotEmpty() && ! bOn) break;
+        auto claim = [&] (const juce::String& id)
+        {
+            if (Modules::isLayeredParamId(id)) claimed.insert(pre + id);
+            else if (pre.isEmpty() || bOn)     claimed.insert(id);
+        };
         auto L = [&pre] (const juce::String& id) { return Modules::isLayeredParamId(id) ? pre + id : id; };
         for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
         {
@@ -416,9 +431,9 @@ void SynthyProcessor::updateMatrixModuleEnables()
             if (mod <= 0)   // 0 == "Off"
                 continue;
             if (const auto s = matrixSourceEnableParam((int) *apvts.getRawParameterValue(L(ID::modSlotSource(n)))); s.isNotEmpty())
-                claimed.insert(L(s));
-            if (const auto t = matrixModuleEnableParam(mod); t.isNotEmpty())   // per-OSC → oscNOn; "Alle OSC" → none
-                claimed.insert(L(t));
+                claim(s);
+            if (const auto t = matrixModuleEnableParam(mod); t.isNotEmpty())   // per-OSC -> oscNOn; "Alle OSC" -> none
+                claim(t);
         }
     }
 
@@ -579,8 +594,7 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     // not under host automation, not while a preset lands, not during RANDOM.
     if (auto it = linkIndex.find(paramId); it != linkIndex.end())
     {
-        const float before = linkLastA[(size_t) it->second];
-        linkLastA[(size_t) it->second] = newValue;
+        const float before = linkLastA[(size_t) it->second].exchange(newValue);
         if (onMsgThread && ! presetLoading.load() && ! linkSuspended && getLayerFocus() == 2)
             mirrorToLayerB(paramId, newValue - before);
     }
@@ -594,7 +608,8 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
 
     // Either layer's slots (21.6: "bmodSlot…"), and B switching on or off (its claims count only
     // while it plays).
-    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerMode || paramId == Parameters::ID::layerFocus)
+    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerMode || paramId == Parameters::ID::layerFocus
+        || paramId == Parameters::ID::arpTarget || paramId == Parameters::ID::seqTarget)
     {
         if (onMsgThread) updateMatrixModuleEnables();
         else             matrixEnablesDirty.store(true);
@@ -691,17 +706,38 @@ void SynthyProcessor::randomize()
     {
         std::vector<float> keep;
         for (auto* p : getParameters()) keep.push_back(p->getValue());
-        randomizeLayerA();
+        const auto memMatrix = matrixAutoEnabled;    // layer A's auto-enable memories before the roll
+        const auto memCross  = crossModAutoEnabled;
+        randomizeLayerA();   // couplings run here, as for an A roll - the roll is post-coupling after
         const juce::String bp (Modules::kLayerBPrefix);
-        for (const auto& id : Modules::layeredParamIds())
-            if (auto* a = apvts.getParameter(id))
-                if (auto* b = apvts.getParameter(bp + id))
-                    b->setValueNotifyingHost(a->getValue());
-        auto& params = getParameters();
-        for (int i = 0; i < params.size(); ++i)
-            if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(params[i]))
-                if (! (rp->paramID.startsWith(bp) && Modules::isLayeredParamId(rp->paramID.substring(bp.length()))))
-                    rp->setValueNotifyingHost(keep[(size_t) i]);
+        {
+            // The copy to B and the restore of A are snapshots, not gestures: no coupling may fire
+            // against the half-restored state (review 2026-11-18) - like a preset load, but the
+            // auto-enable memories are handed over by hand below instead of cleared.
+            presetLoading.store(true);
+            for (const auto& id : Modules::layeredParamIds())
+                if (auto* a = apvts.getParameter(id))
+                    if (auto* b = apvts.getParameter(bp + id))
+                        b->setValueNotifyingHost(a->getValue());
+            auto& params = getParameters();
+            for (int i = 0; i < params.size(); ++i)
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(params[i]))
+                    if (! (rp->paramID.startsWith(bp) && Modules::isLayeredParamId(rp->paramID.substring(bp.length()))))
+                        rp->setValueNotifyingHost(keep[(size_t) i]);
+            presetLoading.store(false);
+        }
+        // B inherits the roll's memories, A gets its own back.
+        for (auto* mem : { &matrixAutoEnabled, &crossModAutoEnabled })
+        {
+            const auto& before = (mem == &matrixAutoEnabled) ? memMatrix : memCross;
+            std::map<juce::String, bool> merged;
+            for (const auto& [id, on] : before)
+                if (! (id.startsWith(bp) && Modules::isLayeredParamId(id.substring(bp.length()))))
+                    merged[id] = on;                                     // A's (and shared) as before
+            for (const auto& [id, on] : *mem)
+                if (Modules::isLayeredParamId(id)) merged[bp + id] = on; // the roll's A memory -> B
+            *mem = std::move(merged);
+        }
     }
     if (focus != 1)
         randomizeLayerA();
@@ -737,13 +773,14 @@ void SynthyProcessor::randomizeLayerA()
     // leaves them where they are, like the master bus.
     static const char* const boxIds[] = { ID::bassOn, ID::bassWave, ID::bassSub, ID::bassCutoff, ID::bassReso,
                                           ID::bassEnv, ID::bassEnvAmt, ID::bassGlide, ID::bassLevel, ID::bassPan,
-                                          ID::seqToBass };
+                                          ID::seqToBass,
+                                          ID::arpTarget, ID::seqTarget };   // 21.7: where the patterns play is set-up, not sound
     float keepBox[sizeof (boxIds) / sizeof (boxIds[0])];
     for (size_t i = 0; i < sizeof (boxIds) / sizeof (boxIds[0]); ++i)
         keepBox[i] = *apvts.getRawParameterValue (boxIds[i]);
 
-    // AD-16 (S1): RANDOM rolls layer A only — layer B and the LAYERS switches stay as they are
-    // (S2 makes RANDOM act on the layer being edited).
+    // The roll of layer A's parameters: layer B and the LAYERS switches stay as they are here —
+    // randomize() carries this roll over to B when B is being edited (21.6).
     auto isLayerBOrLayers = [] (const juce::String& id)
     {
         if (id.startsWith ("layer") || id == ID::splitNote) return true;
@@ -1220,34 +1257,42 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // from the PREVIOUS block (the engines display LFOs, advanced after the render) — a one-block lag that is
     // inaudible. LFO and Chaos sources drive global targets (Velocity/Envelope have no single global
     // value), which matches the editor's ring feed exactly, so ring == audio.
+    // Which layers SOUND this block (21.6/21.7): live keys, a pattern aimed at them, or a release
+    // tail still fading. One predicate for the render and the master-bus modulation (review).
+    const auto playing = layersPlaying();
+    patRoute = resolvePatternRoute(playing);   // 21.7: the pattern's layer(s) and key range
+    const bool layerAOn = playing.a || engineA.isSounding()
+                       || (patRoute.active && (patRoute.dest & LayerRouter::kA) != 0);
+    const bool layerBOn = playing.b || engineB.isSounding()
+                       || (patRoute.active && (patRoute.dest & LayerRouter::kB) != 0);
+
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
     {
         using namespace Parameters;
         static constexpr int kLfoSrc[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                    (int) ModSource::LFO3, (int) ModSource::LFO4 };
-        // AD-16 D3: both layers' matrices drive the master bus (B only while it plays); the
+        // AD-16 D3: both layers' matrices drive the master bus (each while it sounds); the
         // offsets add. Layer A alone is the pre-AD-16 sum, in the same order.
-        const auto playing = layersPlaying();   // 21.6: only the layers that play
         for (const PatchEngine* layer : { &engineA, &engineB })
         {
-        if (layer == &engineA && ! playing.a) continue;
-        if (layer == &engineB && ! playing.b) break;
-        const auto& pp = layer->params();
-        if (*pp.modMatrixOn > 0.5f)
-            for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
-            {
-                const int mod = (int) *pp.modSlotModule[(size_t) n - 1];
-                if (mod <= 0) continue;   // Off
-                const int   src = (int) *pp.modSlotSource[(size_t) n - 1];
-                const int   par = (int) *pp.modSlotParam [(size_t) n - 1];
-                const float amt = *pp.modSlotAmount[(size_t) n - 1];
-                float sv = 0.0f;
-                for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = layer->getLfoDisplayValue(i);
-                if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
-                if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
-                const int tgt = (int) ModDest::targetOf(mod, par);
-                if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
-            }
+            if (layer == &engineA && ! layerAOn) continue;
+            if (layer == &engineB && ! layerBOn) break;
+            const auto& pp = layer->params();
+            if (*pp.modMatrixOn > 0.5f)
+                for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+                {
+                    const int mod = (int) *pp.modSlotModule[(size_t) n - 1];
+                    if (mod <= 0) continue;   // Off
+                    const int   src = (int) *pp.modSlotSource[(size_t) n - 1];
+                    const int   par = (int) *pp.modSlotParam [(size_t) n - 1];
+                    const float amt = *pp.modSlotAmount[(size_t) n - 1];
+                    float sv = 0.0f;
+                    for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = layer->getLfoDisplayValue(i);
+                    if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
+                    if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
+                    const int tgt = (int) ModDest::targetOf(mod, par);
+                    if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
+                }
         }   // layers
     }
     // MASTER · TEMPO — wobble the Tempo-Sync BPM so synced LFOs/delay drift around the beat (applied
@@ -1268,16 +1313,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     patchCtx.hosted      = hosted;
     patchCtx.hostPlaying = hostPlaying;
     patchCtx.hostPpq     = hostPpq;
+    SamplePlayer::resetSeekBudget();   // 12.3: per-block cap on note-on stretch pre-rolls — ONE budget per block for both layers (review)
     engineA.beginBlock(patchCtx);
-    // Layer B (AD-16): not called at all while off — no push, no render, no LFO advance — so the
-    // instrument with B off is the pre-AD-16 one, bit for bit. Switching it off stops its voices.
-    // 21.6 SINGLE / DUAL / SPLIT: B renders while it takes notes, and on after that until its last
+    // Layer B (AD-16): not called at all while it is silent — no push, no render, no LFO advance —
+    // so the instrument with B silent is the pre-AD-16 one, bit for bit. (Resolved above, before
+    // the master-bus modulation.) B renders while it takes notes, and on after that until its last
     // release tail has faded — switching SINGLE from B to A lets B's notes ring out, not cut.
-    const auto playing = layersPlaying();
-    patRoute = resolvePatternRoute(playing);   // 21.7: the pattern's layer(s) and key range
-    // A pattern aimed at B makes B render even where B takes no live keys (Single on A, TARGET B).
-    const bool layerBOn = playing.b || engineB.isSounding()
-                       || (patRoute.active && (patRoute.dest & LayerRouter::kB) != 0);
     if (layerBOn)
         engineB.beginBlock(patchCtx);
 
@@ -1491,6 +1532,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // note-offs pass, so a chord held from before the cursor still releases.
             const bool writing = seqRecordArmed.load();
             auto& kept = arpKeptScratch; kept.clear();
+            std::bitset<128> liveThisBlock;   // live-hand note-ons let through in THIS block (review)
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
@@ -1498,10 +1540,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 {
                     // The figure replaces the chord — unless it plays the BASS box (20.2). 21.7: in a
                     // Split with one target only the pattern hand's keys are taken; the other hand's
-                    // reach the router and play live, and a note-off follows its note-on there.
-                    if (! toBass && m.isNoteOn() && patRoute.feeds(m.getNoteNumber()))
-                        continue;
-                    if (! toBass && m.isNoteOff() && ! layerRouter.isRouted(1, m.getNoteNumber()))
+                    // reach the router and play live, and a note-off follows its note-on there — also
+                    // when both land in this block (a tap, a short DAW clip note): the router learns
+                    // of this block's note-ons only later, so they are remembered here.
+                    const int nn = m.getNoteNumber() & 127;
+                    if (! toBass && m.isNoteOn())
+                    {
+                        if (patRoute.feeds(nn)) continue;
+                        liveThisBlock.set((size_t) nn);
+                    }
+                    if (! toBass && m.isNoteOff() && ! layerRouter.isRouted(1, nn) && ! liveThisBlock[(size_t) nn])
                         continue;
                     if (toBass && writing && m.isNoteOn())
                         continue;   // an entry, not a note (above)
@@ -1624,14 +1672,19 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             // Drop the raw chord (channel-1 note on/off) so only the arp sounds;
             // keep everything else (e.g. the channel-16 auto-play drone).
             auto& kept = arpKeptScratch; kept.clear();   // reused member (no per-block MidiBuffer alloc)
+            std::bitset<128> liveThisBlock;   // as for the figure: this block's live note-ons (review)
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
                 if (m.getChannel() == 1)   // 21.7: as for the figure — the live hand passes
                 {
-                    if (m.isNoteOn() && patRoute.feeds(m.getNoteNumber()))
-                        continue;
-                    if (m.isNoteOff() && ! layerRouter.isRouted(1, m.getNoteNumber()))
+                    const int nn = m.getNoteNumber() & 127;
+                    if (m.isNoteOn())
+                    {
+                        if (patRoute.feeds(nn)) continue;
+                        liveThisBlock.set((size_t) nn);
+                    }
+                    if (m.isNoteOff() && ! layerRouter.isRouted(1, nn) && ! liveThisBlock[(size_t) nn])
                         continue;
                 }
                 kept.addEvent(m, meta.samplePosition);
@@ -1659,6 +1712,17 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // RT-safe — the atomic flag is set on the message thread and consumed here.
     if (pluckRequested.exchange(false))
         focusedEngine().pluck();   // AD-16: the layer being edited
+
+    // A host's All-Notes-Off / All-Sound-Off (any channel but the pattern's own) also releases the
+    // ARP / STEP SEQ voices: before 21.7 they played channel 1 and a channel-1 panic reached them;
+    // on the pattern channel it would not (review 2026-11-18). Block-granular, alloc-free.
+    for (const auto meta : midiMessages)
+        if (const auto m = meta.getMessage(); (m.isAllNotesOff() || m.isAllSoundOff()) && m.getChannel() != kPatternChannel)
+        {
+            engineA.releaseChannel(kPatternChannel);
+            engineB.releaseChannel(kPatternChannel);
+            break;
+        }
 
     // Poly-glide (portamento) and mono glide: on the FINAL midi buffer (after the arpeggiator) so
     // it glides arp steps too — see PatchEngine::processGlide.
@@ -1999,7 +2063,12 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
 #if JASS_HOSTSYNC_DIAG
         diagNote ("setStateInformation");
 #endif
-        apvts.replaceState(juce::ValueTree::fromXml(*xml));
+        {
+            // JUCE restores parameters in id order (alphabetical), so B's "b..." ids land before most
+            // of A's - mirroring A's restored values onto B would shift B off its saved state (review).
+            const juce::ScopedValueSetter<bool> noLink (linkSuspended, true);
+            apvts.replaceState(juce::ValueTree::fromXml(*xml));
+        }
         requestGlobalLfoRearm();        // 20.1: a restored project starts its global One-Shots afresh —
                                         // AFTER the replace, or a block in between spends it on the old state
         PresetIO::resolveSetByName(apvts, samplerName, Parameters::ID::samplerSet, PresetIO::hooks(apvts).pendingSamplerSetName, 0);
@@ -2067,7 +2136,8 @@ void SynthyProcessor::applyLayerGain (int layer, juce::AudioBuffer<float>& b, in
 
 // Every parameter the processor listens to (constructor adds, destructor removes the same list):
 // layer A's patch parameters (linked editing, and A's couplings among them), layer B's coupling
-// params (MIX SRC / CROSS MOD / OSC on / matrix SRC + MOD), and LAYER B ON.
+// params (MIX SRC / CROSS MOD / OSC on / matrix SRC + MOD), and what decides which layers sound
+// (MODE, selection, the ARP / STEP SEQ TARGET).
 juce::StringArray SynthyProcessor::listenedParamIds() const
 {
     using namespace Parameters;
@@ -2083,25 +2153,33 @@ juce::StringArray SynthyProcessor::listenedParamIds() const
     }
     ids.add(ID::layerMode);    // which layers play (Single / Dual / Split) …
     ids.add(ID::layerFocus);   // … and in Single the selection
+    ids.add(ID::arpTarget);    // 21.7: a pattern aimed at B makes B sound (matrix claims on shared modules)
+    ids.add(ID::seqTarget);
     return ids;
 }
 
 // Linked editing (21.6): A's parameter `idA` moved by `deltaRaw` (in its own units); B follows.
-// Knobs move by the same amount, clamped — B keeps its offset; switches and choices take A's
-// value. Message thread only (parameterChanged checks).
+// Knobs move by the same distance on the knob's travel, clamped — B keeps its offset; switches,
+// choices and content selectors take A's value. Message thread only (parameterChanged checks).
 void SynthyProcessor::mirrorToLayerB (const juce::String& idA, float deltaRaw)
 {
     auto* a = apvts.getParameter(idA);
     auto* b = apvts.getParameter(juce::String(Modules::kLayerBPrefix) + idA);
     if (a == nullptr || b == nullptr)
         return;
-    const bool continuous = dynamic_cast<juce::AudioParameterFloat*>(a) != nullptr
-                         || dynamic_cast<juce::AudioParameterInt*>(a) != nullptr;
+    // A content selector (which sample set, which wavetable bank) is a choice in a number's clothes:
+    // B takes the same pick, not "two sets further" (review 2026-11-18).
+    const bool selector = idA == Parameters::ID::samplerSet || idA == Parameters::ID::wavetableBank;
+    const bool continuous = ! selector
+                         && (dynamic_cast<juce::AudioParameterFloat*>(a) != nullptr
+                             || dynamic_cast<juce::AudioParameterInt*>(a) != nullptr);
     if (continuous)
     {
-        const auto& range = b->getNormalisableRange();
-        const float rawB  = b->convertFrom0to1(b->getValue());
-        b->setValueNotifyingHost(b->convertTo0to1(juce::jlimit(range.start, range.end, rawB + deltaRaw)));
+        // The same distance on the KNOB's travel (maintainer 2026-11-18): an octave on A's cutoff
+        // is about an octave on B's too, not the same number of Hz (skewed ranges).
+        const float nowA01    = a->getValue();
+        const float beforeA01 = a->convertTo0to1(a->convertFrom0to1(nowA01) - deltaRaw);
+        b->setValueNotifyingHost(juce::jlimit(0.0f, 1.0f, b->getValue() + (nowA01 - beforeA01)));
     }
     else
         b->setValueNotifyingHost(a->getValue());

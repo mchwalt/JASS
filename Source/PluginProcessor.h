@@ -78,8 +78,10 @@ public:
     // step while a figure is being recorded (Story 15.4).
     static constexpr int kDroneChannel = 16;
     // The ARP's and the STEP SEQ's own output channel (AD-16 S3, Story 21.7): the router sends it to
-    // the sequencer's TARGET layer(s), whatever the pitch, while channel 1 stays the live keys. The
-    // synth is channel-blind (SynthSound applies to every channel), so this changes no sound.
+    // the sequencer's TARGET layer(s), whatever the pitch, while channel 1 stays the live keys. Note-ons
+    // sound alike on every channel (SynthSound applies to all), but note-offs are matched BY channel:
+    // mono glide releases on the sounding note's own channel, and a host panic on any other channel
+    // releases this one too (review 2026-11-18).
     static constexpr int kPatternChannel = 14;
 
     // While the editor is recording a figure into STEP SEQ (Story 15.4), a played key WRITES a step
@@ -116,11 +118,11 @@ public:
     // Randomize all parameters (with guards so the result stays audible).
     void randomize();
 
-    // Reset everything to defaults, then enable only OSC 1 (auto-play drone).
+    // Reset everything to defaults, then apply the Init patch (initPatchOverrides, both layers).
     void resetToDefault();
     // The Init patch where it differs from the parameters' declared defaults (plain values), for
-    // both layers: A = OSC 1..3 on, MATRIX off; B (21.6) = a dark square bass, so a Split sounds
-    // two clearly different sounds at once. The declared defaults stay untouched (old presets
+    // both layers: A = OSC 1..3 on, MATRIX off; B (21.6) = a punchy saw bass (filter swept by LFO 1
+    // One-Shot), so a Split sounds two clearly different sounds at once. The declared defaults stay untouched (old presets
     // read missing => default). RESET applies it, Shift+reset and zone resets go back to it.
     static const std::vector<std::pair<juce::String, float>>& initPatchOverrides();
 
@@ -198,6 +200,8 @@ public:
     // 20.1: a preset / DAW-state load restarts every GLOBAL LFO (a global One-Shot then sweeps once
     // from "now"). Message thread sets, the audio thread consumes it once. Both layers.
     void requestGlobalLfoRearm() noexcept { engineA.requestGlobalLfoRearm(); engineB.requestGlobalLfoRearm(); }
+    // Voices whose key is down in layer A / B (JASS_Render --selftest: hanging notes, mono glide).
+    int layerKeysDown (bool layerB) const { return (layerB ? engineB : engineA).keysDown(); }
     float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
 
     // Name of the currently loaded/active preset (shown in the header). It is
@@ -482,7 +486,7 @@ private:
     void mirrorToLayerB (const juce::String& idA, float deltaRaw);
     void randomizeLayerA();
     std::unordered_map<juce::String, int> linkIndex;   // layer-A patch param id -> slot in linkLastA (built once)
-    std::vector<float> linkLastA;                      // A's last value per patch param (raw units)
+    std::vector<std::atomic<float>> linkLastA;         // A's last value per patch param (raw units; any thread)
     bool linkSuspended = false;                        // RANDOM / bulk writes: nothing to mirror
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks
