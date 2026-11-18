@@ -39,6 +39,7 @@ public:
             if (! juce::MidiMessage::isMidiNoteBlack(n)) ++whiteKeys;
         if (whiteKeys > 0 && getWidth() > 0)
             setKeyWidth((float) getWidth() / (float) whiteKeys);
+        placeSplitButton();
     }
 
     // The pattern's note is drawn like a pressed key, in the MODULATION colour so it reads as
@@ -146,7 +147,36 @@ public:
         repaint();
     }
 
+    // SPLIT button (21.6, maintainer 2026-11-18): sits over the lowest keys, top left, where the
+    // split is shown. A click arms it (lit violet); the next played key becomes the split key.
+    // The editor owns the behaviour, the keyboard only hosts the button.
+    void addSplitButton (std::function<void()> onClick)
+    {
+        splitButton.setClickingTogglesState (false);
+        splitButton.setWantsKeyboardFocus (false);
+        splitButton.setMouseClickGrabsKeyboardFocus (false);   // the keys keep playing
+        splitButton.setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff334155));
+        splitButton.setColour (juce::TextButton::buttonOnColourId, juce::Colour (0xff8b5cf6));   // rack::kLayerBColour
+        splitButton.setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.75f));
+        splitButton.setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
+        splitButton.setTooltip ("Split (key 3): click, then play a key - it becomes the split key. Click again to cancel");
+        splitButton.onClick = std::move (onClick);
+        addAndMakeVisible (splitButton);
+        resized();
+    }
+
+    void setSplitArmed (bool armed)
+    {
+        splitButton.setToggleState (armed, juce::dontSendNotification);
+    }
+
 private:
+    void placeSplitButton()
+    {
+        splitButton.setBounds (4, 3, 64, 22);
+    }
+
+    juce::TextButton splitButton { "SPLIT" };
     int patternNote = -1;
     int hoverNote = -1;
     int splitNote = -1;
@@ -404,7 +434,8 @@ private:
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     LayerSelector* layerSelector = nullptr;        // 21.6: owned by rackOwned; keys 1 / 2 press it
-    bool learnKeyHeld = false;                     // 21.6: key 3 held = LEARN the split key
+    void pressSplitButton();                       // 21.6: the keyboard's SPLIT button (or key 3)
+    bool splitKeyDown = false;                     // key 3 edge detection (keyPressed auto-repeats)
 
     // Without a TooltipWindow instance JUCE shows NO tooltips at all — every setTooltip in the
     // rack (module reset/info buttons, the full-text knob read-outs) was silent until this line.

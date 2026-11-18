@@ -31,8 +31,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   the on-screen keyboard shows the two ranges in the layers' colours with a big A and B. Buttons
   **A** and **B** (keys 1 and 2) pick the layer you edit - B's modules carry a violet header; both
   lit is **linked editing**: the rack shows A and every change goes to B as well, knobs by the
-  same amount so B keeps its offset. The split key moves one semitone at a time, or hold **3** and
-  play a key (the Gemini's "hold SPLIT"). Level and balance per layer. **Loading a preset follows
+  same amount so B keeps its offset. The split key moves one semitone at a time, or click
+  **SPLIT** at the top left of the on-screen keyboard (key **3**) and play a key - a button where
+  the split is shown beats a hidden hold-and-play gesture, and keys 1, 2 and 3 now all press a
+  visible button. A second click cancels; outside Split the button switches MODE to Split, so it
+  never seems dead. Level and balance per layer. **Loading a preset follows
   the selection** (maintainer's proposal): A only loads the preset and keeps layer B - a
   single-layer preset no longer wipes a B you built; B only puts just the preset's sound into B;
   A and B load the whole file. One rack layout serves both layers: a module shows when it is on in

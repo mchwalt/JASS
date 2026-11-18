@@ -663,6 +663,7 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     keyboard->setOctaveForMiddleC(4);      // label MIDI 60 as "C4" (Roland convention) — matches the
                                            // docs/help everywhere ("FREQ knobs = sound at C4", SAMPLER
                                            // ROOT default 60 = C4); JUCE's default label was C3.
+    keyboard->addSplitButton([this] { pressSplitButton(); });
     keyboard->clearKeyMappings();   // computer keys are handled by US (see buildComputerKeyMap)
     buildComputerKeyMap();
     // Highlight played (ch.1) notes and the STEP SEQ preview (15.3) — turning a step lights the key
@@ -887,18 +888,11 @@ void SynthyEditor::timerCallback()
         if (const int n = processor.takeLearnedSplitNote(); n >= 0)
             if (auto* p = a.getParameter (Parameters::ID::splitNote))
                 p->setValueNotifyingHost (p->convertTo0to1 ((float) n));
-        // LEARN = key 3 held (the Super Gemini's "hold SPLIT and play a key"): armed while the key is
-        // down, re-armed after every caught note so the last one played wins; released = off.
-        if (learnKeyHeld)
-        {
-            if (! juce::KeyPress::isKeyCurrentlyDown ('3'))
-            {
-                learnKeyHeld = false;
-                processor.armSplitLearn (false);
-            }
-            else if (! processor.isSplitLearnArmed())
-                processor.armSplitLearn (true);   // after the take above: arming clears the caught note
-        }
+        // The SPLIT button is lit while it waits; the caught key turns it off (processor side).
+        if (keyboard != nullptr)
+            keyboard->setSplitArmed (processor.isSplitLearnArmed());
+        if (splitKeyDown && ! juce::KeyPress::isKeyCurrentlyDown ('3'))
+            splitKeyDown = false;
     }
 
     // Story 7.6: while Shift is held every module ↺ shows "factory values" (amber + dot) — the
@@ -1724,6 +1718,26 @@ void SynthyEditor::releaseComputerKeys()
         }
 }
 
+// SPLIT (21.6, maintainer 2026-11-18): a click arms it — the next played key (on-screen, computer
+// keys or MIDI) becomes the split key — a second click while it waits cancels. Outside Split mode
+// the click switches MODE to Split first, so the button never seems to do nothing.
+void SynthyEditor::pressSplitButton()
+{
+    if (processor.isSplitLearnArmed())
+    {
+        processor.armSplitLearn (false);
+    }
+    else
+    {
+        if (auto* m = processor.getAPVTS().getParameter (Parameters::ID::layerMode))
+            if (juce::roundToInt (m->convertFrom0to1 (m->getValue())) != 2)
+                m->setValueNotifyingHost (m->convertTo0to1 (2.0f));
+        processor.armSplitLearn (true);
+    }
+    if (keyboard != nullptr)
+        keyboard->setSplitArmed (processor.isSplitLearnArmed());
+}
+
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
 {
     // LAYERS (21.6, maintainer 2026-11-16): keys 1 and 2 are the A and B buttons — the same toggle,
@@ -1732,9 +1746,9 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     {
         if (key.getTextCharacter() == '1') { layerSelector->press (true);  return true; }
         if (key.getTextCharacter() == '2') { layerSelector->press (false); return true; }
-        if (key.getTextCharacter() == '3')   // hold + play a key = the split key (LEARN)
+        if (key.getTextCharacter() == '3')   // = a click on SPLIT; auto-repeat while held is ignored
         {
-            if (! learnKeyHeld) { learnKeyHeld = true; processor.armSplitLearn (true); }
+            if (! splitKeyDown) { splitKeyDown = true; pressSplitButton(); }
             return true;
         }
     }
