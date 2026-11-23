@@ -351,14 +351,22 @@ namespace rack
         std::vector<Placed> placedB;               // 21.6: layer A id -> layer B's frame (patch modules)
         bool layerFocusB = false;                  // view B
         bool viewBoth    = false;                  // view A+B (layerFocusB is then false)
-        std::set<juce::String> bothShowB;          // A+B: modules both layers use whose A | B is on B
-        // A+B: which layer's frame the view shows for an entry — A's where only A (or both, unless
-        // switched to B) shows it, B's where only B does.
+        std::map<juce::String, bool> bothPick;     // A+B: the player's A | B choice per module (true = B)
+        // A+B: which layer's frame the view shows for an entry — B's where only B shows it; where
+        // both do, the player's A | B choice, else the layer the module is ON in (A when both or
+        // neither are): an A frame that is off while B's plays showed a greyed module with no
+        // rings (maintainer 2026-11-23).
         bool viewFrameIsB (const RackLayoutEntry& e) const
         {
             const bool a = shownIn (e, false), b = hasLayerB (e.id) && shownIn (e, true);
-            return b && (! a || bothShowB.count (e.id) > 0);
+            if (! b) return false;
+            if (! a) return true;
+            if (auto it = bothPick.find (e.id); it != bothPick.end()) return it->second;
+            return ! enabledIn (e.id, false) && enabledIn (e.id, true);
         }
+        bool enabledIn (const juce::String& id, bool layerB) const;   // the layer's enable param (no enable = on)
+        std::vector<char> lastViewPicks;           // A+B: the frame picks of the last layout (re-pack on a change)
+        std::vector<char> currentViewPicks() const;
         void wireLayerSwitch (ModuleFrame& f, const juce::String& id);
         std::vector<juce::String> pinnedIds;       // descriptor pinnedOnReset (LAYERS)
         // Pinned modules visible in `entries` — returns true if anything changed.

@@ -388,9 +388,28 @@ namespace rack
     {
         f.onLayerSwitch = [this, id] (bool showB)
         {
-            if (showB) bothShowB.insert (id); else bothShowB.erase (id);
+            bothPick[id] = showB;
             relayout();   // same footprint (the two frames share a spec): only the frame swaps
         };
+    }
+
+    bool Rack::enabledIn (const juce::String& id, bool layerB) const
+    {
+        const auto* p = placedIn (id, layerB);
+        if (p == nullptr || p->frame == nullptr) return false;
+        const auto pid = p->frame->enableParamId();
+        if (pid.isEmpty()) return true;
+        const auto* raw = apvts.getRawParameterValue (pid);
+        return raw != nullptr && raw->load() >= 0.5f;
+    }
+
+    std::vector<char> Rack::currentViewPicks() const
+    {
+        std::vector<char> v;
+        v.reserve (layoutModel.size());
+        for (const auto& e : layoutModel)
+            v.push_back ((char) (viewBoth && viewFrameIsB (e)));
+        return v;
     }
 
     void Rack::addLayerBModule (const juce::String& layerAId, ModuleDescriptor desc)
@@ -1149,6 +1168,8 @@ namespace rack
             for (auto* f : frames)
                 f->setVisible (std::find (shownFrames.begin(), shownFrames.end(), f) != shownFrames.end());
 
+            lastViewPicks = currentViewPicks();   // A+B: what this layout shows (updateLiveFeed watches it)
+
             // A | B in the header (A+B view): on both frames of a module both layers use.
             for (const auto& e : layoutModel)
             {
@@ -1225,6 +1246,10 @@ namespace rack
 
     void Rack::updateLiveFeed (const LiveModFeed& feedA, const LiveModFeed& feedB, bool focusB, double playedRatio)
     {
+        // A+B: a module switched on or off in one layer changes which frame the view shows
+        // (viewFrameIsB) — re-pack when it does. Same footprint, so only the frames swap.
+        if (viewBoth && currentViewPicks() != lastViewPicks)
+            relayout();
         // 21.6: the hidden layer's frames (and hidden modules) skip the 20 Hz fan-out.
         for (const auto& p : placed)
             if (p.frame != nullptr && p.frame->isVisible())
