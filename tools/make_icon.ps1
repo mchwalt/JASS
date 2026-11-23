@@ -3,7 +3,8 @@
 # edit. CMake hands the two PNGs to JUCE (ICON_BIG / ICON_SMALL); juceaide turns them into the
 # .ico embedded in JASS.exe and JASS.vst3.
 #
-# Design: the rack's ground colour (#15181d) as a rounded tile, the name in Bahnschrift, and
+# Design: the rack's ground colour (#15181d) as a rounded tile, the name in Bahnschrift in the
+# header wordmark's blues (bright face #6fd3ff over a short #2f6f96 -> #0b3a5e extrusion), and
 # three small modules along the bottom in the rack's zone colours (generator teal, modulator
 # purple, processor blue), each with one knob. Pure ASCII on purpose (PowerShell 5.1).
 #
@@ -48,12 +49,29 @@ function Make-Icon([int]$size, [string]$path) {
         $g.FillEllipse((New-Object System.Drawing.SolidBrush($ground)), [float]($x + $w/2 - $d/2), [float]($y + $h/2 - $d/2), $d, $d)
     }
 
-    # The name.
+    # The name in the header wordmark's colours (PluginEditor.cpp, SpinningTitle3D): a short
+    # extrusion down-right from the deep blue back through the muted blue wall, then the bright
+    # front face on top.
     $font = New-Object System.Drawing.Font('Bahnschrift SemiBold', [float]($size * 0.30), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
     $sf = New-Object System.Drawing.StringFormat
     $sf.Alignment = 'Center'; $sf.LineAlignment = 'Center'
-    $textRect = New-Object System.Drawing.RectangleF(0, [float]($size * 0.06), $size, [float]($size * 0.62))
-    $g.DrawString('JASS', $font, [System.Drawing.Brushes]::White, $textRect, $sf)
+    $back  = [System.Drawing.Color]::FromArgb(255, 0x0b, 0x3a, 0x5e)
+    $wall  = [System.Drawing.Color]::FromArgb(255, 0x2f, 0x6f, 0x96)
+    $front = [System.Drawing.Color]::FromArgb(255, 0x6f, 0xd3, 0xff)
+    $depth = [float]($size * 0.028)
+    $steps = [Math]::Max(2, [int][Math]::Ceiling($depth))
+    for ($k = $steps; $k -ge 0; $k--) {
+        $off = $depth * $k / $steps
+        if ($k -eq 0) { $c = $front } else {
+            $t = 1.0 - [float]$k / $steps   # 0 = far back, ~1 = just behind the face
+            $c = [System.Drawing.Color]::FromArgb(255,
+                [int]($back.R + ($wall.R - $back.R) * $t),
+                [int]($back.G + ($wall.G - $back.G) * $t),
+                [int]($back.B + ($wall.B - $back.B) * $t))
+        }
+        $textRect = New-Object System.Drawing.RectangleF([float]$off, [float]($size * 0.06 + $off), $size, [float]($size * 0.62))
+        $g.DrawString('JASS', $font, (New-Object System.Drawing.SolidBrush($c)), $textRect, $sf)
+    }
 
     $g.Dispose()
     $bmp.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)

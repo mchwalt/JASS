@@ -163,6 +163,11 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   voice that starts a note picks it up at that moment. Nothing is meant to sound different, and
   every factory and user preset rendered bit-identical before and after (new offline renderer
   `JASS_Render` + `tools/rig/nulltest.py`).
+- **The app icon wears JASS's own colours.** The name on the icon was plain white, while the app
+  shows it in blue in the header - the icon on the taskbar and in a DAW's plug-in list did not
+  look like the window it opens (maintainer 2026-11-23). It now uses the header wordmark's
+  colours: the bright blue face over a short extrusion in the two darker blues. The three module
+  tiles below were already in the rack's group colours and stay as they are.
 
 ## [2026.11.0] – 2026-11-04
 
