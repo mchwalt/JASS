@@ -11,6 +11,10 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **PERC no longer stays silent after loading several presets quickly.** A preset asks the
+  background loader for its drum kit and PERC waits for it; when the next load found the kit
+  already loaded, the request was withdrawn but PERC kept waiting - silent, grid clicks too, until
+  a restart. Loading every preset in a row (the v12 conversion on the first start) made it certain.
 - **JUCE 9.0.2 → 9.0.5.** The framework's Windows MIDI fixes reach JASS: devices that are
   unplugged and plugged back (9.0.4: device disconnection handling, 9.0.5: WinMM fixes - the
   maintainer plays through a USB MIDI interface), Direct2D drawing fixes on Windows, and hardening
