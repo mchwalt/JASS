@@ -1,10 +1,10 @@
 Zwei komplette Klänge gleichzeitig — Layer **A** und Layer **B**, gespielt von einer Tastatur.
 
-- **A / B** (Tasten **1** / **2**) — welchen Layer du bearbeitest; in **Single** auch, welcher klingt. **B** einmal drücken: A und B; **B** noch einmal: nur B — zurück genauso mit **A**. Module von B haben eine violette Kopfzeile; jeder Layer zeigt die Module, die er benutzt. Beide an: das Rack zeigt A, und jede Änderung geht auch an B — Regler verschieben B um denselben Betrag, B behält also seinen Abstand.
-- **MODE** — **Single**: der angewählte Layer klingt (mit 1 / 2 umschalten; der verlassene klingt aus). **Dual**: jede Taste spielt beide. **Split**: Tasten unterhalb von SPLIT spielen B, ab SPLIT aufwärts A — die Tastatur zeigt beide Bereiche.
-- **SPLIT** — die Split-Taste, ein Halbton pro Bewegung. Oder **SPLIT** auf der Tastatur klicken (Taste **3**) und eine Taste spielen; nochmal klicken bricht ab. Außerhalb von Split schaltet er MODE auf Split.
+- **A / B** (Tasten **1** / **2**) — welchen Layer du bearbeitest und hörst; der verlassene klingt aus. **B** einmal drücken: A und B; **B** zweimal schnell (Doppelklick): nur B — zurück genauso mit **A**. Module von B haben eine violette Kopfzeile; jeder Layer zeigt die Module, die er benutzt. Beide an: das Rack zeigt A, und jede Änderung geht auch an B — Regler verschieben B um denselben Betrag, B behält also seinen Abstand.
+- **SPLIT auf der Tastatur** (Taste **3**) — Split ein / aus: Tasten unterhalb der Split-Taste spielen B, ab ihr aufwärts A, egal was A / B zeigt. **Doppelklick** (3, 3 schnell), dann eine Taste spielen: sie wird die Split-Taste; nochmal klicken bricht ab.
+- **SPLIT** — die Split-Taste, ein Halbton pro Bewegung.
 - **A LVL / B LVL** — Lautstärke je Layer.
 - **A PAN / B PAN** — Balance je Layer: Mitte lässt den Layer, wie er ist, eine Seite macht die andere leiser.
 - **Preset laden** (LOAD, F-Tasten) folgt A / B: **A** lädt das Preset und behält deinen Layer B; **B** lädt nur den Klang des Presets nach B; **beide** laden die ganze Datei mit beiden Layern — ein Preset ohne Layer B (alle älteren) behält deinen B.
 
-ARP und STEP SEQ spielen den Layer aus ihrem **TARGET** (Auto: den angewählten, in Dual beide, im Split B — dort füttert die linke Hand das Pattern und die rechte spielt A live). RANDOM würfelt den bearbeiteten Layer (beide, wenn beide an sind); RESET in der Kopfzeile geht auf Init: A ein heller Sägezahn-Stapel, B ein knackiger Sägezahn-Bass — ein Split spielt sofort zwei verschiedene Klänge.
+ARP und STEP SEQ spielen den Layer aus ihrem **TARGET** (Auto: den angewählten, bei A+B beide, im Split B — dort füttert die linke Hand das Pattern und die rechte spielt A live). RANDOM würfelt den bearbeiteten Layer (beide, wenn beide an sind); RESET in der Kopfzeile geht auf Init: A ein heller Sägezahn-Stapel, B ein knackiger Sägezahn-Bass — ein Split spielt sofort zwei verschiedene Klänge.

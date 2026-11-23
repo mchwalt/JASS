@@ -133,7 +133,7 @@ namespace
             {
                 if (! PresetIO::loadIntoLayerB (proc->getAPVTS(), opt.layerB).ok)
                 { fail ("cannot load into layer B (format older than current?) " + opt.layerB.getFullPathName()); return; }
-                setParam (*proc, Parameters::ID::layerMode, 1.0f);   // DUAL
+                setParam (*proc, Parameters::ID::layerFocus, 2.0f);   // A+B: both play
             }
             if (opt.split >= 0)
             {

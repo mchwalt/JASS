@@ -147,9 +147,9 @@ public:
         repaint();
     }
 
-    // SPLIT button (21.6, maintainer 2026-11-18): sits over the lowest keys, top left, where the
-    // split is shown. A click arms it (lit violet); the next played key becomes the split key.
-    // The editor owns the behaviour, the keyboard only hosts the button.
+    // SPLIT button (21.6; on/off since 2026-11-23): sits over the lowest keys, top left, where the
+    // split is shown. Lit violet while the split is on; reads LEARN while a double-click waits for
+    // a key. The editor owns the behaviour, the keyboard only hosts the button.
     void addSplitButton (std::function<void()> onClick)
     {
         splitButton.setClickingTogglesState (false);
@@ -159,15 +159,18 @@ public:
         splitButton.setColour (juce::TextButton::buttonOnColourId, rack::kLayerBColour);
         splitButton.setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.75f));
         splitButton.setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
-        splitButton.setTooltip ("Split (key 3): click, then play a key - it becomes the split key. Click again to cancel");
+        splitButton.setTooltip ("Split on/off (key 3) - double-click (3, 3), then play a key: it becomes the split key");
         splitButton.onClick = std::move (onClick);
         addAndMakeVisible (splitButton);
         resized();
     }
 
-    void setSplitArmed (bool armed)
+    void setSplitState (bool on, bool learning)
     {
-        splitButton.setToggleState (armed, juce::dontSendNotification);
+        splitButton.setToggleState (on || learning, juce::dontSendNotification);
+        const juce::String label (learning ? "LEARN" : "SPLIT");
+        if (splitButton.getButtonText() != label)
+            splitButton.setButtonText (label);
     }
 
 private:
@@ -201,8 +204,8 @@ public:
         }
         btnA.setColour (juce::TextButton::buttonOnColourId, rack::kLayerAColour.darker (0.35f));
         btnB.setColour (juce::TextButton::buttonOnColourId, rack::kLayerBColour);
-        btnA.setTooltip ("Layer A - press once: add A (edits go to both), press again: A only");
-        btnB.setTooltip ("Layer B - press once: add B (edits go to both), press again: B only");
+        btnA.setTooltip ("Layer A (key 1) - click: add A (both play, edits go to both); double-click: A only");
+        btnB.setTooltip ("Layer B (key 2) - click: add B (both play, edits go to both); double-click: B only");
         btnA.onClick = [this] { toggle (true); };
         btnB.onClick = [this] { toggle (false); };
         sync();
@@ -239,16 +242,21 @@ public:
     void press (bool isA) { toggle (isA); }
 
 private:
-    // A press always heads for the pressed layer (maintainer 2026-11-23): from the other layer it
-    // adds this one (A+B); with both lit it keeps only this one. So B, B goes from A to B and A, A
-    // back - no press ever drops the layer whose button you pressed. Pressing the only lit button
-    // does nothing.
+    // Maintainer 2026-11-23: a single press on an unlit layer adds it (A+B); a single press on a lit
+    // one does nothing; a quick double press (or double-click, within the system's double-click
+    // time) keeps only the pressed layer. So B, B quickly goes from A to B and A, A back - pressed
+    // slowly, the second press changes nothing. No press ever drops the layer you pressed.
     void toggle (bool isA)
     {
         sync();   // the buttons may be up to one timer tick behind the parameter (review)
+        const auto now = juce::Time::getMillisecondCounter();
+        const bool quick = lastPress != 0 && lastWasA == isA
+                        && (int) (now - lastPress) <= juce::MouseEvent::getDoubleClickTimeout();
+        lastPress = quick ? 0u : now;   // a third quick press starts a new pair
+        lastWasA  = isA;
+        const int own = isA ? 0 : 1;
         const int cur = focus();
-        const int f = (cur == 2) ? (isA ? 0 : 1)
-                    : (cur == (isA ? 0 : 1)) ? cur : 2;
+        const int f = quick ? own : (cur == 1 - own ? 2 : cur);
         if (f == cur) return;
         if (auto* p = apvts.getParameter (Parameters::ID::layerFocus))
         {
@@ -261,6 +269,8 @@ private:
 
     juce::AudioProcessorValueTreeState& apvts;
     juce::TextButton btnA { "A" }, btnB { "B" };
+    juce::uint32 lastPress = 0;   // ms counter of the last single press (0 = none pending)
+    bool lastWasA = true;
 };
 
 // A compact ADSR curve preview: attack ramp → decay to the sustain level →
@@ -447,7 +457,10 @@ private:
     std::vector<ComputerKey> computerKeys;
     std::unique_ptr<FillWidthKeyboard> keyboard;   // lives in the rack's Input zone (hideable)
     LayerSelector* layerSelector = nullptr;        // 21.6: owned by rackOwned; keys 1 / 2 press it
-    void pressSplitButton();                       // 21.6: the keyboard's SPLIT button (or key 3)
+    void pressSplitButton();                       // the keyboard's SPLIT button (or key 3): split on/off; double = LEARN
+    juce::uint32 lastSplitPress = 0;               // ms counter of the last single SPLIT press (0 = none pending)
+    bool layerKeyDown[2] {};                       // keys 1 / 2 held: auto-repeat is no double press
+    void syncSplitButton();                        // its lit state and label from layerMode + the learn wait
     bool splitKeyDown = false;                     // key 3 edge detection (keyPressed auto-repeats)
 
     // Without a TooltipWindow instance JUCE shows NO tooltips at all — every setTooltip in the

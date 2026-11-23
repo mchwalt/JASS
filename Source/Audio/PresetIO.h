@@ -1173,16 +1173,19 @@ namespace PresetIO
         }
         else
             Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
-        // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Layer" is
-        // DUAL now, B ON + "Split" is SPLIT, B off is SINGLE (the default the read left).
+        // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Split" is
+        // SPLIT, anything else is no split (the read above matched "Split" in the new list already —
+        // B off must undo that).
         if (auto* lay = instSrc["Layers"].getDynamicObject(); lay != nullptr && lay->hasProperty("BOn"))
             if (auto* p = a.getParameter(ID::layerMode))
             {
-                // The read above matched "Split" in the new list already — B off must undo that.
-                const float mode = ! (bool) lay->getProperty("BOn") ? 0.0f
-                                 : (lay->getProperty("Mode").toString() == "Split" ? 2.0f : 1.0f);
-                p->setValueNotifyingHost(p->convertTo0to1(mode));
+                const bool split = (bool) lay->getProperty("BOn") && lay->getProperty("Mode").toString() == "Split";
+                p->setValueNotifyingHost(p->convertTo0to1(split ? 2.0f : 0.0f));
             }
+        // MODE is only Split on / off since 2026-11-23: what plays outside a Split is the A / B
+        // selection, so a stored "Dual" reads as no split (the selection survives every load).
+        if (auto* p = a.getParameter(ID::layerMode); p != nullptr && juce::roundToInt(p->convertFrom0to1(p->getValue())) == 1)
+            p->setValueNotifyingHost(p->convertTo0to1(0.0f));
 
         // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
         // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when

@@ -317,7 +317,7 @@ namespace Parameters
 
         // LAYERS (AD-16, Story 21.5) — instrument-level. Layer B's patch params are not listed
         // here: they are A's ids with Modules::kLayerBPrefix in front, made by the spec walk.
-        constexpr const char* layerMode   = "layerMode";    // 0 = Single, 1 = Dual, 2 = Split
+        constexpr const char* layerMode   = "layerMode";    // 0 = no split, 2 = Split (1 = the old Dual, read as 0)
         constexpr const char* splitNote   = "splitNote";    // SPLIT: below → B, from it up → A
         constexpr const char* layerFocus  = "layerFocus";   // 0 = A, 1 = B, 2 = A+B linked (which layer the rack edits)
         constexpr const char* layerALevel = "layerALevel";

@@ -893,11 +893,14 @@ void SynthyEditor::timerCallback()
                 p->setValueNotifyingHost (p->convertTo0to1 ((float) n));
                 p->endChangeGesture();
             }
-        // The SPLIT button is lit while it waits; the caught key turns it off (processor side).
-        if (keyboard != nullptr)
-            keyboard->setSplitArmed (processor.isSplitLearnArmed());
+        // The SPLIT button is lit while the split is on and reads LEARN while it waits; the caught
+        // key ends the wait (processor side). Polled, so a preset load or RESET shows up too.
+        syncSplitButton();
         if (splitKeyDown && ! juce::KeyPress::isKeyCurrentlyDown ('3'))
             splitKeyDown = false;
+        for (int i = 0; i < 2; ++i)
+            if (layerKeyDown[i] && ! juce::KeyPress::isKeyCurrentlyDown ('1' + i))
+                layerKeyDown[i] = false;
     }
 
     // Story 7.6: while Shift is held every module ↺ shows "factory values" (amber + dot) — the
@@ -1138,6 +1141,12 @@ bool SynthyEditor::keyStateChanged (bool /*isKeyDown*/)
 {
     pollPresetHotkeys();       // we have focus here → lowest-latency path
     updateComputerKeys(true);  // start/stop notes for the note keys (focus implied by the event)
+    // Keys 1 / 2 / 3 released: re-armed at once, so a quick tap-tap counts as a double press (the
+    // 30 Hz timer alone could miss a short gap). The timer stays as the fallback.
+    if (splitKeyDown && ! juce::KeyPress::isKeyCurrentlyDown ('3')) splitKeyDown = false;
+    for (int i = 0; i < 2; ++i)
+        if (layerKeyDown[i] && ! juce::KeyPress::isKeyCurrentlyDown ('1' + i))
+            layerKeyDown[i] = false;
     return false;              // observe only; let the event propagate normally
 }
 
@@ -1731,39 +1740,63 @@ void SynthyEditor::releaseComputerKeys()
         }
 }
 
-// SPLIT (21.6, maintainer 2026-11-18): a click arms it — the next played key (on-screen, computer
-// keys or MIDI) becomes the split key — a second click while it waits cancels. Outside Split mode
-// the click switches MODE to Split first, so the button never seems to do nothing.
+// SPLIT (maintainer 2026-11-23, replaces the MODE knob): a click (key 3) switches the split on or
+// off. A quick double click (3, 3 within the system's double-click time) arms LEARN — the next
+// played key (on-screen, computer keys or MIDI) becomes the split key, and the split stays on
+// whatever the first click did. Any click while it waits cancels the learn and changes nothing else.
 void SynthyEditor::pressSplitButton()
 {
+    const auto now = juce::Time::getMillisecondCounter();
+    const bool learn = lastSplitPress != 0
+                    && (int) (now - lastSplitPress) <= juce::MouseEvent::getDoubleClickTimeout();
+    lastSplitPress = learn ? 0u : now;
+    auto* m = processor.getAPVTS().getParameter (Parameters::ID::layerMode);
+    const bool splitOn = m != nullptr && juce::roundToInt (m->convertFrom0to1 (m->getValue())) == 2;
+    auto setSplit = [m] (bool on)
+    {
+        if (m == nullptr) return;
+        m->beginChangeGesture();
+        m->setValueNotifyingHost (m->convertTo0to1 (on ? 2.0f : 0.0f));
+        m->endChangeGesture();
+    };
+
     if (processor.isSplitLearnArmed())
     {
         processor.armSplitLearn (false);
+        lastSplitPress = 0;   // a cancel never starts a double
     }
-    else
+    else if (learn)
     {
-        if (auto* m = processor.getAPVTS().getParameter (Parameters::ID::layerMode))
-            if (juce::roundToInt (m->convertFrom0to1 (m->getValue())) != 2)
-            {
-                m->beginChangeGesture();
-                m->setValueNotifyingHost (m->convertTo0to1 (2.0f));
-                m->endChangeGesture();
-            }
+        if (! splitOn) setSplit (true);
         processor.armSplitLearn (true);
     }
-    if (keyboard != nullptr)
-        keyboard->setSplitArmed (processor.isSplitLearnArmed());
+    else
+        setSplit (! splitOn);
+    syncSplitButton();
+}
+
+void SynthyEditor::syncSplitButton()
+{
+    if (keyboard == nullptr) return;
+    const bool splitOn = juce::roundToInt (processor.getAPVTS().getRawParameterValue (Parameters::ID::layerMode)->load()) == 2;
+    keyboard->setSplitState (splitOn, processor.isSplitLearnArmed());
 }
 
 bool SynthyEditor::keyPressed(const juce::KeyPress& key)
 {
-    // LAYERS (21.6, maintainer 2026-11-16): keys 1 and 2 are the A and B buttons — the same toggle,
-    // so 1 + 2 lights both (linked editing) and the last lit one stays lit.
+    // LAYERS (21.6, maintainer 2026-11-16): keys 1 and 2 are the A and B buttons, key 3 the
+    // keyboard's SPLIT button — a press is a click, a quick 1, 1 / 2, 2 / 3, 3 a double-click.
+    // Auto-repeat while a key is held is ignored, or holding it would count as a double press.
     if (layerSelector != nullptr && ! key.getModifiers().isAnyModifierKeyDown())
     {
-        if (key.getTextCharacter() == '1') { layerSelector->press (true);  return true; }
-        if (key.getTextCharacter() == '2') { layerSelector->press (false); return true; }
-        if (key.getTextCharacter() == '3')   // = a click on SPLIT; auto-repeat while held is ignored
+        const auto c = key.getTextCharacter();
+        if (c == '1' || c == '2')
+        {
+            const int i = c == '1' ? 0 : 1;
+            if (! layerKeyDown[i]) { layerKeyDown[i] = true; layerSelector->press (i == 0); }
+            return true;
+        }
+        if (c == '3')
         {
             if (! splitKeyDown) { splitKeyDown = true; pressSplitButton(); }
             return true;
@@ -2343,8 +2376,7 @@ void SynthyEditor::buildRack()
         bPan.activeWhen = [] { return true; };
         d.body = {
             Display { selector, 2 },
-            Combo { P::layerMode, "MODE", juce::StringArray { "Single", "Dual", "Split" } },
-            split,
+            split,   // MODE is gone (maintainer 2026-11-23): A / B / A+B say what plays, SPLIT on the keyboard splits
             K (P::layerALevel, "A LVL"), aPan,
             K (P::layerBLevel, "B LVL"), bPan,
         };

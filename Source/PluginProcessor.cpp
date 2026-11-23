@@ -2177,8 +2177,8 @@ juce::StringArray SynthyProcessor::listenedParamIds() const
         ids.add(bp + ID::modSlotSource(n));
         ids.add(bp + ID::modSlotModule(n));
     }
-    ids.add(ID::layerMode);    // which layers play (Single / Dual / Split) …
-    ids.add(ID::layerFocus);   // … and in Single the selection
+    ids.add(ID::layerMode);    // which layers play (Split: both) …
+    ids.add(ID::layerFocus);   // … and outside a Split the selection
     ids.add(ID::arpTarget);    // 21.7: a pattern aimed at B makes B sound (matrix claims on shared modules)
     ids.add(ID::seqTarget);
     return ids;

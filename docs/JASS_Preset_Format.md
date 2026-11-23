@@ -85,8 +85,9 @@ B only = the file's `LayerA` into layer B; A + B = the whole file — except tha
 `LayerB` (every preset from before the layers) says nothing about B, so B and the LAYERS settings
 stay as they are. `LayerB` is written only when B differs from its Init sound or a mode other
 than Single is set, so a single-layer sound stays a single-layer file; read without the header's
-LOAD (LiveState, a fresh load), a missing `LayerB` puts B at its Init sound. `Layers.Mode` is Single / Dual / Split; develop files of 2026-11-16 carried a
-`BOn` switch instead (B on + `Layer` = Dual, B on + `Split` = Split, B off = Single).
+LOAD (LiveState, a fresh load), a missing `LayerB` puts B at its Init sound. `Layers.Mode` is Single (no split) or Split; outside a Split the A / B selection decides what
+plays. `Dual` (written until 2026-11-23, when the MODE knob went) reads as Single. Develop files of
+2026-11-16 carried a `BOn` switch instead (B on + `Split` = Split, anything else = Single).
 
 Field renames never break old files: a `ParamSpec` may carry a `legacyPersistKey`, and the
 reader falls back to it when the current key is missing. Writes always use the current key.

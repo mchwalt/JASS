@@ -31,21 +31,21 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ### Added
 - **LAYERS — layer B in the rack, played like a bitimbral hardware synth.** A module in the
-  MASTER BUS zone. **MODE** works as on the UDO Super Gemini: **Single** - the selected layer plays,
-  so keys **1** and **2** switch between two sounds live (a layer you leave rings out instead of
-  being cut); **Dual** - every key plays both; **Split** - below the split key B, from it up A, and
-  the on-screen keyboard shows the two ranges in the layers' colours with a big A and B. Buttons
-  **A** and **B** (keys 1 and 2) pick the layer you edit - B's modules carry a violet header; both
-  lit is **linked editing**: the rack shows A and every change goes to B as well, knobs by the
-  same distance on the knob so B keeps its offset (an octave on A's cutoff is about an octave on
-  B's, not the same number of Hz), a sample set or wavetable bank as the same pick. A press heads
-  for the pressed layer: from the other layer it adds it, with both lit it keeps only it - so B, B
-  goes from A to B and A, A back (maintainer 2026-11-23: a second press on B used to drop B again,
-  and B alone took a press on A, the layer being left). The split key moves one semitone at a time, or click
-  **SPLIT** at the top left of the on-screen keyboard (key **3**) and play a key - a button where
-  the split is shown beats a hidden hold-and-play gesture, and keys 1, 2 and 3 now all press a
-  visible button. A second click cancels; outside Split the button switches MODE to Split, so it
-  never seems dead. Level and balance per layer. **Loading a preset follows
+  MASTER BUS zone. Buttons **A** and **B** (keys 1 and 2) pick the layer you edit and hear - B's
+  modules carry a violet header, keys 1 and 2 switch between two sounds live (a layer you leave
+  rings out instead of being cut); both lit plays both and is **linked editing**: the rack shows A
+  and every change goes to B as well, knobs by the same distance on the knob so B keeps its offset
+  (an octave on A's cutoff is about an octave on B's, not the same number of Hz), a sample set or
+  wavetable bank as the same pick. A press on an unlit layer adds it, a quick double press (or
+  double-click) keeps only the pressed layer - so B, B quickly goes from A to B and A, A back;
+  pressed slowly, the second press changes nothing (maintainer 2026-11-23: a second press on B
+  used to drop B again, and B alone took a press on A, the layer being left). **SPLIT** at the top left of the on-screen keyboard (key **3**) switches the split
+  on and off - below the split key B, from it up A, whatever A / B shows, and the keyboard shows
+  the two ranges in the layers' colours with a big A and B. Double-click it (3, 3 quickly) and play a key to
+  make it the split key (the button reads LEARN while it waits), or move it one semitone at a time
+  with the SPLIT knob. There is no MODE knob (maintainer 2026-11-23): Single with both lit already
+  was Dual, so the selection says what plays and the button where the split is shown says whether
+  it is split; a file that stored Dual loads without a split. Level and balance per layer. **Loading a preset follows
   the selection** (maintainer's proposal): A only loads the preset and keeps layer B - a
   single-layer preset no longer wipes a B you built; B only puts just the preset's sound into B;
   A and B load the whole file. One rack layout serves both layers (zones and order), but each
@@ -57,7 +57,7 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 - **ARP and STEP SEQ get a TARGET - a sequenced bass under the left hand, the right hand live.**
   Until now a running pattern took every key: in a Split both hands fed the figure and nothing
   played live, and the pattern always went to layer A. **TARGET** (Auto / A / B / A+B) in each
-  module sets the layer; Auto follows the mode (Single: the selected layer, Dual: both, Split: B,
+  module sets the layer; Auto follows the layers (the selected layer, both with A and B lit, in a Split B,
   the left hand as on a split-keyboard hardware synth). In a Split with one target only that
   layer's keys feed the pattern and the other hand plays its layer live - the Gemini setup. The
   pattern plays on its own MIDI channel and is routed by target, not by pitch, so an arpeggio
@@ -103,7 +103,7 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   or split. A DAW with two instances is two instruments, the BASS box is a fixed mono voice -
   neither is a second playable patch (AD-16). JASS now carries a second, complete patch: every
   sound module exists twice, layer B's parameters are layer A's with a `b` in front, and its own
-  engine renders 8 more voices. DUAL plays every key on both, SPLIT sends the keys below the
+  engine renders 8 more voices. Both layers can play every key, SPLIT sends the keys below the
   split point (C3 by default) to B; a released key always reaches the layer its note went to, so
   moving the split while holding a chord cannot hang a voice. Each layer has a level and a
   balance. Master bus, ARP, STEP SEQ, PERC and BASS stay single - the ARP and the figure play

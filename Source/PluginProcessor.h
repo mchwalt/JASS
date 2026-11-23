@@ -296,7 +296,9 @@ public:
     LayersPlaying layersPlaying() const
     {
         const int mode = juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerMode)->load());
-        if (mode != 0) return { true, true };
+        // Split plays both; otherwise the selection decides (A+B = both). The MODE knob is gone
+        // (maintainer 2026-11-23): a stored "Dual" (1) from before plays like the selection.
+        if (mode == 2) return { true, true };
         const int f = getLayerFocus();
         return { f != 1, f != 0 };
     }

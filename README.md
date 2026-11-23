@@ -35,8 +35,8 @@ info** so nothing is hidden and every control explains itself.
   **TIE** and the 303's **SLIDE**; a `.mid` transcription loads as a playing
   figure and saves back out for the DAW.
 - **Two sounds from one keyboard.** Every patch exists twice, layer **A** and
-  layer **B**, like a bitimbral hardware synth: **Single** switches between them
-  live, **Dual** stacks them, **Split** puts B under the left hand. A sequenced
+  layer **B**, like a bitimbral hardware synth: **A** / **B** switch between them
+  live, **A+B** stacks them, **SPLIT** puts B under the left hand. A sequenced
   bass in B under the left hand while the right hand plays A — from one instance.
 - **One JASS plays a whole piece.** The patch under your hands, **PERC** drums and
   a sequenced **BASS** underneath — the two boxes run beside the patch, dry into
@@ -119,11 +119,11 @@ info** so nothing is hidden and every control explains itself.
 
 **Two layers (bitimbral)**
 - **Layer A and B** — two complete patches, 8 voices each. The **LAYERS** module
-  (MASTER BUS) picks the layer you edit (keys **1** / **2**; both lit = linked
-  editing) and the **MODE**: **Single** (the selected layer plays, the one you
-  leave rings out), **Dual** (both on every key), **Split** (below the split key
-  B, from it up A). Level and balance per layer.
-- **SPLIT** button on the on-screen keyboard (key **3**): click, play a key — done.
+  (MASTER BUS) picks the layer you edit and hear (keys **1** / **2**: a press adds the layer,
+  a double press keeps only it; the one you leave rings out; both lit = both
+  play, linked editing). Level and balance per layer.
+- **SPLIT** button on the on-screen keyboard (key **3**): split on / off — below
+  the split key B, from it up A. Double-click, play a key — that is the split key.
   The keyboard shows both ranges in the layers' colours.
 - **TARGET** for the ARP and the STEP SEQ: Auto / A / B / A+B. In a Split the
   pattern takes only its layer's keys and the other hand plays live; an arpeggio
