@@ -65,6 +65,8 @@ namespace SeqMidiIO
     // Story 21.8: `lane` = the layer whose STEP SEQ takes the figure (0 = A, 1 = B).
     inline ImportResult importFigure (APVTS& a, const juce::File& file, int lane = 0)
     {
+        jassert (lane >= 0 && lane < PatternStore::kStepLanes);
+        lane = juce::jlimit (0, PatternStore::kStepLanes - 1, lane);
         using namespace detail;
         ImportResult r;
 
@@ -279,6 +281,8 @@ namespace SeqMidiIO
     // pitch-changing TIE reimports as SLIDE, because MIDI cannot carry the difference.
     inline bool exportFigure (APVTS& a, const juce::File& file, int lane = 0)
     {
+        jassert (lane >= 0 && lane < PatternStore::kStepLanes);
+        lane = juce::jlimit (0, PatternStore::kStepLanes - 1, lane);
         constexpr int ppq = 480, overlap = 30;
         auto raw = [&a] (const juce::String& id) { return a.getRawParameterValue (id)->load(); };
 

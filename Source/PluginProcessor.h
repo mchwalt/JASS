@@ -467,11 +467,19 @@ public:
         // concurrently with the ~700 parameter writes, and a half-applied state can rising-edge
         // the auto-play drone into a fresh voice. A latched figure is safe either way: its first
         // note enters quantised to the drums' next bar, after this flag is consumed.
-        killVoicesRequested.store (true);
+        // 1 = every voice; 2 = every voice but layer B's (a single-layer LOAD keeps B and its running
+        // figure, review 2026-11-24). A pending "all" is never weakened to "all but B".
+        const int want = loadKeepsLayerB ? 2 : 1;
+        int expected = 0;
+        if (! killVoicesRequested.compare_exchange_strong (expected, want) && want == 1)
+            killVoicesRequested.store (1);
     }
+    // PresetIO hook (loadPreset): the load in progress keeps layer B. Message thread.
+    void setLoadKeepsLayerB (bool keep) { loadKeepsLayerB = keep; }
 private:
     std::atomic<bool> presetLoading { false };
-    std::atomic<bool> killVoicesRequested { false };   // consumed at the top of processBlock
+    std::atomic<int>  killVoicesRequested { 0 };       // 0 / 1 all / 2 all but B — consumed at the top of processBlock
+    bool              loadKeepsLayerB = false;         // message thread: the running load keeps layer B
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
     std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion

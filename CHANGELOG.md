@@ -11,6 +11,10 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **A figure running in layer B runs on when a single-layer preset loads.** Loading a preset
+  without a layer B keeps your B - but its running figure was stopped and re-started from step 1
+  and its sounding note cut. Layer B is now left untouched by such a load: its figure keeps its
+  place in the bar and its voices keep sounding (code review 2026-11-24).
 - **Octave keys move the figure of the layer you edit.** With a figure running in A and one in B,
   Up / Down shifted both latched figures at once - also in a Split, where the hands are meant to be
   independent. Now they shift A's, B's, or both with A+B lit (maintainer 2026-11-24, code review).

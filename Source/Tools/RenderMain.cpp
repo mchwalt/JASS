@@ -28,6 +28,7 @@
 #include <JuceHeader.h>
 #include "../PluginProcessor.h"
 #include "../Audio/PresetIO.h"
+#include "../Audio/SeqMidiIO.h"   // review group 2: MIDI import / export per lane
 
 namespace
 {
@@ -282,10 +283,10 @@ namespace
         expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "B's pattern note 84 (above the split) -> B only");
         one (juce::MidiMessage::noteOn (SynthyProcessor::kPatternChannel, 36, 0.8f));
         expect (a.getNumEvents() == 1 && b.getNumEvents() == 0, "A's pattern note 36 (below the split) -> A only");
-        s.split = false;   // DUAL, then back to SPLIT while the key is held
-        one (juce::MidiMessage::noteOn (1, 70, 0.8f));  expect (a.getNumEvents() == 1 && b.getNumEvents() == 1, "dual: key -> both");
+        s.split = false;   // no split, both layers selected; then SPLIT while the key is held
+        one (juce::MidiMessage::noteOn (1, 70, 0.8f));  expect (a.getNumEvents() == 1 && b.getNumEvents() == 1, "A+B, no split: key -> both");
         s.split = true;
-        one (juce::MidiMessage::noteOff (1, 70));       expect (a.getNumEvents() == 1 && b.getNumEvents() == 1, "dual -> split while held: note-off -> both");
+        one (juce::MidiMessage::noteOff (1, 70));       expect (a.getNumEvents() == 1 && b.getNumEvents() == 1, "split switched on while held: note-off -> both");
         // 21.8: a layer whose pattern runs takes no live keys; the key still plays the other one.
         s.split = false; s.liveBlock = LayerRouter::kA;
         one (juce::MidiMessage::noteOn (1, 72, 0.8f));  expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "A+B, A's pattern running: key -> B only");
@@ -499,6 +500,112 @@ namespace
             tmpF.deleteFile();
             tmp1.deleteFile();
         }
+
+        // ---- code review 2026-11-24, group 2 ----------------------------------------------------
+        std::cout << "Latch root per lane through presets" << std::endl;
+        {
+            Rig src;
+            src.p->getPatterns().steps[0].setOn (0, true);
+            src.p->getPatterns().steps[1].setOn (0, true);
+            PresetIO::hooks (src.p->getAPVTS()).applySeqLatchRoot (0, 60);
+            PresetIO::hooks (src.p->getAPVTS()).applySeqLatchRoot (1, 50);
+            const auto v = PresetIO::toVar (src.p->getAPVTS(), "latch");
+            Rig dst;
+            PresetIO::applyVar (dst.p->getAPVTS(), juce::JSON::parse (juce::JSON::toString (v, false, 12)));
+            expect (dst.p->getSeqLatchRoot (0) == 60 && dst.p->getSeqLatchRoot (1) == 50, "save -> load: A latched on 60, B on 50");
+        }
+        std::cout << "A B figure or a B latch alone makes the file two-layer" << std::endl;
+        {
+            Rig fig;   // B's figure only: no B parameter changed, B's STEP SEQ off
+            fig.p->getPatterns().steps[1].setOn (2, true);
+            expect (PresetIO::toVar (fig.p->getAPVTS(), "f")["LayerB"].isObject(), "a B figure alone is written (LayerB)");
+            Rig lat;   // B latched only, empty figure
+            PresetIO::hooks (lat.p->getAPVTS()).applySeqLatchRoot (1, 50);
+            expect (PresetIO::toVar (lat.p->getAPVTS(), "l")["LayerB"].isObject(), "a B latch alone is written (LayerB)");
+        }
+        std::cout << "Load into B carries the figure into B and leaves A's" << std::endl;
+        {
+            const auto tmpS = juce::File::createTempFile (".jass");
+            {
+                Rig src;   // a single-layer file whose layer A has a figure
+                auto& fa = src.p->getPatterns().steps[0];
+                fa.setOn (0, true); fa.setPitch (0, 4);
+                setParam (*src.p, ID::seqOn, 1.0f);
+                tmpS.replaceWithText (juce::JSON::toString (PresetIO::toVar (src.p->getAPVTS(), "s"), false, 12));
+            }
+            Rig r;
+            auto& fa = r.p->getPatterns().steps[0];
+            fa.setOn (0, true); fa.setPitch (0, 9);   // the player's A figure
+            PresetIO::loadPreset (r.p->getAPVTS(), tmpS, PresetIO::LoadScope::IntoLayerB);
+            expect (figureIs (r.p->getPatterns().steps[1], 4), "load into B: the file's figure is B's");
+            expect (figureIs (r.p->getPatterns().steps[0], 9), "load into B: A's figure untouched");
+            expect (rawOf (*r.p, b + ID::seqOn) > 0.5f, "load into B: B's STEP SEQ on, as in the file");
+            tmpS.deleteFile();
+        }
+        std::cout << "A stored Dual and a develop B ON file read as no split" << std::endl;
+        {
+            Rig base;
+            const auto text = juce::JSON::toString (PresetIO::toVar (base.p->getAPVTS(), "d"), false, 12);
+            auto withLayers = [&text] (int version, juce::DynamicObject* lay)
+            {
+                auto v = juce::JSON::parse (text);
+                v.getDynamicObject()->setProperty ("FormatVersion", version);
+                v["Instrument"].getDynamicObject()->setProperty ("Layers", juce::var (lay));
+                return v;
+            };
+            {
+                auto* lay = new juce::DynamicObject(); lay->setProperty ("Mode", "Dual");
+                Rig r; r.set (ID::layerMode, 2.0f);
+                PresetIO::applyVar (r.p->getAPVTS(), withLayers (12, lay));
+                expect (juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 0, "Mode Dual reads as no split");
+            }
+            {
+                auto* lay = new juce::DynamicObject(); lay->setProperty ("BOn", true); lay->setProperty ("Mode", "Layer");
+                Rig r; r.set (ID::layerMode, 2.0f);
+                PresetIO::applyVar (r.p->getAPVTS(), withLayers (11, lay));
+                expect (juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 0, "develop B ON + Layer reads as no split");
+            }
+            {
+                auto* lay = new juce::DynamicObject(); lay->setProperty ("BOn", true); lay->setProperty ("Mode", "Split");
+                Rig r;
+                PresetIO::applyVar (r.p->getAPVTS(), withLayers (11, lay));
+                expect (juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 2, "develop B ON + Split reads as Split");
+            }
+            {
+                auto* lay = new juce::DynamicObject(); lay->setProperty ("BOn", false); lay->setProperty ("Mode", "Split");
+                Rig r;
+                PresetIO::applyVar (r.p->getAPVTS(), withLayers (11, lay));
+                expect (juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 0, "develop B off + Split reads as no split (only the BOn pass knows)");
+            }
+        }
+        std::cout << "MIDI export / import on B's STEP SEQ leaves A's alone" << std::endl;
+        {
+            const auto mid = juce::File::createTempFile (".mid");
+            Rig src;
+            auto& fb = src.p->getPatterns().steps[1];
+            const int pitches[4] = { 0, 7, 12, 5 };
+            for (int i = 0; i < 16; ++i) { fb.setOn (i, (i % 4) == 0); fb.setPitch (i, pitches[i / 4]); }
+            setParam (*src.p, b + ID::seqLength, 16.0f);
+            setParam (*src.p, b + ID::seqOn, 1.0f);
+            PresetIO::hooks (src.p->getAPVTS()).applySeqLatchRoot (1, 48);
+            expect (SeqMidiIO::exportFigure (src.p->getAPVTS(), mid, 1), "B's figure exported");
+            Rig dst;
+            setParam (*dst.p, ID::seqLength, 7.0f);   // A's own settings, to be left alone
+            const auto res = SeqMidiIO::importFigure (dst.p->getAPVTS(), mid, 1);
+            expect (res.error == SeqMidiIO::Error::none, "B's figure imported into B");
+            const auto& got = dst.p->getPatterns().steps[1];
+            // The import re-grids the file (its own step division and gate reading), so compare the
+            // melody: the pitches of the sounding steps in order, repeats folded, relative to the first.
+            std::vector<int> mel;
+            for (int i = 0; i < StepPattern::kMaxSteps; ++i)
+                if (got.on (i) && (mel.empty() || mel.back() != got.pitch (i))) mel.push_back (got.pitch (i));
+            const bool shape = mel.size() == 4 && mel[1] - mel[0] == 7 && mel[2] - mel[0] == 12 && mel[3] - mel[0] == 5;
+            expect (shape, "round trip: B's figure keeps its intervals");
+            expect (rawOf (*dst.p, b + ID::seqOn) > 0.5f, "import into B switches B's STEP SEQ on");
+            expect (rawOf (*dst.p, ID::seqOn) < 0.5f && std::abs (rawOf (*dst.p, ID::seqLength) - 7.0f) < 0.5f
+                    && dst.p->getPatterns().steps[0].lastUsed() < 0, "A's STEP SEQ, LEN and figure untouched");
+            mid.deleteFile();
+        }
     }
 
     void processorChecks()
@@ -668,6 +775,44 @@ namespace
             expect (pt.steps[1].on (0) && pt.steps[1].pitch (0) == 5, "B's figure back in B");
             expect (pt.steps[0].lastUsed() < 0, "A's figure stays empty");
             expect (dst.p->getSeqLatchRoot (1) == 50, "B's latch back (SeqLatchRootB)");
+        }
+
+        // ---- code review 2026-11-24, group 2 ----------------------------------------------------
+        std::cout << "A single-layer load keeps B's running figure running" << std::endl;
+        {
+            const auto tmp1 = juce::File::createTempFile (".jass");
+            {
+                Rig one;   // no LayerB in the file
+                tmp1.replaceWithText (juce::JSON::toString (PresetIO::toVar (one.p->getAPVTS(), "one"), false, 12));
+            }
+            Rig r;   // B's 8-step figure at 4 steps/s, latched, selection A
+            auto& st = r.p->getPatterns().steps[1];
+            for (int i = 0; i < 8; ++i) { st.setOn (i, true); st.setPitch (i, i); }
+            setParam (*r.p, bp + ID::seqLength, 8.0f); setParam (*r.p, bp + ID::seqSync, 0.0f);
+            setParam (*r.p, bp + ID::seqRate, 4.0f);   setParam (*r.p, bp + ID::seqGate, 1.0f);
+            setParam (*r.p, bp + ID::seqOn, 1.0f);
+            PresetIO::hooks (r.p->getAPVTS()).applySeqLatchRoot (1, 48);
+            r.run (0.6);
+            const int before = r.p->getSeqStep (1);
+            PresetIO::loadPreset (r.p->getAPVTS(), tmp1, PresetIO::LoadScope::KeepLayerB);
+            r.block();
+            expect (r.p->getSeqLatchRoot (1) == 48, "B's latch kept");
+            expect (before > 0 && r.p->getSeqStep (1) == before, "B's figure runs on (no restart at step 1)");
+            expect (r.p->layerKeysDown (true) == 1, "B's note still sounding through the load");
+            tmp1.deleteFile();
+        }
+        std::cout << "A+B linked editing mirrors a knob, not a module switch" << std::endl;
+        {
+            Rig r;
+            r.set (ID::layerFocus, 2.0f);
+            auto raw = [&] (const juce::String& id) { return r.p->getAPVTS().getRawParameterValue (id)->load(); };
+            const float bCut = raw (bp + ID::filterCutoff);
+            setParam (*r.p, ID::filterCutoff, raw (ID::filterCutoff) * 2.0f);
+            expect (std::abs (raw (bp + ID::filterCutoff) - bCut) > 1.0f, "A's CUTOFF moved: B's CUTOFF follows");
+            const float bOn = raw (bp + ID::filterOn);
+            setParam (*r.p, ID::filterOn, bOn);                         // A matches B first ...
+            setParam (*r.p, ID::filterOn, bOn > 0.5f ? 0.0f : 1.0f);   // ... then flips: a mirror would carry it to B
+            expect (std::abs (raw (bp + ID::filterOn) - bOn) < 0.5f, "A's FILTER switched: B's stays as it was");
         }
     }
 }

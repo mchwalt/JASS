@@ -50,6 +50,7 @@ SynthyProcessor::SynthyProcessor()
     // A preset is a post-coupling snapshot: while one is applied, the parameter couplings stay
     // silent and their auto-enable memories are dropped (see setPresetLoading in the header).
     PresetIO::hooks(apvts).setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
+    PresetIO::hooks(apvts).setLoadKeepsLayerB = [this] (bool keep) { setLoadKeepsLayerB (keep); };
     PresetIO::hooks(apvts).patterns          = &patterns;   // AD-14: the PERC grid is read/written through here
 
     // Story 21.8: one STEP SEQ + ARP lane per layer — lane i plays layer i on its own channel.
@@ -1122,10 +1123,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // maintainer 2026-08-24). Hard stop, no tail: the old patch's tail through the new patch's
     // processing is the very sound being removed. allNotesOff walks the voices directly —
     // RT-safe, and immune to the chord filter since no buffer event is involved.
-    if (killVoicesRequested.exchange (false))
+    if (const int kill = killVoicesRequested.exchange (0); kill != 0)
     {
         engineA.killAllVoices();
-        engineB.killAllVoices();
+        if (kill == 1)   // 2: a single-layer load keeps layer B playing (its figure runs on)
+            engineB.killAllVoices();
         // The drone's voice just died with the rest — reset its bookkeeping too, or a patch that
         // WANTS the drone (no latch, nothing held) would stay silent: autoNoteOn would still say
         // "sounding" and nothing would ever re-trigger it. The noteOff clears the keyboard state;

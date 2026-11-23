@@ -57,7 +57,7 @@ namespace Modules
             chaos(),        // LFO expansion — ditto (Lorenz mod source)
             grain(),        // Story 17.1 — ditto (granular cloud on the SAMPLER's set)
             // bass() (Story 20.2) removed 2026-11-23: layer B with its own STEP SEQ replaces the box (AD-16)
-            layers(),       // Story 21.5 (AD-16) — MODE Single/Dual/Split, split note, focus, level/balance
+            layers(),       // Story 21.5 (AD-16) — split on/off, split note, focus, level/balance
         };
     }
 }

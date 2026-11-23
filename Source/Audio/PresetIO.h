@@ -514,6 +514,9 @@ namespace PresetIO
         std::function<float(const juce::String& paramId)> presetBaseline01;
         std::function<float(const juce::String& paramId)> factoryValue01;   // the Init value (normalised), -1 = the declared default
         std::function<void(bool)> setPresetLoading;
+        // A single-layer LOAD keeps layer B (loadPreset): the processor then spares B's voices from
+        // the load's voice kill. Set around loadFromFile, message thread.
+        std::function<void(bool)> setLoadKeepsLayerB;
         PatternStore* patterns = nullptr;
     };
     inline juce::CriticalSection& hooksLock() { static juce::CriticalSection l; return l; }
@@ -643,7 +646,7 @@ namespace PresetIO
     inline void writeStepSeqContent (APVTS& a, const juce::String& prefix, juce::DynamicObject& root)
     {
         using namespace detail;
-        const int lane = laneOfPrefix (prefix);
+        const int lane = juce::jlimit (0, PatternStore::kStepLanes - 1, laneOfPrefix (prefix));
         // STEP SEQ (Story 15.5): the root the figure is LATCHED to. Since the latch outlives the key
         // that started it, a patch can be saved while a figure is running — and then it should come
         // back running, on the same note. That is what makes a sequencer patch play itself when it
@@ -660,10 +663,10 @@ namespace PresetIO
         // keys the spec pass wrote above. Per step: "On", "Note" — the ABSOLUTE MIDI note,
         // canonical (maintainer's design 2026-08-24; the key name was reserved when the Comment
         // field landed) — "Name", its spelled form, generated purely for the reader's eyes (the
-        // loader ignores it, so number and name can never diverge), and "Accent" (15.2, omitted
-        // when plain so the common case stays terse). Absolute pitch is resolved against the
-        // latch root written just above — or C3 (48), the keyboard's default C, for a patch saved
-        // without a running figure. applyVar reverses the same rule, so offsets round-trip
+        // loader ignores it, so number and name can never diverge), "Accent" (15.2) and "Gate" (15.7),
+        // both always written since v10. Absolute pitch is resolved against the latch root written
+        // just above — or C3 (48), the keyboard's default C, for a patch saved without a running
+        // figure. applyVar reverses the same rule, so offsets round-trip
         // exactly and the figure still transposes with the played key.
         if (auto* mod = root.getProperty("StepSeq").getDynamicObject())
         {
@@ -1175,6 +1178,8 @@ namespace PresetIO
     // the reader half of writeStepSeqContent). Returns the stored latch root, -1 = none.
     inline int readStepSeqContent (APVTS& a, int lane, const juce::var& seqObj)
     {
+        jassert (lane >= 0 && lane < PatternStore::kStepLanes);
+        lane = juce::jlimit (0, PatternStore::kStepLanes - 1, lane);
         // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
         // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when
         // none) restores the engine's offset; "Name" is readability only and deliberately
@@ -1228,22 +1233,37 @@ namespace PresetIO
         return latch;
     }
 
-    inline void applyVar(APVTS& a, const juce::var& v)
+    // `keepLayerB` (a single-layer LOAD, see loadPreset): layer B is left exactly as it is - its
+    // parameters are not reset, its figure and latch not touched - so a figure running in B keeps
+    // running through the load instead of being stopped and re-latched (review 2026-11-24).
+    inline void applyVar(APVTS& a, const juce::var& v, bool keepLayerB = false)
     {
         if (! v.isObject())
             return;
+        const int fileVersion = (int) v.getProperty("FormatVersion", 1);
+        const juce::String bp (Modules::kLayerBPrefix);
+        const int laneB = laneOfPrefix(bp);
+        auto isLayerBParam = [&bp] (const juce::String& id)
+        { return id.startsWith(bp) && Modules::isLayeredParamId(id.substring(bp.length())); };
         // Couplings off while the snapshot lands (see setPresetLoading) — the writes below would
         // otherwise fire them hundreds of times against half-applied intermediate states.
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);
         // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
         // file's values on top (missing field => factory default). Clear the rack-layout baseline.
         for (auto* p : a.processor.getParameters())
+        {
+            if (keepLayerB)
+                if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(p); rp != nullptr && isLayerBParam(rp->paramID))
+                    continue;
             p->setValueNotifyingHost(p->getDefaultValue());
+        }
         a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
         if (hooks(a).patterns)   // AD-14: part of the snapshot too
         {
             hooks(a).patterns->perc.clear();
-            for (auto& fig : hooks(a).patterns->steps) fig.clear();
+            for (int lane = 0; lane < PatternStore::kStepLanes; ++lane)
+                if (! (keepLayerB && lane == laneB))
+                    hooks(a).patterns->steps[(size_t) lane].clear();
         }
 
         // v11 groups the file by layer ("Instrument", "LayerA", "LayerB"); up to v10 the instrument
@@ -1262,9 +1282,10 @@ namespace PresetIO
         // v11 (Story 21.8): STEP SEQ and ARP were instrument modules with a TARGET. A patch module
         // a v11 file still keeps in "Instrument" is read into the layer(s) its "LayerTarget" named —
         // Auto / A / none: layer A; B: layer B; A+B: both — once, here. Generic over the layered
-        // modules; only those two ever lived there.
+        // modules; only those two ever lived there. Gated on the file version (house rule for
+        // migration passes): only a v11 file has them there.
         std::vector<int> legacyLanes;   // the lanes the v11 STEP SEQ goes to (content, below)
-        if (grouped)
+        if (grouped && fileVersion == 11)
             for (const auto& obj : Modules::layeredPersistObjects())
                 if (! layerASrc[juce::Identifier (obj)].isObject() && instSrc[juce::Identifier (obj)].isObject())
                 {
@@ -1273,6 +1294,7 @@ namespace PresetIO
                     if (target == "B")        lanes = { 1 };
                     else if (target == "A+B") lanes = { 0, 1 };
                     else                      lanes = { 0 };
+                    if (keepLayerB) lanes.erase(std::remove(lanes.begin(), lanes.end(), laneB), lanes.end());
                     for (const int lane : lanes)
                         Modules::readLayerModule(a, prefixOfLane(lane), obj, instSrc);
                     if (obj == "StepSeq") legacyLanes = lanes;
@@ -1280,7 +1302,7 @@ namespace PresetIO
         // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Split" is
         // SPLIT, anything else is no split (the read above matched "Split" in the new list already —
         // B off must undo that).
-        if (auto* lay = instSrc["Layers"].getDynamicObject(); lay != nullptr && lay->hasProperty("BOn"))
+        if (auto* lay = instSrc["Layers"].getDynamicObject(); fileVersion == 11 && lay != nullptr && lay->hasProperty("BOn"))
             if (auto* p = a.getParameter(ID::layerMode))
             {
                 const bool split = (bool) lay->getProperty("BOn") && lay->getProperty("Mode").toString() == "Split";
@@ -1384,7 +1406,11 @@ namespace PresetIO
         // declared defaults — toVar leaves an untouched Init B out of the file, so this is what
         // brings it back (a LiveState after a restart, a DAW-less round trip). A LOAD from the
         // header keeps the player's B instead (loadPreset), whatever this sets.
-        if (const auto lb = v["LayerB"]; lb.isObject())
+        if (keepLayerB)
+        {
+            // the player's B stays as it is (loadPreset, single-layer file)
+        }
+        else if (const auto lb = v["LayerB"]; lb.isObject())
         {
             Modules::readLayerState(a, Modules::kLayerBPrefix, lb);
             readMatrixSlots(a, Modules::kLayerBPrefix, lb);
@@ -1411,7 +1437,8 @@ namespace PresetIO
         // 21.8: per lane — each layer's figure comes back running (or stopped) on its own.
         if (hooks(a).applySeqLatchRoot)
             for (int lane = 0; lane < PatternStore::kStepLanes; ++lane)
-                hooks(a).applySeqLatchRoot (lane, laneLatch[lane]);
+                if (! (keepLayerB && lane == laneB))   // a kept B keeps its running figure
+                    hooks(a).applySeqLatchRoot (lane, laneLatch[lane]);
 
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);   // couplings live again — for GESTURES
     }
@@ -1571,7 +1598,7 @@ namespace PresetIO
         bool migrated = false;
     };
 
-    inline LoadResult loadFromFile(APVTS& a, const juce::File& file)
+    inline LoadResult loadFromFile(APVTS& a, const juce::File& file, bool keepLayerB = false)
     {
         LoadResult r;
         if (! file.existsAsFile())
@@ -1593,7 +1620,7 @@ namespace PresetIO
             file.copyFileTo(backupDir.getChildFile(file.getFileName()));
 
             if (r.fileVersion < 3) applyVarFlatLegacy(a, v);   // flat legacy → apvts
-            else                   applyVar(a, v);             // nested v3 → apvts
+            else                   applyVar(a, v, keepLayerB); // nested v3 → apvts
             // Version-gated like convertOldPresets (see the note there): re-running the v5 remap
             // on a v6+ file rotates the matrix param indices.
             if (r.fileVersion < 5) migrateSlotTargetsToModuleParam(a, v);   // v4 files only
@@ -1607,7 +1634,7 @@ namespace PresetIO
         }
         else
         {
-            applyVar(a, v);
+            applyVar(a, v, keepLayerB);
         }
 
         r.ok = true;
@@ -1640,7 +1667,7 @@ namespace PresetIO
                 p->setValueNotifyingHost(p->getDefaultValue());
         Modules::readLayerState(a, prefix, src);
         // 21.8: a v11 file keeps STEP SEQ and ARP in "Instrument" — they are part of the sound now.
-        const juce::var inst = v["Instrument"];
+        const juce::var inst = r.fileVersion == 11 ? v["Instrument"] : juce::var();   // v11 only (gated)
         if (inst.isObject())
             for (const auto& obj : Modules::layeredPersistObjects())
                 if (! src[juce::Identifier (obj)].isObject() && inst[juce::Identifier (obj)].isObject())
@@ -1679,6 +1706,9 @@ namespace PresetIO
     //   a file without B (every older one) — the file's instrument and layer A; layer B stays as it
     //             is (and B's LAYERS settings with it), so a single-layer preset never wipes a B;
     //   B only lit — just the file's sound, into layer B (loadIntoLayer), to build a combination.
+    // So the caller only chooses IntoLayerB or not: KeepLayerB and Whole both mean "a normal load",
+    // and the FILE decides between them (it has a LayerB or not). They stay two names so a caller
+    // can say what it expects - the value itself is not honoured.
     enum class LoadScope { KeepLayerB, IntoLayerB, Whole };
 
     inline LoadResult loadPreset(APVTS& a, const juce::File& file, LoadScope scope)
@@ -1693,55 +1723,29 @@ namespace PresetIO
         // A two-layer file is a sound made of both layers: it loads whole whatever is lit (2026-11-23).
         scope = juce::JSON::parse(file)["LayerB"].isObject() ? LoadScope::Whole : LoadScope::KeepLayerB;
 
-        // What survives the load: with a single-layer file, the selection, layer B and every LAYERS
-        // setting (split, levels, balance); a two-layer file brings all of them itself.
+        // What survives a single-layer load: the selection and every LAYERS setting (split, levels,
+        // balance) - restored after the load. Layer B itself is never touched (applyVar's keepLayerB):
+        // its parameters, figure and latch stay, so a figure running in B runs on, and its voices are
+        // spared the load's voice kill (setLoadKeepsLayerB). A two-layer file brings all of it itself.
+        const bool keepB = (scope == LoadScope::KeepLayerB);
         std::vector<std::pair<juce::String, float>> keep;
         auto keepId = [&] (const juce::String& id) { if (auto* p = a.getParameter(id)) keep.push_back({ id, p->getValue() }); };
-        if (scope == LoadScope::KeepLayerB)
-            keepId(ID::layerFocus);
-        juce::String keepPendingB;
-        if (scope == LoadScope::KeepLayerB)
-        {
-            for (const auto& id : Modules::layeredParamIds()) keepId(juce::String(Modules::kLayerBPrefix) + id);
-            for (const char* id : { ID::layerMode, ID::splitNote, ID::layerALevel, ID::layerBLevel,
+        if (keepB)
+            for (const char* id : { ID::layerFocus, ID::layerMode, ID::splitNote, ID::layerALevel, ID::layerBLevel,
                                     ID::layerAPan, ID::layerBPan })
                 keepId(id);
-            keepPendingB = hooks(a).pendingBSamplerSetName;
-        }
-        // 21.8: B's STEP SEQ figure and latch are part of layer B — kept with it.
-        std::unique_ptr<juce::XmlElement> keepFigB;
-        int keepLatchB = -1;
-        if (scope == LoadScope::KeepLayerB && hooks(a).patterns != nullptr)
-        {
-            keepFigB = std::make_unique<juce::XmlElement>("Keep");
-            hooks(a).patterns->steps[1].writeXml(*keepFigB);
-            if (hooks(a).seqLatchRoot) keepLatchB = hooks(a).seqLatchRoot(1);
-        }
 
-        const auto r = loadFromFile(a, file);
-        if (! r.ok)
-            return r;
-
-        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);   // the restore is no gesture either
-        for (const auto& [id, v01] : keep)
-            if (auto* p = a.getParameter(id))
-                p->setValueNotifyingHost(v01);
-        if (scope == LoadScope::KeepLayerB)
+        if (hooks(a).setLoadKeepsLayerB) hooks(a).setLoadKeepsLayerB(keepB);
+        const auto r = loadFromFile(a, file, keepB);
+        if (r.ok && ! keep.empty())
         {
-            // The file's own B (if it has one) asked for ITS set while loading; that request must
-            // not land on the B we kept (review 2026-11-18). Re-issue the kept B's own pending
-            // request, or withdraw whatever is in flight for B.
-            const juce::String bSet = juce::String(Modules::kLayerBPrefix) + ID::samplerSet;
-            hooks(a).pendingBSamplerSetName = keepPendingB;
-            if (keepPendingB.isNotEmpty() && hooks(a).requestSamplerSet) hooks(a).requestSamplerSet(keepPendingB, bSet);
-            else if (hooks(a).cancelSamplerSet)                         hooks(a).cancelSamplerSet(bSet);
-            if (keepFigB != nullptr)
-            {
-                if (! hooks(a).patterns->steps[1].readXml(*keepFigB)) hooks(a).patterns->steps[1].clear();
-                if (hooks(a).applySeqLatchRoot) hooks(a).applySeqLatchRoot(1, keepLatchB);
-            }
+            if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);   // the restore is no gesture either
+            for (const auto& [id, v01] : keep)
+                if (auto* p = a.getParameter(id))
+                    p->setValueNotifyingHost(v01);
+            if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
         }
-        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
+        if (hooks(a).setLoadKeepsLayerB) hooks(a).setLoadKeepsLayerB(false);
         return r;
     }
     inline LoadResult loadIntoLayerB(APVTS& a, const juce::File& file) { return loadIntoLayer(a, file, Modules::kLayerBPrefix); }

@@ -87,7 +87,7 @@ inline rack::ModuleDescriptor makeModuleDescriptor (const ModuleSpec& m)
         for (const auto& id : m.bodyOrder)
         {
             if (id.isEmpty()) { d.body.push_back (rack::Caption { {} }); continue; }
-            // "step:<n>" (AD-14): a PATTERN cell — a knob bound to PatternStore::step, no
+            // "step:<n>" (AD-14): a PATTERN cell — a knob bound to a PatternStore figure (steps[lane]), no
             // parameter behind it. Captioned with its number, like the step knobs always were.
             if (id.startsWith ("step:"))
             {
