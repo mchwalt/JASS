@@ -2907,8 +2907,6 @@ void SynthyEditor::buildRack()
         greyWhenSynced(d, P::percRate, P::percSync);
         addRackModule(std::move(d));
     }
-    // BASS (Story 20.2, AD-15): the sequenced bass box beside the patch — pure spec, no hooks.
-    addRackModule(makeModuleDescriptor(Modules::bass()));
     patch([&] {   // 21.6: built for layer A here, again for layer B at the end
     addRackModule(makeModuleDescriptor(LS(Modules::glide())));
     addRackModule(makeModuleDescriptor(LS(Modules::pitchEnv())));

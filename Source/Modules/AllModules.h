@@ -35,7 +35,6 @@
 #include "PercSpecs.h"
 #include "ChaosSpecs.h"
 #include "GrainSpecs.h"
-#include "BassSpecs.h"
 #include "LayersSpecs.h"
 
 namespace Modules
@@ -57,7 +56,7 @@ namespace Modules
             perc(),         // Story 16.1 — ditto (140 params; append-only keeps old presets valid)
             chaos(),        // LFO expansion — ditto (Lorenz mod source)
             grain(),        // Story 17.1 — ditto (granular cloud on the SAMPLER's set)
-            bass(),         // Story 20.2 — ditto (the sequenced bass box beside the patch, AD-15)
+            // bass() (Story 20.2) removed 2026-11-23: layer B with its own STEP SEQ replaces the box (AD-16)
             layers(),       // Story 21.5 (AD-16) — MODE Single/Dual/Split, split note, focus, level/balance
         };
     }

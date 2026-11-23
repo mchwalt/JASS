@@ -38,9 +38,9 @@ info** so nothing is hidden and every control explains itself.
   layer **B**, like a bitimbral hardware synth: **A** / **B** switch between them
   live, **A+B** stacks them, **SPLIT** puts B under the left hand. A sequenced
   bass in B under the left hand while the right hand plays A — from one instance.
-- **One JASS plays a whole piece.** The patch under your hands, **PERC** drums and
-  a sequenced **BASS** underneath — the two boxes run beside the patch, dry into
-  the master bus, so the drums never get dragged through your filter.
+- **One JASS plays a whole piece.** The patch under your hands, a sequenced bass
+  in layer B and **PERC** drums — the drums run beside the patch, dry into the
+  master bus, so they never get dragged through your filter.
 - **Kunstkopf output.** Every generator is placed in 3-D by convolving it with a
   measured **MIT KEMAR** head response, and a binaural early-reflection stage
   pushes the image **out of the head** on headphones.
@@ -89,9 +89,6 @@ info** so nothing is hidden and every control explains itself.
   figure started from silence enters on the next start of the drum pattern.
   **COPY** stamps a step column, **x2** doubles the pattern. SFZ choke groups are
   honoured (a closed hi-hat silences the open one).
-- **BASS** — one sequenced mono bass (saw/square, a sub an octave down, a resonant
-  lowpass with its own decay envelope, glide for SLIDE steps). Flip the STEP SEQ's
-  **BASS** switch and the figure plays here while the keyboard plays the patch.
 - **Arpeggiator** — up / down / up-down / random. Takes the same place as the
   STEP SEQ, so only one of the two runs.
 
@@ -161,7 +158,7 @@ The same build runs as a **VST3 instrument**. In a host, JASS
 - keeps its **patterns in the plugin state**, so they travel with the project,
 - plays at its **standalone level**.
 
-The rack is one patch plus two fixed boxes (PERC, BASS) by design — more voices
+The rack is two layers plus the PERC drums by design — more voices
 of music are more JASS instances on more tracks, and two instances stay in phase.
 
 **Tested in:** Bitwig Studio 6.1, Cubase Elements 15 and Waveform Free 14

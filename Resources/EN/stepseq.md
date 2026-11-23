@@ -7,8 +7,7 @@ Plays a figure of up to 768 steps you write yourself, transposed by the key you 
 - **LEN** — how many steps before the pattern repeats.
 - **GATE** — note length, for the whole pattern. **1 = legato**: each note is held into the next step, no gap. Lower values shorten every note; a step's own gate value scales on top of it.
 - **ACCENT** — what an accented step does: how much louder it plays and how far the filter opens. At 0, accents change nothing.
-- **BASS** — sends the figure to the BASS module instead of the patch: the keyboard then plays the patch and the figure plays the bass underneath it. Switch BASS on as well. Clicking a step then sounds it through the bass.
-- **TARGET** — the layer the figure plays: **Auto** (the selected layer, both with A+B, in a Split B), **A**, **B** or **A+B**. In a Split with one target only that layer's keys start and move the figure — the other hand plays live. Ignored while BASS is on.
+- **TARGET** — the layer the figure plays: **Auto** (the selected layer, both with A+B, in a Split B), **A**, **B** or **A+B**. In a Split with one target only that layer's keys start and move the figure — the other hand plays live.
 
 Clicking or turning a step's knob sounds it, so you can write the figure by ear. A **rest keeps its note**: its knob is dimmed but still turns, so a silent step's pitch can be set — and heard — before switching it on. A **double-click** puts a knob back to the loaded preset's value. Preview, entry and the note names all follow the root the figure sounds at: the latched key while one is running, otherwise the keyboard's current C (Up / Down shifts it).
 

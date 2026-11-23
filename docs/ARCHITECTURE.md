@@ -288,10 +288,10 @@ compile against channel 0. Delay and reverb are **per voice**, not bus sends.
 Stage order after the housekeeping (auto-play/drone, tempo resolve from host
 BPM or the MASTER TEMPO knob, arp MIDI rewrite, glide):
 
-1. `synth.renderNextBlock(...)` — all voices mix into the buffer. Then the two
-   **boxes** (AD-15) render dry into the same buffer: `perc.processBlock` (the
-   drums) and `bass.processBlock` (the sequenced bass, fed by the STEP SEQ's MIDI
-   when its BASS switch is on). Neither passes through a voice or its effects.
+1. `synth.renderNextBlock(...)` — all voices mix into the buffer. Then the **box**
+   (AD-15) renders dry into the same buffer: `perc.processBlock` (the drums). It
+   does not pass through a voice or its effects. (The BASS box, the second one,
+   was removed 2026-11-23 — layer B plays the bass.)
 2. Advance the four `uiLfos` → `lfoDisplayValues[]` (these feed the mod rings
    and the global mod path — "ring == audio"). Since Story 20.1 a `uiLfos[i]`
    is also THE instance of LFO i when its GLOBAL latch is on: every voice reads
@@ -620,7 +620,7 @@ The formal architecture spine lives at
 | AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS plays one instrument on the keyboard — two layers since AD-16, plus the two fixed boxes of AD-15; further voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
 
 | AD-14 | **Sequencer patterns are content, not parameters.** The STEP SEQ figure (768 × pitch/on/accent/gate) and the PERC grid (4 × 192) leave the APVTS and live in a `PatternStore` the engine reads lock-free; a host sees ~150 parameters, not ~4000. Presets, DAW state and LiveState carry the patterns as data blocks; the rack binds step knobs and grid cells to the store, not to parameters |
-| AD-15 | **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** The keyboard plays the patch (two layers since AD-16). Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and is driven by an existing sequencer through a switch on that sequencer (STEP SEQ's BASS), never by the keyboard. Two boxes are the limit: PERC (drums) and BASS (a sequenced mono bass). A third box, a second BASS or matrix targets into a box stay out, and so does a third layer (AD-16) — that music is DAW tracks |
+| AD-15 | **Partly superseded 2026-11-23:** the BASS box is removed — layer B, played by its own STEP SEQ, is the bass (AD-16); PERC stays the one box and the rule below still describes it. **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** The keyboard plays the patch (two layers since AD-16). Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and is driven by an existing sequencer through a switch on that sequencer (STEP SEQ's BASS), never by the keyboard. Two boxes are the limit: PERC (drums) and BASS (a sequenced mono bass). A third box, a second BASS or matrix targets into a box stay out, and so does a third layer (AD-16) — that music is DAW tracks |
 | AD-16 | **JASS is bitimbral (decided 2026-11-11, Story 21.3): two identical layers, one rack.** Every patch module exists twice, layer A (today's ids, untouched) and layer B (the same specs, ids prefixed `b`), each with its own voice pool; one A|B focus switch in the header decides which layer the rack shows and edits. Instrument modules (MASTER bus, STEP SEQ, ARP, PERC, BASS, CHAOS, displays, keyboard, preset bank) stay single and serve both; the sequencers get a target. LAYER and SPLIT from one keyboard. A preset is instrument + layer A + an optional `LayerB` object; old presets are layer A with B off. Supersedes AD-13 (a) for two layers; songs with more voices stay DAW tracks |
 
 ### AD-13 in more detail (decided 2026-10-05)
@@ -722,7 +722,11 @@ The formal architecture spine lives at
   sequenced bass); a cut inherits whatever the pattern is. Cutting with the pattern as content
   gives every cut the same small, honest parameter list from day one.
 
-### AD-15 in more detail (decided 2026-11-08, Story 20.2)
+### AD-15 in more detail (decided 2026-11-08, Story 20.2; BASS removed 2026-11-23)
+
+> **Note 2026-11-23:** the BASS box described below no longer exists (maintainer: replace it with
+> layer B). Its code, help and ids are gone; the ids `bass*` and `seqToBass` stay retired so an old
+> DAW project can never hit a new parameter. The text is kept as the record of the decision.
 
 - **The problem.** JASS is monotimbral (AD-13): the STEP SEQ takes over the held chord, so a
   pad on the keyboard and a sequenced figure from the same instance are mutually exclusive.
@@ -799,9 +803,9 @@ The formal architecture spine lives at
      WAVETABLE, SAMPLER, GRAIN, CROSS MOD, FILTER, FORMANT, ADSR, PITCH ENV, GLIDE, LFO 1–4,
      MOD MATRIX, DISTORTION, WAVEFOLD, BITCRUSH, PHASER, CHORUS, DELAY, REVERB.
   2. **Instrument modules stay single** and serve both layers (12 specs): MASTER, COMPRESSOR,
-     STEREO (output mode, width, room), ARP, STEP SEQ, PERC, BASS, CHAOS, OSCILLOSCOPE, SPECTRUM,
+     STEREO (output mode, width, room), ARP, STEP SEQ, PERC, CHAOS, OSCILLOSCOPE, SPECTRUM,
      KEYBOARD, PRESET BANK. CHAOS is one attractor both matrices can read; the master bus sums
-     both layers before the compressor, as it already sums PERC and BASS.
+     both layers before the compressor, as it already sums PERC.
   3. **Ids: layer A keeps today's ids, layer B prefixes them.** The parameter layout is built
      from the same `ModuleSpec` list twice: once as is, once with every id prefixed `b`
      (`filterCutoff` → `bfilterCutoff`; group and host names prefixed `B `). Old presets, DAW
@@ -834,7 +838,7 @@ The formal architecture spine lives at
      in all, B's groups after A's). `PatchParams::resolve` leaves instrument ids unprefixed
      (`outputMode`). The processor owns `engineA`, `engineB` (A declared first — LFO seeds);
      B is not called while `layerBOn` is off. `LayerRouter` (per channel × note memory) splits
-     the final MIDI buffer; B renders into its own buffer and joins the mix before PERC/BASS.
+     the final MIDI buffer; B renders into its own buffer and joins the mix before PERC.
      Decisions taken with the maintainer: **D1** no UI in S1 (ear test by rendered WAVs);
      **D2** per-layer LEVEL *and* PAN, the pan being a balance (centre = unity both sides);
      **D3** the master-bus modulation sums both layers' matrices; **D4** ARP and STEP SEQ play

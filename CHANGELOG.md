@@ -105,35 +105,18 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   LAYERS settings stay. A file that carries a B still loads both layers (maintainer 2026-11-18).
 - **Layer B — JASS becomes bitimbral (engine, routing and state; the controls follow).** The
   target of this season is the UDO Super Gemini: two complete sounds from one keyboard, layered
-  or split. A DAW with two instances is two instruments, the BASS box is a fixed mono voice -
-  neither is a second playable patch (AD-16). JASS now carries a second, complete patch: every
+  or split. A DAW with two instances is two instruments, not a second playable patch
+  in one instance (AD-16). JASS now carries a second, complete patch: every
   sound module exists twice, layer B's parameters are layer A's with a `b` in front, and its own
   engine renders 8 more voices. Both layers can play every key, SPLIT sends the keys below the
   split point (C3 by default) to B; a released key always reaches the layer its note went to, so
   moving the split while holding a chord cannot hang a voice. Each layer has a level and a
-  balance. Master bus, ARP, STEP SEQ, PERC and BASS stay single - the ARP and the figure play
+  balance. Master bus, ARP, STEP SEQ and PERC stay single - the ARP and the figure play
   layer A until they get their own target. Presets keep their root as it was (layer A plus the
   instrument) and add `Layers` and, when B is in use, `LayerB`; every existing preset and DAW
   project loads exactly as before, with B off (verified bit-identical on all presets). It is played and edited through the LAYERS module
   (above). The DAW parameter list grows from 254 to
   456 entries; B's sit after all of A's.
-- **BASS — a second voice beside the patch, and a BASS switch on the STEP SEQ.** JASS is
-  monotimbral, and the STEP SEQ takes the held chord over: a pad on the keyboard and a figure from
-  the same instance could not sound together. The reference piece of this month (a Super Gemini
-  pad with a straight-8ths bass line under it) is exactly that, and the maintainer's point was that
-  PERC already plays beside the patch - its own engine, dry into the bus, nothing of it in the
-  voice. BASS is that rule applied once more (AD-15): one monophonic voice at processor level -
-  saw or square, a square sub an octave down, a resonant lowpass with a decay envelope (ENV,
-  ENV>CUT), glide for SLIDE steps, LEVEL and PAN - summed into the master bus right after the drums.
-  The STEP SEQ's new BASS switch sends the figure there instead of to the patch; root, latch, the
-  quantised entry under PERC and the host clock are unchanged, only the consumer of the figure's
-  notes moves, and the keyboard keeps the patch. An accented step opens the bass filter further and
-  plays louder by the figure's ACCENT amount. AD-15 also closes the list: two boxes, PERC and BASS,
-  no matrix targets into them - a third voice is a DAW track (Story 20.2). Old presets load with
-  BASS off and the switch off; RANDOM leaves both alone, like the master bus. With the switch on,
-  a step clicked or turned in the STEP SEQ (and the GATE row's length preview) sounds through the
-  bass as well, so what you hear while writing is what the figure will play - and a key pressed
-  to write a step is an entry, not a note: it no longer sounds the patch underneath.
 - **A GLOBAL switch on every LFO, and rates down to a 200 s period.** Every LFO used to live
   inside the voice: one per note, restarted by the key. Fine for vibrato, useless for the sound
   that started this (a pad measured off a UDO Super Gemini demo, 2026-11-07: the low-pass opens
@@ -156,7 +139,7 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 
 ### Changed
 - **Presets are grouped by layer (FormatVersion 11).** A file now reads as three parts:
-  `Instrument` (master bus, sequencers, PERC, BASS, LAYERS), `LayerA` and `LayerB` - the same
+  `Instrument` (master bus, sequencers, PERC, LAYERS), `LayerA` and `LayerB` - the same
   module objects as before, only no longer mixed on one level with layer A on the root and B as an
   extra (maintainer: "das .jass-Format um eine Gruppierung nach Layer aufbohren"). Older files load
   as before and are converted on first use, with a copy in `PresetsBackup`; an older JASS opening a
