@@ -34,6 +34,12 @@ SynthyProcessor::SynthyProcessor()
     PresetIO::hooks(apvts).cancelSamplerSet = [this] (const juce::String& target)
     {
         samplePreload.cancel (target);
+        // A withdrawn request will never land, so nothing is pending for PERC any more: the caller
+        // resolves the kit right here (it is already loaded). Without this the flag stayed set and
+        // PERC silent for good — hit on the first start after 21.8, when the v12 conversion loads
+        // every preset in turn and each one asks for its kit (maintainer 2026-11-23: "PERC stumm").
+        if (target == Parameters::ID::percKit)
+            percKitPending.store (false);
     };
     samplePreload.startThread (juce::Thread::Priority::background);
 
