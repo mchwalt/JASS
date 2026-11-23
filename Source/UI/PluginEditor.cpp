@@ -1054,10 +1054,12 @@ void SynthyEditor::timerCallback()
             const bool seqOnNow = *apvts.getRawParameterValue (pre + Parameters::ID::seqOn) >= 0.5f;
             if (seqCursor >= 0 && seqCursorLane == l)
             {
-                // AC6 ends the recording when the module is SWITCHED off — the falling edge, not the
-                // state. Writing a figure into a silent sequencer is a perfectly sane way to work
-                // (and the only quiet one), so simply being off must not refuse the cursor.
-                if (seqOnLast[(size_t) l] && ! seqOnNow)
+                // AC6 ends the recording when the module is SWITCHED — off AND on (maintainer
+                // 2026-11-23: off and on again must leave entry for sure; a step clicked to listen
+                // while the module was off had re-armed the ring, and switching on kept it, so the
+                // next key landed on that step). Being off is no reason on its own: writing a figure
+                // into a silent sequencer is a sane way to work (and the only quiet one).
+                if (seqOnLast[(size_t) l] != seqOnNow)
                     seqStopCursor();
                 else if (const int pending = seqPendingNote.exchange (-1); pending >= 0)
                     seqWriteNote (pending);
