@@ -5,6 +5,6 @@ Zwei komplette Klänge gleichzeitig — Layer **A** und Layer **B**, gespielt vo
 - **SPLIT** — die Split-Taste, ein Halbton pro Bewegung.
 - **A LVL / B LVL** — Lautstärke je Layer.
 - **A PAN / B PAN** — Balance je Layer: Mitte lässt den Layer, wie er ist, eine Seite macht die andere leiser.
-- **Preset laden** (LOAD, F-Tasten) folgt A / B: **A** lädt das Preset und behält deinen Layer B; **B** lädt nur den Klang des Presets nach B; **beide** laden die ganze Datei mit beiden Layern — ein Preset ohne Layer B (alle älteren) behält deinen B.
+- **Preset laden** (LOAD, F-Tasten): ein Preset mit **zwei Layern** lädt komplett — beide Layer, sein Split und seine A / B-Auswahl. Ein Preset mit **einem Layer** (alle älteren) lädt nach A und behält deinen Layer B. Ist **nur B** an, kommt nur der Klang des Presets nach B.
 
 Jeder Layer hat seinen eigenen **STEP SEQ** und **ARP**, die diesen Layer spielen — eine Bassfigur in B und eine zweite Figur oder ein Arpeggio in A laufen gleichzeitig. Im Split füttert jede Hand das Pattern ihres Layers; ein Layer, dessen Pattern läuft, nimmt keine Live-Tasten. RANDOM würfelt den bearbeiteten Layer (beide, wenn beide an sind); RESET in der Kopfzeile geht auf Init: A ein heller Sägezahn-Stapel, B ein knackiger Sägezahn-Bass — ein Split spielt sofort zwei verschiedene Klänge.

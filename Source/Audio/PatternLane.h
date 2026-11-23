@@ -36,6 +36,7 @@ struct PatternLane
     std::atomic<float>* arpMode = nullptr;
     std::atomic<float>* arpOctaves = nullptr;
     std::atomic<float>* arpGate = nullptr;
+    std::atomic<float>* arpSync = nullptr;
 
     void bind (juce::AudioProcessorValueTreeState& apvts, int laneIndex, const juce::String& idPrefix, int midiChannel)
     {
@@ -47,7 +48,7 @@ struct PatternLane
         seqOn = p (ID::seqOn);       seqLength = p (ID::seqLength); seqSync = p (ID::seqSync);
         seqRate = p (ID::seqRate);   seqGate = p (ID::seqGate);     seqAccent = p (ID::seqAccent);
         arpOn = p (ID::arpOn);       arpRate = p (ID::arpRate);     arpMode = p (ID::arpMode);
-        arpOctaves = p (ID::arpOctaves); arpGate = p (ID::arpGate);
+        arpOctaves = p (ID::arpOctaves); arpGate = p (ID::arpGate); arpSync = p (ID::arpSync);
         arpHeld.reserve (128);
     }
 

@@ -1672,13 +1672,13 @@ namespace PresetIO
         return r;
     }
 
-    // What a preset LOAD reaches follows the LAYERS selection (maintainer 2026-11-16: "Preset load
-    // geht je nachdem wie A und B geschaltet sind"):
-    //   A only  — the file's instrument and layer A; layer B stays as it is (and B's LAYERS
-    //             settings with it), so a single-layer preset no longer wipes a B you built;
-    //   B only  — just the file's sound, into layer B (loadIntoLayer);
-    //   A + B   — the whole file, both layers and the instrument.
-    // The selection itself is a view choice and never changes with a load.
+    // What a preset LOAD reaches (maintainer 2026-11-16, revised 2026-11-23: "das muss das Preset
+    // doch mitbringen, was benoetigt wird"):
+    //   a file WITH a layer B — always the whole file, both layers, the instrument and its LAYERS
+    //             settings including the A / B selection it was saved with (unless B alone is lit);
+    //   a file without B (every older one) — the file's instrument and layer A; layer B stays as it
+    //             is (and B's LAYERS settings with it), so a single-layer preset never wipes a B;
+    //   B only lit — just the file's sound, into layer B (loadIntoLayer), to build a combination.
     enum class LoadScope { KeepLayerB, IntoLayerB, Whole };
 
     inline LoadResult loadPreset(APVTS& a, const juce::File& file, LoadScope scope)
@@ -1690,14 +1690,15 @@ namespace PresetIO
         // untouched) says nothing about B — so even "the whole file" leaves B as it is, exactly
         // like A only (maintainer 2026-11-18: "alte Presets ueberschreiben immer nur Layer A").
         // Before, A + B reset B to the declared defaults: no oscillators, a silent B in a Split.
-        if (scope == LoadScope::Whole && ! juce::JSON::parse(file)["LayerB"].isObject())
-            scope = LoadScope::KeepLayerB;
+        // A two-layer file is a sound made of both layers: it loads whole whatever is lit (2026-11-23).
+        scope = juce::JSON::parse(file)["LayerB"].isObject() ? LoadScope::Whole : LoadScope::KeepLayerB;
 
-        // What survives the load: the selection always; with A only, layer B and every LAYERS
-        // setting (mode, split, levels, balance) as well.
+        // What survives the load: with a single-layer file, the selection, layer B and every LAYERS
+        // setting (split, levels, balance); a two-layer file brings all of them itself.
         std::vector<std::pair<juce::String, float>> keep;
         auto keepId = [&] (const juce::String& id) { if (auto* p = a.getParameter(id)) keep.push_back({ id, p->getValue() }); };
-        keepId(ID::layerFocus);
+        if (scope == LoadScope::KeepLayerB)
+            keepId(ID::layerFocus);
         juce::String keepPendingB;
         if (scope == LoadScope::KeepLayerB)
         {

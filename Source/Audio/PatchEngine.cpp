@@ -204,6 +204,7 @@ void PatchEngine::processGlide (juce::MidiBuffer& midiMessages, int droneChannel
     for (const auto meta : midiMessages)
     {
         const auto m = meta.getMessage();
+        if (m.isNoteOn()) noteOnThisBlock = true;   // the rings' per-voice One-Shot restarts too (endBlock)
         if (m.getChannel() == droneChannel) continue;   // never glide the auto-play drone
         if (m.isNoteOn())       glideNewNotes.push_back(m.getNoteNumber());
         else if (m.isNoteOff()) glideOffNotes.push_back(m.getNoteNumber());
@@ -302,6 +303,11 @@ void PatchEngine::endBlock (const BlockContext& ctx)
         const bool global = lfoGlobalActive[li];
         if (global && (rearm || ! lfoGlobalWasOn[li]))
             uiLfos[li].reset();
+        // A per-voice One-Shot sweeps once from every key, so its ring must too (2026-11-23: the
+        // MOD MATRIX ring on B's CUTOFF stood still — B's Init bass sweeps it with such an LFO; the
+        // display instance had swept once at the load and then sat at 0).
+        if (! global && noteOnThisBlock && uiLfos[li].getWaveform() == LFOWaveform::OneShot)
+            uiLfos[li].reset();
         lfoGlobalWasOn[li] = global;
         const int  div    = (int) *p.lfoSyncDiv[li];
         // A One-Shot is never pinned: pinning would restart it every cycle, and its point is to
@@ -321,4 +327,5 @@ void PatchEngine::endBlock (const BlockContext& ctx)
                 v = uiLfos[li].process();
         lfoDisplayValues[li].store(v);
     }
+    noteOnThisBlock = false;
 }

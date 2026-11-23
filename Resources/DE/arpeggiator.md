@@ -1,7 +1,8 @@
 Macht aus einem gehaltenen Akkord eine automatische Notenfolge.
 
 - **MODE** — Muster (Up, Down, UpDown, Random).
-- **RATE** — Geschwindigkeit (Noten pro Schlag).
+- **SYNC** — Schrittlänge als Notenwert zum Tempo (1/8, 1/16 …). *Free* nimmt stattdessen RATE.
+- **RATE** — Schritte pro Sekunde, wenn SYNC auf *Free* steht.
 - **OCT** — dehnt das Muster über zusätzliche Oktaven.
 - **GATE** — Notenlänge (niedrig = kurz/Staccato — abgehackte Noten, hoch = lang/Legato — weich gebundene Noten).
 

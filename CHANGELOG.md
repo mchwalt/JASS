@@ -11,6 +11,13 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **A two-layer preset brings what it needs.** It loads whole whatever is lit - both layers, its
+  split and the A / B selection it was saved with - instead of loading only A while A alone was lit
+  (maintainer 2026-11-23: "das muss das Preset doch mitbringen"). A single-layer preset still loads
+  into A and keeps your B; with B alone lit a preset's sound still goes into B only.
+- **The MOD MATRIX ring follows a per-key One-Shot LFO.** The display copy of such an LFO swept once
+  at a load and then sat at zero, so a One-Shot routed to CUTOFF (layer B's Init bass) showed no
+  movement; it now restarts with every key, as the voices do.
 - **PERC no longer stays silent after loading several presets quickly.** A preset asks the
   background loader for its drum kit and PERC waits for it; when the next load found the kit
   already loaded, the request was withdrawn but PERC kept waiting - silent, grid clicks too, until
@@ -34,6 +41,11 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
+- **ARP SYNC - the arpeggio on the tempo grid.** The ARPEGGIATOR ran on RATE in steps per second
+  only; it predates tempo sync and was never brought along when the LFOs, DELAY, STEP SEQ and PERC
+  got it (maintainer 2026-11-23). SYNC offers the same note values as STEP SEQ against the MASTER
+  tempo, or the host's in a DAW; Free keeps RATE, and Free is the default, so every existing preset
+  plays as before (Story 21.9).
 - **A STEP SEQ and an ARP in each layer - two figures at once, the layer is the target.** With
   the BASS box gone (layer B is the bass now) the bass figure needed a sequencer of its own that
   runs beside the first one. STEP SEQ and ARP are now patch modules like OSC or FILTER: layer A

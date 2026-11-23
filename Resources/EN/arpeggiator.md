@@ -1,7 +1,8 @@
 Turns a held chord into an automatic note sequence.
 
 - **MODE** — pattern (Up, Down, UpDown, Random).
-- **RATE** — speed (notes per beat).
+- **SYNC** — step length as a note value against the tempo (1/8, 1/16 …). *Free* uses RATE instead.
+- **RATE** — steps per second, when SYNC is *Free*.
 - **OCT** — extends the pattern across extra octaves.
 - **GATE** — note length (low = short/staccato — clipped, detached notes; high = long/legato — smooth, connected notes).
 

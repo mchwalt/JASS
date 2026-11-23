@@ -1190,8 +1190,9 @@ void SynthyEditor::setPresetName(const juce::String& name)
 // surfaces a format migration. (Was inline in loadBtn.onClick; extracted for reuse.)
 void SynthyEditor::loadPresetFile(const juce::File& f)
 {
-    // AD-16 (21.6): the LAYERS selection decides what the load reaches — A only: instrument + A,
-    // B kept; B only: the file's sound into B; A + B: the whole file (PresetIO::LoadScope).
+    // AD-16 (21.6, revised 2026-11-23): B alone lit loads the file's sound into B; otherwise the
+    // file decides — a two-layer preset loads whole with its own selection, a single-layer one
+    // reaches the instrument and A and keeps B (PresetIO::loadPreset).
     const int focus = processor.getLayerFocus();
     const auto scope = focus == 1 ? PresetIO::LoadScope::IntoLayerB
                      : focus == 2 ? PresetIO::LoadScope::Whole
@@ -2687,7 +2688,11 @@ void SynthyEditor::buildRack()
     }
     });
     patch([&] {   // 21.8: each layer has its own ARP (built for A here, again for B at the end)
-    addRackModule(makeModuleDescriptor(LS(Modules::arpeggiator())));
+    {
+        auto d = makeModuleDescriptor(LS(Modules::arpeggiator()));
+        greyWhenSynced(d, lid(pre, P::arpRate), lid(pre, P::arpSync));   // 21.9: RATE only on Free
+        addRackModule(std::move(d));
+    }
     });
     // STEP SEQ (Story 15.1) — spec-driven; the editor only adds the mutual exclusion with the ARP.
     // Both REPLACE the held chord, so both running at once is not a thing; rather than a silent

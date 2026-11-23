@@ -107,6 +107,7 @@ namespace Parameters
         constexpr const char* arpMode    = "arpMode";
         constexpr const char* arpOctaves = "arpOctaves";
         constexpr const char* arpGate    = "arpGate";
+        constexpr const char* arpSync    = "arpSync";   // 21.9: Free | note values (SyncDivision)
         // (arpTarget, 21.7, is retired since 21.8 — never reuse the id.)
 
         // STEP SEQ (Story 15.1) — an authored 16-step figure. Per-step params are indexed like the

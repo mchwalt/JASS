@@ -330,6 +330,7 @@ namespace
         setParam (*built.p, b + ID::filterCutoff, 1234.0f);
         setParam (*built.p, b + ID::modSlotModule (2), 1.0f);   // a routing in slot 2
         setParam (*built.p, ID::layerMode, 2.0f);
+        setParam (*built.p, ID::layerFocus, 2.0f);              // saved with A+B lit
         const auto json = juce::JSON::toString (PresetIO::toVar (built.p->getAPVTS(), "st"), false, 12);
         expect (juce::JSON::parse (json)["LayerB"].isObject(), "a B of its own is written as LayerB");
         // Every parameter but PERC's KIT: a fresh processor may still be fetching its kit in the
@@ -372,8 +373,13 @@ namespace
             PresetIO::loadPreset (r.p->getAPVTS(), tmpOld, PresetIO::LoadScope::Whole);
             expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 777.0f) < 0.5f && juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 2,
                     "A+B load of a file without LayerB keeps B and the mode");
+            setParam (*r.p, b + ID::filterCutoff, 777.0f);
+            setParam (*r.p, ID::layerFocus, 0.0f);
             PresetIO::loadPreset (r.p->getAPVTS(), tmpB, PresetIO::LoadScope::KeepLayerB);
-            expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 777.0f) < 0.5f, "A-only load of a file WITH LayerB keeps B");
+            expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 1234.0f) < 0.5f,
+                    "A-only load of a file WITH LayerB loads it whole (2026-11-23)");
+            expect (juce::roundToInt (rawOf (*r.p, ID::layerFocus)) == 2 && juce::roundToInt (rawOf (*r.p, ID::layerMode)) == 2,
+                    "a two-layer file brings its A / B selection and its split");
             PresetIO::loadPreset (r.p->getAPVTS(), tmpB, PresetIO::LoadScope::Whole);
             expect (std::abs (rawOf (*r.p, b + ID::filterCutoff) - 1234.0f) < 0.5f, "A+B load of a file with LayerB replaces B");
         }
@@ -459,23 +465,33 @@ namespace
             }
         }
         {
-            // LOAD with A only keeps the player's B — its figure included.
-            const auto tmpF = juce::File::createTempFile (".jass");
+            // A single-layer file keeps the player's B — its figure included; a two-layer file
+            // brings its own B figure whatever is lit (2026-11-23).
+            const auto tmpF = juce::File::createTempFile (".jass");   // with a LayerB of its own
+            const auto tmp1 = juce::File::createTempFile (".jass");   // layer A only
             {
-                Rig src;   // a file with a LayerB of its own and a different B figure
+                Rig one;   // untouched B: no LayerB in the file
+                one.p->getPatterns().steps[0].setOn (0, true);
+                tmp1.replaceWithText (juce::JSON::toString (PresetIO::toVar (one.p->getAPVTS(), "one"), false, 12));
+                Rig src;   // a different B figure and sound
                 auto& fb = src.p->getPatterns().steps[1];
                 fb.setOn (0, true); fb.setPitch (0, 3);
                 setParam (*src.p, b + ID::filterCutoff, 1234.0f);
                 tmpF.replaceWithText (juce::JSON::toString (PresetIO::toVar (src.p->getAPVTS(), "f"), false, 12));
             }
+            expect (! juce::JSON::parse (tmp1)["LayerB"].isObject(), "an untouched B stays out of the file");
             Rig r;
             auto& fb = r.p->getPatterns().steps[1];
             fb.setOn (0, true); fb.setPitch (0, 9);
+            PresetIO::loadPreset (r.p->getAPVTS(), tmp1, PresetIO::LoadScope::KeepLayerB);
+            expect (figureIs (r.p->getPatterns().steps[1], 9), "a single-layer load keeps B's figure");
             PresetIO::loadPreset (r.p->getAPVTS(), tmpF, PresetIO::LoadScope::KeepLayerB);
-            expect (figureIs (r.p->getPatterns().steps[1], 9), "A-only load keeps B's figure");
+            expect (figureIs (r.p->getPatterns().steps[1], 3), "a two-layer load brings its B figure, A alone lit");
+            fb.setPitch (0, 9);
             PresetIO::loadPreset (r.p->getAPVTS(), tmpF, PresetIO::LoadScope::Whole);
             expect (figureIs (r.p->getPatterns().steps[1], 3), "A+B load brings the file's B figure");
             tmpF.deleteFile();
+            tmp1.deleteFile();
         }
     }
 

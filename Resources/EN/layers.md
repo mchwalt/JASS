@@ -5,6 +5,6 @@ Two complete sounds at once — layer **A** and layer **B**, played from one key
 - **SPLIT** — the split key, one semitone per move.
 - **A LVL / B LVL** — each layer's level.
 - **A PAN / B PAN** — each layer's balance: centre leaves the layer as it is, a side turns the other side down.
-- **Loading a preset** (LOAD, F-keys) follows A / B: **A** loads the preset and keeps your layer B; **B** puts only the preset's sound into B; **both** load the whole file, both layers — a preset without a layer B (all older ones) keeps your B.
+- **Loading a preset** (LOAD, F-keys): a preset with **two layers** loads whole — both layers, its split and its A / B selection. A preset with **one layer** (all older ones) loads into A and keeps your layer B. With **B alone** lit, only the preset's sound goes into B.
 
 Each layer has its own **STEP SEQ** and **ARP**, which play that layer — a bass figure in B and a second figure or an arpeggio in A run at once. In a Split each hand feeds its own layer's pattern; a layer whose pattern runs takes no live keys. RANDOM rolls the layer you edit (both when both are lit); RESET in the header returns to Init: A a bright saw stack, B a punchy saw bass — a Split plays two different sounds right away.

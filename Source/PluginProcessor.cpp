@@ -1832,7 +1832,11 @@ void SynthyProcessor::laneOutput (PatternLane& lane, juce::MidiBuffer& midi, con
     if (lane.arpActive())
     {
         arp.enabled = true;
-        arp.rateHz  = lane.arpRate->load();
+        // 21.9: SYNC = the step as a note value against the resolved tempo (host BPM when hosted,
+        // else MASTER), the same clock as STEP SEQ and PERC; Free = RATE in steps/s.
+        const int adiv = (int) lane.arpSync->load();
+        arp.rateHz  = SyncDivision::isSynced(adiv) ? 1.0 / juce::jmax(1.0e-3, SyncDivision::delaySeconds(syncBpm, adiv))
+                                                   : (double) lane.arpRate->load();
         arp.mode    = (Arpeggiator::Mode)(int) lane.arpMode->load();
         arp.octaves = (int) lane.arpOctaves->load();
         arp.gate    = lane.arpGate->load();

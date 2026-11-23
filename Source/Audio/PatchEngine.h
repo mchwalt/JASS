@@ -93,6 +93,7 @@ private:
     // starts when the LFO is switched on; a preset or DAW-state load rearms as well.
     bool lfoGlobalWasOn[kNumLFOs] {};            // audio thread only
     std::atomic<bool> rearmGlobalLfos { false };
+    bool noteOnThisBlock = false;                // a key reached this layer (processGlide) — rearms the rings' One-Shot
 
     juce::Synthesiser synth;
     // Flat list of the synth's voices, built once in the constructor and handed to every voice so a

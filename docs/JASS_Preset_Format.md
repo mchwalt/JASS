@@ -80,10 +80,11 @@ nested format on load.
 instrument modules and layer A's modules sat together on the root (B, when present, in `LayerB`);
 readers take both shapes — a v10 file is a valid single-layer preset. Which module is a patch
 module is the spec's `layered` flag; in the APVTS layer B's parameters are layer A's ids with the
-prefix `b`. **Loading follows the LAYERS selection:** A only = instrument + `LayerA`, B kept;
-B only = the file's `LayerA` into layer B; A + B = the whole file — except that a file without
-`LayerB` (every preset from before the layers) says nothing about B, so B and the LAYERS settings
-stay as they are. `LayerB` is written only when B differs from its Init sound or a mode other
+prefix `b`. **Loading (revised 2026-11-23):** a file **with** `LayerB` loads whole whatever is lit —
+both layers, the instrument and its `Layers` settings including `Focus` (the A / B selection it
+was saved with); a file **without** `LayerB` (every preset from before the layers) says nothing
+about B, so it loads the instrument + `LayerA` and B, the selection and the LAYERS settings stay
+as they are; with **B alone** lit the file's `LayerA` goes into layer B only. `LayerB` is written only when B differs from its Init sound or a mode other
 than Single is set, so a single-layer sound stays a single-layer file; read without the header's
 LOAD (LiveState, a fresh load), a missing `LayerB` puts B at its Init sound. `Layers.Mode` is Single (no split) or Split; outside a Split the A / B selection decides what
 plays. `Dual` (written until 2026-11-23, when the MODE knob went) reads as Single. Develop files of
