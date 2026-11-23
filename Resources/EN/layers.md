@@ -1,6 +1,6 @@
 Two complete sounds at once — layer **A** and layer **B**, played from one keyboard.
 
-- **A / B** (keys **1** / **2**) — which layer you edit; in **Single** also which one plays. B's modules have a violet header; each layer shows the modules it uses. Both lit: the rack shows A and every change goes to B too — knobs move B by the same amount, so B keeps its offset.
+- **A / B** (keys **1** / **2**) — which layer you edit; in **Single** also which one plays. Press **B** once: A and B; press **B** again: B only — the same with **A** on the way back. B's modules have a violet header; each layer shows the modules it uses. Both lit: the rack shows A and every change goes to B too — knobs move B by the same amount, so B keeps its offset.
 - **MODE** — **Single**: the lit layer plays (switch sounds with 1 / 2; a layer you leave rings out). **Dual**: every key plays both. **Split**: keys below SPLIT play B, from SPLIT up A — the keyboard shows both ranges.
 - **SPLIT** — the split key, one semitone per move. Or click **SPLIT** on the keyboard (key **3**) and play a key; click again to cancel. Outside Split it switches MODE to Split.
 - **A LVL / B LVL** — each layer's level.

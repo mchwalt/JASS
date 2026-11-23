@@ -184,7 +184,7 @@ private:
 
 // LAYERS (AD-16, Story 21.6): which layer the rack edits — two buttons, A and B, each on its own
 // or both together (A+B = linked editing: the rack shows A, every edit is mirrored to B). One of
-// them is always lit: clicking the only lit button does nothing. Writes `layerFocus`
+// them is always lit: clicking the only lit button does nothing; see toggle(). Writes `layerFocus`
 // (0 = A, 1 = B, 2 = A+B); polls it, so a preset load or RESET shows up here.
 class LayerSelector : public juce::Component, private juce::Timer
 {
@@ -201,8 +201,8 @@ public:
         }
         btnA.setColour (juce::TextButton::buttonOnColourId, rack::kLayerAColour.darker (0.35f));
         btnB.setColour (juce::TextButton::buttonOnColourId, rack::kLayerBColour);
-        btnA.setTooltip ("Edit layer A - with B lit too: edits go to both");
-        btnB.setTooltip ("Edit layer B - with A lit too: edits go to both");
+        btnA.setTooltip ("Layer A - press once: add A (edits go to both), press again: A only");
+        btnB.setTooltip ("Layer B - press once: add B (edits go to both), press again: B only");
         btnA.onClick = [this] { toggle (true); };
         btnB.onClick = [this] { toggle (false); };
         sync();
@@ -239,13 +239,17 @@ public:
     void press (bool isA) { toggle (isA); }
 
 private:
+    // A press always heads for the pressed layer (maintainer 2026-11-23): from the other layer it
+    // adds this one (A+B); with both lit it keeps only this one. So B, B goes from A to B and A, A
+    // back - no press ever drops the layer whose button you pressed. Pressing the only lit button
+    // does nothing.
     void toggle (bool isA)
     {
         sync();   // the buttons may be up to one timer tick behind the parameter (review)
-        bool a = btnA.getToggleState(), b = btnB.getToggleState();
-        (isA ? a : b) = ! (isA ? a : b);
-        if (! a && ! b) return;   // one layer is always edited
-        const int f = (a && b) ? 2 : (b ? 1 : 0);
+        const int cur = focus();
+        const int f = (cur == 2) ? (isA ? 0 : 1)
+                    : (cur == (isA ? 0 : 1)) ? cur : 2;
+        if (f == cur) return;
         if (auto* p = apvts.getParameter (Parameters::ID::layerFocus))
         {
             p->beginChangeGesture();

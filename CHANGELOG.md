@@ -38,7 +38,10 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   **A** and **B** (keys 1 and 2) pick the layer you edit - B's modules carry a violet header; both
   lit is **linked editing**: the rack shows A and every change goes to B as well, knobs by the
   same distance on the knob so B keeps its offset (an octave on A's cutoff is about an octave on
-  B's, not the same number of Hz), a sample set or wavetable bank as the same pick. The split key moves one semitone at a time, or click
+  B's, not the same number of Hz), a sample set or wavetable bank as the same pick. A press heads
+  for the pressed layer: from the other layer it adds it, with both lit it keeps only it - so B, B
+  goes from A to B and A, A back (maintainer 2026-11-23: a second press on B used to drop B again,
+  and B alone took a press on A, the layer being left). The split key moves one semitone at a time, or click
   **SPLIT** at the top left of the on-screen keyboard (key **3**) and play a key - a button where
   the split is shown beats a hidden hold-and-play gesture, and keys 1, 2 and 3 now all press a
   visible button. A second click cancels; outside Split the button switches MODE to Split, so it

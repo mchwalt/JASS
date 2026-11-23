@@ -1,6 +1,6 @@
 Zwei komplette Klänge gleichzeitig — Layer **A** und Layer **B**, gespielt von einer Tastatur.
 
-- **A / B** (Tasten **1** / **2**) — welchen Layer du bearbeitest; in **Single** auch, welcher klingt. Module von B haben eine violette Kopfzeile; jeder Layer zeigt die Module, die er benutzt. Beide an: das Rack zeigt A, und jede Änderung geht auch an B — Regler verschieben B um denselben Betrag, B behält also seinen Abstand.
+- **A / B** (Tasten **1** / **2**) — welchen Layer du bearbeitest; in **Single** auch, welcher klingt. **B** einmal drücken: A und B; **B** noch einmal: nur B — zurück genauso mit **A**. Module von B haben eine violette Kopfzeile; jeder Layer zeigt die Module, die er benutzt. Beide an: das Rack zeigt A, und jede Änderung geht auch an B — Regler verschieben B um denselben Betrag, B behält also seinen Abstand.
 - **MODE** — **Single**: der angewählte Layer klingt (mit 1 / 2 umschalten; der verlassene klingt aus). **Dual**: jede Taste spielt beide. **Split**: Tasten unterhalb von SPLIT spielen B, ab SPLIT aufwärts A — die Tastatur zeigt beide Bereiche.
 - **SPLIT** — die Split-Taste, ein Halbton pro Bewegung. Oder **SPLIT** auf der Tastatur klicken (Taste **3**) und eine Taste spielen; nochmal klicken bricht ab. Außerhalb von Split schaltet er MODE auf Split.
 - **A LVL / B LVL** — Lautstärke je Layer.
