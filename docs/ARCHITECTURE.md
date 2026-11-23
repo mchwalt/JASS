@@ -853,10 +853,16 @@ The formal architecture spine lives at
      drone (ch 16) and the step audition (ch 15) keep their channels and go to the focused
      layer. A per-layer MIDI-channel mode (ch 1 → A, ch 2 → B, for the DAW) is a candidate for
      later, not part of this decision.
-  7. **Sequencers get a target, not a copy.** ARP and STEP SEQ stay single (the Gemini has one
-     of each); each gets a target choice **A | B | A+B** (STEP SEQ additionally keeps its BASS
-     switch — BASS wins when on). Default A: the pre-AD-16 behaviour. PERC and BASS stay boxes
-     under AD-15; AD-15's rule 4 ("two boxes, closed list") still holds — layers are not boxes.
+  7. **Sequencers are patch modules — the layer is the target** (Story 21.8, 2026-11-23; it
+     replaced S3's "a target, not a copy"). STEP SEQ and ARP are `layered`: each layer has its own
+     pair, playing that layer. At run time a pair is a `PatternLane` (`Source/Audio/PatternLane.h`:
+     StepSequencer + Arpeggiator + latch, host anchor, held-keys edge, displays), one per layer in
+     an array the processor runs the same code over; lane i plays channel 14 / 13 and the router
+     sends each pattern channel to its layer. A lane takes the keys that reach its layer (the
+     selection outside a Split, its hand inside one); a layer whose lane runs takes no live keys
+     (`LayerRouter::Settings::liveBlock`). The figures live in `PatternStore::steps[lane]`; presets
+     carry them inside their layer object (FormatVersion 12). More STEP SEQs per layer would be
+     more lanes. PERC stays the one box (AD-15); the BASS box is gone (2026-11-23).
   8. **One rack, a focus switch.** The header gets **A | B** (lit, B tinted so it is always
      visible which layer is edited), B ON, LAYER/SPLIT and the split note. The rack shows the
      focused layer's patch modules; instrument modules look the same whichever layer is in

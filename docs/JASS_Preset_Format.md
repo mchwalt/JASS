@@ -1,8 +1,8 @@
-# JASS `.jass` Preset Format (nested, v11)
+# JASS `.jass` Preset Format (nested, v12)
 
 JASS stores patches as **JSON** files with the extension `.jass`. The format is
 **nested** (one object per module) and versioned; the current version is
-**`FormatVersion: 11`** (defined as `PresetIO::kFormatVersion`).
+**`FormatVersion: 12`** (defined as `PresetIO::kFormatVersion`).
 
 - **Format:** JSON, UTF‑8. File extension `.jass`.
 - **Canonical source:** each module declares its own parameters and JSON shape in
@@ -43,7 +43,7 @@ nested format on load.
 
 ```jsonc
 {
-  "FormatVersion": 11,
+  "FormatVersion": 12,
   "Name": "Matrix Demo",
   "Modified": false,        // LiveState only: true = unsaved working state (header shows "Current State")
 
@@ -53,19 +53,19 @@ nested format on load.
     "Master":     { "On": true, "Volume": 0.5, "Tempo": 130.0 },
     "Stereo":     { "Enabled": true, "Width": 0.5, "Time": 12.0 },
     "Compressor": { "Enabled": false, "Threshold": -18.0, … },
-    "StepSeq":    { …, "LatchRoot": 46, "Steps": [ … ] },
     "Perc":       { …, "File": "RoboterDrums", "Lanes": [ … ] },
     "Layers":     { "Mode": "Single", "Split": 48, "Focus": "A",
                     "ALevel": 1.0, "BLevel": 1.0, "APan": 0.0, "BPan": 0.0 }
-    // … Arp, Bass, Chaos, Scope, Spectrum, Keyboard, PresetBank
+    // … Chaos, Scope, Spectrum, Keyboard, PresetBank
   },
   "LayerA": {               // layer A's patch: the 27 patch modules
     "Filter":  { "Enabled": true, "Type": "Lowpass", "Cutoff": 500.0, "Resonance": 2.5, "Track": 0.0 },
     "Osc1":    { … },
     "Sampler": { …, "File": "Splendid" },
-    "ModMatrix": { "Enabled": true, "Slots": [ … ] }
+    "ModMatrix": { "Enabled": true, "Slots": [ … ] },
+    "StepSeq": { …, "LatchRoot": 46, "Steps": [ … ] }   // v12: the layer's own STEP SEQ (figure + latch)
     // … Osc2/3, Sub, Noise, Karplus, Wavetable, Grain, CrossMod, Adsr, PitchEnv, Glide,
-    //   Lfo1..4, Formant, Distortion, Wavefold, Bitcrush, Phaser, Chorus, Delay, Reverb
+    //   Lfo1..4, Arp, Formant, Distortion, Wavefold, Bitcrush, Phaser, Chorus, Delay, Reverb
   },
   // Optional. Layer B's patch, same object and field names as LayerA. Written when B is on or
   // differs from a fresh layer; absent ⇒ B at defaults, off.
@@ -134,6 +134,11 @@ on/off/accent/pitch values ARE parameters and do take part in RANDOM.)
   default), only the writer stopped producing them.
   `v11` groups the modules into `Instrument`, `LayerA`, `LayerB` (AD-16;
   structure only — every value is unchanged).
+  `v12` (Story 21.8) makes STEP SEQ and ARP patch modules: `StepSeq` (with its
+  `Steps` and `LatchRoot`) and `Arp` move from `Instrument` into `LayerA` /
+  `LayerB`, and their `LayerTarget` field is gone. A v11 file's
+  `Instrument.StepSeq` / `.Arp` is read into the layer(s) its `LayerTarget`
+  named — `Auto` / `A`: layer A, `B`: layer B, `A+B`: both.
   This integer contract is independent of the app's CalVer version.
 - **Migration & backups.** Presets older than the current `FormatVersion` are
   upgraded to the current format — both by the startup batch pass (`convertOldPresets`)
