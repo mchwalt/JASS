@@ -158,11 +158,15 @@ public:
     // Move every LATCHED sequencer root. The pattern keeps running after the key is released, so
     // an octave shift has no held note left to move — the editor sends the ±12 here instead, and
     // each figure follows the octave keys exactly as a held key would have moved it.
+    // Only the layer being edited moves (maintainer 2026-11-24, review E1): A, B, or both with A+B
+    // — in a Split the other hand's figure stays where it is.
     void transposeSeqLatch (int semitones)
     {
+        const int focus = getLayerFocus();
         for (auto& l : lanes)
-            if (const int r = l.latchedRoot.load(); r >= 0)
-                l.latchedRoot.store (juce::jlimit (0, 127, r + semitones));
+            if (focus == 2 || focus == l.index)
+                if (const int r = l.latchedRoot.load(); r >= 0)
+                    l.latchedRoot.store (juce::jlimit (0, 127, r + semitones));
     }
     // Is any latched figure running? (SPACE stops them — the editor needs to know whether there is
     // anything to stop before it falls through to the Karplus pluck.)
@@ -298,7 +302,7 @@ public:
     // layerFocus: 0 = A, 1 = B, 2 = A+B (linked editing — the rack shows A, edits mirror to B).
     int  getLayerFocus() const { return juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerFocus)->load()); }
     bool isFocusB() const      { return getLayerFocus() == 1; }
-    // Which layers take notes (21.6): SINGLE — the selection (A, B, or both); DUAL / SPLIT — both.
+    // Which layers take live notes (21.6): the selection (A, B, or both), and in a Split both.
     struct LayersPlaying { bool a = true, b = false; };
     // Which keys reach which layer this block (Story 21.8): a lane takes the keys that reach its
     // layer — the selection outside a Split, its key range inside one.
@@ -360,8 +364,8 @@ private:
     void laneOutput (PatternLane& lane, juce::MidiBuffer& midi, const PatternLane::KeyScope& keys, int numSamples,
                      double syncBpm, bool hosted, bool hostPlaying, const juce::Optional<double>& hostPpq, bool hostRunning);
     // Story 16.1: PERC is the one sound source that is NOT a voice. It renders into the summed mix
-    // (after the synth, before the compressor) because JASS is monotimbral: as MIDI its hits would
-    // be dragged through the patch's filter and effects. See PercSequencer.h.
+    // (after the synth, before the compressor) because as MIDI its hits would be dragged through a
+    // layer's filter and effects. See PercSequencer.h.
     PercSequencer perc;
     PatternStore patterns;   // AD-14 (18.5): the PERC grid and the STEP SEQ figures (one per layer, 21.8)
 #if JASS_HOSTSYNC_DIAG
@@ -374,6 +378,8 @@ private:
     int  diagRead = 0;
     int  diagBlocksLeft = 0;
     bool diagWasPlaying = false;
+    int  diagSeqPre[2]  = { -1, -1 };       // lane A's clock before / after the host sync (laneOutput)
+    int  diagSeqPost[3] = { -1, -1, -1 };
     void flushDiag();
 #endif
     std::atomic<int> percStepDisplay { 0 };   // playhead for the grid (message thread reads it)
@@ -469,7 +475,10 @@ private:
     std::atomic<bool> matrixEnablesDirty { false };
     std::atomic<bool> crossModDirty      { false };
     std::atomic<bool> seqArpDirty        { false };   // Story 15.1: ARP/STEP SEQ exclusion
-    std::atomic<int>  pendingExclusive { -1 };        // 21.8: lane * 2 + (1 = STEP SEQ, 0 = ARP) just switched on
+    // 21.8: what was just switched on, one bit per lane and module (bit lane*2 + 1 = STEP SEQ, + 0 =
+    // ARP) — a mask, so two layers switched before the deferred reconcile both get their exclusion.
+    std::atomic<std::uint32_t> pendingExclusive { 0 };
+    bool laneBSoundingLast = false;   // audio thread: B's figure started / stopped => matrix claims change
     std::atomic<int>  pendingCrossModCode { -1 };   // encodes which CROSS-MOD param changed (alloc-free)
     void applyCrossModCoupling(const juce::String& paramId);   // the message-thread coupling body
     void applySeqArpExclusion();   // Story 15.1: ARP and STEP SEQ cannot both replace the chord

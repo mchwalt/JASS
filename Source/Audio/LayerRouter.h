@@ -25,9 +25,9 @@ public:
 
     struct Settings
     {
-        bool playA         = true;    // the layers that take NEW notes (Single: the selected one,
-        bool playB         = false;   // Dual / Split: both)
-        bool split         = false;   // with both: false = DUAL (every key to both)
+        bool playA         = true;    // the layers that take NEW notes: the selection (A, B or
+        bool playB         = false;   // both), and both in a Split
+        bool split         = false;   // with both: false = every key to both (A+B)
         int  splitNote     = 48;
         bool focusB        = false;   // drone + step preview go to the edited layer
         int  patternChannelA = 14;    // layer A's ARP / STEP SEQ (21.8: one channel per layer)

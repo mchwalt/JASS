@@ -863,6 +863,10 @@ The formal architecture spine lives at
      (`LayerRouter::Settings::liveBlock`). The figures live in `PatternStore::steps[lane]`; presets
      carry them inside their layer object (FormatVersion 12). More STEP SEQs per layer would be
      more lanes. PERC stays the one box (AD-15); the BASS box is gone (2026-11-23).
+     **Reserved MIDI channels** (review 2026-11-24): 16 the auto-play drone, 15 A's step preview,
+     14 A's pattern, 13 B's pattern, 12 B's step preview — each routed to its layer whatever is
+     selected. Live keys are channel 1; a host sending notes on 12–16 reaches those paths, not the
+     live-key routing (split, selection).
   8. **One rack, a focus switch.** The header gets **A | B** (lit, B tinted so it is always
      visible which layer is edited), B ON, LAYER/SPLIT and the split note. The rack shows the
      focused layer's patch modules; instrument modules look the same whichever layer is in

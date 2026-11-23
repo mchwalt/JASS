@@ -11,6 +11,12 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 ## [Unreleased]
 
 ### Fixed
+- **Octave keys move the figure of the layer you edit.** With a figure running in A and one in B,
+  Up / Down shifted both latched figures at once - also in a Split, where the hands are meant to be
+  independent. Now they shift A's, B's, or both with A+B lit (maintainer 2026-11-24, code review).
+- **RANDOM leaves both STEP SEQ switches alone.** It kept A's ARP and B's sequencer switches but
+  rolled A's STEP SEQ on or off, so a random patch could start or stop a figure. The sequencer
+  switches are playing, not sound design (maintainer 2026-11-24, code review).
 - **A two-layer preset brings what it needs.** It loads whole whatever is lit - both layers, its
   split and the A / B selection it was saved with - instead of loading only A while A alone was lit
   (maintainer 2026-11-23: "das muss das Preset doch mitbringen"). A single-layer preset still loads

@@ -37,6 +37,9 @@ struct PatternLane
     std::atomic<float>* arpOctaves = nullptr;
     std::atomic<float>* arpGate = nullptr;
     std::atomic<float>* arpSync = nullptr;
+    // The two switch ids, built once: parameterChanged compares against them on every change, also
+    // on the audio thread under host automation, where building a String would allocate (review).
+    juce::String seqOnId, arpOnId;
 
     void bind (juce::AudioProcessorValueTreeState& apvts, int laneIndex, const juce::String& idPrefix, int midiChannel)
     {
@@ -49,6 +52,8 @@ struct PatternLane
         seqRate = p (ID::seqRate);   seqGate = p (ID::seqGate);     seqAccent = p (ID::seqAccent);
         arpOn = p (ID::arpOn);       arpRate = p (ID::arpRate);     arpMode = p (ID::arpMode);
         arpOctaves = p (ID::arpOctaves); arpGate = p (ID::arpGate); arpSync = p (ID::arpSync);
+        seqOnId = prefix + ID::seqOn;
+        arpOnId = prefix + ID::arpOn;
         arpHeld.reserve (128);
     }
 
@@ -79,6 +84,16 @@ struct PatternLane
     // STEP SEQ wins inside its layer (15.1: both replace the held chord, only one can run).
     bool arpActive() const noexcept { return ! seqActive() && arpOn->load() > 0.5f; }
     bool active() const noexcept    { return seqActive() || arpActive(); }
+    // A figure that can actually play: switched on AND latched. Only this makes an otherwise idle
+    // layer render and claim shared modules — a switch alone, with no root, plays nothing (review).
+    bool sounding() const noexcept  { return seqActive() && latchedRoot.load() >= 0; }
+
+    // The switches as one block sees them: read ONCE per block (snapshot) and used by the chord
+    // filter, laneInput and laneOutput alike, so a switch flipping mid-block cannot let a key play
+    // live and feed the pattern in the same block (review).
+    bool blockSeq = false, blockArp = false;
+    void snapshot() noexcept        { blockSeq = seqActive(); blockArp = ! blockSeq && arpOn->load() > 0.5f; }
+    bool blockActive() const noexcept { return blockSeq || blockArp; }
 
     void prepare (double sampleRate)
     {

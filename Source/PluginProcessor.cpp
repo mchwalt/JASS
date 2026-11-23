@@ -440,7 +440,7 @@ void SynthyProcessor::updateMatrixModuleEnables()
     // 2026-11-18). An instrument module (COMPRESSOR, STEREO, MASTER, CHAOS) is shared: B's claim on
     // it counts while B sounds (live keys or a pattern aimed at it); a claim from either keeps it on.
     const auto playingNow = layersPlaying();
-    const bool bOn = playingNow.b || lanes[1].active();   // 21.8: B's own STEP SEQ / ARP makes it sound
+    const bool bOn = playingNow.b || lanes[1].sounding();   // 21.8: B's own running figure makes it sound
     std::set<juce::String> claimed;
     for (const juce::String pre : { juce::String(), juce::String(Modules::kLayerBPrefix) })
     {
@@ -650,7 +650,7 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     // host automation this only raises the flag. A pattern in B also makes B sound, which the
     // matrix's shared-module claims depend on — so the switch reconciles those as well.
     for (const auto& l : lanes)
-        if (paramId == l.id(Parameters::ID::seqOn) || paramId == l.id(Parameters::ID::arpOn))
+        if (paramId == l.seqOnId || paramId == l.arpOnId)   // cached ids: no String built here (review)
         {
             if (l.index != 0)
             {
@@ -659,7 +659,7 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
             }
             if (newValue <= 0.5f)          // switching OFF frees the other one; nothing to reconcile
                 return;
-            pendingExclusive.store(l.index * 2 + (paramId == l.id(Parameters::ID::seqOn) ? 1 : 0));
+            pendingExclusive.fetch_or(1u << (l.index * 2 + (paramId == l.seqOnId ? 1 : 0)));
             if (onMsgThread) applySeqArpExclusion();
             else             seqArpDirty.store(true);
             return;
@@ -693,14 +693,19 @@ void SynthyProcessor::reconcileParamCouplingsIfDirty()
 void SynthyProcessor::applySeqArpExclusion()
 {
     using namespace Parameters;
-    const int code = pendingExclusive.exchange(-1);
-    if (code < 0)
-        return;
-    const auto& l = lanes[(size_t) juce::jlimit(0, kNumLanes - 1, code / 2)];
-    const juce::String loser = l.id((code & 1) != 0 ? ID::arpOn : ID::seqOn);
-    if (auto* p = apvts.getParameter(loser))
-        if (*apvts.getRawParameterValue(loser) > 0.5f)
-            p->setValueNotifyingHost(0.0f);
+    const std::uint32_t mask = pendingExclusive.exchange(0);
+    for (const auto& l : lanes)
+    {
+        const bool seqWon = (mask >> (l.index * 2 + 1)) & 1u;
+        const bool arpWon = (mask >> (l.index * 2)) & 1u;
+        if (! seqWon && ! arpWon)
+            continue;
+        // Both switched on before this ran: STEP SEQ wins, as it does inside the block (arpActive).
+        const juce::String& loser = seqWon ? l.arpOnId : l.seqOnId;
+        if (auto* p = apvts.getParameter(loser))
+            if (*apvts.getRawParameterValue(loser) > 0.5f)
+                p->setValueNotifyingHost(0.0f);
+    }
 }
 
 // The CROSS-MOD coupling body (message thread only): operand distinctness + enable coupling.
@@ -757,7 +762,7 @@ void SynthyProcessor::randomize()
             presetLoading.store(true);
             for (const auto& id : Modules::layeredParamIds())
             {
-                // 21.8: B's STEP SEQ / ARP switches are performance, like A's (kept by the A roll).
+                // 21.8: B's STEP SEQ / ARP switches are performance, like A's (the A roll keeps both).
                 if (id == Parameters::ID::seqOn || id == Parameters::ID::arpOn) continue;
                 if (auto* a = apvts.getParameter(id))
                     if (auto* b = apvts.getParameter(bp + id))
@@ -808,6 +813,7 @@ void SynthyProcessor::randomizeLayerA()
         keepMasterBus[i] = *apvts.getRawParameterValue (masterBusIds[i]);
 
     const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
+    const float keepSeqOn       = *apvts.getRawParameterValue(ID::seqOn);   // so is the STEP SEQ (review E2, 2026-11-24)
     const float keepGlideOn     = *apvts.getRawParameterValue(ID::glideOn); // glide = performance, not sound design
     const float keepKeyboardOn  = *apvts.getRawParameterValue(ID::keyboardOn); // keyboard = input surface, not sound design
 
@@ -878,6 +884,7 @@ void SynthyProcessor::randomizeLayerA()
     for (int i = 0; i < numMasterBus; ++i)
         set(masterBusIds[i], keepMasterBus[i]);
     set(ID::arpOn,       keepArpOn);
+    set(ID::seqOn,       keepSeqOn);
     set(ID::glideOn,     keepGlideOn);
     set(ID::keyboardOn,  keepKeyboardOn);
 
@@ -1228,7 +1235,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     hostWasPlaying = hosted && hostPlaying;
 #if JASS_HOSTSYNC_DIAG
     if (hosted && ! isTimerRunning()) startTimer (500);
-    int diagSeqPre[2] = { -1, -1 }, diagSeqPost[3] = { -1, -1, -1 };
+    diagSeqPre[0] = diagSeqPre[1] = -1;   // lane A's clock around its host sync, filled in laneOutput
+    diagSeqPost[0] = diagSeqPost[1] = diagSeqPost[2] = -1;
     const bool diagPlayEdge = hosted && hostPlaying && ! diagWasPlaying;
     diagWasPlaying = hostPlaying;
 #endif
@@ -1269,13 +1277,23 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     const auto playing = layersPlaying();
     const auto keys = keyScope(playing);   // 21.8: which keys reach which layer (and its lane)
     std::uint8_t activeLanes = 0;          // bit i = lane i's STEP SEQ or ARP replaces its keys
-    for (const auto& l : lanes)
-        if (l.active()) activeLanes |= (std::uint8_t) (1u << l.index);
+    for (auto& l : lanes)
+    {
+        l.snapshot();                      // one read of the switches for the whole block (review)
+        if (l.blockActive()) activeLanes |= (std::uint8_t) (1u << l.index);
+    }
     const bool layerAOn = playing.a || engineA.isSounding() || (activeLanes & 1u) != 0;
     bool previewB = false;   // 21.8: a step of B's STEP SEQ being previewed makes B sound
     for (const auto meta : midiMessages)
         if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == kAuditionChannelB) { previewB = true; break; }
-    const bool layerBOn = playing.b || engineB.isSounding() || (activeLanes & 2u) != 0 || previewB;
+    // A figure of B's that can play (switched on AND latched) — a switch alone renders nothing (review).
+    const bool bFigure  = lanes[1].blockSeq && lanes[1].latchedRoot.load() >= 0;
+    const bool layerBOn = playing.b || engineB.isSounding() || bFigure || previewB;
+    if (bFigure != laneBSoundingLast)      // B's shared-module claims follow its figure (message thread)
+    {
+        laneBSoundingLast = bFigure;
+        matrixEnablesDirty.store(true);
+    }
 
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
     {
@@ -1320,7 +1338,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     patchCtx.syncBpm     = syncBpm;
     patchCtx.chaosX      = chaosDisplay[0].load();
     patchCtx.chaosY      = chaosDisplay[1].load();
-    patchCtx.accentDepth = lanes[0].seqAccent->load();   // 15.2 — each layer's own STEP SEQ ACCENT (21.8)
+    patchCtx.accentDepth = lanes[0].seqAccent->load();   // 15.2 — layer A's STEP SEQ ACCENT (B's: ctxB below)
     patchCtx.hosted      = hosted;
     patchCtx.hostPlaying = hostPlaying;
     patchCtx.hostPpq     = hostPpq;
@@ -1336,7 +1354,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         ctxB.accentDepth = lanes[1].seqAccent->load();
         engineB.beginBlock(ctxB);
     }
-
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
     {
@@ -1439,6 +1456,36 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         }
         for (auto& l : lanes)
             laneOutput(l, midiMessages, keys, buffer.getNumSamples(), syncBpm, hosted, hostPlaying, hostPpq, hostRunning);
+
+#if JASS_HOSTSYNC_DIAG
+        // Per-block record after a PLAY edge, an anchor move or a state change (Bitwig diagnosis,
+        // 2026-10-19): layer A's figure and the drums, as before 21.8 (ported, review).
+        if (hosted)
+        {
+            const auto& la = lanes[0];
+            const double anchorNow = la.anchorPpq.load();
+            const int stateNow = (perc.enabled ? 1 : 0) | (percKitPending.load() ? 2 : 0) | (hostPlaying ? 4 : 0) | (la.seq.enabled ? 8 : 0);
+            if (diagPlayEdge || anchorNow != diagLastAnchor || stateNow != diagLastState) diagBlocksLeft = 24;
+            diagLastAnchor = anchorNow; diagLastState = stateNow;
+            if (diagBlocksLeft > 0)
+            {
+                --diagBlocksLeft;
+                const int sdivD = (int) la.seqSync->load();
+                auto& r = diag[(size_t) (diagWrite.load() % 256)];
+                r.t = juce::Time::getMillisecondCounterHiRes();
+                r.ppq = hostPpq.hasValue() ? *hostPpq : -999.0;
+                r.stepsPos = hostPpq.hasValue() ? *hostPpq / juce::jmax (1e-9, SyncDivision::beatsPerCycle(sdivD)) : -999.0;
+                r.anchor = anchorNow; r.percAnchor = percAnchorPpq.load();
+                r.playing = hostPlaying ? 1 : 0; r.seqOn = la.seq.enabled ? 1 : 0; r.latch = la.latchedRoot.load();
+                r.percOn = perc.enabled ? 1 : 0; r.kitPending = percKitPending.load() ? 1 : 0;
+                r.kitIdx = (int) *apvts.getRawParameterValue(Parameters::ID::percKit); r.percStep = perc.playingStep();
+                r.preIdx = diagSeqPre[0]; r.preCnt = diagSeqPre[1];
+                r.postIdx = diagSeqPost[0]; r.postCnt = diagSeqPost[1]; r.postDelay = diagSeqPost[2];
+                r.fired = la.seq.enabled ? la.seq.playingStep() : -1; r.n = buffer.getNumSamples();
+                diagWrite.fetch_add (1);
+            }
+        }
+#endif
     }
 
     // Don't let the auto-play drone pluck the Karplus string (it's played via
@@ -1548,7 +1595,6 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         percStepDisplay.store(percOn ? perc.playingStep() : -1);
     }
 
-
     // Mirror the note the STEP SEQ is holding, so the on-screen keyboard can show what the pattern
     // is playing (maintainer 2026-08-11). Display only: the sequencer's notes go straight into the
     // MIDI buffer and must stay out of the keyboard STATE, or they would come back as held keys and
@@ -1645,7 +1691,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
 void SynthyProcessor::laneInput (PatternLane& lane, const juce::MidiBuffer& rawMidi, const PatternLane::KeyScope& keys,
                                  double syncBpm, bool hosted, bool hostPlaying, const juce::Optional<double>& hostPpq)
 {
-    if (! lane.seqActive())
+    if (! lane.blockSeq)
         return;
     auto& seq = lane.seq;
     auto feeds = [&] (int n) { return keys.reaches (lane.index, n); };
@@ -1712,11 +1758,17 @@ void SynthyProcessor::laneInput (PatternLane& lane, const juce::MidiBuffer& rawM
         {
             const auto m = meta.getMessage();
             if (m.getChannel() != 1) continue;
-            if ((m.isNoteOn() || m.isNoteOff()) && ! feeds(m.getNoteNumber()))
-                continue;   // a key of another layer does not anchor this figure
+            // A release always clears its key, whichever layer it reaches NOW: the split or the
+            // selection may have moved since its note-on, and a bit left set would keep the
+            // "from silence" edge from ever arming the anchor again (review).
             if (m.isNoteOff() || (m.isNoteOn() && m.getVelocity() == 0))
+            {
                 lane.hostKeysDown.reset ((size_t) m.getNoteNumber());
-            else if (m.isNoteOn())
+                continue;
+            }
+            if (m.isNoteOn() && ! feeds(m.getNoteNumber()))
+                continue;   // a key of another layer does not anchor this figure
+            if (m.isNoteOn())
             {
                 // A note-off at this very sample that the buffer orders AFTER the note-on still
                 // belongs before it (a clip boundary): apply those first.
@@ -1779,7 +1831,7 @@ void SynthyProcessor::laneOutput (PatternLane& lane, juce::MidiBuffer& midi, con
 {
     PatchEngine& engine = lane.index == 0 ? engineA : engineB;
     auto& seq = lane.seq;
-    if (lane.seqActive())
+    if (lane.blockSeq)
     {
         const int playRoot = lane.latchedRoot.load();
         const int sdiv = (int) lane.seqSync->load();
@@ -1793,17 +1845,34 @@ void SynthyProcessor::laneOutput (PatternLane& lane, juce::MidiBuffer& midi, con
             seq.restartLegato();
             if (! hosted && perc.enabled)
                 seq.setStartDelay(perc.samplesToPatternStart());
+            else if (! hosted)   // no drums: on the other running figure's grid, as laneInput's entry (review)
+                for (const auto& other : lanes)
+                    if (&other != &lane && other.seq.enabled && other.seq.playingStep() >= 0)
+                    {
+                        seq.setStartDelay(other.seq.samplesToNextStep());
+                        break;
+                    }
         }
         // 18.6: in a DAW the figure's step is the host's bar position, whatever key started it and
         // whenever - so it lines up with a PERC on another track, and with the DAW's grid. Only
         // while the host PLAYS: a stopped host's position would pull a free-running clock back to
         // the same step every block. While it stands, the figure runs only under a key that is
         // actually held (sound design with the transport off), on the free clock.
+#if JASS_HOSTSYNC_DIAG
+        const int diagPreIdx = seq.currentStep(), diagPreCnt = seq.clockSampleCounter();
+#endif
         if (hosted && hostPlaying && hostPpq.hasValue() && playRoot >= 0 && SyncDivision::isSynced(sdiv))
         {
             const double anchor = lane.anchorPpq.load();   // step 0 = the note's entry
             seq.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(sdiv));
         }
+#if JASS_HOSTSYNC_DIAG
+        if (lane.index == 0)   // the diagnostic records follow layer A's figure, as before 21.8
+        {
+            diagSeqPre[0] = diagPreIdx; diagSeqPre[1] = diagPreCnt;
+            diagSeqPost[0] = seq.currentStep(); diagSeqPost[1] = seq.clockSampleCounter(); diagSeqPost[2] = seq.clockStartDelay();
+        }
+#endif
         const bool seqRuns = hostRunning ? (playRoot >= 0) : (lane.blockRoot >= 0 && playRoot >= 0);
         seq.processBlock(numSamples, midi, lane.channel, seqRuns);   // the lane's own channel
 
@@ -1829,7 +1898,7 @@ void SynthyProcessor::laneOutput (PatternLane& lane, juce::MidiBuffer& midi, con
     }
 
     auto& arp = lane.arp;
-    if (lane.arpActive())
+    if (lane.blockArp)
     {
         arp.enabled = true;
         // 21.9: SYNC = the step as a note value against the resolved tempo (host BPM when hosted,

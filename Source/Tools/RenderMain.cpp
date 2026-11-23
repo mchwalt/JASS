@@ -291,6 +291,12 @@ namespace
         one (juce::MidiMessage::noteOn (1, 72, 0.8f));  expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "A+B, A's pattern running: key -> B only");
         s.liveBlock = LayerRouter::kNone;   // A's pattern stops while the key is held
         one (juce::MidiMessage::noteOff (1, 72));       expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "its note-off still -> B only");
+        // Review 2026-11-24: B's step preview (channel 12) reaches B whatever is selected.
+        s.playA = true; s.playB = false; s.split = false;
+        s.auditionChannelB = SynthyProcessor::kAuditionChannelB;
+        one (juce::MidiMessage::noteOn (SynthyProcessor::kAuditionChannelB, 60, 0.8f));
+        expect (b.getNumEvents() == 1 && a.getNumEvents() == 0, "selection A: B's step preview (ch 12) -> B only");
+        one (juce::MidiMessage::noteOff (SynthyProcessor::kAuditionChannelB, 60));
     }
 
     struct Rig
@@ -616,6 +622,52 @@ namespace
             auto raw = [&] (const juce::String& id) { return r.p->getAPVTS().getRawParameterValue (id)->load(); };
             expect (raw (bp + ID::arpOn) < 0.5f, "B's STEP SEQ on switches B's ARP off");
             expect (raw (ID::arpOn) > 0.5f, "...and leaves A's ARP on");
+        }
+
+        // ---- code review 2026-11-24, group 1 --------------------------------------------------
+        std::cout << "B's step preview sounds in B with A selected" << std::endl;
+        {
+            Rig r;   // selection A, nothing else playing
+            r.run (0.1);
+            r.block ({ { 0, juce::MidiMessage::noteOn (SynthyProcessor::kAuditionChannelB, 60, 0.8f) } });
+            r.run (0.1);
+            expect (r.p->layerKeysDown (true) == 1 && r.p->layerKeysDown (false) == 0, "preview on ch 12: one key down in B, none in A");
+            r.block ({ { 0, juce::MidiMessage::noteOff (SynthyProcessor::kAuditionChannelB, 60) } });
+        }
+        std::cout << "Host panic on channel 1 stops B's latched figure note too" << std::endl;
+        {
+            Rig r;
+            longFigure (r, 1);
+            PresetIO::hooks (r.p->getAPVTS()).applySeqLatchRoot (1, 48);
+            r.run (0.3);
+            expect (r.p->layerKeysDown (true) >= 1, "B's figure note sounding (latched) before the panic");
+            r.block ({ { 0, juce::MidiMessage::allNotesOff (1) } });
+            r.run (0.6);
+            expect (r.p->layerKeysDown (true) == 0, "All-Notes-Off on channel 1: B's pattern note has ended too");
+        }
+        std::cout << "Editing B's figure marks the preset modified" << std::endl;
+        {
+            Rig r;
+            r.p->markPresetClean();
+            expect (! r.p->isPresetModified(), "clean after markPresetClean");
+            r.p->getPatterns().steps[1].setOn (3, true);
+            expect (r.p->isPresetModified(), "a step switched in B's figure: modified");
+        }
+        std::cout << "DAW state carries B's figure and latch" << std::endl;
+        {
+            Rig src;
+            auto& fb = src.p->getPatterns().steps[1];
+            fb.setOn (0, true); fb.setPitch (0, 5);
+            setParam (*src.p, bp + ID::seqOn, 1.0f);
+            PresetIO::hooks (src.p->getAPVTS()).applySeqLatchRoot (1, 50);
+            juce::MemoryBlock mb;
+            src.p->getStateInformation (mb);
+            Rig dst;
+            dst.p->setStateInformation (mb.getData(), (int) mb.getSize());
+            const auto& pt = dst.p->getPatterns();
+            expect (pt.steps[1].on (0) && pt.steps[1].pitch (0) == 5, "B's figure back in B");
+            expect (pt.steps[0].lastUsed() < 0, "A's figure stays empty");
+            expect (dst.p->getSeqLatchRoot (1) == 50, "B's latch back (SeqLatchRootB)");
         }
     }
 }
