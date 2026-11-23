@@ -128,12 +128,13 @@ namespace Modules
     }
 
     static void readModules (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix,
-                             Pass pass, const juce::var& root)
+                             Pass pass, const juce::var& root, const juce::String& onlyObject = {})
     {
         for (const auto& m : all())
         {
             if (pass == Pass::LayerOnly && ! m.layered) continue;
             if (pass == Pass::InstrumentOnly && m.layered) continue;
+            if (onlyObject.isNotEmpty() && m.persistObject != onlyObject) continue;
             const juce::var obj = root[juce::Identifier (m.persistObject)];
             if (! obj.isObject()) continue;
             for (const auto& p : m.params)
@@ -194,6 +195,20 @@ namespace Modules
     void readInstrumentState (juce::AudioProcessorValueTreeState& apvts, const juce::var& root)
     {
         readModules (apvts, {}, Pass::InstrumentOnly, root);
+    }
+
+    juce::StringArray layeredPersistObjects()
+    {
+        juce::StringArray a;
+        for (const auto& m : all())
+            if (m.layered) a.add (m.persistObject);
+        return a;
+    }
+
+    void readLayerModule (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix,
+                          const juce::String& persistObject, const juce::var& root)
+    {
+        readModules (apvts, prefix, Pass::LayerOnly, root, persistObject);
     }
 
     const juce::StringArray& layeredParamIds()

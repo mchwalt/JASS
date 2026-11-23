@@ -107,7 +107,7 @@ namespace Parameters
         constexpr const char* arpMode    = "arpMode";
         constexpr const char* arpOctaves = "arpOctaves";
         constexpr const char* arpGate    = "arpGate";
-        constexpr const char* arpTarget  = "arpTarget";   // 21.7: Auto | A | B | A+B
+        // (arpTarget, 21.7, is retired since 21.8 — never reuse the id.)
 
         // STEP SEQ (Story 15.1) — an authored 16-step figure. Per-step params are indexed like the
         // oscillators/LFOs so the audio thread never builds a String (RT-safety, Story 11.1).
@@ -140,7 +140,7 @@ namespace Parameters
         JASS_INDEXED_ID (percPan,   4, "percPan",   "")   // per-lane placement (16.1: hats off-centre)
         // (The BASS box ids bass* and seqToBass, Story 20.2, are retired since 2026-11-23 — never
         // reuse them: old DAW projects still carry them.)
-        constexpr const char* seqTarget  = "seqTarget";   // 21.7: Auto | A | B | A+B
+        // (seqTarget, 21.7, is retired since 21.8 — never reuse the id.)
         // The grid cells (percStep<lane>_<step>) are NO LONGER parameters (AD-14, Story 18.5):
         // they live in PatternStore::perc. A DAW state saved before 18.5 still carries them as
         // <PARAM> elements; PluginProcessor::setStateInformation folds those into the store once.

@@ -224,15 +224,18 @@ struct StepPattern
         return true;
     }
 
-    // DAW state: ONE child element on the APVTS XML, rows trimmed to the last used step:
+    // DAW state: ONE child element per layer on the APVTS XML, rows trimmed to the last used step:
     //   <StepPattern on="X.X." pitch="0 7 0 12" accent="..X." gate="100 100 101 50"/>
+    // Layer A keeps the historical tag (an old project's element is layer A's figure); layer B
+    // writes "StepPatternB" (Story 21.8) — see xmlTagFor.
     static constexpr const char* kXmlTag = "StepPattern";
+    static juce::String xmlTagFor (int lane) { return lane == 0 ? juce::String (kXmlTag) : juce::String (kXmlTag) + juce::String::charToString ((juce::juce_wchar) ('A' + lane)); }
 
-    void writeXml (juce::XmlElement& parent) const
+    void writeXml (juce::XmlElement& parent, const juce::String& tag = kXmlTag) const
     {
-        if (auto* old = parent.getChildByName (kXmlTag))
+        if (auto* old = parent.getChildByName (tag))
             parent.removeChildElement (old, true);
-        auto* el = parent.createNewChildElement (kXmlTag);
+        auto* el = parent.createNewChildElement (tag);
         const int used = lastUsed() + 1;
         juce::String onRow, accRow;
         juce::StringArray pitches, gates;
@@ -249,9 +252,9 @@ struct StepPattern
         el->setAttribute ("gate",   gates.joinIntoString (" "));
     }
 
-    bool readXml (juce::XmlElement& parent)
+    bool readXml (juce::XmlElement& parent, const juce::String& tag = kXmlTag)
     {
-        auto* el = parent.getChildByName (kXmlTag);
+        auto* el = parent.getChildByName (tag);
         if (el == nullptr) return false;
         const juce::String onRow = el->getStringAttribute ("on"), accRow = el->getStringAttribute ("accent");
         juce::StringArray pitches, gates;
@@ -302,8 +305,11 @@ public:
 // the processor.
 struct PatternStore
 {
+    // One STEP SEQ figure per layer (Story 21.8: STEP SEQ is a layered module) — index = the lane
+    // = the layer (0 = A, 1 = B). The array is where more lanes would grow.
+    static constexpr int kStepLanes = 2;
     PercPattern perc;
-    StepPattern step;
+    std::array<StepPattern, kStepLanes> steps;
 
     PatternStore() = default;
     PatternStore (const PatternStore&) = delete;              // arrays of atomics: not copyable,

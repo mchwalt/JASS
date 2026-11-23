@@ -39,4 +39,10 @@ namespace Modules
     void writeInstrumentState (juce::AudioProcessorValueTreeState& apvts, juce::DynamicObject& root);
     void readInstrumentState  (juce::AudioProcessorValueTreeState& apvts, const juce::var& root);
     void readLayerState  (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, const juce::var& root);
+    // The patch modules' object names ("Osc1", "StepSeq", ...) — and one of them read alone into the
+    // layer `prefix` names, from `root[persistObject]` (Story 21.8: a module that became layered
+    // after FormatVersion 11 still sits in a v11 file's "Instrument"; PresetIO reads it from there).
+    juce::StringArray layeredPersistObjects();
+    void readLayerModule (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix,
+                          const juce::String& persistObject, const juce::var& root);
 }

@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 JASS uses **CalVer** versioning: `YYYY.MM.MICRO` (e.g. `2026.07.0`), where `MICRO`
 increments for additional releases within the same month. This is the app/release
 version and is independent of the preset **`FormatVersion`** (an integer schema
-contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
+contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset_Format.md)).
 
 ## [Unreleased]
 
@@ -30,6 +30,24 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
+- **A STEP SEQ and an ARP in each layer - two figures at once, the layer is the target.** With
+  the BASS box gone (layer B is the bass now) the bass figure needed a sequencer of its own that
+  runs beside the first one. STEP SEQ and ARP are now patch modules like OSC or FILTER: layer A
+  and layer B each have their own, each plays its own layer, and both run at the same time on the
+  shared clock (and on PERC's downbeat). The rack shows them like every other module - B's with
+  the violet header, and with A+B a module both layers use gets A | B in its header. A pattern
+  takes the keys that reach its layer: outside a Split the selected layer(s), in a Split its own
+  hand; a layer whose pattern runs takes no live keys, so one key never plays a layer live and
+  feeds its pattern at once. The ARP / STEP SEQ exclusion holds per layer (A's ARP and B's STEP
+  SEQ run together). TARGET is gone - the maintainer first asked for instances with a target
+  each, then settled it: "die Zuordnung erfolgt automatisch ueber den gerade angewaehlten Layer
+  ... wie es auch bei den anderen Modulen der Fall ist". Each layer's figure plays on its own MIDI
+  channel and its step preview sounds through its own layer; LOAD MIDI / SAVE MIDI act on the
+  module clicked; the keyboard shows both running notes in the layers' colours. **FormatVersion
+  12**: the figure and its latch travel with the layer (`LayerA.StepSeq`, `LayerB.StepSeq`); a v11
+  file's STEP SEQ and ARP land in the layer(s) their old TARGET named (Auto / A: layer A), so every
+  preset sounds as before - 23 of 24 presets bit-identical, the 24th is Light Duo, which played
+  the removed BASS box and is converted by hand next (Story 21.8).
 - **LAYERS — layer B in the rack, played like a bitimbral hardware synth.** A module in the
   MASTER BUS zone. Buttons **A** and **B** (keys 1 and 2) pick the layer you edit and hear - B's
   modules carry a violet header, keys 1 and 2 switch between two sounds live (a layer you leave
@@ -60,6 +78,8 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   every reset. RANDOM rolls the layer being edited; the auto-enable couplings (MOD MATRIX, CROSS
   MOD) work in layer B as in A (Story 21.6).
 - **ARP and STEP SEQ get a TARGET - a sequenced bass under the left hand, the right hand live.**
+  (Superseded by the STEP SEQ and ARP per layer above: the layer is the target now; the routing
+  work below - the pattern's own channel, the Split key filter, the hang fixes - carries over.)
   Until now a running pattern took every key: in a Split both hands fed the figure and nothing
   played live, and the pattern always went to layer A. **TARGET** (Auto / A / B / A+B) in each
   module sets the layer; Auto follows the layers (the selected layer, both with A and B lit, in a Split B,

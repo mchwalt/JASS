@@ -19,15 +19,17 @@ class FillWidthKeyboard : public juce::MidiKeyboardComponent
 public:
     using juce::MidiKeyboardComponent::MidiKeyboardComponent;
 
-    // Show what the STEP SEQ is playing. Its notes never enter the MidiKeyboardState (they would
-    // come back as held keys and the pattern would re-root itself on its own output), so the
-    // component cannot know them: the editor pushes the note in from the processor's atomic instead.
-    // Purely a paint state — nothing here sounds, and -1 means "the pattern is between notes".
-    void setPatternNote (int midiNote)
+    // Show what the STEP SEQs are playing — one note per layer (Story 21.8), each in its layer's
+    // colour. Their notes never enter the MidiKeyboardState (they would come back as held keys and
+    // a pattern would re-root itself on its own output), so the component cannot know them: the
+    // editor pushes them in from the processor's atomics instead. Purely a paint state — nothing
+    // here sounds, and -1 means "that pattern is between notes".
+    void setPatternNotes (int noteA, int noteB)
     {
-        if (midiNote == patternNote)
+        if (noteA == patternNotes[0] && noteB == patternNotes[1])
             return;
-        patternNote = midiNote;
+        patternNotes[0] = noteA;
+        patternNotes[1] = noteB;
         repaint();
     }
 
@@ -132,10 +134,21 @@ private:
                 g.fillRect (area.withWidth (3.0f));
             }
         }
-        if (midiNote != patternNote)
+        // The running pattern notes, A cyan, B violet; one key played by both shows both halves.
+        const bool a = midiNote == patternNotes[0], b = midiNote == patternNotes[1];
+        if (! a && ! b)
             return;
-        g.setColour (juce::Colour (0xff9384b6).withAlpha (0.75f));   // rack::typeColour(Modulator)
-        g.fillRect (area.reduced (1.0f));
+        auto r = area.reduced (1.0f);
+        if (a && b)
+        {
+            g.setColour (rack::kLayerAColour.withAlpha (0.75f));
+            g.fillRect (r.removeFromTop (r.getHeight() * 0.5f));
+            g.setColour (rack::kLayerBColour.withAlpha (0.75f));
+            g.fillRect (r);
+            return;
+        }
+        g.setColour ((a ? rack::kLayerAColour : rack::kLayerBColour).withAlpha (0.75f));
+        g.fillRect (r);
     }
 
 public:
@@ -180,7 +193,7 @@ private:
     }
 
     juce::TextButton splitButton { "SPLIT" };
-    int patternNote = -1;
+    int patternNotes[2] { -1, -1 };   // 21.8: A's and B's running STEP SEQ note
     int hoverNote = -1;
     int splitNote = -1;
 };
@@ -372,9 +385,10 @@ public:
         stopTimer();
         processor.onStateReloaded = nullptr;   // the async re-load must not reach a dead editor
         processor.getKeyboardState().removeListener (this);
-        processor.setSeqRecordArmed (false);   // a closed window must never leave the sequencer
-                                               // rootless — it would look enabled and stay silent
-        auditionStep (0, false);   // the timer is gone — close a running STEP SEQ preview by hand
+        for (int l = 0; l < SynthyProcessor::kNumLanes; ++l)
+            processor.setSeqRecordArmed (l, false);   // a closed window must never leave a sequencer
+                                                      // rootless — it would look enabled and stay silent
+        stopAudition();   // the timer is gone — close a running STEP SEQ preview by hand
         // Dismiss the MODULES call-out NOW (before rackBody is destroyed): its RackCustomizePanel
         // holds a reference to *rackBody, so a callout left open when the editor closes would dangle.
         if (auto* co = modulesCallout.getComponent())
@@ -420,9 +434,10 @@ private:
     void updatePresetLabel();                    // composes "Preset: X" / "Current State"
     void loadPresetFile(const juce::File& f);    // shared LOAD path (LOAD button + bank F-keys)
     void doublePercPattern();                    // PERC header x2: pattern doubles behind itself
-    void chooseMidiImport();                     // STEP SEQ header LOAD MIDI: chooser (15.8)
-    void chooseMidiExport();                     // STEP SEQ header SAVE MIDI: chooser + export (15.8)
-    void importMidiFigure(const juce::File& f);  // the import itself: figure into STEP SEQ (15.8)
+    // STEP SEQ header LOAD MIDI / SAVE MIDI (15.8) — of the layer whose module was clicked (21.8).
+    void chooseMidiImport(int lane);
+    void chooseMidiExport(int lane);
+    void importMidiFigure(const juce::File& f, int lane);   // the import itself: figure into that STEP SEQ
 
     // Preset quick-access bank (F1..F12) — a MASTER BUS module. The 12 slot assignments are a
     // GLOBAL app setting (PresetIO::PresetBanks.json), not per-preset.
@@ -471,13 +486,17 @@ private:
     // Preview of a STEP SEQ step while it is edited (Story 15.3). The step's value is an offset in
     // semitones, so it needs a reference — seqPitchReference(): the LATCHED root while a figure is
     // running (what you click is what the loop plays), otherwise the computer keyboard's current C.
-    void auditionStep (int semitones, bool sounding, bool accented = false);
+    // Story 21.8: every STEP SEQ function takes the LANE (= the layer whose module it is: 0 = A,
+    // 1 = B); the preview plays on that layer's audition channel, so B's steps sound in B.
+    void auditionStep (int lane, int semitones, bool sounding, bool accented = false);
+    void stopAudition();              // close a running preview, whichever lane it belongs to
     // GATE preview: sound the step for gate% of the current step length (TIE / SLIDE = one full
     // step), re-triggering on every call so a scrubbed gate is heard length by length.
-    void auditionStepGated (int semitones, bool accented, int gate);
-    int  seqPitchReference() const;   // the root a step offset actually sounds against (15.6)
-    int  seqRefShown  = -1;   // last reference the note boxes were texted with (timer re-texts)
+    void auditionStepGated (int lane, int semitones, bool accented, int gate);
+    int  seqPitchReference (int lane) const;   // the root a step offset actually sounds against (15.6)
+    std::array<int, SynthyProcessor::kNumLanes> seqRefShown { -1, -1 };   // last reference the note boxes were texted with
     int auditionNote  = -1;   // MIDI note currently previewing, or -1
+    int auditionChannel = SynthyProcessor::kAuditionChannel;   // ...and the channel it sounds on
     bool auditionAccented = false;   // 15.2: preview velocity of the sounding audition note
     int auditionTicks = 0;    // 30 Hz timer ticks until the safety release (a wheel or a typed
                               // value has no drag end that could close the note)
@@ -486,8 +505,11 @@ private:
     // The write cursor is the ONE step the next played note goes into: 0-based, -1 = not recording.
     // Pure UI state — nothing about it belongs in a preset (AC9). Reset (↺) arms it at step 0, a
     // click on any step knob moves it there, and it clears itself past LEN or when STEP SEQ goes off.
+    // One cursor for the whole rack (21.8): it sits in ONE lane's figure at a time.
     int  seqCursor = -1;
-    void seqSetCursor (int step);            // -1 stops; also drives the processor's record flag
+    int  seqCursorLane = 0;
+    void seqSetCursor (int lane, int step);  // -1 stops; also drives that lane's record flag
+    void seqStopCursor() { seqSetCursor (seqCursorLane, -1); }
 
     // --- Step pages (16.3) ---------------------------------------------------------------------
     // View state for the two paged sequencer grids: which 48-step page is shown, and whether the
@@ -495,14 +517,14 @@ private:
     // page cannot flip away under an editing cursor; re-latching jumps to the playing page). The
     // ModuleFrames poll these through their descriptor's paging hooks and rebuild/repaint on a
     // change; the timer below does the auto-flip. Pure UI state — never in a preset.
-    int  seqShownPage  = 0;
-    bool seqFollow     = true;
+    std::array<int,  SynthyProcessor::kNumLanes> seqShownPage { 0, 0 };   // per STEP SEQ (21.8)
+    std::array<bool, SynthyProcessor::kNumLanes> seqFollow    { true, true };
     int  percShownPage = 0;
     bool percFollow    = true;
     PercGrid* percGrid = nullptr;            // typed pointer (rackOwned owns it): page offset pushes
-    int  seqPlayingPage()  const;            // page under the playhead, -1 when not running
+    int  seqPlayingPage (int lane) const;   // page under that lane's playhead, -1 when not running
     int  percPlayingPage() const;
-    void setSeqPage  (int page, bool manual);   // manual = a page-button pick (pauses FOLLOW)
+    void setSeqPage  (int lane, int page, bool manual);   // manual = a page-button pick (pauses FOLLOW)
     void setPercPage (int page, bool manual);
     void seqWriteNote (int midiNote);        // write the cursor's step from a played note, advance
     void seqAdvanceCursor();                 // next step, or stop past LEN
@@ -511,7 +533,7 @@ private:
     // processBlock), so it only parks the note here; the 30 Hz timer picks it up on the message
     // thread and does the parameter write. -1 = nothing pending.
     std::atomic<int> seqPendingNote { -1 };
-    bool seqOnLast = false;   // edge detect for "STEP SEQ was switched off" (ends a recording)
+    std::array<bool, SynthyProcessor::kNumLanes> seqOnLast { false, false };   // edge: "STEP SEQ was switched off" (ends a recording)
     void handleNoteOn  (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override;
     void handleNoteOff (juce::MidiKeyboardState*, int midiChannel, int midiNote, float velocity) override;
     bool keyboardPlayable = true;   // mirrors keyboardOn: false => dimmed AND input-blocked

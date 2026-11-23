@@ -122,9 +122,10 @@ info** so nothing is hidden and every control explains itself.
 - **SPLIT** button on the on-screen keyboard (key **3**): split on / off — below
   the split key B, from it up A. Double-click, play a key — that is the split key.
   The keyboard shows both ranges in the layers' colours.
-- **TARGET** for the ARP and the STEP SEQ: Auto / A / B / A+B. In a Split the
-  pattern takes only its layer's keys and the other hand plays live; an arpeggio
-  crossing the split stays in its layer.
+- **A STEP SEQ and an ARP per layer**: each plays its own layer, and both
+  layers' patterns run at once — a bass figure in B, a second figure or an
+  arpeggio in A. In a Split each hand feeds its own layer's pattern; an
+  arpeggio crossing the split stays in its layer.
 - **Presets** carry both layers; loading follows the A / B selection, and an older
   single-layer preset keeps your layer B. **RESET** gives B its own Init sound — a
   punchy saw bass — so a Split sounds right away.

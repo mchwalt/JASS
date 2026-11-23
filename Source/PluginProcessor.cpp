@@ -46,16 +46,24 @@ SynthyProcessor::SynthyProcessor()
     PresetIO::hooks(apvts).setPresetLoading  = [this] (bool loading) { setPresetLoading (loading); };
     PresetIO::hooks(apvts).patterns          = &patterns;   // AD-14: the PERC grid is read/written through here
 
-    PresetIO::hooks(apvts).seqLatchRoot      = [this] { return seqLatchedRoot.load(); };
-    PresetIO::hooks(apvts).applySeqLatchRoot = [this] (int note)
+    // Story 21.8: one STEP SEQ + ARP lane per layer — lane i plays layer i on its own channel.
+    for (int i = 0; i < kNumLanes; ++i)
+        lanes[(size_t) i].bind (apvts, i, i == 0 ? juce::String() : juce::String (Modules::kLayerBPrefix), patternChannelOf (i));
+
+    PresetIO::hooks(apvts).seqLatchRoot      = [this] (int lane) { return lanes[(size_t) juce::jlimit (0, kNumLanes - 1, lane)].latchedRoot.load(); };
+    PresetIO::hooks(apvts).applySeqLatchRoot = [this] (int lane, int note)
     {
+        auto& l = lanes[(size_t) juce::jlimit (0, kNumLanes - 1, lane)];
         if (note >= 0)
         {
-            startSeqLatch (note);
-            seqRequantize.store (true);   // a loaded latch always re-enters on the drums' downbeat
+            startSeqLatch (l.index, note);
+            l.requantize.store (true);   // a loaded latch always re-enters on the drums' downbeat
         }
         else
-            stopSeqLatch();
+        {
+            l.latchedRoot.store (-1);
+            l.anchorPpq.store (-1.0);
+        }
     };
 
     // Double-click-on-a-knob's baseline: the value the loaded preset gave that parameter.
@@ -306,7 +314,7 @@ void SynthyProcessor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, in
         currentNoteRatio.store(1.0f);   // our drone note (C4) → FREQ knobs show base
         return;
     }
-    if (midiChannel == kAuditionChannel)
+    if (midiChannel == kAuditionChannel || midiChannel == kAuditionChannelB)
     {
         // A previewed STEP SEQ step (15.3) is not a played key: it must not enter the held-note
         // set (the sequencer would take it as its root) and it must not move the FREQ display.
@@ -332,7 +340,7 @@ void SynthyProcessor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, in
 
 void SynthyProcessor::handleNoteOff(juce::MidiKeyboardState*, int midiChannel, int midiNote, float)
 {
-    if (midiChannel == kDroneChannel || midiChannel == kAuditionChannel)
+    if (midiChannel == kDroneChannel || midiChannel == kAuditionChannel || midiChannel == kAuditionChannelB)
         return;                          // neither one ever entered the held-note set
     if (midiNote >= 0 && midiNote < 128)
         (midiNote < 64 ? heldNotesLo : heldNotesHi).fetch_and(~(1ULL << (midiNote & 63)));
@@ -426,8 +434,7 @@ void SynthyProcessor::updateMatrixModuleEnables()
     // 2026-11-18). An instrument module (COMPRESSOR, STEREO, MASTER, CHAOS) is shared: B's claim on
     // it counts while B sounds (live keys or a pattern aimed at it); a claim from either keeps it on.
     const auto playingNow = layersPlaying();
-    const auto pat = resolvePatternRoute(playingNow);
-    const bool bOn = playingNow.b || (pat.active && (pat.dest & LayerRouter::kB) != 0);
+    const bool bOn = playingNow.b || lanes[1].active();   // 21.8: B's own STEP SEQ / ARP makes it sound
     std::set<juce::String> claimed;
     for (const juce::String pre : { juce::String(), juce::String(Modules::kLayerBPrefix) })
     {
@@ -623,27 +630,34 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
 
     // Either layer's slots (21.6: "bmodSlot…"), and B switching on or off (its claims count only
     // while it plays).
-    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerMode || paramId == Parameters::ID::layerFocus
-        || paramId == Parameters::ID::arpTarget || paramId == Parameters::ID::seqTarget)
+    if (paramId.startsWith("modSlot") || paramId.startsWith("bmodSlot") || paramId == Parameters::ID::layerMode || paramId == Parameters::ID::layerFocus)
     {
         if (onMsgThread) updateMatrixModuleEnables();
         else             matrixEnablesDirty.store(true);
         return;
     }
 
-    // ARP and STEP SEQ both REPLACE the held chord, so only one can run. Switching one ON
-    // switches the other OFF, which keeps the rack honest: no lit module sitting there doing
-    // nothing. Writing a parameter is a message-thread job (setValueNotifyingHost allocates and
-    // notifies), so under host automation this only raises the flag.
-    if (paramId == Parameters::ID::seqOn || paramId == Parameters::ID::arpOn)
-    {
-        if (newValue <= 0.5f)          // switching OFF frees the other one; nothing to reconcile
+    // ARP and STEP SEQ both REPLACE the keys of their layer, so only one of a layer's pair can run
+    // (21.8: per layer — A's ARP and B's STEP SEQ run together). Switching one ON switches the other
+    // OFF, which keeps the rack honest: no lit module sitting there doing nothing. Writing a
+    // parameter is a message-thread job (setValueNotifyingHost allocates and notifies), so under
+    // host automation this only raises the flag. A pattern in B also makes B sound, which the
+    // matrix's shared-module claims depend on — so the switch reconciles those as well.
+    for (const auto& l : lanes)
+        if (paramId == l.id(Parameters::ID::seqOn) || paramId == l.id(Parameters::ID::arpOn))
+        {
+            if (l.index != 0)
+            {
+                if (onMsgThread) updateMatrixModuleEnables();
+                else             matrixEnablesDirty.store(true);
+            }
+            if (newValue <= 0.5f)          // switching OFF frees the other one; nothing to reconcile
+                return;
+            pendingExclusive.store(l.index * 2 + (paramId == l.id(Parameters::ID::seqOn) ? 1 : 0));
+            if (onMsgThread) applySeqArpExclusion();
+            else             seqArpDirty.store(true);
             return;
-        pendingExclusiveIsSeq.store(paramId == Parameters::ID::seqOn);
-        if (onMsgThread) applySeqArpExclusion();
-        else             seqArpDirty.store(true);
-        return;
-    }
+        }
 
     const int cc = crossModCode(paramId);
     if (cc < 0)
@@ -668,11 +682,16 @@ void SynthyProcessor::reconcileParamCouplingsIfDirty()
         applySeqArpExclusion();
 }
 
-// Message thread only: the module that was just switched on wins, the other is switched off.
+// Message thread only: the module that was just switched on wins, the other one OF THE SAME
+// LAYER is switched off (21.8).
 void SynthyProcessor::applySeqArpExclusion()
 {
     using namespace Parameters;
-    const char* loser = pendingExclusiveIsSeq.load() ? ID::arpOn : ID::seqOn;
+    const int code = pendingExclusive.exchange(-1);
+    if (code < 0)
+        return;
+    const auto& l = lanes[(size_t) juce::jlimit(0, kNumLanes - 1, code / 2)];
+    const juce::String loser = l.id((code & 1) != 0 ? ID::arpOn : ID::seqOn);
     if (auto* p = apvts.getParameter(loser))
         if (*apvts.getRawParameterValue(loser) > 0.5f)
             p->setValueNotifyingHost(0.0f);
@@ -731,9 +750,13 @@ void SynthyProcessor::randomize()
             // auto-enable memories are handed over by hand below instead of cleared.
             presetLoading.store(true);
             for (const auto& id : Modules::layeredParamIds())
+            {
+                // 21.8: B's STEP SEQ / ARP switches are performance, like A's (kept by the A roll).
+                if (id == Parameters::ID::seqOn || id == Parameters::ID::arpOn) continue;
                 if (auto* a = apvts.getParameter(id))
                     if (auto* b = apvts.getParameter(bp + id))
                         b->setValueNotifyingHost(a->getValue());
+            }
             auto& params = getParameters();
             for (int i = 0; i < params.size(); ++i)
                 if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(params[i]))
@@ -784,10 +807,6 @@ void SynthyProcessor::randomizeLayerA()
 
     // Random value for every parameter... (the MOD MATRIX is re-rolled CONTROLLED below —
     // it is the synth's central movement layer, so RANDOM must vary it, not leave it alone.)
-    static const char* const boxIds[] = { ID::arpTarget, ID::seqTarget };   // 21.7: where the patterns play is set-up, not sound
-    float keepBox[sizeof (boxIds) / sizeof (boxIds[0])];
-    for (size_t i = 0; i < sizeof (boxIds) / sizeof (boxIds[0]); ++i)
-        keepBox[i] = *apvts.getRawParameterValue (boxIds[i]);
 
     // The roll of layer A's parameters: layer B and the LAYERS switches stay as they are here —
     // randomize() carries this roll over to B when B is being edited (21.6).
@@ -855,8 +874,6 @@ void SynthyProcessor::randomizeLayerA()
     set(ID::arpOn,       keepArpOn);
     set(ID::glideOn,     keepGlideOn);
     set(ID::keyboardOn,  keepKeyboardOn);
-    for (size_t i = 0; i < sizeof (boxIds) / sizeof (boxIds[0]); ++i)
-        set(boxIds[i], keepBox[i]);   // 20.2
 
     // Modulation matrix: RANDOM VARIES it too (it is the central movement layer). The blanket
     // dice above already wrote random slots; redo them CONTROLLED so patches move without blowing
@@ -916,51 +933,6 @@ void SynthyProcessor::randomizeLayerA()
         }
     }
 
-}
-
-// AD-16 S3 (Story 21.7): where the running ARP / STEP SEQ plays, and which keys feed it.
-//   TARGET Auto  Single: the selected layer(s) - Dual: both - Split: B, the left hand
-//          A / B / A+B as chosen.
-// In a Split with ONE target layer only that layer's keys feed the pattern (B: below the split
-// note, A: from it up); the other hand plays its layer live - the classic split-keyboard setup.
-// A+B in a Split, and every other mode, takes all keys as before S3.
-SynthyProcessor::PatternRoute SynthyProcessor::resolvePatternRoute (const LayersPlaying& playing) const
-{
-    using namespace Parameters;
-    PatternRoute r;
-    const bool seqOn  = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
-    const bool arpOn  = *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
-    int target = 0;
-    if (seqOn)
-    {
-        target = juce::roundToInt (apvts.getRawParameterValue(ID::seqTarget)->load());
-    }
-    else if (arpOn)
-        target = juce::roundToInt (apvts.getRawParameterValue(ID::arpTarget)->load());
-    else
-        return r;
-    r.active = true;
-
-    const int mode = juce::roundToInt (apvts.getRawParameterValue(ID::layerMode)->load());
-    switch (target)
-    {
-        case 1:  r.dest = LayerRouter::kA;    break;
-        case 2:  r.dest = LayerRouter::kB;    break;
-        case 3:  r.dest = LayerRouter::kBoth; break;
-        default: // Auto
-            if (mode == 2) r.dest = LayerRouter::kB;
-            else r.dest = (std::uint8_t) ((playing.a ? LayerRouter::kA : 0) | (playing.b ? LayerRouter::kB : 0));
-            if (r.dest == LayerRouter::kNone) r.dest = LayerRouter::kA;
-            break;
-    }
-    if (mode == 2 && r.dest != LayerRouter::kBoth)
-    {
-        const int split = juce::roundToInt (apvts.getRawParameterValue(ID::splitNote)->load());
-        r.filtered = true;
-        if (r.dest == LayerRouter::kB) { r.lo = 0;     r.hi = split - 1; }
-        else                           { r.lo = split; r.hi = 127; }
-    }
-    return r;
 }
 
 const std::vector<std::pair<juce::String, float>>& SynthyProcessor::initPatchOverrides()
@@ -1026,7 +998,7 @@ void SynthyProcessor::resetToDefault()
     for (auto* p : getParameters())
         p->setValueNotifyingHost(p->getDefaultValue());
     patterns.perc.clear();   // AD-14: the patterns are no parameters, so the loop above cannot reach them
-    patterns.step.clear();
+    for (auto& fig : patterns.steps) fig.clear();
 
     for (const auto& [id, plain] : initPatchOverrides())
         if (auto* p = apvts.getParameter(id))
@@ -1046,8 +1018,11 @@ void SynthyProcessor::markPresetClean()
         cleanSnapshot.push_back(p->getValue());
     cleanPercRevision = patterns.perc.revision.load();   // AD-14: a changed cell is a change too
     patterns.perc.markClean();                            // 7.6: the grid as loaded, for PERC's ↺
-    patterns.step.markClean();                            // ...and the figure's double-click / ↺ baseline
-    cleanStepRevision = patterns.step.revision.load();
+    for (size_t i = 0; i < patterns.steps.size(); ++i)    // ...and each figure's double-click / ↺ baseline
+    {
+        patterns.steps[i].markClean();
+        cleanStepRevision[i] = patterns.steps[i].revision.load();
+    }
 }
 
 void SynthyProcessor::markLayerBClean()
@@ -1062,6 +1037,8 @@ void SynthyProcessor::markLayerBClean()
         if (auto* rp = dynamic_cast<juce::RangedAudioParameter*>(params[i]))
             if (rp->paramID.startsWith(bp) && Modules::isLayeredParamId(rp->paramID.substring(bp.length())))
                 cleanSnapshot[(size_t) i] = rp->getValue();
+    patterns.steps[1].markClean();   // 21.8: B's figure is part of the sound just loaded
+    cleanStepRevision[1] = patterns.steps[1].revision.load();
 }
 
 bool SynthyProcessor::isPresetModified() const
@@ -1069,9 +1046,11 @@ bool SynthyProcessor::isPresetModified() const
     auto& params = getParameters();
     if (cleanSnapshot.size() != (size_t) params.size())
         return true;   // no baseline (e.g. restored as a modified working state)
-    if (patterns.perc.revision.load() != cleanPercRevision
-        || patterns.step.revision.load() != cleanStepRevision)
+    if (patterns.perc.revision.load() != cleanPercRevision)
         return true;   // a pattern cell changed since the baseline (AD-14)
+    for (size_t i = 0; i < patterns.steps.size(); ++i)
+        if (patterns.steps[i].revision.load() != cleanStepRevision[i])
+            return true;
     for (int i = 0; i < params.size(); ++i)
         if (std::abs(params[i]->getValue() - cleanSnapshot[(size_t) i]) > 1.0e-6f)
             return true;
@@ -1086,7 +1065,7 @@ void SynthyProcessor::restoreModifiedState(bool modified)
     {
         cleanSnapshot.clear();
         patterns.perc.invalidateBaseline();   // 7.6: no "as loaded" state ⇒ the ↺ falls back to factory
-        patterns.step.invalidateBaseline();
+        for (auto& fig : patterns.steps) fig.invalidateBaseline();
     }
     else
         markPresetClean();
@@ -1111,10 +1090,8 @@ void SynthyProcessor::prepareToPlay(double sampleRate, int samplesPerBlock)
     compressor.prepare(sampleRate);
     prevMasterGain = 0.0f;   // ramp start for the (possibly modulated) master gain
     chaos.setSampleRate(sampleRate);
-    arp.prepare(sampleRate);
-    stepSeq.prepare(sampleRate);
+    for (auto& l : lanes) l.prepare(sampleRate);   // 21.8: each layer's STEP SEQ + ARP
     perc.prepare(sampleRate);   // 16.1: four SamplePlayers, configured once (their stretch engine allocates)
-    arpHeldScratch.reserve(128);
 
     // Feed the real sample rate to the scope/spectrum displays (ms-window + bin→Hz).
     waveformCapture.setSampleRate(sampleRate);
@@ -1165,7 +1142,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // (or a held key) had just said no: a saw C4 hung under the beat until the next keypress
     // chased it away (maintainer 2026-08-24, holding a key while switching DAF Beat ⇄ Los Ninos).
     if ((mask & ~prevSourcesMask) != 0
-        && seqLatchedRoot.load() < 0
+        && ! isSeqLatched()
         && heldNotesLo.load() == 0 && heldNotesHi.load() == 0)
         autoPlayEnabled.store(true);
     prevSourcesMask = mask;
@@ -1230,12 +1207,16 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (hosted && hostPlaying && hostPpq.hasValue())
     {
         if (! hostWasPlaying)
-            for (auto* a : { &percAnchorPpq, &seqAnchorPpq })
+        {
+            auto continueAnchor = [&] (std::atomic<double>& a)
             {
-                const double cur = a->load();
-                a->store (cur >= 0.0 && hostLastPpq >= 0.0 ? *hostPpq - (hostLastPpq - cur)   // continue
-                                                             : *hostPpq);                       // first PLAY: step 0
-            }
+                const double cur = a.load();
+                a.store (cur >= 0.0 && hostLastPpq >= 0.0 ? *hostPpq - (hostLastPpq - cur)   // continue
+                                                            : *hostPpq);                       // first PLAY: step 0
+            };
+            continueAnchor (percAnchorPpq);
+            for (auto& l : lanes) continueAnchor (l.anchorPpq);
+        }
         hostLastPpq = *hostPpq + buffer.getNumSamples() * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate()));
     }
     hostWasPlaying = hosted && hostPlaying;
@@ -1280,11 +1261,15 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // Which layers SOUND this block (21.6/21.7): live keys, a pattern aimed at them, or a release
     // tail still fading. One predicate for the render and the master-bus modulation (review).
     const auto playing = layersPlaying();
-    patRoute = resolvePatternRoute(playing);   // 21.7: the pattern's layer(s) and key range
-    const bool layerAOn = playing.a || engineA.isSounding()
-                       || (patRoute.active && (patRoute.dest & LayerRouter::kA) != 0);
-    const bool layerBOn = playing.b || engineB.isSounding()
-                       || (patRoute.active && (patRoute.dest & LayerRouter::kB) != 0);
+    const auto keys = keyScope(playing);   // 21.8: which keys reach which layer (and its lane)
+    std::uint8_t activeLanes = 0;          // bit i = lane i's STEP SEQ or ARP replaces its keys
+    for (const auto& l : lanes)
+        if (l.active()) activeLanes |= (std::uint8_t) (1u << l.index);
+    const bool layerAOn = playing.a || engineA.isSounding() || (activeLanes & 1u) != 0;
+    bool previewB = false;   // 21.8: a step of B's STEP SEQ being previewed makes B sound
+    for (const auto meta : midiMessages)
+        if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == kAuditionChannelB) { previewB = true; break; }
+    const bool layerBOn = playing.b || engineB.isSounding() || (activeLanes & 2u) != 0 || previewB;
 
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
     {
@@ -1329,7 +1314,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     patchCtx.syncBpm     = syncBpm;
     patchCtx.chaosX      = chaosDisplay[0].load();
     patchCtx.chaosY      = chaosDisplay[1].load();
-    patchCtx.accentDepth = *apvts.getRawParameterValue(Parameters::ID::seqAccent);   // 15.2
+    patchCtx.accentDepth = lanes[0].seqAccent->load();   // 15.2 — each layer's own STEP SEQ ACCENT (21.8)
     patchCtx.hosted      = hosted;
     patchCtx.hostPlaying = hostPlaying;
     patchCtx.hostPpq     = hostPpq;
@@ -1340,7 +1325,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // the master-bus modulation.) B renders while it takes notes, and on after that until its last
     // release tail has faded — switching SINGLE from B to A lets B's notes ring out, not cut.
     if (layerBOn)
-        engineB.beginBlock(patchCtx);
+    {
+        PatchEngine::BlockContext ctxB = patchCtx;
+        ctxB.accentDepth = lanes[1].seqAccent->load();
+        engineB.beginBlock(ctxB);
+    }
 
 
     // Arpeggiator: replace the raw held chord with an automatic note sequence.
@@ -1378,12 +1367,19 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 perc.reset();
                 // Standalone only: in a DAW both clocks follow the host's position (below), so
                 // there is nothing to negotiate between them.
-                if (! hosted && stepSeq.enabled && stepSeq.playingStep() >= 0)
-                {
-                    const int wait = stepSeq.samplesToNextStep();
-                    perc.setStartDelay(wait);
-                    stepSeq.restartLegatoIn(wait);
-                }
+                // 21.8: with figures in both layers, the first running one sets the moment and
+                // every running figure restarts on it, so they stay together with the drums.
+                if (! hosted)
+                    for (auto& ref : lanes)
+                        if (ref.seq.enabled && ref.seq.playingStep() >= 0)
+                        {
+                            const int wait = ref.seq.samplesToNextStep();
+                            perc.setStartDelay(wait);
+                            for (auto& l : lanes)
+                                if (l.seq.enabled && l.seq.playingStep() >= 0)
+                                    l.seq.restartLegatoIn(wait);
+                            break;
+                        }
             }
             perc.enabled = percOn;
             perc.length  = (int) *apvts.getRawParameterValue(ID::percLength);
@@ -1399,139 +1395,33 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
             }
         }
 
-        const bool seqOn = *apvts.getRawParameterValue(ID::seqOn) > 0.5f;
-        bool arpOn = ! seqOn && *apvts.getRawParameterValue(ID::arpOn) > 0.5f;
-        if (seqOn)
+        // Story 21.8: each layer's STEP SEQ / ARP — one lane per layer, the same code for each.
+        // Stage 1 (raw keys): every lane reads its root / held chord and anchors from the keys that
+        // reach its layer. Stage 2: the keys a running lane takes leave the buffer (a key that also
+        // reaches a layer whose lane is idle stays — the router keeps it from the busy one). Stage
+        // 3: each lane writes its pattern on its own channel.
+        for (auto& l : lanes)
+            laneInput(l, midiMessages, keys, syncBpm, hosted, hostPlaying, hostPpq);
+        if (activeLanes != 0)
         {
-            stepSeq.enabled = true;
-            stepSeq.length  = (int) *apvts.getRawParameterValue(ID::seqLength);
-            // Step length: the musical division against the resolved tempo (host BPM when hosted,
-            // else the MASTER knob), or the free-running RATE in steps/s. Same clock the LFOs and
-            // DELAY ride on, so a synced pattern cannot drift against a synced delay.
-            const int sdiv = (int) *apvts.getRawParameterValue(ID::seqSync);
-            stepSeq.stepSeconds = SyncDivision::isSynced(sdiv)
-                                      ? SyncDivision::delaySeconds(syncBpm, sdiv)
-                                      : 1.0 / juce::jmax(0.5, (double) *apvts.getRawParameterValue(ID::seqRate));
-            stepSeq.gate = *apvts.getRawParameterValue(ID::seqGate);
-            seqStepSecondsDisplay.store(stepSeq.stepSeconds);   // the GATE preview's time base (editor)
-            // Only the playable range is copied: playback clamps to `length` with the same bound,
-            // so steps beyond it are never read — and at kMaxSteps 768 (16 pages) copying the full
-            // arrays would be ~3000 atomic loads per block for a 16-step figure.
-            const int seqUsed = juce::jlimit(1, (int) StepSequencer::kMaxSteps, stepSeq.length);
-            for (int s = 0; s < seqUsed; ++s)   // AD-14: from the PatternStore, one relaxed load per cell
-            {
-                stepSeq.pitch [(size_t) s] = patterns.step.pitch (s);
-                stepSeq.on    [(size_t) s] = patterns.step.on    (s);
-                stepSeq.accent[(size_t) s] = patterns.step.accent(s);   // 15.2
-                stepSeq.sgate [(size_t) s] = patterns.step.gate  (s);   // 15.7
-            }
-
-            // The LOWEST held channel-1 note is the root the step offsets are added to; the ch.16
-            // auto-play drone is excluded, exactly as for the arp.
-            // While the editor is RECORDING a figure (15.4) the search is skipped outright: those
-            // keys are being written into the steps, and taking one as the root would restart and
-            // transpose the pattern on every note entered.
-            int root = -1;
-            if (! seqRecordArmed.load())
-            {
-                for (int n = 0; n < 128 && root < 0; ++n)
-                    if (keyboardState.isNoteOn(1, n) && patRoute.feeds(n)) root = n;   // 21.7: the pattern hand
-                // A note whose note-off lands in the SAME block is already up by now and the
-                // search above never sees it — a short clip note in a DAW, or a tapped key. It
-                // still latches: take the lowest channel-1 note-on of this block (maintainer
-                // 2026-10-19, Bitwig: the figure started "nur manchmal" — a block-alignment lottery).
-                if (root < 0)
-                    for (const auto meta : midiMessages)
-                        if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == 1 && patRoute.feeds(m.getNoteNumber()))
-                            if (root < 0 || m.getNoteNumber() < root)
-                                root = m.getNoteNumber();
-            }
-
-            // 18.6 ANCHOR: in a host the figure's step 0 is where its note ENTERED, not the song's
-            // start. The host position is taken modulo LEN (syncToHost), and a 48-step figure is
-            // three bars: counted from bar 1 it sits at step 0 only every third bar, so a clip
-            // launched or a PLAY pressed anywhere else began the figure in its middle (maintainer
-            // 2026-10-25, Bitwig: "der erste gespielte Ton ist der letzte der Sequenz"). The edge is
-            // taken event by event, not from the keys held at the block's end: a clip boundary in a
-            // DAW is a note-off and a note-on at the SAME sample, and that is a fresh entry - only a
-            // key added while another is really still down changes the root without restarting,
-            // exactly the standalone's rule. The note's exact position, not a grid: the user placed
-            // it. A key pressed while the host stands anchors nothing.
-            {
-                const bool anchorArmed = hosted && hostPlaying && hostPpq.hasValue()
-                                      && SyncDivision::isSynced(sdiv) && ! seqRecordArmed.load();
-                for (const auto meta : midiMessages)
-                {
-                    const auto m = meta.getMessage();
-                    if (m.getChannel() != 1) continue;
-                    if ((m.isNoteOn() || m.isNoteOff()) && ! patRoute.feeds(m.getNoteNumber()))
-                        continue;   // 21.7: the live hand does not anchor the figure
-                    if (m.isNoteOff() || (m.isNoteOn() && m.getVelocity() == 0))
-                        seqHostKeysDown.reset ((size_t) m.getNoteNumber());
-                    else if (m.isNoteOn())
-                    {
-                        // A note-off at this very sample that the buffer orders AFTER the note-on
-                        // still belongs before it (a clip boundary): apply those first.
-                        for (const auto later : midiMessages)
-                            if (later.samplePosition == meta.samplePosition)
-                                if (const auto l = later.getMessage(); l.isNoteOff() && l.getChannel() == 1)
-                                    seqHostKeysDown.reset ((size_t) l.getNoteNumber());
-                        if (seqHostKeysDown.none() && anchorArmed)
-                            seqAnchorPpq.store (*hostPpq + meta.samplePosition * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate())));
-                        seqHostKeysDown.set ((size_t) m.getNoteNumber());
-                    }
-                    else if (m.isAllNotesOff() || m.isAllSoundOff())
-                        seqHostKeysDown.reset();
-                }
-            }
-
-            // LATCH (maintainer 2026-08-11): the first key takes the pattern over and it keeps
-            // running after the key is released — holding one down for a whole piece is not playing,
-            // it is standing still. What changes the root afterwards is a NEW key, or an octave
-            // shift, which the editor applies to this latched value (there is no held key left for
-            // it to move). Switching the module off clears the latch, so the transport is still the
-            // module's own switch.
-            if (root >= 0)
-                seqLatchedRoot.store(root);
-            const int playRoot = seqLatchedRoot.load();
-            if (playRoot >= 0)
-                stepSeq.setRoot(playRoot);
-
-            // Preset-load latch (15.5): a stored latch must ALWAYS enter on the drums' downbeat.
-            // The rising-edge logic below cannot see this case — a latch loaded over a still-
-            // running one keeps playRoot high, so there is no edge. applySeqLatchRoot sets the
-            // flag; the restart itself happens AFTER the chord filter below, because its note-off
-            // must land in `kept`: everything channel-1 in the RAW buffer is dropped there, and a
-            // swallowed note-off is a bass note that hangs forever (maintainer found it in
-            // minutes: "irgendwas wird nicht richtig abgeschaltet").
-            const bool requantize = seqRequantize.exchange(false) && playRoot >= 0;
-            if (requantize)
-                seqKeyWasHeld = true;   // edge consumed — the check below must not fire again
-
-            // Quantised entry (16.1): a figure started from silence while PERC runs waits for the
-            // drum pattern's next step 0. Only on the rising edge — a key ADDED to an already
-            // running figure must not restart or delay anything, exactly as in 15.1.
-            if (! hosted && playRoot >= 0 && ! seqKeyWasHeld && perc.enabled)   // 18.6: a DAW's grid rules
-                stepSeq.setStartDelay(perc.samplesToPatternStart());
-            seqKeyWasHeld = (playRoot >= 0);
-
-            // Drop the raw chord so only the pattern sounds; keep everything else.
             auto& kept = arpKeptScratch; kept.clear();
-            std::bitset<128> liveThisBlock;   // live-hand note-ons let through in THIS block (review)
+            std::bitset<128> liveThisBlock;   // live note-ons let through in THIS block (review)
             for (const auto meta : midiMessages)
             {
                 auto m = meta.getMessage();
                 if (m.getChannel() == 1)
                 {
-                    // The figure replaces the chord. 21.7: in a
-                    // Split with one target only the pattern hand's keys are taken; the other hand's
-                    // reach the router and play live, and a note-off follows its note-on there — also
-                    // when both land in this block (a tap, a short DAW clip note): the router learns
-                    // of this block's note-ons only later, so they are remembered here.
+                    // A key reaching only busy layers is the pattern's; one reaching an idle layer
+                    // plays live there. A note-off follows its note-on — also when both land in this
+                    // block (a tap, a short DAW clip note): the router learns of this block's
+                    // note-ons only later, so they are remembered here.
                     const int nn = m.getNoteNumber() & 127;
                     if (m.isNoteOn())
                     {
-                        if (patRoute.feeds(nn)) continue;
+                        std::uint8_t reach = 0;
+                        for (const auto& l : lanes)
+                            if (keys.reaches(l.index, nn)) reach |= (std::uint8_t) (1u << l.index);
+                        if (reach != 0 && (reach & ~activeLanes) == 0) continue;
                         liveThisBlock.set((size_t) nn);
                     }
                     if (m.isNoteOff() && ! layerRouter.isRouted(1, nn) && ! liveThisBlock[(size_t) nn])
@@ -1539,136 +1429,10 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                 }
                 kept.addEvent(m, meta.samplePosition);
             }
-            if (requantize)
-            {
-                // Restart at step 0, quantised to the drum clock resolved above — LEGATO: the note
-                // that is sounding is kept and step 0 takes it over like a TIE boundary, so the
-                // bass does not dip while it falls back in step with the drums (maintainer
-                // 2026-10-11). A preset load (the other caller) has no voice sounding, so the
-                // takeover finds nothing and the entry is a plain note-on, as before.
-                stepSeq.restartLegato();
-                if (! hosted && perc.enabled)
-                    stepSeq.setStartDelay(perc.samplesToPatternStart());
-            }
-            // 18.6: in a DAW the figure's step is the host's bar position, whatever key started it
-            // and whenever - so it lines up with a PERC on another track, and with the DAW's grid.
-            // Only while the host PLAYS: a stopped host's position would pull a free-running clock
-            // back to the same step every block. While it stands, the figure runs only under a key
-            // that is actually held (sound design with the transport off), on the free clock.
-#if JASS_HOSTSYNC_DIAG
-            const int diagPreIdx = stepSeq.currentStep(), diagPreCnt = stepSeq.clockSampleCounter();
-#endif
-            if (hosted && hostPlaying && hostPpq.hasValue() && playRoot >= 0 && SyncDivision::isSynced(sdiv))
-            {
-                const double anchor = seqAnchorPpq.load();   // see seqAnchorPpq: step 0 = the note's entry
-                stepSeq.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(sdiv));
-            }
-#if JASS_HOSTSYNC_DIAG
-            const int diagPostIdx = stepSeq.currentStep(), diagPostCnt = stepSeq.clockSampleCounter(),
-                      diagPostDelay = stepSeq.clockStartDelay();
-#endif
-            const bool seqRuns = hostRunning ? (playRoot >= 0) : (root >= 0 && playRoot >= 0);
-            stepSeq.processBlock(buffer.getNumSamples(), kept, kPatternChannel, seqRuns);   // 21.7: the pattern's own channel
-#if JASS_HOSTSYNC_DIAG
-            diagSeqPre[0] = diagPreIdx; diagSeqPre[1] = diagPreCnt;
-            diagSeqPost[0] = diagPostIdx; diagSeqPost[1] = diagPostCnt; diagSeqPost[2] = diagPostDelay;
-#endif
-
-            // 15.7 TIE/SLIDE: a takeover boundary retunes the sounding voice instead of
-            // retriggering it — MIDI cannot say that, so the sequencer recorded it and the voice
-            // is moved here (SynthVoice::slideTo: envelope untouched). Block-granular start
-            // (≤ one buffer early against a ≥ tens-of-ms step — inaudible). The chain's note-on
-            // is at least one full step old, so its voice always exists by now.
-            for (int e = 0; e < stepSeq.numLegatoEvents(); ++e)
-            {
-                const auto& ev = stepSeq.legatoEvent(e);
-                const double secs = ev.slide ? StepSequencer::kSlideSeconds : 0.0;
-                if (patRoute.dest & LayerRouter::kA) engineA.slideVoice(ev.note, (double) ev.semitones, secs);   // 21.7: TARGET
-                if (patRoute.dest & LayerRouter::kB) engineB.slideVoice(ev.note, (double) ev.semitones, secs);
-            }
             midiMessages.swapWith(kept);
         }
-        else if (stepSeq.enabled)
-        {
-            stepSeq.enabled = false;       // just switched off => release its note
-            stepSeq.releaseAll(midiMessages, kPatternChannel);
-            stepSeq.reset();
-            seqLatchedRoot.store(-1);      // the switch is the transport: off forgets the root
-            seqKeyWasHeld = false;
-            seqRequantize.store(false);    // a stray flag must not fire on a later re-enable
-        }
-
-#if JASS_HOSTSYNC_DIAG
-        if (hosted)
-        {
-            const double anchorNow = seqAnchorPpq.load();
-            const int stateNow = (perc.enabled ? 1 : 0) | (percKitPending.load() ? 2 : 0) | (hostPlaying ? 4 : 0) | (stepSeq.enabled ? 8 : 0);
-            if (diagPlayEdge || anchorNow != diagLastAnchor || stateNow != diagLastState) diagBlocksLeft = 24;
-            diagLastAnchor = anchorNow; diagLastState = stateNow;
-            if (diagBlocksLeft > 0)
-            {
-                --diagBlocksLeft;
-                const int sdivD = (int) *apvts.getRawParameterValue(Parameters::ID::seqSync);
-                auto& r = diag[(size_t) (diagWrite.load() % 256)];
-                r.t = juce::Time::getMillisecondCounterHiRes();
-                r.ppq = hostPpq.hasValue() ? *hostPpq : -999.0;
-                r.stepsPos = hostPpq.hasValue() ? *hostPpq / juce::jmax (1e-9, SyncDivision::beatsPerCycle(sdivD)) : -999.0;
-                r.anchor = anchorNow; r.percAnchor = percAnchorPpq.load();
-                r.playing = hostPlaying ? 1 : 0; r.seqOn = stepSeq.enabled ? 1 : 0; r.latch = seqLatchedRoot.load();
-                r.percOn = perc.enabled ? 1 : 0; r.kitPending = percKitPending.load() ? 1 : 0;
-                r.kitIdx = (int) *apvts.getRawParameterValue(Parameters::ID::percKit); r.percStep = perc.playingStep();
-                r.preIdx = diagSeqPre[0]; r.preCnt = diagSeqPre[1];
-                r.postIdx = diagSeqPost[0]; r.postCnt = diagSeqPost[1]; r.postDelay = diagSeqPost[2];
-                r.fired = stepSeq.enabled ? stepSeq.playingStep() : -1; r.n = buffer.getNumSamples();
-                diagWrite.fetch_add (1);
-            }
-        }
-#endif
-
-        if (arpOn)
-        {
-            arp.enabled = true;
-            arp.rateHz  = *apvts.getRawParameterValue(ID::arpRate);
-            arp.mode    = (Arpeggiator::Mode)(int) *apvts.getRawParameterValue(ID::arpMode);
-            arp.octaves = (int) *apvts.getRawParameterValue(ID::arpOctaves);
-            arp.gate    = *apvts.getRawParameterValue(ID::arpGate);
-
-            // Held chord = the channel-1 notes currently down (keyboardState was
-            // just updated above). The drone lives on channel 16, so it's excluded.
-            arpHeldScratch.clear();
-            for (int n = 0; n < 128; ++n)
-                if (keyboardState.isNoteOn(1, n) && patRoute.feeds(n)) arpHeldScratch.push_back(n);   // 21.7: the pattern hand
-            arp.setHeldNotes(arpHeldScratch);
-
-            // Drop the raw chord (channel-1 note on/off) so only the arp sounds;
-            // keep everything else (e.g. the channel-16 auto-play drone).
-            auto& kept = arpKeptScratch; kept.clear();   // reused member (no per-block MidiBuffer alloc)
-            std::bitset<128> liveThisBlock;   // as for the figure: this block's live note-ons (review)
-            for (const auto meta : midiMessages)
-            {
-                auto m = meta.getMessage();
-                if (m.getChannel() == 1)   // 21.7: as for the figure — the live hand passes
-                {
-                    const int nn = m.getNoteNumber() & 127;
-                    if (m.isNoteOn())
-                    {
-                        if (patRoute.feeds(nn)) continue;
-                        liveThisBlock.set((size_t) nn);
-                    }
-                    if (m.isNoteOff() && ! layerRouter.isRouted(1, nn) && ! liveThisBlock[(size_t) nn])
-                        continue;
-                }
-                kept.addEvent(m, meta.samplePosition);
-            }
-            arp.processBlock(buffer.getNumSamples(), kept, kPatternChannel);
-            midiMessages.swapWith(kept);
-        }
-        else if (arp.enabled)
-        {
-            arp.enabled = false;           // just switched off → release its note
-            arp.releaseAll(midiMessages, kPatternChannel);   // 21.7: where its notes play
-            arp.reset();
-        }
+        for (auto& l : lanes)
+            laneOutput(l, midiMessages, keys, buffer.getNumSamples(), syncBpm, hosted, hostPlaying, hostPpq, hostRunning);
     }
 
     // Don't let the auto-play drone pluck the Karplus string (it's played via
@@ -1688,10 +1452,14 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // ARP / STEP SEQ voices: before 21.7 they played channel 1 and a channel-1 panic reached them;
     // on the pattern channel it would not (review 2026-11-18). Block-granular, alloc-free.
     for (const auto meta : midiMessages)
-        if (const auto m = meta.getMessage(); (m.isAllNotesOff() || m.isAllSoundOff()) && m.getChannel() != kPatternChannel)
+        if (const auto m = meta.getMessage(); (m.isAllNotesOff() || m.isAllSoundOff())
+                                              && m.getChannel() != kPatternChannel && m.getChannel() != kPatternChannelB)
         {
-            engineA.releaseChannel(kPatternChannel);
-            engineB.releaseChannel(kPatternChannel);
+            for (const auto& l : lanes)
+            {
+                engineA.releaseChannel(l.channel);
+                engineB.releaseChannel(l.channel);
+            }
             break;
         }
 
@@ -1714,10 +1482,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         rs.split           = juce::roundToInt (apvts.getRawParameterValue(Parameters::ID::layerMode)->load()) == 2;
         rs.splitNote       = (int) *apvts.getRawParameterValue(Parameters::ID::splitNote);
         rs.focusB          = isFocusB();   // A+B edits through A: drone and preview stay on A
-        rs.patternDest     = patRoute.dest;      // 21.7: the ARP / STEP SEQ TARGET
-        rs.patternChannel  = kPatternChannel;
+        rs.patternChannelA = kPatternChannel;    // 21.8: each lane's channel goes to its layer
+        rs.patternChannelB = kPatternChannelB;
+        rs.liveBlock       = activeLanes;        // ...and a busy lane's layer takes no live keys
         rs.droneChannel    = kDroneChannel;
         rs.auditionChannel = kAuditionChannel;
+        rs.auditionChannelB = kAuditionChannelB;   // 21.8: B's STEP SEQ preview
         layerRouter.route(midiMessages, layerMidiA, layerMidiB, rs);
 
         engineA.processGlide(layerMidiA, kDroneChannel);
@@ -1777,9 +1547,12 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // is playing (maintainer 2026-08-11). Display only: the sequencer's notes go straight into the
     // MIDI buffer and must stay out of the keyboard STATE, or they would come back as held keys and
     // the pattern would keep re-rooting itself.
-    seqNoteDisplay.store(stepSeq.enabled ? stepSeq.currentNote() : -1);
-    // …and the step it is on, so STEP SEQ can mark the running step the way PERC's grid does.
-    seqStepDisplay.store(stepSeq.enabled ? stepSeq.playingStep() : -1);
+    for (auto& l : lanes)
+    {
+        l.noteDisplay.store(l.seq.enabled ? l.seq.currentNote() : -1);
+        // …and the step it is on, so STEP SEQ can mark the running step the way PERC's grid does.
+        l.stepDisplay.store(l.seq.enabled ? l.seq.playingStep() : -1);
+    }
 
     if (droneJustTriggered)
     {
@@ -1859,12 +1632,227 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     }
 }
 
+// ── Story 21.8: one layer's STEP SEQ / ARP (a PatternLane) ─────────────────────────────────────
+// The code below is the pre-21.8 sequencer block, per lane: every id is the lane's own (prefixed
+// for B), its keys are the keys that reach its layer, its notes go out on its own channel, and a
+// TIE/SLIDE retunes a voice of its own layer. Nothing here names a particular lane.
+void SynthyProcessor::laneInput (PatternLane& lane, const juce::MidiBuffer& rawMidi, const PatternLane::KeyScope& keys,
+                                 double syncBpm, bool hosted, bool hostPlaying, const juce::Optional<double>& hostPpq)
+{
+    if (! lane.seqActive())
+        return;
+    auto& seq = lane.seq;
+    auto feeds = [&] (int n) { return keys.reaches (lane.index, n); };
+
+    seq.enabled = true;
+    seq.length  = (int) lane.seqLength->load();
+    // Step length: the musical division against the resolved tempo (host BPM when hosted, else the
+    // MASTER knob), or the free-running RATE in steps/s. Same clock the LFOs and DELAY ride on, so a
+    // synced pattern cannot drift against a synced delay.
+    const int sdiv = (int) lane.seqSync->load();
+    seq.stepSeconds = SyncDivision::isSynced(sdiv)
+                          ? SyncDivision::delaySeconds(syncBpm, sdiv)
+                          : 1.0 / juce::jmax(0.5, (double) lane.seqRate->load());
+    seq.gate = lane.seqGate->load();
+    lane.stepSecondsDisplay.store(seq.stepSeconds);   // the GATE preview's time base (editor)
+    // Only the playable range is copied: playback clamps to `length` with the same bound, so steps
+    // beyond it are never read — and at kMaxSteps 768 (16 pages) copying the full arrays would be
+    // ~3000 atomic loads per block for a 16-step figure.
+    const auto& fig = patterns.steps[(size_t) lane.index];
+    const int seqUsed = juce::jlimit(1, (int) StepSequencer::kMaxSteps, seq.length);
+    for (int s = 0; s < seqUsed; ++s)   // AD-14: from the PatternStore, one relaxed load per cell
+    {
+        seq.pitch [(size_t) s] = fig.pitch (s);
+        seq.on    [(size_t) s] = fig.on    (s);
+        seq.accent[(size_t) s] = fig.accent(s);   // 15.2
+        seq.sgate [(size_t) s] = fig.gate  (s);   // 15.7
+    }
+
+    // The LOWEST held channel-1 note that reaches this layer is the root the step offsets are added
+    // to; the ch.16 auto-play drone is excluded, exactly as for the arp. While the editor is
+    // RECORDING this lane's figure (15.4) the search is skipped outright: those keys are being
+    // written into the steps, and taking one as the root would restart and transpose the pattern on
+    // every note entered.
+    int root = -1;
+    if (! lane.recordArmed.load())
+    {
+        for (int n = 0; n < 128 && root < 0; ++n)
+            if (keyboardState.isNoteOn(1, n) && feeds(n)) root = n;
+        // A note whose note-off lands in the SAME block is already up by now and the search above
+        // never sees it — a short clip note in a DAW, or a tapped key. It still latches: take the
+        // lowest channel-1 note-on of this block (maintainer 2026-10-19, Bitwig: the figure started
+        // "nur manchmal" — a block-alignment lottery).
+        if (root < 0)
+            for (const auto meta : rawMidi)
+                if (const auto m = meta.getMessage(); m.isNoteOn() && m.getChannel() == 1 && feeds(m.getNoteNumber()))
+                    if (root < 0 || m.getNoteNumber() < root)
+                        root = m.getNoteNumber();
+    }
+    lane.blockRoot = root;
+
+    // 18.6 ANCHOR: in a host the figure's step 0 is where its note ENTERED, not the song's start.
+    // The host position is taken modulo LEN (syncToHost), and a 48-step figure is three bars:
+    // counted from bar 1 it sits at step 0 only every third bar, so a clip launched or a PLAY
+    // pressed anywhere else began the figure in its middle (maintainer 2026-10-25, Bitwig: "der
+    // erste gespielte Ton ist der letzte der Sequenz"). The edge is taken event by event, not from
+    // the keys held at the block's end: a clip boundary in a DAW is a note-off and a note-on at the
+    // SAME sample, and that is a fresh entry - only a key added while another is really still down
+    // changes the root without restarting, exactly the standalone's rule. The note's exact position,
+    // not a grid: the user placed it. A key pressed while the host stands anchors nothing.
+    {
+        const bool anchorArmed = hosted && hostPlaying && hostPpq.hasValue()
+                              && SyncDivision::isSynced(sdiv) && ! lane.recordArmed.load();
+        for (const auto meta : rawMidi)
+        {
+            const auto m = meta.getMessage();
+            if (m.getChannel() != 1) continue;
+            if ((m.isNoteOn() || m.isNoteOff()) && ! feeds(m.getNoteNumber()))
+                continue;   // a key of another layer does not anchor this figure
+            if (m.isNoteOff() || (m.isNoteOn() && m.getVelocity() == 0))
+                lane.hostKeysDown.reset ((size_t) m.getNoteNumber());
+            else if (m.isNoteOn())
+            {
+                // A note-off at this very sample that the buffer orders AFTER the note-on still
+                // belongs before it (a clip boundary): apply those first.
+                for (const auto later : rawMidi)
+                    if (later.samplePosition == meta.samplePosition)
+                        if (const auto l = later.getMessage(); l.isNoteOff() && l.getChannel() == 1)
+                            lane.hostKeysDown.reset ((size_t) l.getNoteNumber());
+                if (lane.hostKeysDown.none() && anchorArmed)
+                    lane.anchorPpq.store (*hostPpq + meta.samplePosition * syncBpm / (60.0 * juce::jmax (1.0, getSampleRate())));
+                lane.hostKeysDown.set ((size_t) m.getNoteNumber());
+            }
+            else if (m.isAllNotesOff() || m.isAllSoundOff())
+                lane.hostKeysDown.reset();
+        }
+    }
+
+    // LATCH (maintainer 2026-08-11): the first key takes the pattern over and it keeps running after
+    // the key is released — holding one down for a whole piece is not playing, it is standing
+    // still. What changes the root afterwards is a NEW key, or an octave shift, which the editor
+    // applies to this latched value (there is no held key left for it to move). Switching the
+    // module off clears the latch, so the transport is still the module's own switch.
+    if (root >= 0)
+        lane.latchedRoot.store(root);
+    const int playRoot = lane.latchedRoot.load();
+    if (playRoot >= 0)
+        seq.setRoot(playRoot);
+
+    // Preset-load latch (15.5): a stored latch must ALWAYS enter on the drums' downbeat. The
+    // rising-edge logic below cannot see this case — a latch loaded over a still-running one keeps
+    // playRoot high, so there is no edge. applySeqLatchRoot sets the flag; the restart itself
+    // happens in laneOutput, AFTER the chord filter, because its note-off must land in the buffer
+    // that is kept: everything channel-1 in the RAW buffer may be dropped there, and a swallowed
+    // note-off is a bass note that hangs forever (maintainer found it in minutes: "irgendwas wird
+    // nicht richtig abgeschaltet").
+    lane.blockRequantize = lane.requantize.exchange(false) && playRoot >= 0;
+    if (lane.blockRequantize)
+        lane.seqKeyWasHeld = true;   // edge consumed — the check below must not fire again
+
+    // Quantised entry (16.1): a figure started from silence while PERC runs waits for the drum
+    // pattern's next step 0. Only on the rising edge — a key ADDED to an already running figure
+    // must not restart or delay anything, exactly as in 15.1. 21.8: without PERC, a figure entering
+    // while another layer's figure runs waits for that one's next step, so the two share the grid.
+    if (! hosted && playRoot >= 0 && ! lane.seqKeyWasHeld)   // 18.6: a DAW's grid rules
+    {
+        if (perc.enabled)
+            seq.setStartDelay(perc.samplesToPatternStart());
+        else
+            for (const auto& other : lanes)
+                if (&other != &lane && other.seq.enabled && other.seq.playingStep() >= 0)
+                {
+                    seq.setStartDelay(other.seq.samplesToNextStep());
+                    break;
+                }
+    }
+    lane.seqKeyWasHeld = (playRoot >= 0);
+}
+
+void SynthyProcessor::laneOutput (PatternLane& lane, juce::MidiBuffer& midi, const PatternLane::KeyScope& keys, int numSamples,
+                                  double syncBpm, bool hosted, bool hostPlaying, const juce::Optional<double>& hostPpq, bool hostRunning)
+{
+    PatchEngine& engine = lane.index == 0 ? engineA : engineB;
+    auto& seq = lane.seq;
+    if (lane.seqActive())
+    {
+        const int playRoot = lane.latchedRoot.load();
+        const int sdiv = (int) lane.seqSync->load();
+        if (lane.blockRequantize)
+        {
+            // Restart at step 0, quantised to the drum clock — LEGATO: the note that is sounding is
+            // kept and step 0 takes it over like a TIE boundary, so the bass does not dip while it
+            // falls back in step with the drums (maintainer 2026-10-11). A preset load (the other
+            // caller) has no voice sounding, so the takeover finds nothing and the entry is a plain
+            // note-on, as before.
+            seq.restartLegato();
+            if (! hosted && perc.enabled)
+                seq.setStartDelay(perc.samplesToPatternStart());
+        }
+        // 18.6: in a DAW the figure's step is the host's bar position, whatever key started it and
+        // whenever - so it lines up with a PERC on another track, and with the DAW's grid. Only
+        // while the host PLAYS: a stopped host's position would pull a free-running clock back to
+        // the same step every block. While it stands, the figure runs only under a key that is
+        // actually held (sound design with the transport off), on the free clock.
+        if (hosted && hostPlaying && hostPpq.hasValue() && playRoot >= 0 && SyncDivision::isSynced(sdiv))
+        {
+            const double anchor = lane.anchorPpq.load();   // step 0 = the note's entry
+            seq.syncToHost((*hostPpq - (anchor >= 0.0 ? anchor : 0.0)) / SyncDivision::beatsPerCycle(sdiv));
+        }
+        const bool seqRuns = hostRunning ? (playRoot >= 0) : (lane.blockRoot >= 0 && playRoot >= 0);
+        seq.processBlock(numSamples, midi, lane.channel, seqRuns);   // the lane's own channel
+
+        // 15.7 TIE/SLIDE: a takeover boundary retunes the sounding voice instead of retriggering
+        // it — MIDI cannot say that, so the sequencer recorded it and the voice of this lane's
+        // layer is moved here (SynthVoice::slideTo: envelope untouched). Block-granular start
+        // (≤ one buffer early against a ≥ tens-of-ms step — inaudible). The chain's note-on is at
+        // least one full step old, so its voice always exists by now.
+        for (int e = 0; e < seq.numLegatoEvents(); ++e)
+        {
+            const auto& ev = seq.legatoEvent(e);
+            engine.slideVoice(ev.note, (double) ev.semitones, ev.slide ? StepSequencer::kSlideSeconds : 0.0);
+        }
+    }
+    else if (seq.enabled)
+    {
+        seq.enabled = false;       // just switched off => release its note
+        seq.releaseAll(midi, lane.channel);
+        seq.reset();
+        lane.latchedRoot.store(-1);      // the switch is the transport: off forgets the root
+        lane.seqKeyWasHeld = false;
+        lane.requantize.store(false);    // a stray flag must not fire on a later re-enable
+    }
+
+    auto& arp = lane.arp;
+    if (lane.arpActive())
+    {
+        arp.enabled = true;
+        arp.rateHz  = lane.arpRate->load();
+        arp.mode    = (Arpeggiator::Mode)(int) lane.arpMode->load();
+        arp.octaves = (int) lane.arpOctaves->load();
+        arp.gate    = lane.arpGate->load();
+        // Held chord = the channel-1 notes currently down that reach this layer (keyboardState was
+        // just updated). The drone lives on channel 16, so it's excluded.
+        lane.arpHeld.clear();
+        for (int n = 0; n < 128; ++n)
+            if (keyboardState.isNoteOn(1, n) && keys.reaches(lane.index, n)) lane.arpHeld.push_back(n);
+        arp.setHeldNotes(lane.arpHeld);
+        arp.processBlock(numSamples, midi, lane.channel);
+    }
+    else if (arp.enabled)
+    {
+        arp.enabled = false;           // just switched off → release its note
+        arp.releaseAll(midi, lane.channel);
+        arp.reset();
+    }
+}
+
 void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
 {
     auto state = apvts.copyState();
     std::unique_ptr<juce::XmlElement> xml(state.createXml());
     patterns.perc.writeXml(*xml);   // AD-14: the patterns ride along as ONE element each, not thousands of PARAMs
-    patterns.step.writeXml(*xml);
+    for (size_t i = 0; i < patterns.steps.size(); ++i)   // 21.8: one figure per layer; A keeps the old tag
+        patterns.steps[i].writeXml(*xml, StepPattern::xmlTagFor((int) i));
     // The sample-set NAMES beside the indices, for the same reason a preset carries them
     // (PresetIO::toVar): a DAW project must find its drum kit again whatever the store's order
     // is when the project opens (maintainer 2026-10-19, Bitwig: PERC came in late / not at all).
@@ -1879,7 +1867,10 @@ void SynthyProcessor::getStateInformation(juce::MemoryBlock& destData)
     // The figure's latched root (15.5 for presets): a sequencer track comes back running on the
     // note it was running on, exactly as a preset does - without it a reopened project waited for
     // a note-on that Bitwig does not send for a note the playhead starts inside of.
-    xml->setAttribute("SeqLatchRoot", seqLatchedRoot.load());
+    // One per layer since 21.8: "SeqLatchRoot" (A, the old name) and "SeqLatchRootB".
+    for (const auto& l : lanes)
+        xml->setAttribute(l.index == 0 ? juce::String("SeqLatchRoot") : "SeqLatchRoot" + juce::String::charToString((juce::juce_wchar) ('A' + l.index)),
+                          l.latchedRoot.load());
     copyXmlToBinary(*xml, destData);
 }
 
@@ -1996,9 +1987,12 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         const bool foldedPerc = migrateLegacyPercXml(*xml, patterns.perc);
         if (! patterns.perc.readXml(*xml) && ! foldedPerc)
             patterns.perc.clear();
-        const bool foldedStep = migrateLegacyStepXml(*xml, patterns.step);
-        if (! patterns.step.readXml(*xml) && ! foldedStep)
-            patterns.step.clear();
+        const bool foldedStep = migrateLegacyStepXml(*xml, patterns.steps[0]);
+        if (! patterns.steps[0].readXml(*xml) && ! foldedStep)
+            patterns.steps[0].clear();
+        for (size_t i = 1; i < patterns.steps.size(); ++i)   // 21.8: B's figure (absent before = empty)
+            if (! patterns.steps[i].readXml(*xml, StepPattern::xmlTagFor((int) i)))
+                patterns.steps[i].clear();
         // The set names (written by getStateInformation since 2026-10-19; a project saved before
         // carries none and keeps the index behaviour). Taken off the tree before it becomes the
         // state, then re-resolved AFTER replaceState so the selection lands on top of the indices:
@@ -2007,12 +2001,18 @@ void SynthyProcessor::setStateInformation(const void* data, int sizeInBytes)
         const juce::String samplerName = xml->getStringAttribute("SamplerSetFile");
         const juce::String kitName     = xml->getStringAttribute("PercKitFile");
         const juce::String bSamplerName = xml->getStringAttribute("BSamplerSetFile");   // AD-16
-        const int latchRoot = xml->getIntAttribute("SeqLatchRoot", -1);   // absent (older project) = -1 = none
+        int laneLatch[kNumLanes];   // absent (older project) = -1 = none; one per layer since 21.8
+        for (int i = 0; i < kNumLanes; ++i)
+        {
+            const juce::String attr = i == 0 ? juce::String("SeqLatchRoot") : "SeqLatchRoot" + juce::String::charToString((juce::juce_wchar) ('A' + i));
+            laneLatch[i] = xml->getIntAttribute(attr, -1);
+            xml->removeAttribute(attr);
+        }
         xml->removeAttribute("SamplerSetFile");
         xml->removeAttribute("PercKitFile");
         xml->removeAttribute("BSamplerSetFile");
-        xml->removeAttribute("SeqLatchRoot");
-        seqLatchedRoot.store(latchRoot >= 0 ? juce::jlimit(0, 127, latchRoot) : -1);
+        for (int i = 0; i < kNumLanes; ++i)
+            lanes[(size_t) i].latchedRoot.store(laneLatch[i] >= 0 ? juce::jlimit(0, 127, laneLatch[i]) : -1);
 #if JASS_HOSTSYNC_DIAG
         diagNote ("setStateInformation");
 #endif
@@ -2106,8 +2106,8 @@ juce::StringArray SynthyProcessor::listenedParamIds() const
     }
     ids.add(ID::layerMode);    // which layers play (Split: both) …
     ids.add(ID::layerFocus);   // … and outside a Split the selection
-    ids.add(ID::arpTarget);    // 21.7: a pattern aimed at B makes B sound (matrix claims on shared modules)
-    ids.add(ID::seqTarget);
+    ids.add(bp + ID::seqOn);   // 21.8: B's own STEP SEQ / ARP — exclusion, and B sounds (matrix claims)
+    ids.add(bp + ID::arpOn);
     return ids;
 }
 

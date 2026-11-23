@@ -1013,48 +1013,56 @@ void SynthyEditor::timerCallback()
         // Same idea for the STEP SEQ preview (15.3): a knob moved by the wheel or the value box
         // never reports a drag end, so the note is closed on a timeout instead.
         if (auditionTicks > 0 && --auditionTicks == 0)
-            auditionStep (0, false);
+            stopAudition();
 
         // Show the running pattern on the keyboard (maintainer 2026-08-11): the sequencer's notes
         // bypass the keyboard state on purpose, so the display is fed from the processor's atomic.
         if (keyboard != nullptr)
-            keyboard->setPatternNote (processor.getSeqNote());
+            keyboard->setPatternNotes (processor.getSeqNote (0), processor.getSeqNote (1));   // 21.8: one per layer
 
         // Step pages (16.3), the FOLLOW auto-flip: while a pattern runs and FOLLOW is latched,
         // the shown page tracks the playhead's page. Editing wins — while the write cursor is
         // armed the display stays with the cursor (seqSetCursor moves it), so the flip is skipped.
-        if (seqFollow && seqCursor < 0)
-            if (const int p = seqPlayingPage(); p >= 0 && p != seqShownPage)
-                setSeqPage (p, false);
+        for (int l = 0; l < SynthyProcessor::kNumLanes; ++l)   // 21.8: each STEP SEQ its own pager
+            if (seqFollow[(size_t) l] && ! (seqCursor >= 0 && seqCursorLane == l))
+                if (const int p = seqPlayingPage (l); p >= 0 && p != seqShownPage[(size_t) l])
+                    setSeqPage (l, p, false);
         if (percFollow)
             if (const int p = percPlayingPage(); p >= 0 && p != percShownPage)
                 setPercPage (p, false);
 
         // The STEP SEQ note boxes resolve their names over the root that actually sounds (15.6) —
         // re-text them whenever that reference moves: a new latch, a stopped one, an octave shift.
-        if (const int ref = seqPitchReference(); ref != seqRefShown)
         {
-            seqRefShown = ref;
-            if (rackBody != nullptr)
+            bool moved = false;
+            for (int l = 0; l < SynthyProcessor::kNumLanes; ++l)
+                if (const int ref = seqPitchReference (l); ref != seqRefShown[(size_t) l])
+                {
+                    seqRefShown[(size_t) l] = ref;
+                    moved = true;
+                }
+            if (moved && rackBody != nullptr)
                 rackBody->refreshNamedReadouts();
         }
 
         // Recording a figure (15.4): parameters are written HERE, on the message thread, from the
         // note handleNoteOn parked — that callback runs on the audio thread for hardware MIDI.
         // Switching STEP SEQ off ends the recording, so an armed cursor can never outlive its module.
+        for (int l = 0; l < SynthyProcessor::kNumLanes; ++l)   // 21.8: the cursor's own STEP SEQ
         {
-            const bool seqOnNow = *apvts.getRawParameterValue (Parameters::ID::seqOn) >= 0.5f;
-            if (seqCursor >= 0)
+            const juce::String pre = l == 0 ? juce::String() : juce::String (Modules::kLayerBPrefix);
+            const bool seqOnNow = *apvts.getRawParameterValue (pre + Parameters::ID::seqOn) >= 0.5f;
+            if (seqCursor >= 0 && seqCursorLane == l)
             {
                 // AC6 ends the recording when the module is SWITCHED off — the falling edge, not the
                 // state. Writing a figure into a silent sequencer is a perfectly sane way to work
                 // (and the only quiet one), so simply being off must not refuse the cursor.
-                if (seqOnLast && ! seqOnNow)
-                    seqSetCursor (-1);
+                if (seqOnLast[(size_t) l] && ! seqOnNow)
+                    seqStopCursor();
                 else if (const int pending = seqPendingNote.exchange (-1); pending >= 0)
                     seqWriteNote (pending);
             }
-            seqOnLast = seqOnNow;
+            seqOnLast[(size_t) l] = seqOnNow;
         }
 
         // A modal popup (MODULES call-out, a combo dropdown, …) grabs the keyboard focus, so
@@ -1239,7 +1247,7 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     // A loaded preset must never sit in figure-writing mode: the cursor is state about the PREVIOUS
     // patch (armed by touching a step knob, 15.4 AC7), and the freshly loaded figure is exactly what
     // the next played key would overwrite.
-    seqSetCursor(-1);
+    seqStopCursor();
 
     if (res.migrated)
     {
@@ -1261,22 +1269,22 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
 // STEP SEQ's LOAD MIDI / SAVE MIDI (story 15.8): the choosers behind the module's own header
 // buttons. They start at the system's last-used folder — transcriptions live in Downloads or a
 // DAW project, never in the Presets folder.
-void SynthyEditor::chooseMidiImport()
+void SynthyEditor::chooseMidiImport(int lane)
 {
     presetChooser = std::make_unique<juce::FileChooser>(
         currentLang == "DE" ? "MIDI-Figur laden" : "Load MIDI figure",
         juce::File(), "*.mid;*.midi");
     auto flags = juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles;
     juce::Component::SafePointer<SynthyEditor> self (this);
-    presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
+    presetChooser->launchAsync(flags, [self, lane](const juce::FileChooser& fc)
     {
         if (self == nullptr) return;
         if (auto f = fc.getResult(); f != juce::File{})
-            self->importMidiFigure(f);
+            self->importMidiFigure(f, lane);
     });
 }
 
-void SynthyEditor::chooseMidiExport()
+void SynthyEditor::chooseMidiExport(int lane)
 {
     presetChooser = std::make_unique<juce::FileChooser>(
         currentLang == "DE" ? "Figur als MIDI speichern" : "Save figure as MIDI",
@@ -1285,7 +1293,7 @@ void SynthyEditor::chooseMidiExport()
                | juce::FileBrowserComponent::canSelectFiles
                | juce::FileBrowserComponent::warnAboutOverwriting;
     juce::Component::SafePointer<SynthyEditor> self (this);
-    presetChooser->launchAsync(flags, [self](const juce::FileChooser& fc)
+    presetChooser->launchAsync(flags, [self, lane](const juce::FileChooser& fc)
     {
         if (self == nullptr) return;
         auto f = fc.getResult();
@@ -1293,7 +1301,7 @@ void SynthyEditor::chooseMidiExport()
         if (! f.hasFileExtension("mid;midi")) f = f.withFileExtension("mid");
         // Exports the FIGURE, not the patch: preset name and clean-state stay untouched —
         // writing a .mid does not make the .jass on disk any truer.
-        if (! SeqMidiIO::exportFigure(self->processor.getAPVTS(), f))
+        if (! SeqMidiIO::exportFigure(self->processor.getAPVTS(), f, lane))
             juce::NativeMessageBox::showMessageBoxAsync(
                 juce::MessageBoxIconType::WarningIcon,
                 self->currentLang == "DE" ? "MIDI-Export fehlgeschlagen" : "MIDI export failed",
@@ -1326,9 +1334,9 @@ void SynthyEditor::doublePercPattern()
 // The import itself (story 15.8): the transcription becomes the running figure. Errors are as
 // LOUD as the preset path's — a file that silently does nothing teaches the user the feature
 // does not exist. Success is silent: the imported figure latches to its root and PLAYS.
-void SynthyEditor::importMidiFigure(const juce::File& f)
+void SynthyEditor::importMidiFigure(const juce::File& f, int lane)
 {
-    const auto res = SeqMidiIO::importFigure(processor.getAPVTS(), f);
+    const auto res = SeqMidiIO::importFigure(processor.getAPVTS(), f, lane);
     if (res.error != SeqMidiIO::Error::none)
     {
         const bool de = currentLang == "DE";
@@ -1363,7 +1371,7 @@ void SynthyEditor::importMidiFigure(const juce::File& f)
         return;
     }
     // Same hygiene as a preset load: an armed write cursor belongs to the figure that is gone.
-    seqSetCursor(-1);
+    seqStopCursor();
 }
 
 // Remove every F-key assignment of this preset name — the bank stores names and re-resolves them
@@ -1565,9 +1573,9 @@ void SynthyEditor::retuneSoundingComputerKeys()
 // running loop plays there (before, the preview stayed in the keyboard's key while the pattern ran
 // transposed — no way to build a melody by ear, maintainer 2026-08-23). Without a latch it is the
 // computer keyboard's current C, moving with the Up/Down octave keys as before.
-int SynthyEditor::seqPitchReference() const
+int SynthyEditor::seqPitchReference(int lane) const
 {
-    return processor.isSeqLatched() ? processor.getSeqLatchRoot() : 12 * kbBaseOctave;
+    return processor.isSeqLatched(lane) ? processor.getSeqLatchRoot(lane) : 12 * kbBaseOctave;
 }
 
 // Sound the step that is being edited (Story 15.3). A step's value is a number of SEMITONES, so it
@@ -1577,27 +1585,35 @@ int SynthyEditor::seqPitchReference() const
 // processor drops every channel-1 note so that only the pattern sounds — precisely the moment a
 // preview is wanted. Velocity is the 100 the sequencer itself emits, or the preview would be louder
 // than the step it previews.
-void SynthyEditor::auditionStep(int semitones, bool sounding, bool accented)
+void SynthyEditor::stopAudition()
+{
+    if (auditionNote >= 0)
+        processor.getKeyboardState().noteOff(auditionChannel, auditionNote, 0.0f);
+    auditionNote  = -1;
+    auditionTicks = 0;
+}
+
+void SynthyEditor::auditionStep(int lane, int semitones, bool sounding, bool accented)
 {
     auto& state = processor.getKeyboardState();
-    const int ch = SynthyProcessor::kAuditionChannel;
+    // 21.8: each layer's preview channel — the router sends it to that layer, so a step of B's
+    // STEP SEQ sounds through B, whatever the selection.
+    const int ch = SynthyProcessor::auditionChannelOf(lane);
     if (! sounding)
     {
-        if (auditionNote >= 0)
-            state.noteOff(ch, auditionNote, 0.0f);
-        auditionNote  = -1;
-        auditionTicks = 0;
+        stopAudition();
         return;
     }
-    const int note = juce::jlimit(0, 127, seqPitchReference() + semitones);
-    if (note != auditionNote || accented != auditionAccented)   // accent change re-triggers too (15.2)
+    const int note = juce::jlimit(0, 127, seqPitchReference(lane) + semitones);
+    if (note != auditionNote || accented != auditionAccented || ch != auditionChannel)   // accent change re-triggers too (15.2)
     {
         if (auditionNote >= 0)
-            state.noteOff(ch, auditionNote, 0.0f);   // re-trigger: a drag scrubs the scale
+            state.noteOff(auditionChannel, auditionNote, 0.0f);   // re-trigger: a drag scrubs the scale
         // 100 is what the sequencer emits for a plain step; an ACCENTED one plays hot (127),
         // so the preview sounds exactly like the figure will (15.2).
         state.noteOn(ch, note, accented ? 1.0f : 100.0f / 127.0f);
         auditionNote = note;
+        auditionChannel = ch;
         auditionAccented = accented;
     }
     auditionTicks = 24;   // ~0.8 s at the editor's 30 Hz — the wheel and the value box have no
@@ -1609,16 +1625,12 @@ void SynthyEditor::auditionStep(int semitones, bool sounding, bool accented)
 // the step length the processor last resolved (SYNC against the tempo, or RATE) — the length the
 // figure itself will give the note. TIE and SLIDE have no second step to run into here, so they
 // sound as one full step. Always a fresh attack: hearing the length means hearing it end.
-void SynthyEditor::auditionStepGated(int semitones, bool accented, int gate)
+void SynthyEditor::auditionStepGated(int lane, int semitones, bool accented, int gate)
 {
-    if (auditionNote >= 0)   // re-trigger: a note still sounding would just be extended
-    {
-        processor.getKeyboardState().noteOff(SynthyProcessor::kAuditionChannel, auditionNote, 0.0f);
-        auditionNote = -1;
-    }
-    auditionStep(semitones, true, accented);
+    stopAudition();   // re-trigger: a note still sounding would just be extended
+    auditionStep(lane, semitones, true, accented);
     const double frac  = gate >= StepPattern::kGateTie ? 1.0 : juce::jlimit(5, 100, gate) / 100.0;
-    const double hold  = frac * juce::jmax(0.02, processor.getSeqStepSeconds());
+    const double hold  = frac * juce::jmax(0.02, processor.getSeqStepSeconds(lane));
     auditionTicks = juce::jmax(1, juce::roundToInt(hold * 30.0));   // the timer runs at 30 Hz
 }
 
@@ -1626,19 +1638,22 @@ void SynthyEditor::auditionStepGated(int semitones, bool accented, int gate)
 // The cursor is the step the next played note lands in. It is UI state only: no parameter, nothing
 // persisted (AC9). Setting it also arms the processor, which then stops looking for a root note —
 // otherwise every key entered would restart and transpose the figure while it is being written.
-void SynthyEditor::seqSetCursor(int step)
+void SynthyEditor::seqSetCursor(int lane, int step)
 {
-    if (step == seqCursor)
+    if (step == seqCursor && lane == seqCursorLane)
         return;
+    if (lane != seqCursorLane)   // 21.8: one cursor — taking it into another STEP SEQ ends the old one
+        processor.setSeqRecordArmed(seqCursorLane, false);
+    seqCursorLane = lane;
     seqCursor = step;
-    processor.setSeqRecordArmed(seqCursor >= 0);
+    processor.setSeqRecordArmed(lane, seqCursor >= 0);
     if (seqCursor < 0)
         seqPendingNote.store(-1);   // drop anything parked between the last note and the stop
     // Step pages (16.3): editing wins over the playhead — the shown page follows the cursor
     // across a 48-step boundary (a write running past page A continues visibly on page B).
     // Not a manual page pick: FOLLOW stays latched and resumes once the cursor stops.
     if (seqCursor >= 0)
-        setSeqPage(seqCursor / StepSequencer::kPageSteps, false);
+        setSeqPage(lane, seqCursor / StepSequencer::kPageSteps, false);
 }
 
 // --- Step pages (16.3) ---------------------------------------------------------------------------
@@ -1646,9 +1661,9 @@ void SynthyEditor::seqSetCursor(int step)
 // new page's params); PERC's grid gets its window pushed directly. A MANUAL pick — a page button —
 // pauses FOLLOW (the Logic/Cubase catch convention): the display must never flip away under an
 // editing cursor. Re-latching FOLLOW (setFollow true) jumps to the playing page and resumes.
-int SynthyEditor::seqPlayingPage() const
+int SynthyEditor::seqPlayingPage(int lane) const
 {
-    const int s = processor.getSeqStep();
+    const int s = processor.getSeqStep(lane);
     return s >= 0 ? s / StepSequencer::kPageSteps : -1;
 }
 
@@ -1658,11 +1673,11 @@ int SynthyEditor::percPlayingPage() const
     return s >= 0 ? s / PercSequencer::kPageSteps : -1;
 }
 
-void SynthyEditor::setSeqPage(int page, bool manual)
+void SynthyEditor::setSeqPage(int lane, int page, bool manual)
 {
-    seqShownPage = juce::jlimit(0, StepSequencer::kMaxSteps / StepSequencer::kPageSteps - 1, page);
+    seqShownPage[(size_t) lane] = juce::jlimit(0, StepSequencer::kMaxSteps / StepSequencer::kPageSteps - 1, page);
     if (manual)
-        seqFollow = false;
+        seqFollow[(size_t) lane] = false;
 }
 
 void SynthyEditor::setPercPage(int page, bool manual)
@@ -1682,15 +1697,15 @@ void SynthyEditor::seqWriteNote(int midiNote)
 {
     if (seqCursor < 0 || seqCursor >= StepSequencer::kMaxSteps)
         return;
-    auto& fig       = processor.getPatterns().step;   // the figure is content (AD-14)
-    const int semis = juce::jlimit(-24, 24, midiNote - seqPitchReference());
+    auto& fig       = processor.getPatterns().steps[(size_t) seqCursorLane];   // the figure is content (AD-14)
+    const int semis = juce::jlimit(-24, 24, midiNote - seqPitchReference(seqCursorLane));
 
     fig.setPitch(seqCursor, semis);
     // A written step is not a rest (AC3) — a figure entered by playing must sound without a
     // second pass over 32 switches.
     fig.setOn(seqCursor, true);
 
-    auditionStep(semis, true);   // hear what was just written, through 15.3's one preview path
+    auditionStep(seqCursorLane, semis, true);   // hear what was just written, through 15.3's one preview path
     seqAdvanceCursor();
 }
 
@@ -1702,7 +1717,7 @@ void SynthyEditor::seqSkipStep()
 {
     if (seqCursor < 0)
         return;
-    processor.getPatterns().step.setOn(seqCursor, false);
+    processor.getPatterns().steps[(size_t) seqCursorLane].setOn(seqCursor, false);
     seqAdvanceCursor();
 }
 
@@ -1711,9 +1726,10 @@ void SynthyEditor::seqAdvanceCursor()
 {
     if (seqCursor < 0)
         return;
-    const int len  = (int) *processor.getAPVTS().getRawParameterValue(Parameters::ID::seqLength);
+    const juce::String pre = seqCursorLane == 0 ? juce::String() : juce::String (Modules::kLayerBPrefix);
+    const int len  = (int) *processor.getAPVTS().getRawParameterValue(pre + Parameters::ID::seqLength);
     const int next = seqCursor + 1;
-    seqSetCursor((next >= len || next >= StepSequencer::kMaxSteps) ? -1 : next);
+    seqSetCursor(seqCursorLane, (next >= len || next >= StepSequencer::kMaxSteps) ? -1 : next);
 }
 
 // MidiKeyboardState calls this on the AUDIO thread for hardware MIDI (the state is pumped from
@@ -1723,7 +1739,8 @@ void SynthyEditor::handleNoteOn(juce::MidiKeyboardState*, int midiChannel, int m
 {
     if (seqCursor < 0)
         return;
-    if (midiChannel == SynthyProcessor::kAuditionChannel || midiChannel == SynthyProcessor::kDroneChannel)
+    if (midiChannel == SynthyProcessor::kAuditionChannel || midiChannel == SynthyProcessor::kAuditionChannelB
+        || midiChannel == SynthyProcessor::kDroneChannel)
         return;
     seqPendingNote.store(midiNote);
 }
@@ -1819,7 +1836,7 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     // every played key overwriting the figure. ESC is the universal "stop editing" key.
     if (key == juce::KeyPress::escapeKey && seqCursor >= 0)
     {
-        seqSetCursor(-1);
+        seqStopCursor();
         return true;
     }
     // ← / → move the write cursor without touching the figure (15.6): step back to fix a slip,
@@ -1827,10 +1844,11 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
     // figure is being written — outside of that they keep whatever meaning they have elsewhere.
     if ((key == juce::KeyPress::leftKey || key == juce::KeyPress::rightKey) && seqCursor >= 0)
     {
-        const int len  = (int) *processor.getAPVTS().getRawParameterValue(Parameters::ID::seqLength);
+        const juce::String pre = seqCursorLane == 0 ? juce::String() : juce::String (Modules::kLayerBPrefix);
+        const int len  = (int) *processor.getAPVTS().getRawParameterValue(pre + Parameters::ID::seqLength);
         const int last = juce::jmin(len, (int) StepSequencer::kMaxSteps) - 1;
         const int dir  = (key == juce::KeyPress::rightKey) ? 1 : -1;
-        seqSetCursor(juce::jlimit(0, last, seqCursor + dir));
+        seqSetCursor(seqCursorLane, juce::jlimit(0, last, seqCursor + dir));
         return true;
     }
     // Backspace takes back the last entry: cursor back one step AND that step switched off. The
@@ -1841,8 +1859,8 @@ bool SynthyEditor::keyPressed(const juce::KeyPress& key)
         if (seqCursor > 0)
         {
             const int prev = seqCursor - 1;
-            seqSetCursor(prev);
-            processor.getPatterns().step.setOn(prev, false);
+            seqSetCursor(seqCursorLane, prev);
+            processor.getPatterns().steps[(size_t) seqCursorLane].setOn(prev, false);
         }
         return true;
     }
@@ -2666,14 +2684,19 @@ void SynthyEditor::buildRack()
         addRackModule(std::move(d));
     }
     });
-    addRackModule(makeModuleDescriptor(Modules::arpeggiator()));
+    patch([&] {   // 21.8: each layer has its own ARP (built for A here, again for B at the end)
+    addRackModule(makeModuleDescriptor(LS(Modules::arpeggiator())));
+    });
     // STEP SEQ (Story 15.1) — spec-driven; the editor only adds the mutual exclusion with the ARP.
     // Both REPLACE the held chord, so both running at once is not a thing; rather than a silent
     // precedence rule that leaves a lit ARP doing nothing, switching one on switches the other off,
     // so the rack always shows the truth. (The processor enforces the precedence as well, for the
     // case where a preset arrives with both set.)
-    {
-        auto d = makeModuleDescriptor(Modules::stepSeq());
+    patch([&] {   // 21.8: each layer has its own STEP SEQ (built for A here, again for B at the end)
+        // The lane = the layer this frame belongs to; every hook below captures it BY VALUE, so A's
+        // frame keeps driving A's figure after B's pass.
+        const int lane = pre.isEmpty() ? 0 : 1;
+        auto d = makeModuleDescriptor(LS(Modules::stepSeq()));
         // Pin each step's on/off into the corner of its own pitch knob. The switch params are
         // declared showInBody=false so they claim no grid cell; ModuleFrame draws them top-right
         // and greys the knob when a step is off, through the same path as any inactive control.
@@ -2687,7 +2710,7 @@ void SynthyEditor::buildRack()
         // The step cells are PATTERN cells (AD-14): Knob::patternStep says which step of page A
         // the cell shows; the frame binds the knob, the three-state corner switch and the GATE
         // alt row to PatternStore::step itself, so nothing here names a parameter.
-        d.stepPattern = &processor.getPatterns().step;
+        d.stepPattern = &processor.getPatterns().steps[(size_t) lane];
         for (auto& el : d.body)
             if (auto* k = std::get_if<Knob>(&el))
                 if (k->patternStep >= 0)
@@ -2697,33 +2720,33 @@ void SynthyEditor::buildRack()
                     // rebinds its params per page, and these editor hooks translate themselves
                     // through the same shared page state, so cell 7 on page C selects, marks and
                     // previews step 103. (Read seqShownPage at CALL time, never captured.)
-                    auto absStep = [this, step] { return step + seqShownPage * StepSequencer::kPageSteps; };
-                    k->audition = [this, absStep](int semis, bool sounding)
+                    auto absStep = [this, step, lane] { return step + seqShownPage[(size_t) lane] * StepSequencer::kPageSteps; };
+                    k->audition = [this, absStep, lane](int semis, bool sounding)
                     {
-                        if (sounding) seqSetCursor(absStep() - 1);   // a click selects, exactly as 15.3 sounds
+                        if (sounding) seqSetCursor(lane, absStep() - 1);   // a click selects, exactly as 15.3 sounds
                         // An accented step previews HOT (15.2) — the same velocity the figure plays.
-                        const bool acc = processor.getPatterns().step.accent(absStep() - 1);
-                        auditionStep(semis, sounding, acc);
+                        const bool acc = processor.getPatterns().steps[(size_t) lane].accent(absStep() - 1);
+                        auditionStep(lane, semis, sounding, acc);
                     };
-                    k->highlightWhen = [this, absStep] { return seqCursor == absStep() - 1; };
+                    k->highlightWhen = [this, absStep, lane] { return seqCursor == absStep() - 1 && seqCursorLane == lane; };
                     // …and mark the step the pattern is ON, the way PERC's grid marks its column
                     // (maintainer 2026-08-11). Ring = where writing goes, dot = what is sounding.
-                    k->playingWhen = [this, absStep] { return processor.getSeqStep() == absStep() - 1; };
+                    k->playingWhen = [this, absStep, lane] { return processor.getSeqStep(lane) == absStep() - 1; };
                     // …and read out the NOTE, not the raw semitone count (maintainer 2026-08-18):
                     // the value stays an offset, the display resolves it through the SAME reference
                     // audition sounds it with — seqPitchReference(), so box, preview and the RUNNING
                     // figure always agree, latched or not (15.6). The timer re-texts the boxes when
                     // that reference moves (a new latch, the octave keys). 60 = C4, as everywhere.
-                    k->textFromValue = [this](double v)
+                    k->textFromValue = [this, lane](double v)
                     {
-                        const int note = juce::jlimit(0, 127, seqPitchReference() + juce::roundToInt(v));
+                        const int note = juce::jlimit(0, 127, seqPitchReference(lane) + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4);
                     };
                     // Hover adds the MIDI number the box has no room for ("E1 · 40") — for
                     // transcribing from templates that count in numbers (maintainer 2026-08-18).
-                    k->tooltipFromValue = [this](double v)
+                    k->tooltipFromValue = [this, lane](double v)
                     {
-                        const int note = juce::jlimit(0, 127, seqPitchReference() + juce::roundToInt(v));
+                        const int note = juce::jlimit(0, 127, seqPitchReference(lane) + juce::roundToInt(v));
                         return juce::MidiMessage::getMidiNoteName(note, true, true, 4)
                              + juce::String::fromUTF8(" \xc2\xb7 ") + juce::String(note);   // "·" as UTF-8 escape
                     };
@@ -2733,12 +2756,12 @@ void SynthyEditor::buildRack()
                     // (held through, next step takes over without a retrigger) and SLIDE (the
                     // same, gliding — the 303). Read-out spells the two names.
                     // ...and hear the gate while turning it: the step at exactly that length.
-                    k->altAudition = [this, absStep](int gate, int semis, bool sounding)
+                    k->altAudition = [this, absStep, lane](int gate, int semis, bool sounding)
                     {
                         if (! sounding) return;
-                        seqSetCursor(absStep() - 1);   // a touch selects, as on the pitch row
-                        const bool acc = processor.getPatterns().step.accent(absStep() - 1);
-                        auditionStepGated(semis, acc, gate);
+                        seqSetCursor(lane, absStep() - 1);   // a touch selects, as on the pitch row
+                        const bool acc = processor.getPatterns().steps[(size_t) lane].accent(absStep() - 1);
+                        auditionStepGated(lane, semis, acc, gate);
                     };
                     k->altTextFromValue = [](double v)
                     {
@@ -2755,7 +2778,7 @@ void SynthyEditor::buildRack()
                         return (double) juce::jlimit(5, 100, (int) u.getDoubleValue());
                     };
                 }
-                else if (k->paramId == P::seqLength)
+                else if (k->paramId == lid(pre, P::seqLength))
                     // LEN across 768 steps (cap raise 2026-09-02): bare drag/wheel in 8s —
                     // half a bar of 16ths per move — Shift in single steps, as before.
                     k->coarseStep = 8;
@@ -2765,49 +2788,50 @@ void SynthyEditor::buildRack()
         // Only while the module is ON (maintainer 2026-10-19): the header RESET fires every module's
         // ↺, STEP SEQ included, and Init leaves it off — the next key must sound the Init patch, not
         // land in step 1. Arming is the active sequencer's reset; an off module's reset just empties.
-        d.onReset = [this]
+        d.onReset = [this, lane, onId = lid(pre, P::seqOn)]
         {
-            const bool on = *processor.getAPVTS().getRawParameterValue (Parameters::ID::seqOn) >= 0.5f;
-            seqSetCursor (on ? 0 : -1);
+            const bool on = *processor.getAPVTS().getRawParameterValue (onId) >= 0.5f;
+            if (on)                      seqSetCursor (lane, 0);
+            else if (seqCursorLane == lane) seqStopCursor();
         };
         d.altRowTitle = "GATE";   // 15.7: the header latch that flips the knobs to the gate row
         // 16.2: the red line after step LEN — "where does the figure end", at a glance. The
         // marker cells are the pattern cells (no prefix needed since AD-14).
-        d.lenMarkerLengthParam = P::seqLength;
+        d.lenMarkerLengthParam = lid(pre, P::seqLength);
         // Step pages (16.3): the 48 knobs are a window onto kMaxSteps; A/B/C/D + FOLLOW in the
         // header. State lives HERE (the cursor, the timer's auto-flip and these hooks share it).
         d.paging.pageCount     = StepSequencer::kMaxSteps / StepSequencer::kPageSteps;
         d.paging.stepsPerPage  = StepSequencer::kPageSteps;   // pattern cells page by index (AD-14)
-        d.paging.getPage       = [this] { return seqShownPage; };
-        d.paging.setPage       = [this](int p) { setSeqPage(p, true); };
-        d.paging.playingPage   = [this] { return seqPlayingPage(); };
-        d.paging.getFollow     = [this] { return seqFollow; };
-        d.paging.setFollow     = [this](bool f)
+        d.paging.getPage       = [this, lane] { return seqShownPage[(size_t) lane]; };
+        d.paging.setPage       = [this, lane](int p) { setSeqPage(lane, p, true); };
+        d.paging.playingPage   = [this, lane] { return seqPlayingPage(lane); };
+        d.paging.getFollow     = [this, lane] { return (bool) seqFollow[(size_t) lane]; };
+        d.paging.setFollow     = [this, lane](bool f)
         {
-            seqFollow = f;
+            seqFollow[(size_t) lane] = f;
             if (f)   // re-latching jumps to the playing page and resumes following
-                if (const int p = seqPlayingPage(); p >= 0) setSeqPage(p, false);
+                if (const int p = seqPlayingPage(lane); p >= 0) setSeqPage(lane, p, false);
         };
         // Laufindex (maintainer 2026-09-02): live "step/LEN" beside the pager — at 768 steps
         // the playing-page dot alone no longer says where in the figure the playhead is.
-        d.headerReadout = [this]
+        d.headerReadout = [this, lane, lenId = lid(pre, P::seqLength)]
         {
-            const int s = processor.getSeqStep();
+            const int s = processor.getSeqStep(lane);
             if (s < 0) return juce::String();
-            const int len = (int) *processor.getAPVTS().getRawParameterValue(P::seqLength);
+            const int len = (int) *processor.getAPVTS().getRawParameterValue(lenId);
             return juce::String(s + 1) + "/" + juce::String(len);
         };
         // MIDI ⇄ figure (15.8): the sequencer's own entry points, so "whole preset or just the
         // MIDI track?" is answered by WHERE the user clicks, before any dialog opens.
         d.headerActions.push_back({ "LOAD MIDI",
                                     "Import a .mid transcription as the figure",
-                                    [this] { chooseMidiImport(); } });
+                                    [this, lane] { chooseMidiImport(lane); } });
         d.headerActions.push_back({ "SAVE MIDI",
                                     "Export the figure as a .mid file",
-                                    [this] { chooseMidiExport(); } });
-        greyWhenSynced(d, P::seqRate, P::seqSync);
+                                    [this, lane] { chooseMidiExport(lane); } });
+        greyWhenSynced(d, lid(pre, P::seqRate), lid(pre, P::seqSync));
         addRackModule(std::move(d));
-    }
+    });
     // PERC (Story 16.1) — the drum grid next to the note sequencer. Two things the spec cannot
     // declare: the step field is a painted component (128 switches would be six rack units at the
     // grid's 62 px cell), and the KIT list is dynamic, exactly like the SAMPLER's SET.

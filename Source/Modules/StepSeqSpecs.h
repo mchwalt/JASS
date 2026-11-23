@@ -42,6 +42,9 @@ namespace Modules
         // screen — the whole rack draws about a fifth smaller than it would with STEP SEQ and PERC
         // hidden. Story 7.4 bought most of that back by shortening the two-row modules.
         m.defaultVisible = false;   // hidden until switched on: the stock rack is the Init set (maintainer 2026-10-03)
+        // Story 21.8: a PATCH module — each layer has its own STEP SEQ, which plays that layer (the
+        // layer is the target). Layer A keeps these ids, layer B gets them with the "b" prefix.
+        m.layered = true;
 
         m.params.push_back ({ "seqOn", "Enabled", "", ParamSpec::Kind::Bool, {}, 0.0f });
 
@@ -75,9 +78,8 @@ namespace Modules
         m.params.push_back ({ "seqAccent", "Accent", "ACCENT", ParamSpec::Kind::Float,
                               juce::NormalisableRange<float> (0.0f, 1.0f, 0.01f), 0.5f });
         // (seqToBass, Story 20.2, sat here: the BASS box went 2026-11-23, layer B replaces it.)
-        // TARGET (AD-16 S3, Story 21.7, appended): the layer(s) the figure plays — as the ARP's.
-        m.params.push_back ({ "seqTarget", "LayerTarget", "TARGET", ParamSpec::Kind::Choice, {}, 0.0f,
-                              juce::StringArray { "Auto", "A", "B", "A+B" } });
+        // (seqTarget, Story 21.7, sat here: since 21.8 each layer has its own STEP SEQ, so the layer
+        // is the target. A v11 file's "LayerTarget" is honoured once on read, see PresetIO.)
 
         // ---- DISPLAY order: two rows of 24, the globals directly after the figure -------------
         // The body shows ONE PAGE (kPageSteps knobs); "step:<n>" is a pattern cell (a knob bound
@@ -85,7 +87,7 @@ namespace Modules
         // with patternStep = n-1). ModuleFrame rebinds these cells to the shown page's steps
         // (16.3) — the A/B/C/D window onto the kMaxSteps pattern.
         for (int s = 1;  s <= 24; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
-        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate", "seqTarget" });   // TARGET (21.7) fills the spacer row 2 gained with BASS (20.2)
+        m.bodyOrder.insert (m.bodyOrder.end(), { "seqSync", "seqRate", "" });   // spacer (TARGET until 21.8)
         for (int s = 25; s <= StepSequencer::kPageSteps; ++s) m.bodyOrder.push_back ("step:" + juce::String (s));
         m.bodyOrder.insert (m.bodyOrder.end(), { "seqLength", "seqGate", "seqAccent", "" });
         return m;

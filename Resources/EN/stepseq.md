@@ -7,13 +7,14 @@ Plays a figure of up to 768 steps you write yourself, transposed by the key you 
 - **LEN** — how many steps before the pattern repeats.
 - **GATE** — note length, for the whole pattern. **1 = legato**: each note is held into the next step, no gap. Lower values shorten every note; a step's own gate value scales on top of it.
 - **ACCENT** — what an accented step does: how much louder it plays and how far the filter opens. At 0, accents change nothing.
-- **TARGET** — the layer the figure plays: **Auto** (the selected layer, both with A+B, in a Split B), **A**, **B** or **A+B**. In a Split with one target only that layer's keys start and move the figure — the other hand plays live.
 
 Clicking or turning a step's knob sounds it, so you can write the figure by ear. A **rest keeps its note**: its knob is dimmed but still turns, so a silent step's pitch can be set — and heard — before switching it on. A **double-click** puts a knob back to the loaded preset's value. Preview, entry and the note names all follow the root the figure sounds at: the latched key while one is running, otherwise the keyboard's current C (Up / Down shifts it).
 
 **Play the figure in instead of turning knobs.** **Shift + Reset** (the circular arrow in this module's title bar) empties the pattern and, while the module is on, starts writing at step 1 (a plain Reset brings back the figure as loaded): a ring marks the step waiting for a note. Play a key — on the computer keyboard or a MIDI keyboard — and it is written there, switched on, and the ring moves to the next step. **SPACE** skips a step and leaves it as a rest. **← / →** move the ring without changing anything, **BACKSPACE** takes back the last note (one step back, switched off), **ESC** ends writing. Writing stops by itself after LEN steps. A **click on any step knob** moves the ring there, so a wrong note is corrected by clicking it and playing again. While the ring is showing, keys write instead of starting the pattern.
 
-Does not run alongside the ARPEGGIATOR: both take the same place as the note source, so switching one on switches the other off.
+**One per layer.** Layer A and layer B each have their own STEP SEQ, and each plays its own layer — both can run at once. A figure takes the keys that reach its layer: outside a Split the selected layer(s), in a Split its own hand. B's module has a violet header; with A+B, a STEP SEQ both layers use shows **A | B** in its header.
+
+Does not run alongside its layer's ARPEGGIATOR: both take the same place as the note source, so switching one on switches the other off. The other layer is not affected.
 
 **MIDI import/export — the LOAD MIDI / SAVE MIDI buttons in this module's title bar.** LOAD MIDI opens a `.mid` transcription: velocities become accents, note lengths become gate/TIE/SLIDE, the loop's cycle is detected, and the figure latches to its most frequent note and plays. SAVE MIDI writes the figure back out. One asymmetry: a TIE that changes pitch exports as the 303's overlap and comes back as SLIDE — MIDI cannot carry the difference.
 

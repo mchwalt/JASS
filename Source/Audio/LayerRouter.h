@@ -10,10 +10,12 @@
 //
 // A note-off goes where ITS note-on went — the router remembers, per channel and note, which
 // layers a note-on reached. Moving the split point or switching LAYER/SPLIT while keys are held
-// therefore never hangs a voice. The drone and the step preview go to the focused layer. The ARP
-// and the STEP SEQ play on their own channel (patternChannel, Story 21.7), routed by their TARGET,
-// not by pitch — an arpeggio crossing the split note stays in its layer; the keys on channel 1 are
-// the live hand. Everything that is not a note (all-notes-off, controllers) reaches both.
+// therefore never hangs a voice. The drone and the step preview go to the focused layer. Each
+// layer's ARP / STEP SEQ plays on its own channel (Story 21.7; one per layer since 21.8), routed to
+// that layer, not by pitch — an arpeggio crossing the split note stays in its layer. The keys on
+// channel 1 are the live hand; a layer whose pattern is running takes none of them (liveBlock), so a
+// key plays a layer live OR feeds its pattern. Everything that is not a note (all-notes-off,
+// controllers) reaches both.
 //
 // Audio thread only. No allocation: the two output buffers are the caller's, pre-sized.
 class LayerRouter
@@ -28,10 +30,12 @@ public:
         bool split         = false;   // with both: false = DUAL (every key to both)
         int  splitNote     = 48;
         bool focusB        = false;   // drone + step preview go to the edited layer
-        std::uint8_t patternDest = kA; // ARP / STEP SEQ notes (patternChannel) go here (21.7 TARGET)
-        int  patternChannel = 14;
+        int  patternChannelA = 14;    // layer A's ARP / STEP SEQ (21.8: one channel per layer)
+        int  patternChannelB = 13;    // layer B's
+        std::uint8_t liveBlock = kNone;   // layers whose pattern runs: they take no live notes (21.8)
         int  droneChannel  = 16;
         int  auditionChannel = 15;
+        int  auditionChannelB = 12;   // 21.8: layer B's STEP SEQ preview — always to B
     };
 
     // B off: nothing is copied — the caller hands `in` to layer A untouched (bit-exact pre-AD-16
@@ -89,11 +93,17 @@ private:
         const int ch = m.getChannel();
         if (ch == s.droneChannel || ch == s.auditionChannel)
             return s.focusB ? kB : kA;
-        if (ch == s.patternChannel)
-            return s.patternDest != kNone ? s.patternDest : kA;
+        if (ch == s.auditionChannelB)
+            return kB;
+        if (ch == s.patternChannelA) return kA;
+        if (ch == s.patternChannelB) return kB;
+        std::uint8_t d;
         if (s.playA && s.playB)
-            return ! s.split ? kBoth : (m.getNoteNumber() < s.splitNote ? kB : kA);
-        return s.playB ? kB : kA;
+            d = ! s.split ? kBoth : (m.getNoteNumber() < s.splitNote ? kB : kA);
+        else
+            d = s.playB ? kB : kA;
+        if (ch == 1) d = (std::uint8_t) (d & ~s.liveBlock);   // the live keys only (as the chord filter); kNone = the pattern's
+        return d;
     }
 
     void remember (const juce::MidiMessage& m, std::uint8_t d)

@@ -40,7 +40,13 @@ namespace PresetIO
     // Bumped to 2 in the layout era (Story 4.3: RackLayout added). Loading is version-tolerant:
     // applyVar always factory-resets first, so older files (v1 / no version) load safely and
     // missing fields fall back to factory. The number is for future *value* migrations.
-    constexpr int kFormatVersion = 11;  // v11 (AD-16, 2026-11-16) = grouped by layer: "Instrument",
+    constexpr int kFormatVersion = 12;  // v12 (Story 21.8, 2026-11-23) = STEP SEQ and ARP are patch
+                                        //       modules: "StepSeq" (with its "Steps" and "LatchRoot")
+                                        //       and "Arp" move from "Instrument" into "LayerA" /
+                                        //       "LayerB"; their TARGET is gone. A v11 file's
+                                        //       "Instrument.StepSeq" / ".Arp" is read into the layer(s)
+                                        //       its "LayerTarget" named (Auto / A: layer A).
+                                        // v11 (AD-16, 2026-11-16) = grouped by layer: "Instrument",
                                         //       "LayerA", "LayerB" (maintainer: "das .jass-Format um eine
                                         //       Gruppierung nach Layer aufbohren"). v10 kept everything
                                         //       but layer B on the root; readers take both.
@@ -502,8 +508,9 @@ namespace PresetIO
             if (paramId == juce::String (Modules::kLayerBPrefix) + Parameters::ID::samplerSet) return pendingBSamplerSetName;
             return pendingSamplerSetName;
         }
-        std::function<int()>     seqLatchRoot;
-        std::function<void(int)> applySeqLatchRoot;
+        // STEP SEQ latch per lane (Story 21.8: lane = layer, 0 = A, 1 = B).
+        std::function<int(int lane)>            seqLatchRoot;
+        std::function<void(int lane, int note)> applySeqLatchRoot;
         std::function<float(const juce::String& paramId)> presetBaseline01;
         std::function<float(const juce::String& paramId)> factoryValue01;   // the Init value (normalised), -1 = the declared default
         std::function<void(bool)> setPresetLoading;
@@ -627,6 +634,87 @@ namespace PresetIO
         return set != nullptr ? set->getName() : juce::String();
     }
 
+    // The lane (= layer) an id prefix belongs to: "" = A (0), "b" = B (1). Story 21.8.
+    inline int laneOfPrefix (const juce::String& prefix) { return prefix.isEmpty() ? 0 : 1; }
+    inline juce::String prefixOfLane (int lane) { return lane == 0 ? juce::String() : juce::String (Modules::kLayerBPrefix); }
+
+    // The STEP SEQ's content inside a layer's "StepSeq" object (Story 21.8: STEP SEQ is a patch
+    // module, so its figure and latch travel with the layer): "LatchRoot" and the "Steps" array.
+    inline void writeStepSeqContent (APVTS& a, const juce::String& prefix, juce::DynamicObject& root)
+    {
+        using namespace detail;
+        const int lane = laneOfPrefix (prefix);
+        // STEP SEQ (Story 15.5): the root the figure is LATCHED to. Since the latch outlives the key
+        // that started it, a patch can be saved while a figure is running — and then it should come
+        // back running, on the same note. That is what makes a sequencer patch play itself when it
+        // is loaded rather than wait to be touched. It is not a parameter: it is a performance
+        // state, it has no knob, and automating it would be meaningless. Absent / -1 ⇒ the patch
+        // loads silent, which is every preset written before this field existed.
+        if (hooks(a).seqLatchRoot)
+            if (const int n = hooks(a).seqLatchRoot(lane); n >= 0)
+                if (auto* mod = root.getProperty("StepSeq").getDynamicObject())
+                    mod->setProperty("LatchRoot", n);
+
+        // STEP SEQ steps as an ARRAY of note objects (FormatVersion 7, story 15.2) — a figure in
+        // the file reads as music instead of as a knob dump. Replaces the flat Pitch1/Step1/…
+        // keys the spec pass wrote above. Per step: "On", "Note" — the ABSOLUTE MIDI note,
+        // canonical (maintainer's design 2026-08-24; the key name was reserved when the Comment
+        // field landed) — "Name", its spelled form, generated purely for the reader's eyes (the
+        // loader ignores it, so number and name can never diverge), and "Accent" (15.2, omitted
+        // when plain so the common case stays terse). Absolute pitch is resolved against the
+        // latch root written just above — or C3 (48), the keyboard's default C, for a patch saved
+        // without a running figure. applyVar reverses the same rule, so offsets round-trip
+        // exactly and the figure still transposes with the played key.
+        if (auto* mod = root.getProperty("StepSeq").getDynamicObject())
+        {
+            const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
+            // The figure comes from the PatternStore (AD-14), not from parameters. Only the USED
+            // steps are written (16 pages would be ~750 "Off C3" lines in every file otherwise —
+            // these files are read by eye). Used = up to LEN, extended to the last step that
+            // differs from factory default (OFF, pitch 0, plain, gate 100) so material parked
+            // beyond the LEN line survives the round-trip. The reader has always tolerated a
+            // short array: it factory-resets first, so a missing step IS the default.
+            const StepPattern* fig = hooks(a).patterns != nullptr ? &hooks(a).patterns->steps[(size_t) lane] : nullptr;
+            int used = juce::jlimit(1, (int) StepPattern::kMaxSteps,
+                                    (int) *a.getRawParameterValue(prefix + ID::seqLength));
+            if (fig != nullptr)
+                used = juce::jmax(used, fig->lastUsed() + 1);
+            // …rounded UP to a full 16-step bar (maintainer 2026-09-02, the Laufindex formula
+            // "(LEN/16)*16 + 16" with integer division): the array always ends on a bar
+            // boundary, so the last bar reads complete instead of stopping mid-line. A LEN
+            // already on the boundary gains nothing — at most 15 rest lines are added.
+            used = juce::jmin((int) StepPattern::kMaxSteps, ((used + 15) / 16) * 16);
+            juce::Array<juce::var> steps;
+            for (int s = 1; s <= used; ++s)
+            {
+                const int q = s - 1;   // the store is 0-based
+                auto* st = new juce::DynamicObject();
+                // "Step" — the running index, FIRST so every line of the file says where it is
+                // (maintainer 2026-09-02: nobody counts 384 objects by eye while paging through
+                // a preset). Orientation only: the loader reads by POSITION and ignores this,
+                // exactly as it ignores "Name" — the two can never disagree with the music.
+                st->setProperty("Step", s);
+                const int note = juce::jlimit(0, 127, ref + (fig != nullptr ? fig->pitch(q) : 0));
+                st->setProperty("On",   fig != nullptr && fig->on(q));
+                st->setProperty("Note", note);
+                st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
+                // Written even when false/100 (v10): a field the file omits forces the reader to
+                // know the default by heart — the maintainer reads these files. Loaders still
+                // treat a missing field as the default, so older terse files load unchanged.
+                st->setProperty("Accent", fig != nullptr && fig->accent(q));
+                // v8 (15.7): the step's gate — a percent of the step, or the two values past the
+                // top of that continuum (100 = exactly the pre-15.7 behaviour).
+                const int sg = fig != nullptr ? fig->gate(q) : StepPattern::kGateDefault;
+                if      (sg >= StepPattern::kGateSlide) st->setProperty("Gate", "SLIDE");
+                else if (sg == StepPattern::kGateTie)   st->setProperty("Gate", "TIE");
+                else                                    st->setProperty("Gate", sg);
+                steps.add(juce::var(st));
+            }
+            mod->setProperty("Steps", juce::var(steps));
+        }
+
+    }
+
     // ── The patch part of a preset (AD-16, Story 21.5) ──────────────────────────────────────
     // What a PATCH writes beyond its spec-driven module objects: the SAMPLER set's name and the
     // MOD MATRIX routings as an array. One routine for both layers — layer A on the preset root
@@ -686,6 +774,7 @@ namespace PresetIO
             mod->setProperty("Slots", juce::var(slots));
         }
 
+        writeStepSeqContent(a, prefix, root);   // 21.8: the layer's own STEP SEQ figure + latch
     }
 
     // Layer B differs from a fresh layer? (Then it is written even while it does not play — a parked
@@ -696,6 +785,11 @@ namespace PresetIO
     // and is written as it is, so it round-trips exactly.
     inline bool layerBIsDefault (APVTS& a)
     {
+        // 21.8: B's STEP SEQ figure and latch are part of the layer — a B with a figure is in use.
+        if (hooks (a).patterns != nullptr && hooks (a).patterns->steps[1].lastUsed() >= 0)
+            return false;
+        if (hooks (a).seqLatchRoot && hooks (a).seqLatchRoot (1) >= 0)
+            return false;
         for (const auto& id : Modules::layeredParamIds())
         {
             const juce::String bid = juce::String (Modules::kLayerBPrefix) + id;
@@ -749,75 +843,6 @@ namespace PresetIO
             if (kitName.isNotEmpty())
                 if (auto* mod = inst->getProperty("Perc").getDynamicObject())
                     mod->setProperty("File", kitName);
-        }
-
-        // STEP SEQ (Story 15.5): the root the figure is LATCHED to. Since the latch outlives the key
-        // that started it, a patch can be saved while a figure is running — and then it should come
-        // back running, on the same note. That is what makes a sequencer patch play itself when it
-        // is loaded rather than wait to be touched. It is not a parameter: it is a performance
-        // state, it has no knob, and automating it would be meaningless. Absent / -1 ⇒ the patch
-        // loads silent, which is every preset written before this field existed.
-        if (hooks(a).seqLatchRoot)
-            if (const int n = hooks(a).seqLatchRoot(); n >= 0)
-                if (auto* mod = inst->getProperty("StepSeq").getDynamicObject())
-                    mod->setProperty("LatchRoot", n);
-
-        // STEP SEQ steps as an ARRAY of note objects (FormatVersion 7, story 15.2) — a figure in
-        // the file reads as music instead of as a knob dump. Replaces the flat Pitch1/Step1/…
-        // keys the spec pass wrote above. Per step: "On", "Note" — the ABSOLUTE MIDI note,
-        // canonical (maintainer's design 2026-08-24; the key name was reserved when the Comment
-        // field landed) — "Name", its spelled form, generated purely for the reader's eyes (the
-        // loader ignores it, so number and name can never diverge), and "Accent" (15.2, omitted
-        // when plain so the common case stays terse). Absolute pitch is resolved against the
-        // latch root written just above — or C3 (48), the keyboard's default C, for a patch saved
-        // without a running figure. applyVar reverses the same rule, so offsets round-trip
-        // exactly and the figure still transposes with the played key.
-        if (auto* mod = inst->getProperty("StepSeq").getDynamicObject())
-        {
-            const int ref = mod->hasProperty("LatchRoot") ? (int) mod->getProperty("LatchRoot") : 48;
-            // The figure comes from the PatternStore (AD-14), not from parameters. Only the USED
-            // steps are written (16 pages would be ~750 "Off C3" lines in every file otherwise —
-            // these files are read by eye). Used = up to LEN, extended to the last step that
-            // differs from factory default (OFF, pitch 0, plain, gate 100) so material parked
-            // beyond the LEN line survives the round-trip. The reader has always tolerated a
-            // short array: it factory-resets first, so a missing step IS the default.
-            const StepPattern* fig = hooks(a).patterns != nullptr ? &hooks(a).patterns->step : nullptr;
-            int used = juce::jlimit(1, (int) StepPattern::kMaxSteps,
-                                    (int) *a.getRawParameterValue(ID::seqLength));
-            if (fig != nullptr)
-                used = juce::jmax(used, fig->lastUsed() + 1);
-            // …rounded UP to a full 16-step bar (maintainer 2026-09-02, the Laufindex formula
-            // "(LEN/16)*16 + 16" with integer division): the array always ends on a bar
-            // boundary, so the last bar reads complete instead of stopping mid-line. A LEN
-            // already on the boundary gains nothing — at most 15 rest lines are added.
-            used = juce::jmin((int) StepPattern::kMaxSteps, ((used + 15) / 16) * 16);
-            juce::Array<juce::var> steps;
-            for (int s = 1; s <= used; ++s)
-            {
-                const int q = s - 1;   // the store is 0-based
-                auto* st = new juce::DynamicObject();
-                // "Step" — the running index, FIRST so every line of the file says where it is
-                // (maintainer 2026-09-02: nobody counts 384 objects by eye while paging through
-                // a preset). Orientation only: the loader reads by POSITION and ignores this,
-                // exactly as it ignores "Name" — the two can never disagree with the music.
-                st->setProperty("Step", s);
-                const int note = juce::jlimit(0, 127, ref + (fig != nullptr ? fig->pitch(q) : 0));
-                st->setProperty("On",   fig != nullptr && fig->on(q));
-                st->setProperty("Note", note);
-                st->setProperty("Name", juce::MidiMessage::getMidiNoteName(note, true, true, 4));
-                // Written even when false/100 (v10): a field the file omits forces the reader to
-                // know the default by heart — the maintainer reads these files. Loaders still
-                // treat a missing field as the default, so older terse files load unchanged.
-                st->setProperty("Accent", fig != nullptr && fig->accent(q));
-                // v8 (15.7): the step's gate — a percent of the step, or the two values past the
-                // top of that continuum (100 = exactly the pre-15.7 behaviour).
-                const int sg = fig != nullptr ? fig->gate(q) : StepPattern::kGateDefault;
-                if      (sg >= StepPattern::kGateSlide) st->setProperty("Gate", "SLIDE");
-                else if (sg == StepPattern::kGateTie)   st->setProperty("Gate", "TIE");
-                else                                    st->setProperty("Gate", sg);
-                steps.add(juce::var(st));
-            }
-            mod->setProperty("Steps", juce::var(steps));
         }
 
         // PERC lanes as an ARRAY of lane objects (FormatVersion 9) — the same cure the v7 pass
@@ -1146,57 +1171,23 @@ namespace PresetIO
         else                  Modules::readLayerState(a, prefix, juce::var(rt));
     }
 
-    inline void applyVar(APVTS& a, const juce::var& v)
+    // The STEP SEQ content of one layer's "StepSeq" object into lane `lane`'s figure (Story 21.8;
+    // the reader half of writeStepSeqContent). Returns the stored latch root, -1 = none.
+    inline int readStepSeqContent (APVTS& a, int lane, const juce::var& seqObj)
     {
-        if (! v.isObject())
-            return;
-        // Couplings off while the snapshot lands (see setPresetLoading) — the writes below would
-        // otherwise fire them hundreds of times against half-applied intermediate states.
-        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);
-        // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
-        // file's values on top (missing field => factory default). Clear the rack-layout baseline.
-        for (auto* p : a.processor.getParameters())
-            p->setValueNotifyingHost(p->getDefaultValue());
-        a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
-        if (hooks(a).patterns) { hooks(a).patterns->perc.clear(); hooks(a).patterns->step.clear(); }   // AD-14: part of the snapshot too
-
-        // v11 groups the file by layer ("Instrument", "LayerA", "LayerB"); up to v10 the instrument
-        // AND layer A sat on the root. Everything below reads from `instSrc` / `layerASrc`, which
-        // are the root itself for an older file.
-        const bool grouped = v["Instrument"].isObject() && v["LayerA"].isObject();
-        const juce::var instSrc   = grouped ? v["Instrument"] : v;
-        const juce::var layerASrc = grouped ? v["LayerA"]     : v;
-        if (grouped)
-        {
-            Modules::readInstrumentState(a, instSrc);
-            Modules::readLayerState(a, {}, layerASrc);
-        }
-        else
-            Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
-        // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Split" is
-        // SPLIT, anything else is no split (the read above matched "Split" in the new list already —
-        // B off must undo that).
-        if (auto* lay = instSrc["Layers"].getDynamicObject(); lay != nullptr && lay->hasProperty("BOn"))
-            if (auto* p = a.getParameter(ID::layerMode))
-            {
-                const bool split = (bool) lay->getProperty("BOn") && lay->getProperty("Mode").toString() == "Split";
-                p->setValueNotifyingHost(p->convertTo0to1(split ? 2.0f : 0.0f));
-            }
-        // MODE is only Split on / off since 2026-11-23: what plays outside a Split is the A / B
-        // selection, so a stored "Dual" reads as no split (the selection survives every load).
-        if (auto* p = a.getParameter(ID::layerMode); p != nullptr && juce::roundToInt(p->convertFrom0to1(p->getValue())) == 1)
-            p->setValueNotifyingHost(p->convertTo0to1(0.0f));
-
         // STEP SEQ steps into the PatternStore (AD-14). A v7+ file carries the ARRAY of note
         // objects (see toVar): the absolute "Note" minus the file's latch root (C3 = 48 when
         // none) restores the engine's offset; "Name" is readability only and deliberately
         // ignored — the number is canonical. A pre-v7 file carries flat Pitch<n>/Step<n> keys —
         // until 18.5 the spec pass read those as parameters; now this is their one reader.
-        if (auto* seq = instSrc["StepSeq"].getDynamicObject())
+        int latch = -1;
+        if (auto* seq = seqObj.getDynamicObject())
         {
+            if (seq->hasProperty ("LatchRoot"))
+                latch = (int) seq->getProperty ("LatchRoot");
             const int ref = seq->hasProperty("LatchRoot")
                                 ? juce::jlimit(0, 127, (int) seq->getProperty("LatchRoot")) : 48;
-            StepPattern* fig = hooks(a).patterns != nullptr ? &hooks(a).patterns->step : nullptr;
+            StepPattern* fig = hooks(a).patterns != nullptr ? &hooks(a).patterns->steps[(size_t) lane] : nullptr;
             if (auto* steps = seq->getProperty("Steps").getArray())
             {
                 for (int s = 0; fig != nullptr && s < juce::jmin((int) StepPattern::kMaxSteps, steps->size()); ++s)
@@ -1233,6 +1224,82 @@ namespace PresetIO
                 }
             }
         }
+
+        return latch;
+    }
+
+    inline void applyVar(APVTS& a, const juce::var& v)
+    {
+        if (! v.isObject())
+            return;
+        // Couplings off while the snapshot lands (see setPresetLoading) — the writes below would
+        // otherwise fire them hundreds of times against half-applied intermediate states.
+        if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(true);
+        // A preset is a COMPLETE snapshot: factory-reset every parameter first, then layer the
+        // file's values on top (missing field => factory default). Clear the rack-layout baseline.
+        for (auto* p : a.processor.getParameters())
+            p->setValueNotifyingHost(p->getDefaultValue());
+        a.state.removeProperty(juce::Identifier("rackLayout"), nullptr);
+        if (hooks(a).patterns)   // AD-14: part of the snapshot too
+        {
+            hooks(a).patterns->perc.clear();
+            for (auto& fig : hooks(a).patterns->steps) fig.clear();
+        }
+
+        // v11 groups the file by layer ("Instrument", "LayerA", "LayerB"); up to v10 the instrument
+        // AND layer A sat on the root. Everything below reads from `instSrc` / `layerASrc`, which
+        // are the root itself for an older file.
+        const bool grouped = v["Instrument"].isObject() && v["LayerA"].isObject();
+        const juce::var instSrc   = grouped ? v["Instrument"] : v;
+        const juce::var layerASrc = grouped ? v["LayerA"]     : v;
+        if (grouped)
+        {
+            Modules::readInstrumentState(a, instSrc);
+            Modules::readLayerState(a, {}, layerASrc);
+        }
+        else
+            Modules::readState(a, v);   // each module reads its own nested object (spec-driven)
+        // v11 (Story 21.8): STEP SEQ and ARP were instrument modules with a TARGET. A patch module
+        // a v11 file still keeps in "Instrument" is read into the layer(s) its "LayerTarget" named —
+        // Auto / A / none: layer A; B: layer B; A+B: both — once, here. Generic over the layered
+        // modules; only those two ever lived there.
+        std::vector<int> legacyLanes;   // the lanes the v11 STEP SEQ goes to (content, below)
+        if (grouped)
+            for (const auto& obj : Modules::layeredPersistObjects())
+                if (! layerASrc[juce::Identifier (obj)].isObject() && instSrc[juce::Identifier (obj)].isObject())
+                {
+                    const juce::String target = instSrc[juce::Identifier (obj)]["LayerTarget"].toString();
+                    std::vector<int> lanes;
+                    if (target == "B")        lanes = { 1 };
+                    else if (target == "A+B") lanes = { 0, 1 };
+                    else                      lanes = { 0 };
+                    for (const int lane : lanes)
+                        Modules::readLayerModule(a, prefixOfLane(lane), obj, instSrc);
+                    if (obj == "StepSeq") legacyLanes = lanes;
+                }
+        // Files written while LAYERS had a B ON switch (develop, 2026-11-16 only): B ON + "Split" is
+        // SPLIT, anything else is no split (the read above matched "Split" in the new list already —
+        // B off must undo that).
+        if (auto* lay = instSrc["Layers"].getDynamicObject(); lay != nullptr && lay->hasProperty("BOn"))
+            if (auto* p = a.getParameter(ID::layerMode))
+            {
+                const bool split = (bool) lay->getProperty("BOn") && lay->getProperty("Mode").toString() == "Split";
+                p->setValueNotifyingHost(p->convertTo0to1(split ? 2.0f : 0.0f));
+            }
+        // MODE is only Split on / off since 2026-11-23: what plays outside a Split is the A / B
+        // selection, so a stored "Dual" reads as no split (the selection survives every load).
+        if (auto* p = a.getParameter(ID::layerMode); p != nullptr && juce::roundToInt(p->convertFrom0to1(p->getValue())) == 1)
+            p->setValueNotifyingHost(p->convertTo0to1(0.0f));
+
+        // STEP SEQ content per lane (Story 21.8): a v12 file carries it in each layer's "StepSeq";
+        // a v11 file in "Instrument" — moved to the layer(s) its TARGET named, just above; a file up
+        // to v10 on the root, which is layer A's source. See readStepSeqContent.
+        int laneLatch[PatternStore::kStepLanes];
+        for (auto& l : laneLatch) l = -1;
+        if (const auto seqA = layerASrc["StepSeq"]; seqA.isObject())
+            laneLatch[0] = readStepSeqContent(a, 0, seqA);
+        for (const int lane : legacyLanes)
+            laneLatch[lane] = readStepSeqContent(a, lane, instSrc["StepSeq"]);
 
         // PERC "Lanes" / MOD MATRIX "Slots" from the v9 ARRAYS (see toVar): rebuild the flat keys
         // the spec pass understands and run it again on just that one module — so the mapping
@@ -1321,6 +1388,8 @@ namespace PresetIO
         {
             Modules::readLayerState(a, Modules::kLayerBPrefix, lb);
             readMatrixSlots(a, Modules::kLayerBPrefix, lb);
+            if (const auto seqB = lb["StepSeq"]; seqB.isObject())
+                laneLatch[1] = readStepSeqContent(a, 1, seqB);   // 21.8
             resolveSet (lb, "Sampler", "File", (juce::String (Modules::kLayerBPrefix) + ID::samplerSet).toRawUTF8(),
                         hooks(a).pendingBSamplerSetName);
         }
@@ -1339,14 +1408,10 @@ namespace PresetIO
         // it was running on. Missing field ⇒ -1 ⇒ no latch, which also CLEARS whatever the previous
         // patch left playing — switching presets must never leave a figure sounding under the new
         // patch. Presets written before this field behave exactly as they did.
+        // 21.8: per lane — each layer's figure comes back running (or stopped) on its own.
         if (hooks(a).applySeqLatchRoot)
-        {
-            int latch = -1;
-            if (auto* seq = instSrc["StepSeq"].getDynamicObject())
-                if (seq->hasProperty ("LatchRoot"))
-                    latch = (int) seq->getProperty ("LatchRoot");
-            hooks(a).applySeqLatchRoot (latch);
-        }
+            for (int lane = 0; lane < PatternStore::kStepLanes; ++lane)
+                hooks(a).applySeqLatchRoot (lane, laneLatch[lane]);
 
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);   // couplings live again — for GESTURES
     }
@@ -1551,8 +1616,8 @@ namespace PresetIO
 
     // ── AD-16: a preset's SOUND into one layer (Story 21.5/21.6) ─────────────────────────────
     // The file's layer A ("LayerA" in v11, the root up to v10) — patch modules, SAMPLER set name,
-    // matrix slots — lands in the layer `prefix` names; the instrument (master bus, sequencers,
-    // PERC, BASS, LAYERS, the latch) and the other layer stay as they are, so any single-layer
+    // matrix slots, since 21.8 its STEP SEQ figure and latch and its ARP — lands in the layer `prefix`
+    // names; the instrument (master bus, PERC, LAYERS) and the other layer stay as they are, so any single-layer
     // preset is layer material. The header's LOAD uses it with B selected. v10 and later only:
     // older files need the migration pass, which rewrites the file (every file in the Presets
     // folder is converted at startup anyway). Message thread.
@@ -1574,7 +1639,21 @@ namespace PresetIO
             if (auto* p = a.getParameter(prefix + id))
                 p->setValueNotifyingHost(p->getDefaultValue());
         Modules::readLayerState(a, prefix, src);
+        // 21.8: a v11 file keeps STEP SEQ and ARP in "Instrument" — they are part of the sound now.
+        const juce::var inst = v["Instrument"];
+        if (inst.isObject())
+            for (const auto& obj : Modules::layeredPersistObjects())
+                if (! src[juce::Identifier (obj)].isObject() && inst[juce::Identifier (obj)].isObject())
+                    Modules::readLayerModule(a, prefix, obj, inst);
         readMatrixSlots(a, prefix, src);
+        // ...and the figure with its latch, into this layer's lane.
+        {
+            const int lane = laneOfPrefix(prefix);
+            const juce::var seqSrc = src["StepSeq"].isObject() ? src["StepSeq"] : inst["StepSeq"];
+            if (hooks(a).patterns) hooks(a).patterns->steps[(size_t) lane].clear();
+            const int latch = seqSrc.isObject() ? readStepSeqContent(a, lane, seqSrc) : -1;
+            if (hooks(a).applySeqLatchRoot) hooks(a).applySeqLatchRoot(lane, latch);
+        }
         const juce::String setParam = prefix + ID::samplerSet;
         juce::String setName;
         if (auto* mod = src["Sampler"].getDynamicObject())
@@ -1628,6 +1707,15 @@ namespace PresetIO
                 keepId(id);
             keepPendingB = hooks(a).pendingBSamplerSetName;
         }
+        // 21.8: B's STEP SEQ figure and latch are part of layer B — kept with it.
+        std::unique_ptr<juce::XmlElement> keepFigB;
+        int keepLatchB = -1;
+        if (scope == LoadScope::KeepLayerB && hooks(a).patterns != nullptr)
+        {
+            keepFigB = std::make_unique<juce::XmlElement>("Keep");
+            hooks(a).patterns->steps[1].writeXml(*keepFigB);
+            if (hooks(a).seqLatchRoot) keepLatchB = hooks(a).seqLatchRoot(1);
+        }
 
         const auto r = loadFromFile(a, file);
         if (! r.ok)
@@ -1646,6 +1734,11 @@ namespace PresetIO
             hooks(a).pendingBSamplerSetName = keepPendingB;
             if (keepPendingB.isNotEmpty() && hooks(a).requestSamplerSet) hooks(a).requestSamplerSet(keepPendingB, bSet);
             else if (hooks(a).cancelSamplerSet)                         hooks(a).cancelSamplerSet(bSet);
+            if (keepFigB != nullptr)
+            {
+                if (! hooks(a).patterns->steps[1].readXml(*keepFigB)) hooks(a).patterns->steps[1].clear();
+                if (hooks(a).applySeqLatchRoot) hooks(a).applySeqLatchRoot(1, keepLatchB);
+            }
         }
         if (hooks(a).setPresetLoading) hooks(a).setPresetLoading(false);
         return r;

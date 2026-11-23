@@ -62,7 +62,8 @@ namespace SeqMidiIO
     }
 
     // ── Import ───────────────────────────────────────────────────────────────────────────
-    inline ImportResult importFigure (APVTS& a, const juce::File& file)
+    // Story 21.8: `lane` = the layer whose STEP SEQ takes the figure (0 = A, 1 = B).
+    inline ImportResult importFigure (APVTS& a, const juce::File& file, int lane = 0)
     {
         using namespace detail;
         ImportResult r;
@@ -248,7 +249,7 @@ namespace SeqMidiIO
         if (PresetIO::hooks(a).setPresetLoading) PresetIO::hooks(a).setPresetLoading (true);
         // The figure lives in the PatternStore (AD-14), reached through PresetIO's hook. Full
         // reset first: import replaces the WHOLE figure.
-        if (auto* fig = PresetIO::hooks(a).patterns != nullptr ? &PresetIO::hooks(a).patterns->step : nullptr)
+        if (auto* fig = PresetIO::hooks(a).patterns != nullptr ? &PresetIO::hooks(a).patterns->steps[(size_t) lane] : nullptr)
             for (int q = 0; q < StepPattern::kMaxSteps; ++q)
             {
                 fig->setOn     (q, on.count (q) > 0);
@@ -256,14 +257,15 @@ namespace SeqMidiIO
                 fig->setAccent (q, acc.count (q) && acc[q]);
                 fig->setGate   (q, gate.count (q) ? gate[q] : StepPattern::kGateDefault);
             }
-        setRaw (a, Parameters::ID::seqLength, (float) period);
-        setRaw (a, Parameters::ID::seqSync, 5.0f);    // "1/16" — the contract's grid
-        setRaw (a, Parameters::ID::seqGate, 1.0f);    // measured percents assume an unscaled gate
-        setRaw (a, Parameters::ID::seqOn, 1.0f);      // the ARP exclusion coupling handles the rest
+        const juce::String pre = PresetIO::prefixOfLane (lane);
+        setRaw (a, pre + Parameters::ID::seqLength, (float) period);
+        setRaw (a, pre + Parameters::ID::seqSync, 5.0f);    // "1/16" — the contract's grid
+        setRaw (a, pre + Parameters::ID::seqGate, 1.0f);    // measured percents assume an unscaled gate
+        setRaw (a, pre + Parameters::ID::seqOn, 1.0f);      // the ARP exclusion coupling handles the rest
         if (r.tempo > 0.0)
             setRaw (a, Parameters::ID::syncTempo, (float) juce::jlimit (40.0, 250.0, r.tempo));
         if (PresetIO::hooks(a).setPresetLoading) PresetIO::hooks(a).setPresetLoading (false);
-        if (PresetIO::hooks(a).applySeqLatchRoot) PresetIO::hooks(a).applySeqLatchRoot (root);   // …and it plays
+        if (PresetIO::hooks(a).applySeqLatchRoot) PresetIO::hooks(a).applySeqLatchRoot (lane, root);   // …and it plays
 
         r.steps = period;
         r.root  = root;
@@ -275,7 +277,7 @@ namespace SeqMidiIO
     // emits (127 accented / 100 plain). TIE chains merge into one note; a pitch takeover (TIE
     // or SLIDE with a new pitch) exports as the 303's OVERLAP — documented asymmetry: a
     // pitch-changing TIE reimports as SLIDE, because MIDI cannot carry the difference.
-    inline bool exportFigure (APVTS& a, const juce::File& file)
+    inline bool exportFigure (APVTS& a, const juce::File& file, int lane = 0)
     {
         constexpr int ppq = 480, overlap = 30;
         auto raw = [&a] (const juce::String& id) { return a.getRawParameterValue (id)->load(); };
@@ -287,13 +289,14 @@ namespace SeqMidiIO
         // A binary-division figure round-trips exactly (an 1/8 step reimports as a TIE'd pair
         // of 16ths — same music); triplet/dotted grids export truthfully but won't survive the
         // reimport's 1/16 quantize gate — MIDI time is absolute, the 303 grid is not.
-        const int    syncIdx   = (int) raw (Parameters::ID::seqSync);
+        const juce::String pre = PresetIO::prefixOfLane (lane);
+        const int    syncIdx   = (int) raw (pre + Parameters::ID::seqSync);
         const double beats     = SyncDivision::isSynced (syncIdx) ? SyncDivision::beatsPerCycle (syncIdx) : 0.25;
         const int    stepTicks = (int) std::llround (ppq * beats);
 
-        const int len  = juce::jlimit (1, StepSequencer::kMaxSteps, (int) raw (Parameters::ID::seqLength));
-        const int root = PresetIO::hooks(a).seqLatchRoot && PresetIO::hooks(a).seqLatchRoot() >= 0
-                             ? PresetIO::hooks(a).seqLatchRoot() : 48;   // C3 — the same fallback the preset writer uses
+        const int len  = juce::jlimit (1, StepSequencer::kMaxSteps, (int) raw (pre + Parameters::ID::seqLength));
+        const int root = PresetIO::hooks(a).seqLatchRoot && PresetIO::hooks(a).seqLatchRoot (lane) >= 0
+                             ? PresetIO::hooks(a).seqLatchRoot (lane) : 48;   // C3 — the same fallback the preset writer uses
 
         juce::MidiMessageSequence seq;
         {
@@ -302,7 +305,7 @@ namespace SeqMidiIO
         }
 
         // The figure lives in the PatternStore (AD-14); without the hook there is nothing to export.
-        const StepPattern* fig = PresetIO::hooks(a).patterns != nullptr ? &PresetIO::hooks(a).patterns->step : nullptr;
+        const StepPattern* fig = PresetIO::hooks(a).patterns != nullptr ? &PresetIO::hooks(a).patterns->steps[(size_t) lane] : nullptr;
         if (fig == nullptr)
             return false;
         auto stepOn    = [fig] (int s) { return fig->on (s); };
