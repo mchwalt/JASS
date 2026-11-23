@@ -132,14 +132,16 @@ namespace rack
         for (const auto& e : layoutModel)
         {
             if (e.zone != zone || ! shown (e)) continue;
-            const auto* p = placedById (e.id);
-            if (p == nullptr || p->frame == nullptr) continue;
-            if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
-            const auto pid = p->frame->enableParamId();
-            if (pid.isEmpty()) continue;
-            ++enableable;
-            if (auto* raw = apvts.getRawParameterValue (pid); raw != nullptr && raw->load() >= 0.5f)
-                ++on;
+            for (const auto* p : framesInView (e))   // A+B: both layers' members (2026-11-23)
+            {
+                if (p == nullptr || p->frame == nullptr) continue;
+                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                const auto pid = p->frame->enableParamId();
+                if (pid.isEmpty()) continue;
+                ++enableable;
+                if (auto* raw = apvts.getRawParameterValue (pid); raw != nullptr && raw->load() >= 0.5f)
+                    ++on;
+            }
         }
     }
 
@@ -154,23 +156,30 @@ namespace rack
 
         if (! enabled)
         {
-            if (zh != nullptr) zh->bypassSnapshot.clear();
+            std::map<juce::String, float> snap;
             for (const auto& e : layoutModel)
             {
                 if (e.zone != zone || ! shown (e)) continue;
-                const auto* p = placedById (e.id);
-                if (p == nullptr || p->frame == nullptr) continue;
-                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
-                const auto pid = p->frame->enableParamId();
-                if (pid.isEmpty()) continue;
-                if (auto* param = apvts.getParameter (pid))
+                for (const auto* p : framesInView (e))
                 {
-                    // Keyed by the ENABLE id, not the layout id: a bypass made in B must not be
-                    // restored into A's enables (21.6 review).
-                    if (zh != nullptr) zh->bypassSnapshot[pid] = param->getValue();   // remember
-                    param->setValueNotifyingHost (0.0f);
+                    if (p == nullptr || p->frame == nullptr) continue;
+                    if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                    const auto pid = p->frame->enableParamId();
+                    if (pid.isEmpty()) continue;
+                    if (auto* param = apvts.getParameter (pid))
+                    {
+                        // Keyed by the ENABLE id, not the layout id: a bypass made in B must not be
+                        // restored into A's enables (21.6 review). In A+B, A's write mirrors to B
+                        // (linked editing) — so B's value is stashed BEFORE A's is touched.
+                        if (snap.count (pid) == 0)
+                            snap[pid] = param->getValue();   // remember
+                    }
                 }
             }
+            for (const auto& kv : snap)
+                if (auto* param = apvts.getParameter (kv.first))
+                    param->setValueNotifyingHost (0.0f);
+            if (zh != nullptr) zh->bypassSnapshot = std::move (snap);
         }
         else
         {
@@ -178,20 +187,24 @@ namespace rack
             for (const auto& e : layoutModel)
             {
                 if (e.zone != zone || ! shown (e)) continue;
-                const auto* p = placedById (e.id);
-                if (p == nullptr || p->frame == nullptr) continue;
-                if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
-                const auto pid = p->frame->enableParamId();
-                if (pid.isEmpty()) continue;
-                if (auto* param = apvts.getParameter (pid))
+                // A's frame first, then B's: in A+B A's write mirrors to B, and B's own write
+                // that follows puts B's remembered value back on top.
+                for (const auto* p : framesInView (e))
                 {
-                    float val = 1.0f;   // fallback: turn the whole group on
-                    if (haveSnapshot)
+                    if (p == nullptr || p->frame == nullptr) continue;
+                    if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
+                    const auto pid = p->frame->enableParamId();
+                    if (pid.isEmpty()) continue;
+                    if (auto* param = apvts.getParameter (pid))
                     {
-                        auto it = zh->bypassSnapshot.find (pid);
-                        val = (it != zh->bypassSnapshot.end()) ? it->second : 0.0f;
+                        float val = 1.0f;   // fallback: turn the whole group on
+                        if (haveSnapshot)
+                        {
+                            auto it = zh->bypassSnapshot.find (pid);
+                            val = (it != zh->bypassSnapshot.end()) ? it->second : 0.0f;
+                        }
+                        param->setValueNotifyingHost (val);
                     }
-                    param->setValueNotifyingHost (val);
                 }
             }
             if (zh != nullptr) zh->bypassSnapshot.clear();
@@ -310,12 +323,35 @@ namespace rack
         // AD-16 (21.6): while B is focused a patch module's entry resolves to B's frame — so
         // placement, the zone bypass and everything else that asks "which frame is this" follow
         // the focus by construction.
-        if (layerFocusB)
+        // A+B (2026-11-23): A's frame where A shows the module, B's where only B does or where the
+        // module's A | B is switched to B.
+        bool useB = layerFocusB;
+        if (viewBoth)
+            for (const auto& e : layoutModel)
+                if (e.id == id) { useB = viewFrameIsB (e); break; }
+        if (useB)
             for (const auto& p : placedB)
                 if (p.id == id) return &p;
         for (const auto& p : placed)
             if (p.id == id) return &p;
         return nullptr;
+    }
+
+    std::vector<bool> Rack::viewLayers (const juce::String& id) const
+    {
+        if (! viewBoth) return { layerFocusB && hasLayerB (id) };
+        if (! hasLayerB (id)) return { false };   // an instrument module: one frame
+        return { false, true };
+    }
+
+    std::vector<const Rack::Placed*> Rack::framesInView (const RackLayoutEntry& e) const
+    {
+        if (! viewBoth) return { placedById (e.id) };
+        std::vector<const Placed*> out;
+        for (const bool layerB : viewLayers (e.id))
+            if (shownIn (e, layerB))
+                out.push_back (placedIn (e.id, layerB));
+        return out;
     }
 
     std::vector<const Rack::Placed*> Rack::allLayersById (const juce::String& id) const
@@ -348,11 +384,23 @@ namespace rack
         return nullptr;
     }
 
+    void Rack::wireLayerSwitch (ModuleFrame& f, const juce::String& id)
+    {
+        f.onLayerSwitch = [this, id] (bool showB)
+        {
+            if (showB) bothShowB.insert (id); else bothShowB.erase (id);
+            relayout();   // same footprint (the two frames share a spec): only the frame swaps
+        };
+    }
+
     void Rack::addLayerBModule (const juce::String& layerAId, ModuleDescriptor desc)
     {
         desc.layerB = true;
         auto* f = frames.add (new ModuleFrame (apvts, std::move (desc)));
         addChildComponent (*f);   // hidden until B is focused (layout() decides)
+        wireLayerSwitch (*f, layerAId);
+        for (const auto& p : placed)   // A's frame gets the same switch
+            if (p.id == layerAId && p.frame != nullptr) wireLayerSwitch (*p.frame, layerAId);
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
         f->onFootprintChanged = [this, f]
         {
@@ -371,13 +419,14 @@ namespace rack
         placedB.push_back ({ layerAId, f, spec.cols, spec.heightUnits, alignR });
     }
 
-    void Rack::setLayerFocusB (bool b)
+    void Rack::setLayerView (int view)
     {
-        if (layerFocusB == b) return;
-        layerFocusB = b;
-        relayout();   // the same zones and order, the other layer's frames and visible set (21.6 review)
-        // No onLayoutChanged: the window is sized for the taller layer already (preferredHeight),
-        // so a focus switch never resizes it.
+        if (view == layerView()) return;
+        layerFocusB = view == 1;
+        viewBoth    = view == 2;
+        relayout();   // the same zones and order, the other view's frames and visible set (21.6 review)
+        // No onLayoutChanged: every zone is sized for the tallest view already (layout), so a
+        // switch never resizes the window.
     }
 
     juce::String Rack::zoneName (Zone zone) { return zoneText (zone); }
@@ -393,8 +442,10 @@ namespace rack
         // hide  => force the module disabled (it's "not present" for the synth);
         // show  => restore its FACTORY-DEFAULT enable state, NOT force-on — e.g. CROSS MOD
         //          defaults to disabled, so re-showing it must leave it disabled.
-        // 21.6 review: visibility is per layer, so a show/hide drives the edited layer's enable.
-        driveEnableLayer (id, layerFocusB, show);
+        // 21.6 review: visibility is per layer, so a show/hide drives the edited layer's enable —
+        // in A+B both layers' (2026-11-23).
+        for (const bool layerB : viewLayers (id))
+            driveEnableLayer (id, layerB, show);
     }
 
     void Rack::driveEnableLayer (const juce::String& id, bool layerB, bool show)
@@ -414,7 +465,11 @@ namespace rack
         // show ⇒ enable once). Order is owned by the list, so position is kept.
         bool changed = false;
         for (auto& e : layoutModel)
-            if (e.id == id && shown (e) != visible) { visFlag (e, layerFocusB) = visible; changed = true; }
+            if (e.id == id && shown (e) != visible)
+            {
+                for (const bool layerB : viewLayers (e.id)) visFlag (e, layerB) = visible;   // A+B: both
+                changed = true;
+            }
         if (! changed) return;
         driveEnable (id, visible);   // the edited layer's enable
         relayout();
@@ -798,8 +853,8 @@ namespace rack
         for (auto& e : layoutModel)
             if (e.zone == zone && shown (e) != visible)
             {
-                visFlag (e, layerFocusB) = visible;
-                driveEnable (e.id, visible);   // the edited layer's enable
+                for (const bool layerB : viewLayers (e.id)) visFlag (e, layerB) = visible;   // A+B: both
+                driveEnable (e.id, visible);   // the edited layer's enable (A+B: both)
                 changed = true;
             }
         if (! changed) return;
@@ -839,16 +894,9 @@ namespace rack
     {
         // layout() does not mutate when apply == false, but it is non-const (it writes
         // member scratch only when applying) — measure via a const_cast-free copy path.
-        // The TALLER of the two layers' visible sets (maintainer 2026-11-19: switching A/B must not
-        // resize the window), so the window stays put and the shorter layer leaves room below.
-        auto* self = const_cast<Rack*> (this);
-        const bool focus = self->layerFocusB;
-        self->layerFocusB = false;
-        const int hA = self->layout (width, /*apply*/ false);
-        self->layerFocusB = true;
-        const int hB = self->layout (width, /*apply*/ false);
-        self->layerFocusB = focus;
-        return juce::jmax (hA, hB);
+        // Every zone is as tall as the tallest of the views A, B and A+B (layout), so the height
+        // is the same in each (maintainer 2026-11-19: switching must not resize the window).
+        return const_cast<Rack*> (this)->layout (width, /*apply*/ false);
     }
 
     int Rack::maxHeight (int width) const
@@ -1086,9 +1134,9 @@ namespace rack
                 }
             }
 
-            // ...and it is as tall as the taller layer's packing, so every zone below starts at the
-            // same y in A and B — only a zone's CONTENT changes on a switch, nothing jumps.
-            const int rowsUsed = juce::jmax (maxRowUsed + 1, zoneRowsIn (zone, ! layerFocusB));
+            // ...and it is as tall as the tallest packing of the three views (A, B, A+B), so every
+            // zone below starts at the same y in each — only a zone's CONTENT changes on a switch.
+            const int rowsUsed = std::max ({ maxRowUsed + 1, zoneRowsIn (zone, 0), zoneRowsIn (zone, 1), zoneRowsIn (zone, 2) });
             if (rowsUsed > 0)
                 y = zoneTopY + rowsUsed * kHu + (rowsUsed - 1) * kGutter;
             y += kGutter;   // gap before the next zone
@@ -1100,6 +1148,14 @@ namespace rack
         {
             for (auto* f : frames)
                 f->setVisible (std::find (shownFrames.begin(), shownFrames.end(), f) != shownFrames.end());
+
+            // A | B in the header (A+B view): on both frames of a module both layers use.
+            for (const auto& e : layoutModel)
+            {
+                const bool both = viewBoth && hasLayerB (e.id) && shownIn (e, false) && shownIn (e, true);
+                for (const auto* p : allLayersById (e.id))
+                    if (p->frame != nullptr) p->frame->setLayerSwitch (both);
+            }
 
             // The zone-header controls were created before any module frame (constructor vs.
             // addModule), so they sit BEHIND the frames in z-order. Pull the visible ones to the
@@ -1115,13 +1171,18 @@ namespace rack
         return y + kPad;
     }
 
-    int Rack::zoneRowsIn (Zone zone, bool layerB) const
+    int Rack::zoneRowsIn (Zone zone, int view) const
     {
-        // The same first-fit packing as layout(), for one layer's visible modules of one zone,
-        // counting rows only (no bounds, no alignment shift — that is horizontal).
+        // The same first-fit packing as layout(), for one view's visible modules of one zone,
+        // counting rows only (no bounds, no alignment shift — that is horizontal). In A+B a module
+        // packs with the frame that view shows: A's where A shows it, else B's.
+        auto shownInView = [&] (const RackLayoutEntry& e)
+        { return view == 2 ? (shownIn (e, false) || shownIn (e, true)) : shownIn (e, view == 1); };
+        auto frameLayerB = [&] (const RackLayoutEntry& e)
+        { return view == 2 ? viewFrameIsB (e) : view == 1; };
         std::vector<const RackLayoutEntry*> es;
         for (const auto& e : layoutModel)
-            if (e.zone == zone && shownIn (e, layerB))
+            if (e.zone == zone && shownInView (e))
                 es.push_back (&e);
         std::stable_sort (es.begin(), es.end(),
                           [] (const RackLayoutEntry* a, const RackLayoutEntry* b) { return a->position < b->position; });
@@ -1130,7 +1191,7 @@ namespace rack
         int maxRow = -1;
         for (const auto* e : es)
         {
-            const auto* pl = placedIn (e->id, layerB);
+            const auto* pl = placedIn (e->id, frameLayerB (*e));
             if (pl == nullptr || pl->frame == nullptr) continue;
             const int fcols = juce::jmin (pl->cols, cols), funits = pl->units;
             auto fits = [&] (int r, int c)
@@ -1162,11 +1223,15 @@ namespace rack
         layout (getWidth(), /*apply*/ true);
     }
 
-    void Rack::updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio)
+    void Rack::updateLiveFeed (const LiveModFeed& feedA, const LiveModFeed& feedB, bool focusB, double playedRatio)
     {
-        for (auto* f : frames)
-            if (f->isVisible())   // 21.6: the hidden layer's frames (and hidden modules) skip the 20 Hz fan-out
-                f->updateLiveFeed (ringByTarget, playedRatio);
+        // 21.6: the hidden layer's frames (and hidden modules) skip the 20 Hz fan-out.
+        for (const auto& p : placed)
+            if (p.frame != nullptr && p.frame->isVisible())
+                p.frame->updateLiveFeed (hasLayerB (p.id) ? feedA : (focusB ? feedB : feedA), playedRatio);
+        for (const auto& p : placedB)
+            if (p.frame != nullptr && p.frame->isVisible())
+                p.frame->updateLiveFeed (feedB, playedRatio);
 
         // Individual module enable toggles change the params behind our back; refresh the
         // zone-header group toggles from the live values on the same (editor) tick.

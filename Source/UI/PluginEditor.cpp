@@ -877,8 +877,8 @@ void SynthyEditor::timerCallback()
     processor.reconcileParamCouplingsIfDirty();
 
     // AD-16 (21.6): the rack shows the focused layer's patch frames (A also for A+B).
-    if (rackBody != nullptr && rackBody->isLayerFocusB() != processor.isFocusB())
-        rackBody->setLayerFocusB (processor.isFocusB());
+    if (rackBody != nullptr && rackBody->layerView() != processor.getLayerFocus())
+        rackBody->setLayerView (processor.getLayerFocus());   // 0 A, 1 B, 2 A+B (overall view)
     {
         auto& a = processor.getAPVTS();
         // SPLIT shown on the keyboard whenever it is on (B's keys violet), whatever the selection.
@@ -941,17 +941,21 @@ void SynthyEditor::timerCallback()
     // sources stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
     static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                      (int) ModSource::LFO3, (int) ModSource::LFO4 };
+    // AD-16: one feed per layer — each frame lights with its OWN layer's LFOs and matrix (the A+B
+    // view shows frames of both at once, 2026-11-23); instrument modules follow the edited layer.
+    rack::LiveModFeed feedA {}, feedB {};
+    for (const bool layerB : { false, true })
+    {
+    rack::LiveModFeed& feed = layerB ? feedB : feedA;
     std::array<float, ModMatrixConfig::kNumSources> lfoSrcVal {};
-    rack::LiveModFeed feed {};
     // LFOs are pure matrix sources now (no built-in target) — just record each LFO's display value
     // at its ModSource slot; the matrix loop below lights the rings for LFO-sourced routings.
     for (int i = 0; i < kNumLFOs; ++i)
-        lfoSrcVal[(size_t) kLfoSourceIdx[i]] = processor.getLfoDisplayValue(i);
+        lfoSrcVal[(size_t) kLfoSourceIdx[i]] = processor.getLfoDisplayValueOf(layerB, i);
     lfoSrcVal[(size_t) ModSource::ChaosX] = processor.getChaosDisplayValue(0);   // same snapshot the
     lfoSrcVal[(size_t) ModSource::ChaosY] = processor.getChaosDisplayValue(1);   // voices modulate with
     {
-        // AD-16 (21.6): the rings show the modulation of the layer the rack shows (A for A+B).
-        const juce::String rp = processor.isFocusB() ? juce::String (Modules::kLayerBPrefix) : juce::String();
+        const juce::String rp = layerB ? juce::String (Modules::kLayerBPrefix) : juce::String();
         const bool matrixOn = *apvts.getRawParameterValue(lid(rp, P::modMatrixOn)) > 0.5f;
         if (matrixOn)
             for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
@@ -971,6 +975,7 @@ void SynthyEditor::timerCallback()
                 else if (tgt > 0 && tgt < (int) feed.byTarget.size())
                     feed.byTarget[(size_t) tgt] += val;   // global (incl. "Alle OSC")
             }
+    }
     }
 
     // Enforce the KEYBOARD module's enable on its INPUT: JUCE's MidiKeyboardComponent ignores
@@ -1087,7 +1092,7 @@ void SynthyEditor::timerCallback()
 
     // The live feed drives the rack (AD-8): ONE timer, rack fans out to its frames.
     if (rackBody)
-        rackBody->updateLiveFeed(feed, ratio);
+        rackBody->updateLiveFeed(feedA, feedB, processor.isFocusB(), ratio);
 
     // Keep the header label in sync: it reacts both to the (async-restored)
     // preset name and to live edits flipping the "modified" flag.

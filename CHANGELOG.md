@@ -33,8 +33,13 @@ contract — currently `10`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 - **LAYERS — layer B in the rack, played like a bitimbral hardware synth.** A module in the
   MASTER BUS zone. Buttons **A** and **B** (keys 1 and 2) pick the layer you edit and hear - B's
   modules carry a violet header, keys 1 and 2 switch between two sounds live (a layer you leave
-  rings out instead of being cut); both lit plays both and is **linked editing**: the rack shows A
-  and every change goes to B as well, knobs by the same distance on the knob so B keeps its offset
+  rings out instead of being cut); both lit plays both and is **linked editing**: the rack shows
+  every module either layer uses (maintainer 2026-11-23: B's modules used to vanish from the
+  view for both layers) - a module only B uses with B's values and violet header, changing only
+  B; a module both layers use carries a small A | B in its header that picks whose values are on
+  screen, its header cyan for A and violet for B (on B, edits reach B only); hiding, showing or a zone's on/off acting on both; a module A uses shows A and every
+  change goes to B as well except the module's on/off, which acts on the layer on screen (so
+  switching on a module in A+B does not slip it into the other layer), knobs by the same distance on the knob so B keeps its offset
   (an octave on A's cutoff is about an octave on B's, not the same number of Hz), a sample set or
   wavetable bank as the same pick. A press on an unlit layer adds it, a quick double press (or
   double-click) keeps only the pressed layer - so B, B quickly goes from A to B and A, A back;

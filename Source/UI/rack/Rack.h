@@ -3,6 +3,7 @@
 #include <vector>
 #include <utility>
 #include <map>
+#include <set>
 #include <functional>
 #include <algorithm>
 #include "ModuleDescriptor.h"
@@ -43,9 +44,11 @@ namespace rack
         // Layer B's frame of a patch module: built against B's params, placed by LAYER A's layout
         // entry (`layerAId`) — one layout for both layers. It takes A's place while B is focused.
         void addLayerBModule (const juce::String& layerAId, ModuleDescriptor desc);
-        // Which layer the rack shows: false = A (also for A+B, linked editing), true = B.
-        void setLayerFocusB (bool b);
-        bool isLayerFocusB() const noexcept { return layerFocusB; }
+        // Which layer the rack shows (= layerFocus): 0 = A, 1 = B, 2 = A+B — the overall view
+        // (maintainer 2026-11-23): every module either layer uses; a module A uses shows A's frame
+        // (edits mirror to B), a module only B uses shows B's frame (violet, B's values, B only).
+        void setLayerView (int view);
+        int  layerView() const noexcept { return viewBoth ? 2 : (layerFocusB ? 1 : 0); }
         // After a load into B: what layer B now uses must be visible in B ("on ⇒ visible").
         void revealAfterLayerLoad()
         {
@@ -63,7 +66,9 @@ namespace rack
         // Fan the live feed out to every frame (AD-8): the single editor timer reads the
         // processor's LFO atomic + active target + played ratio and calls this once per
         // tick. Each frame gates rings by its own enable and refreshes its transform knobs.
-        void updateLiveFeed (const LiveModFeed& ringByTarget, double playedRatio);
+        // AD-16: one feed per layer; a layer's frames take its own, instrument modules the edited
+        // layer's (`focusB`) — so in A+B a frame showing B's values rings with B's modulation.
+        void updateLiveFeed (const LiveModFeed& feedA, const LiveModFeed& feedB, bool focusB, double playedRatio);
 
         // Find a module frame by its descriptor id (nullptr if none). Lets the editor reach a
         // specific module — e.g. so the spacebar can trigger STRING-KARPLUS' PLUCK button.
@@ -181,8 +186,8 @@ namespace rack
         std::function<void(const juce::String& id)> onModuleHelp;
 
         // Total stacked height the current population needs at `width` — lets the
-        // editor size/verify the fixed window without scrolling (AC4). The taller of the two
-        // layers' visible sets, so switching A/B never resizes the window (2026-11-19).
+        // editor size/verify the fixed window without scrolling (AC4). Every zone is as tall as
+        // the tallest of the views A, B and A+B, so switching never resizes the window (2026-11-19).
         int preferredHeight (int width) const;
 
         // Worst-case height: what the rack would need at `width` with EVERY module visible.
@@ -302,9 +307,16 @@ namespace rack
         // layer / in the layer being edited, and the flag to write for a layer.
         bool hasLayerB (const juce::String& id) const;
         bool shownIn (const RackLayoutEntry& e, bool layerB) const;
-        bool shown (const RackLayoutEntry& e) const { return shownIn (e, layerFocusB); }
+        bool shown (const RackLayoutEntry& e) const
+        { return viewBoth ? (shownIn (e, false) || shownIn (e, true)) : shownIn (e, layerFocusB); }
         bool& visFlag (RackLayoutEntry& e, bool layerB) const { return (layerB && hasLayerB (e.id)) ? e.visibleB : e.visible; }
         const Placed* placedIn (const juce::String& id, bool layerB) const;
+        // The layers the current view acts on for a module: the edited layer, or in A+B both
+        // (B only where the module has a B frame). Show/hide and the zone controls loop over these.
+        std::vector<bool> viewLayers (const juce::String& id) const;
+        // The frames behind a shown entry that the zone controls act on: in A+B each layer's frame
+        // where the module is shown in that layer; otherwise the one on screen.
+        std::vector<const Placed*> framesInView (const RackLayoutEntry& e) const;
 
         // Preset-load reconciliation (complement of enforceHiddenDisabled): a module the loaded
         // preset left ENABLED must be visible — you can't play through a module you can't see, and
@@ -329,7 +341,7 @@ namespace rack
         juce::var layoutToVar() const;                  // model → JSON var
         void applyLayoutVar (const juce::var& v);       // JSON var → model (by id), then re-pack (no enable coupling)
         void splitLegacyVisibility (const std::vector<juce::String>& ids);   // pre-2026-11-19 data: one flag → per layer
-        int  zoneRowsIn (Zone zone, bool layerB) const;   // rows a layer's visible modules fill in a zone
+        int  zoneRowsIn (Zone zone, int view) const;     // rows a view's (0 A, 1 B, 2 A+B) visible modules fill in a zone
         bool isDefaultLayout() const;                   // model == captured defaults?
         void writeLayoutToState();                      // persist to apvts.state (or clear when default)
         static Zone zoneFromName (const juce::String& name);   // inverse of zoneName
@@ -337,7 +349,17 @@ namespace rack
         juce::OwnedArray<ModuleFrame> frames;
         std::vector<Placed> placed;                // id -> frame + footprint (build order)
         std::vector<Placed> placedB;               // 21.6: layer A id -> layer B's frame (patch modules)
-        bool layerFocusB = false;
+        bool layerFocusB = false;                  // view B
+        bool viewBoth    = false;                  // view A+B (layerFocusB is then false)
+        std::set<juce::String> bothShowB;          // A+B: modules both layers use whose A | B is on B
+        // A+B: which layer's frame the view shows for an entry — A's where only A (or both, unless
+        // switched to B) shows it, B's where only B does.
+        bool viewFrameIsB (const RackLayoutEntry& e) const
+        {
+            const bool a = shownIn (e, false), b = hasLayerB (e.id) && shownIn (e, true);
+            return b && (! a || bothShowB.count (e.id) > 0);
+        }
+        void wireLayerSwitch (ModuleFrame& f, const juce::String& id);
         std::vector<juce::String> pinnedIds;       // descriptor pinnedOnReset (LAYERS)
         // Pinned modules visible in `entries` — returns true if anything changed.
         bool showPinned (std::vector<RackLayoutEntry>& entries) const;

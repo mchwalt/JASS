@@ -52,6 +52,13 @@ namespace rack
         // A module that only DRAWS (scope, spectrum): hiding it changes nothing you can hear, so
         // the rack may take it at its word — see ModuleDescriptor::visualOnly.
         bool isVisualOnly() const noexcept { return desc.visualOnly; }
+
+        // A+B view (maintainer 2026-11-23): a module both layers use shows a small A | B pair in
+        // its header; the lit letter is the layer whose values are on screen, the header takes
+        // that layer's colour (A cyan, B violet), and a click on the other letter asks the rack
+        // to show the other layer's frame (onLayerSwitch(true) = show B).
+        void setLayerSwitch (bool shown);
+        std::function<void(bool showB)> onLayerSwitch;
         // Visibly "press" this module's first Action button (shows the press animation AND
         // fires its onClick) — lets a keyboard shortcut mirror the on-screen button.
         void clickFirstAction();
@@ -206,6 +213,8 @@ namespace rack
         std::vector<PatternCell> patternCells;
         uint32_t lastPatternRevision = 0;
         void syncPatternCells();   // store → widgets, silently
+        std::unique_ptr<juce::TextButton> layerABtn, layerBBtn;   // A+B view: which layer's values (setLayerSwitch)
+        bool layerSwitchShown = false;
         std::unique_ptr<juce::TextButton> altRowBtn;   // header latch; only when altRowTitle set
         juce::OwnedArray<juce::TextButton> actionBtns; // header one-shot actions (15.8), see desc.headerActions
         std::unique_ptr<juce::TextButton> collapseBtn; // display fold latch (16.2); only when collapseTitle set

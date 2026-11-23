@@ -28,6 +28,9 @@ namespace Modules
     bool isLayeredParamId (const juce::String& id);
     // Every patch-module parameter id, unprefixed (layer A's spelling), in spec order.
     const juce::StringArray& layeredParamIds();
+    // Is `id` (unprefixed) the on/off switch of a patch module (oscOn1, filterOn, ...)? Linked editing
+    // leaves these alone: in A+B a module's switch acts on the layer on screen (maintainer 2026-11-23).
+    bool isLayeredEnableParamId (const juce::String& id);
     // The patch modules only, ids prefixed with `prefix`, persisted under the SAME object and field
     // names as layer A — so a layer is "a preset's patch part", wherever it is stored (`LayerB`).
     void writeLayerState (juce::AudioProcessorValueTreeState& apvts, const juce::String& prefix, juce::DynamicObject& root);

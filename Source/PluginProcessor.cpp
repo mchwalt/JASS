@@ -607,7 +607,10 @@ void SynthyProcessor::parameterChanged(const juce::String& paramId, float newVal
     if (auto it = linkIndex.find(paramId); it != linkIndex.end())
     {
         const float before = linkLastA[(size_t) it->second].exchange(newValue);
-        if (onMsgThread && ! presetLoading.load() && ! linkSuspended && getLayerFocus() == 2)
+        // A module's on/off switch is not mirrored (maintainer 2026-11-23): in the A+B overall
+        // view it acts on the layer whose frame is on screen, like the rest of that frame.
+        if (onMsgThread && ! presetLoading.load() && ! linkSuspended && getLayerFocus() == 2
+            && ! Modules::isLayeredEnableParamId(paramId))
             mirrorToLayerB(paramId, newValue - before);
     }
 

@@ -214,4 +214,17 @@ namespace Modules
     {
         return layeredParamIds().contains (id);
     }
+
+    bool isLayeredEnableParamId (const juce::String& id)
+    {
+        static const juce::StringArray ids = []
+        {
+            juce::StringArray a;
+            for (const auto& m : all())
+                if (m.layered && m.enableParamId.isNotEmpty())
+                    a.add (m.enableParamId);
+            return a;
+        }();
+        return ids.contains (id);
+    }
 }

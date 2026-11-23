@@ -1059,7 +1059,7 @@ namespace rack
                 p->setValueNotifyingHost (v01);
                 // A+B linked editing (21.6 review): A's reset is mirrored to B as a DELTA, which
                 // leaves B at neither its preset nor its factory value — put B on its OWN baseline.
-                if (! desc.layerB && Modules::isLayeredParamId (id))
+                if (! desc.layerB && Modules::isLayeredParamId (id) && ! Modules::isLayeredEnableParamId (id))   // the switch stays per layer (2026-11-23)
                     if (auto* f = apvts.getRawParameterValue (Parameters::ID::layerFocus); f != nullptr && juce::roundToInt (f->load()) == 2)
                     {
                         const juce::String bid = juce::String (Modules::kLayerBPrefix) + id;
@@ -1140,6 +1140,38 @@ namespace rack
             refreshCombo (dc.paramId);
     }
 
+    void ModuleFrame::setLayerSwitch (bool shown)
+    {
+        if (shown == layerSwitchShown) return;
+        layerSwitchShown = shown;
+        if (shown && layerABtn == nullptr)
+        {
+            auto make = [this] (const char* text, bool isB)
+            {
+                auto b = std::make_unique<juce::TextButton> (text);
+                b->setClickingTogglesState (false);
+                b->setWantsKeyboardFocus (false);
+                b->setMouseClickGrabsKeyboardFocus (false);
+                b->setColour (juce::TextButton::buttonColourId,   juce::Colour (0xff334155));
+                b->setColour (juce::TextButton::buttonOnColourId, isB ? kLayerBColour : kLayerAColour.darker (0.35f));
+                b->setColour (juce::TextButton::textColourOffId,  juce::Colours::white.withAlpha (0.55f));
+                b->setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
+                b->setToggleState (isB == desc.layerB, juce::dontSendNotification);   // this frame's layer is lit
+                b->setTooltip (isB ? "Show layer B's values of this module (edits go to B only)"
+                                   : "Show layer A's values of this module (edits go to both)");
+                b->onClick = [this, isB] { if (isB != desc.layerB && onLayerSwitch) onLayerSwitch (isB); };
+                addChildComponent (*b);
+                return b;
+            };
+            layerABtn = make ("A", false);
+            layerBBtn = make ("B", true);
+        }
+        if (layerABtn != nullptr) layerABtn->setVisible (shown);
+        if (layerBBtn != nullptr) layerBBtn->setVisible (shown);
+        resized();
+        repaint();
+    }
+
     void ModuleFrame::resized()
     {
         auto r = getLocalBounds();
@@ -1162,6 +1194,14 @@ namespace rack
         auto infoSlot = header.removeFromRight (20);
         if (infoBtn != nullptr)
             infoBtn->setBounds (infoSlot);
+        // A | B (A+B view, 2026-11-23): only while shown, so every other header is untouched.
+        if (layerSwitchShown && layerABtn != nullptr && layerBBtn != nullptr)
+        {
+            auto slot = header.removeFromRight (40).reduced (1, 1);
+            layerBBtn->setBounds (slot.removeFromRight (19));
+            slot.removeFromRight (2);
+            layerABtn->setBounds (slot.removeFromRight (19));
+        }
         // Row toggle (15.7): only modules that declare one give up header width for it, so
         // every other module's header geometry is untouched.
         if (altRowBtn != nullptr)
@@ -1376,6 +1416,15 @@ namespace rack
             g.setColour (kLayerBColour.withAlpha (0.20f));
             g.fillRect (header);
             g.setColour (kLayerBColour);
+            g.fillRect (getLocalBounds().removeFromTop (5).removeFromBottom (3));
+        }
+        // A+B view, a module both layers use (2026-11-23): A's frame says it is A — cyan tint and
+        // strip, the counterpart of B's violet, so the header colour follows the A | B choice.
+        else if (layerSwitchShown)
+        {
+            g.setColour (kLayerAColour.withAlpha (0.16f));
+            g.fillRect (header);
+            g.setColour (kLayerAColour);
             g.fillRect (getLocalBounds().removeFromTop (5).removeFromBottom (3));
         }
 

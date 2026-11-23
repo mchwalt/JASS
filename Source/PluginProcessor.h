@@ -197,6 +197,11 @@ public:
     {
         return (isFocusB() ? engineB : engineA).getLfoDisplayValue(i);
     }
+    // ...of a given layer: the A+B view shows frames of both layers at once (2026-11-23).
+    float getLfoDisplayValueOf(bool layerB, int i) const
+    {
+        return (layerB ? engineB : engineA).getLfoDisplayValue(i);
+    }
     // 20.1: a preset / DAW-state load restarts every GLOBAL LFO (a global One-Shot then sweeps once
     // from "now"). Message thread sets, the audio thread consumes it once. Both layers.
     void requestGlobalLfoRearm() noexcept { engineA.requestGlobalLfoRearm(); engineB.requestGlobalLfoRearm(); }
