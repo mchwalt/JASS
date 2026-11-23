@@ -21,10 +21,22 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
 - **RANDOM leaves both STEP SEQ switches alone.** It kept A's ARP and B's sequencer switches but
   rolled A's STEP SEQ on or off, so a random patch could start or stop a figure. The sequencer
   switches are playing, not sound design (maintainer 2026-11-24, code review).
-- **A two-layer preset brings what it needs.** It loads whole whatever is lit - both layers, its
-  split and the A / B selection it was saved with - instead of loading only A while A alone was lit
-  (maintainer 2026-11-23: "das muss das Preset doch mitbringen"). A single-layer preset still loads
-  into A and keeps your B; with B alone lit a preset's sound still goes into B only.
+- **A two-layer preset brings what it needs.** Unless B alone is lit (then a preset's sound still
+  goes into B only), a preset with two layers loads whole - both layers, its split and the A / B
+  selection it was saved with - instead of loading only A while A alone was lit (maintainer
+  2026-11-23: "das muss das Preset doch mitbringen"). A single-layer preset still loads into A and
+  keeps your B.
+- **Switching STEP SEQ off and on again leaves step entry for sure.** Entry ended only when the
+  module was switched off; a step clicked to listen while it was off re-armed the ring, switching
+  on kept it, and the next key overwrote that step (maintainer 2026-11-23). Any switch now ends it.
+- **A+B shows the module that plays.** A module both layers show used to show layer A's frame even
+  where A had it off and B played it - greyed, without rings (maintainer 2026-11-23). A+B now shows
+  the frame of the layer the module is on in (A when both are), re-picks when it is switched, and
+  an A | B choice in its header wins until a preset loads or A+B is left (code review 2026-11-24).
+- **Zone on/off across views, and the master-bus rings.** A zone switched off in one view and on in
+  another now restores each layer's own modules (it had forced the other layer's off, or never
+  brought them back); the rings of the master-bus modules show both layers' modulation, as the
+  master bus sums both (code review 2026-11-24).
 - **The MOD MATRIX ring follows a per-key One-Shot LFO.** The display copy of such an LFO swept once
   at a load and then sat at zero, so a One-Shot routed to CUTOFF (layer B's Init bass) showed no
   movement; it now restarts with every key, as the voices do.
@@ -73,7 +85,7 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   12**: the figure and its latch travel with the layer (`LayerA.StepSeq`, `LayerB.StepSeq`); a v11
   file's STEP SEQ and ARP land in the layer(s) their old TARGET named (Auto / A: layer A), so every
   preset sounds as before - 23 of 24 presets bit-identical, the 24th is Light Duo, which played
-  the removed BASS box and is converted by hand next (Story 21.8).
+  the removed BASS box (Story 21.8).
 - **LAYERS — layer B in the rack, played like a bitimbral hardware synth.** A module in the
   MASTER BUS zone. Buttons **A** and **B** (keys 1 and 2) pick the layer you edit and hear - B's
   modules carry a violet header, keys 1 and 2 switch between two sounds live (a layer you leave
@@ -103,21 +115,18 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   only confused; showing or hiding a module acts on the layer you edit); LAYERS itself is back on screen after
   every reset. RANDOM rolls the layer being edited; the auto-enable couplings (MOD MATRIX, CROSS
   MOD) work in layer B as in A (Story 21.6).
-- **ARP and STEP SEQ get a TARGET - a sequenced bass under the left hand, the right hand live.**
-  (Superseded by the STEP SEQ and ARP per layer above: the layer is the target now; the routing
-  work below - the pattern's own channel, the Split key filter, the hang fixes - carries over.)
-  Until now a running pattern took every key: in a Split both hands fed the figure and nothing
-  played live, and the pattern always went to layer A. **TARGET** (Auto / A / B / A+B) in each
-  module sets the layer; Auto follows the layers (the selected layer, both with A and B lit, in a Split B,
-  the left hand as on a split-keyboard hardware synth). In a Split with one target only that
-  layer's keys feed the pattern and the other hand plays its layer live - the Gemini setup. The
-  pattern plays on its own MIDI channel and is routed by target, not by pitch, so an arpeggio
+- **A running pattern and a Split work together - a sequenced bass under the left hand, the right
+  hand live.** Until now a running pattern took every key: in a Split both hands fed the figure and
+  nothing played live, and the pattern always went to layer A. Now a pattern takes only the keys
+  of its own layer (each layer has its own STEP SEQ and ARP, above) and the other hand plays its
+  layer live - the Gemini setup. The pattern plays on its own MIDI channel and is routed by layer,
+  not by pitch, so an arpeggio
   over four octaves stays in its layer when it crosses the split; the figure's TIE/SLIDE follows
   it. With B off nothing changes (24 of 24 presets render bit-identical). A code review of the
   whole layer rebuild then caught what the null test cannot see: a live key tapped in a Split
   while a pattern runs hung, mono GLIDE no longer cut the previous pattern note, a host's
   All-Notes-Off missed the pattern notes, a DAW project loaded with A and B lit shifted layer B,
-  switching Single to A edited B, RANDOM on B could nudge A and rolled the TARGET. All fixed;
+  switching Single to A edited B, RANDOM on B could nudge A. All fixed;
   `JASS_Render --selftest` now checks the router, the Split key filter and the pattern channel,
   and each check was shown to fail with its bug put back. The second part of the review, presets:
   an A-only load or a load into B no longer lets a sample set that was still loading land on B
@@ -157,8 +166,7 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   engine renders 8 more voices. Both layers can play every key, SPLIT sends the keys below the
   split point (C3 by default) to B; a released key always reaches the layer its note went to, so
   moving the split while holding a chord cannot hang a voice. Each layer has a level and a
-  balance. Master bus, ARP, STEP SEQ and PERC stay single - the ARP and the figure play
-  layer A until they get their own target. Presets keep their root as it was (layer A plus the
+  balance. Master bus and PERC stay single (STEP SEQ and ARP became per-layer modules, above). Presets keep their root as it was (layer A plus the
   instrument) and add `Layers` and, when B is in use, `LayerB`; every existing preset and DAW
   project loads exactly as before, with B off (verified bit-identical on all presets). It is played and edited through the LAYERS module
   (above). The DAW parameter list grows from 254 to

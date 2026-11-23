@@ -199,7 +199,8 @@ private:
 };
 
 // LAYERS (AD-16, Story 21.6): which layer the rack edits — two buttons, A and B, each on its own
-// or both together (A+B = linked editing: the rack shows A, every edit is mirrored to B). One of
+// or both together (A+B: both play, the rack shows every module either layer uses, a knob on an A
+// frame moves B too, on/off stays per layer — see Rack::viewFrameIsB). One of
 // them is always lit: clicking the only lit button does nothing; see toggle(). Writes `layerFocus`
 // (0 = A, 1 = B, 2 = A+B); polls it, so a preset load or RESET shows up here.
 class LayerSelector : public juce::Component, private juce::Timer

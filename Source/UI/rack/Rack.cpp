@@ -156,7 +156,10 @@ namespace rack
 
         if (! enabled)
         {
+            // Merged into what is already stashed: a bypass made in another view (the other layer)
+            // keeps its own memory (review 2026-11-24).
             std::map<juce::String, float> snap;
+            if (zh != nullptr) snap = zh->bypassSnapshot;
             for (const auto& e : layoutModel)
             {
                 if (e.zone != zone || ! shown (e)) continue;
@@ -169,45 +172,54 @@ namespace rack
                     if (auto* param = apvts.getParameter (pid))
                     {
                         // Keyed by the ENABLE id, not the layout id: a bypass made in B must not be
-                        // restored into A's enables (21.6 review). In A+B, A's write mirrors to B
-                        // (linked editing) — so B's value is stashed BEFORE A's is touched.
+                        // restored into A's enables (21.6 review). In A+B both layers' frames are
+                        // members; on/off switches are not mirrored A -> B (2026-11-23), so each
+                        // layer's value is its own. A pid already stashed keeps its first value.
                         if (snap.count (pid) == 0)
+                        {
                             snap[pid] = param->getValue();   // remember
+                            param->setValueNotifyingHost (0.0f);
+                        }
                     }
                 }
             }
-            for (const auto& kv : snap)
-                if (auto* param = apvts.getParameter (kv.first))
-                    param->setValueNotifyingHost (0.0f);
             if (zh != nullptr) zh->bypassSnapshot = std::move (snap);
         }
         else
         {
-            const bool haveSnapshot = (zh != nullptr && ! zh->bypassSnapshot.empty());
+            // The members of this view (in A+B both layers' frames; switches are not mirrored).
+            std::vector<juce::String> pids;
             for (const auto& e : layoutModel)
             {
                 if (e.zone != zone || ! shown (e)) continue;
-                // A's frame first, then B's: in A+B A's write mirrors to B, and B's own write
-                // that follows puts B's remembered value back on top.
                 for (const auto* p : framesInView (e))
                 {
                     if (p == nullptr || p->frame == nullptr) continue;
                     if (p->frame->isHostLocked()) continue;   // AD-13: the host owns this one
                     const auto pid = p->frame->enableParamId();
-                    if (pid.isEmpty()) continue;
-                    if (auto* param = apvts.getParameter (pid))
-                    {
-                        float val = 1.0f;   // fallback: turn the whole group on
-                        if (haveSnapshot)
-                        {
-                            auto it = zh->bypassSnapshot.find (pid);
-                            val = (it != zh->bypassSnapshot.end()) ? it->second : 0.0f;
-                        }
-                        param->setValueNotifyingHost (val);
-                    }
+                    if (pid.isNotEmpty() && std::find (pids.begin(), pids.end(), pid) == pids.end())
+                        pids.push_back (pid);
                 }
             }
-            if (zh != nullptr) zh->bypassSnapshot.clear();
+            // Restore what THIS view's members stashed and forget only those; a pid the bypass never
+            // touched (a bypass made in the other layer's view) is left alone, and the other layer's
+            // memory stays for its own restore (review 2026-11-24). Nothing of this view stashed
+            // (never bypassed here) => fall back to turning the view's group on.
+            bool anyStashed = false;
+            if (zh != nullptr)
+                for (const auto& pid : pids)
+                    if (zh->bypassSnapshot.count (pid) > 0) { anyStashed = true; break; }
+            for (const auto& pid : pids)
+                if (auto* param = apvts.getParameter (pid))
+                {
+                    if (! anyStashed)
+                        param->setValueNotifyingHost (1.0f);
+                    else if (auto it = zh->bypassSnapshot.find (pid); it != zh->bypassSnapshot.end())
+                    {
+                        param->setValueNotifyingHost (it->second);
+                        zh->bypassSnapshot.erase (it);
+                    }
+                }
         }
 
         syncZoneHeaderToggles();
@@ -441,11 +453,20 @@ namespace rack
     void Rack::setLayerView (int view)
     {
         if (view == layerView()) return;
+        if (viewBoth && view != 2)
+            bothPick.clear();   // leaving A+B forgets the A | B picks (maintainer 2026-11-24)
         layerFocusB = view == 1;
         viewBoth    = view == 2;
         relayout();   // the same zones and order, the other view's frames and visible set (21.6 review)
         // No onLayoutChanged: every zone is sized for the tallest view already (layout), so a
         // switch never resizes the window.
+    }
+
+    void Rack::clearLayerPicks()
+    {
+        if (bothPick.empty()) return;
+        bothPick.clear();
+        if (viewBoth) relayout();   // back to "the layer it is on in"
     }
 
     juce::String Rack::zoneName (Zone zone) { return zoneText (zone); }
@@ -1250,10 +1271,18 @@ namespace rack
         // (viewFrameIsB) — re-pack when it does. Same footprint, so only the frames swap.
         if (viewBoth && currentViewPicks() != lastViewPicks)
             relayout();
+        // An instrument module (master bus, PERC, displays) serves both layers, and the master-bus
+        // modulation sums both matrices (AD-16 D3): its rings show feedA + feedB (review 2026-11-24).
+        // `focusB` no longer decides anything here; kept in the signature for the editor's call.
+        juce::ignoreUnused (focusB);
+        LiveModFeed both = feedA;
+        for (size_t t = 0; t < both.byTarget.size(); ++t) both.byTarget[t] += feedB.byTarget[t];
+        for (int o = 0; o < 3; ++o)
+            for (int k = 0; k < 6; ++k) both.osc[o][k] += feedB.osc[o][k];
         // 21.6: the hidden layer's frames (and hidden modules) skip the 20 Hz fan-out.
         for (const auto& p : placed)
             if (p.frame != nullptr && p.frame->isVisible())
-                p.frame->updateLiveFeed (hasLayerB (p.id) ? feedA : (focusB ? feedB : feedA), playedRatio);
+                p.frame->updateLiveFeed (hasLayerB (p.id) ? feedA : both, playedRatio);
         for (const auto& p : placedB)
             if (p.frame != nullptr && p.frame->isVisible())
                 p.frame->updateLiveFeed (feedB, playedRatio);

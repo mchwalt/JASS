@@ -876,7 +876,8 @@ void SynthyEditor::timerCallback()
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
 
-    // AD-16 (21.6): the rack shows the focused layer's patch frames (A also for A+B).
+    // AD-16 (21.6): the rack shows the focused layer's frames; in A+B every module either layer uses
+    // (Rack::setLayerView / viewFrameIsB).
     if (rackBody != nullptr && rackBody->layerView() != processor.getLayerFocus())
         rackBody->setLayerView (processor.getLayerFocus());   // 0 A, 1 B, 2 A+B (overall view)
     {
@@ -942,7 +943,7 @@ void SynthyEditor::timerCallback()
     static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
                                                      (int) ModSource::LFO3, (int) ModSource::LFO4 };
     // AD-16: one feed per layer — each frame lights with its OWN layer's LFOs and matrix (the A+B
-    // view shows frames of both at once, 2026-11-23); instrument modules follow the edited layer.
+    // view shows frames of both at once, 2026-11-23); instrument modules sum both (the master bus does).
     rack::LiveModFeed feedA {}, feedB {};
     for (const bool layerB : { false, true })
     {
@@ -1251,6 +1252,10 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     // patch (armed by touching a step knob, 15.4 AC7), and the freshly loaded figure is exactly what
     // the next played key would overwrite.
     seqStopCursor();
+    // A+B: a loaded sound starts from the automatic frame pick, not from an A | B choice made for
+    // the previous one (review decision 2026-11-24).
+    if (rackBody != nullptr)
+        rackBody->clearLayerPicks();
 
     if (res.migrated)
     {
@@ -1646,7 +1651,10 @@ void SynthyEditor::seqSetCursor(int lane, int step)
     if (step == seqCursor && lane == seqCursorLane)
         return;
     if (lane != seqCursorLane)   // 21.8: one cursor — taking it into another STEP SEQ ends the old one
+    {
         processor.setSeqRecordArmed(seqCursorLane, false);
+        seqPendingNote.store(-1);   // a note parked for the old figure must not land in the new one (review)
+    }
     seqCursorLane = lane;
     seqCursor = step;
     processor.setSeqRecordArmed(lane, seqCursor >= 0);

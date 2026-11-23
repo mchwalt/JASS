@@ -58,7 +58,7 @@ nested format on load.
                     "ALevel": 1.0, "BLevel": 1.0, "APan": 0.0, "BPan": 0.0 }
     // … Chaos, Scope, Spectrum, Keyboard, PresetBank
   },
-  "LayerA": {               // layer A's patch: the 27 patch modules
+  "LayerA": {               // layer A's patch: the 29 patch modules (incl. StepSeq, Arp)
     "Filter":  { "Enabled": true, "Type": "Lowpass", "Cutoff": 500.0, "Resonance": 2.5, "Track": 0.0 },
     "Osc1":    { … },
     "Sampler": { …, "File": "Splendid" },

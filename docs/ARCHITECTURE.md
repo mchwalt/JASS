@@ -617,11 +617,11 @@ The formal architecture spine lives at
 | AD-10 | `RackLayout` model (id/zone/position/visible) is the single source of placement truth; customization is a reorderable list panel |
 | AD-11 | Layout persistence is append-only, default-on-missing, no format bump |
 | AD-12 | Width fixed (1920 px), height auto-fits the visible rack; the display-fit scale comes from the may-appear worst case, with a floor of 1:1 physical pixels |
-| AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS plays one instrument on the keyboard — two layers since AD-16, plus the two fixed boxes of AD-15; further voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
+| AD-13 | **Multitimbral = DAW + plugins, not a host inside JASS.** JASS plays one instrument on the keyboard — two layers since AD-16, plus the PERC box of AD-15; further voices of music are several plugin instances on several DAW tracks. The DAW is Waveform 14 (Tracktion Engine + JUCE, the same stack). In a host the MASTER module is off: mute, level and tempo belong to the DAW. The plugin line is a family of single-purpose sound modules under their own names; **JASS** is the name of the standalone only |
 
 | AD-14 | **Sequencer patterns are content, not parameters.** The STEP SEQ figure (768 × pitch/on/accent/gate) and the PERC grid (4 × 192) leave the APVTS and live in a `PatternStore` the engine reads lock-free; a host sees ~150 parameters, not ~4000. Presets, DAW state and LiveState carry the patterns as data blocks; the rack binds step knobs and grid cells to the store, not to parameters |
-| AD-15 | **Partly superseded 2026-11-23:** the BASS box is removed — layer B, played by its own STEP SEQ, is the bass (AD-16); PERC stays the one box and the rule below still describes it. **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** The keyboard plays the patch (two layers since AD-16). Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and is driven by an existing sequencer through a switch on that sequencer (STEP SEQ's BASS), never by the keyboard. Two boxes are the limit: PERC (drums) and BASS (a sequenced mono bass). A third box, a second BASS or matrix targets into a box stay out, and so does a third layer (AD-16) — that music is DAW tracks |
-| AD-16 | **JASS is bitimbral (decided 2026-11-11, Story 21.3): two identical layers, one rack.** Every patch module exists twice, layer A (today's ids, untouched) and layer B (the same specs, ids prefixed `b`), each with its own voice pool; one A|B focus switch in the header decides which layer the rack shows and edits. Instrument modules (MASTER bus, STEP SEQ, ARP, PERC, BASS, CHAOS, displays, keyboard, preset bank) stay single and serve both; the sequencers get a target. LAYER and SPLIT from one keyboard. A preset is instrument + layer A + an optional `LayerB` object; old presets are layer A with B off. Supersedes AD-13 (a) for two layers; songs with more voices stay DAW tracks |
+| AD-15 | **Partly superseded 2026-11-23:** the BASS box is removed — layer B, played by its own STEP SEQ, is the bass (AD-16); PERC stays the one box and the rule below still describes it. **A fixed box may play beside the patch — PERC's rule, generalised (decided 2026-11-08, Story 20.2).** The keyboard plays the patch (two layers since AD-16). Besides it, a *box* may sound if it has its own small engine at processor level, no part selector, sums dry into the master bus at PERC's point, and runs from its own sequencer, never from the keyboard. ~~Two boxes are the limit: PERC and BASS~~ — since 2026-11-23 PERC (drums) is the one box. A further box or matrix targets into a box stay out, and so does a third layer (AD-16) — that music is DAW tracks |
+| AD-16 | **JASS is bitimbral (decided 2026-11-11, Story 21.3): two identical layers, one rack.** Every patch module exists twice, layer A (today's ids, untouched) and layer B (the same specs, ids prefixed `b`), each with its own voice pool; the A / B / A+B selection (LAYERS) decides which layer the rack shows, edits and hears; A+B shows every module either layer uses. STEP SEQ and ARP are patch modules too — each layer its own, playing that layer (Story 21.8). Instrument modules (MASTER bus, PERC, CHAOS, displays, keyboard, preset bank) stay single and serve both. SPLIT (on/off at the keyboard) from one keyboard. A preset is instrument + layer A + an optional `LayerB` object; old presets are layer A with B off. Supersedes AD-13 (a) for two layers; songs with more voices stay DAW tracks |
 
 ### AD-13 in more detail (decided 2026-10-05)
 
@@ -799,12 +799,12 @@ The formal architecture spine lives at
   keyboard) gives that.
 - **The rule.**
   1. **Two identical layers, A and B.** Every *patch module* exists twice; layer B is not a
-     reduced copy. Patch modules (27 of today's 39 specs): OSC 1–3, SUB, NOISE, STRING,
+     reduced copy. Patch modules (29 specs since 21.8): OSC 1–3, SUB, NOISE, STRING,
      WAVETABLE, SAMPLER, GRAIN, CROSS MOD, FILTER, FORMANT, ADSR, PITCH ENV, GLIDE, LFO 1–4,
-     MOD MATRIX, DISTORTION, WAVEFOLD, BITCRUSH, PHASER, CHORUS, DELAY, REVERB.
-  2. **Instrument modules stay single** and serve both layers (12 specs): MASTER, COMPRESSOR,
-     STEREO (output mode, width, room), ARP, STEP SEQ, PERC, CHAOS, OSCILLOSCOPE, SPECTRUM,
-     KEYBOARD, PRESET BANK. CHAOS is one attractor both matrices can read; the master bus sums
+     MOD MATRIX, DISTORTION, WAVEFOLD, BITCRUSH, PHASER, CHORUS, DELAY, REVERB, STEP SEQ, ARP.
+  2. **Instrument modules stay single** and serve both layers: MASTER, COMPRESSOR,
+     STEREO (output mode, width, room), PERC, CHAOS, OSCILLOSCOPE, SPECTRUM, KEYBOARD,
+     PRESET BANK, LAYERS (STEP SEQ and ARP became patch modules in 21.8, the BASS box went). CHAOS is one attractor both matrices can read; the master bus sums
      both layers before the compressor, as it already sums PERC.
   3. **Ids: layer A keeps today's ids, layer B prefixes them.** The parameter layout is built
      from the same `ModuleSpec` list twice: once as is, once with every id prefixed `b`
@@ -812,9 +812,10 @@ The formal architecture spine lives at
      projects, automation and the 450-odd `ID::` call sites keep meaning layer A; the B ids
      come out of the spec walk, not out of hand-written constants (the `JASS_INDEXED_ID`
      pattern already proves the cached-string approach for OSC/LFO/slot ids). New layer-level
-     parameters (all append-only, defaults = today): `layerBOn` (off), `layerMode` (LAYER |
-     SPLIT), `splitNote` (C3), `layerFocus` (A | B, UI only, not automatable), level/pan
-     balance per layer.
+     parameters (all append-only, defaults = today): `layerMode` (Single | Dual | Split; since
+     2026-11-23 only no-split / Split is used, a stored Dual reads as no split), `splitNote` (C3),
+     `layerFocus` (A | B | A+B, not automatable — what the rack shows and, outside a Split, what
+     plays), level/pan balance per layer. (`layerBOn` of S1 became MODE in 21.6, then went.)
   4. **One engine class per layer.** Everything per-patch that lives in the processor today
      moves into a `PatchEngine` (working name): the `juce::Synthesiser` with its voices, the
      `GlideInfo` and mono-glide state, the GLOBAL LFOs (20.1), the sampler loop clock, the
@@ -848,10 +849,10 @@ The formal architecture spine lives at
   5. **Voices.** Each layer has its own pool of **8** voices (today's count), stock JUCE
      allocation and stealing inside the pool; B's pool renders only while `layerBOn`. Raising
      the count (the Gemini has 20 shared) is a later measurement, not part of this decision.
-  6. **MIDI router in front of the engines.** LAYER: every key goes to both. SPLIT: below
-     `splitNote` → B, from it up → A (bass/pad under the left hand, the classic split). The
-     drone (ch 16) and the step audition (ch 15) keep their channels and go to the focused
-     layer. A per-layer MIDI-channel mode (ch 1 → A, ch 2 → B, for the DAW) is a candidate for
+  6. **MIDI router in front of the engines.** Outside a Split a key goes to the selected
+     layer(s) (A+B: both). SPLIT: below `splitNote` → B, from it up → A (bass/pad under the left
+     hand, the classic split). The drone (ch 16) goes to the focused layer; the step previews
+     (ch 15 A, ch 12 B) and the pattern channels (14 A, 13 B) go to their own layer (item 7). A per-layer MIDI-channel mode (ch 1 → A, ch 2 → B, for the DAW) is a candidate for
      later, not part of this decision.
   7. **Sequencers are patch modules — the layer is the target** (Story 21.8, 2026-11-23; it
      replaced S3's "a target, not a copy"). STEP SEQ and ARP are `layered`: each layer has its own
@@ -867,8 +868,18 @@ The formal architecture spine lives at
      14 A's pattern, 13 B's pattern, 12 B's step preview — each routed to its layer whatever is
      selected. Live keys are channel 1; a host sending notes on 12–16 reaches those paths, not the
      live-key routing (split, selection).
-  8. **One rack, a focus switch.** The header gets **A | B** (lit, B tinted so it is always
-     visible which layer is edited), B ON, LAYER/SPLIT and the split note. The rack shows the
+  8. **One rack, a focus switch.** As built (21.6, revised 2026-11-23): the LAYERS module's
+     **A** / **B** buttons (keys 1 / 2; a press adds a layer, a quick double press keeps only it)
+     and the keyboard's **SPLIT** button (key 3; double press = LEARN the split key). **A+B is the
+     overall view**: every module either layer uses (`Rack::shown`); a module only B uses shows
+     B's frame; a module both use shows the frame of the layer it is on in, or the player's
+     **A | B** header pick (`viewFrameIsB`, `bothPick`, cleared on a preset load and on leaving
+     A+B); a module switched on or off re-picks (re-pack on a change of the pick set). Every
+     zone is as tall as the tallest of the three views, so switching never moves a header. In
+     A+B a knob on an A frame moves B too, a module's on/off acts on the layer on screen; the
+     rings of instrument modules sum both layers. (The original plan:) The header gets **A | B**
+     (lit, B tinted so it is always visible which layer is edited), B ON, LAYER/SPLIT and the
+     split note. The rack shows the
      focused layer's patch modules; instrument modules look the same whichever layer is in
      focus. Implementation preference: **two frame sets** for the patch modules (B's frames are
      built against B's ids) swapped on focus — no rebinding of `ModuleFrame` attachments, of
@@ -926,7 +937,8 @@ The formal architecture spine lives at
     noted, README.
   - Stories 21.1 (FILTER SLOPE + DRIVE) and 21.2 (DUAL) live inside the voice and therefore
     apply to both layers without extra work; they can come before or after S0–S3.
-- **Open after S3: does the BASS box stay?** Once STEP SEQ can target layer B, a mono bass patch
+- **Open after S3: does the BASS box stay?** *(Decided 2026-11-23: no — removed, layer B with its
+  own STEP SEQ plays the bass; `Light Duo` converted by hand.)* Once STEP SEQ can target layer B, a mono bass patch
   on B covers most of what BASS does. BASS still differs: dry past the patch FX, one cheap mono
   voice, and a third simultaneous part (pad on A, a second sound on B, the figure on BASS).
   Decided by ear after S3 against `Light Duo`; if it goes, it is hidden and its parameters stay

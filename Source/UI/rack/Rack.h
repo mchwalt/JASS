@@ -48,6 +48,9 @@ namespace rack
         // (maintainer 2026-11-23): every module either layer uses; a module A uses shows A's frame
         // (edits mirror to B), a module only B uses shows B's frame (violet, B's values, B only).
         void setLayerView (int view);
+        // Forget the player's A | B picks (A+B view): a preset load calls this, leaving A+B does it
+        // by itself (maintainer 2026-11-24) — the view then shows the layer each module is on in.
+        void clearLayerPicks();
         int  layerView() const noexcept { return viewBoth ? 2 : (layerFocusB ? 1 : 0); }
         // After a load into B: what layer B now uses must be visible in B ("on ⇒ visible").
         void revealAfterLayerLoad()
@@ -66,8 +69,9 @@ namespace rack
         // Fan the live feed out to every frame (AD-8): the single editor timer reads the
         // processor's LFO atomic + active target + played ratio and calls this once per
         // tick. Each frame gates rings by its own enable and refreshes its transform knobs.
-        // AD-16: one feed per layer; a layer's frames take its own, instrument modules the edited
-        // layer's (`focusB`) — so in A+B a frame showing B's values rings with B's modulation.
+        // AD-16: one feed per layer; a layer's frames take its own (in A+B a frame showing B's
+        // values rings with B's modulation), instrument modules both summed (the master bus sums
+        // both matrices). `focusB` is unused since 2026-11-24.
         void updateLiveFeed (const LiveModFeed& feedA, const LiveModFeed& feedB, bool focusB, double playedRatio);
 
         // Find a module frame by its descriptor id (nullptr if none). Lets the editor reach a

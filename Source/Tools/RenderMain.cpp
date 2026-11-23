@@ -814,6 +814,72 @@ namespace
             setParam (*r.p, ID::filterOn, bOn > 0.5f ? 0.0f : 1.0f);   // ... then flips: a mirror would carry it to B
             expect (std::abs (raw (bp + ID::filterOn) - bOn) < 0.5f, "A's FILTER switched: B's stays as it was");
         }
+        std::cout << "Step entry per lane: B's armed lane takes no root, A still latches" << std::endl;
+        {
+            Rig r;
+            r.set (ID::layerMode, 2.0f); r.set (ID::splitNote, 60.0f);
+            longFigure (r, 0); longFigure (r, 1);
+            r.p->setSeqRecordArmed (1, true);   // writing B's figure by playing (review group 3)
+            r.run (0.1);
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 48, 0.8f) }, { 0, juce::MidiMessage::noteOn (1, 72, 0.8f) } });
+            r.block ({ { 0, juce::MidiMessage::noteOff (1, 48) }, { 0, juce::MidiMessage::noteOff (1, 72) } });
+            r.run (0.2);
+            expect (! r.p->isSeqLatched (1), "an armed lane B takes the left hand's key as an entry, not as a root");
+            expect (r.p->isSeqLatched (0) && r.p->getSeqLatchRoot (0) == 72, "lane A still latches from the right hand");
+            r.p->setSeqRecordArmed (1, false);
+        }
+        std::cout << "A per-key One-Shot LFO's ring restarts on a key (A and B)" << std::endl;
+        for (const bool layerB : { false, true })
+        {
+            Rig r;
+            const juce::String pre = layerB ? bp : juce::String();
+            r.set (ID::layerFocus, layerB ? 1.0f : 0.0f);   // the key reaches the layer under test
+            setParam (*r.p, pre + ID::lfoOn (1), 1.0f);
+            setParam (*r.p, pre + ID::lfoWave (1), 5.0f);    // One-Shot
+            setParam (*r.p, pre + ID::lfoRate (1), 3.5f);
+            setParam (*r.p, pre + ID::lfoDepth (1), 1.0f);
+            setParam (*r.p, pre + ID::lfoGlobal (1), 0.0f);  // per voice
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            r.run (1.0);                                     // the sweep is over: the ring sits at rest
+            const float rest = r.p->getLfoDisplayValueOf (layerB, 0);
+            r.block ({ { 0, juce::MidiMessage::noteOff (1, 60) } });
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 62, 0.8f) } });
+            r.run (0.02);
+            expect (std::abs (r.p->getLfoDisplayValueOf (layerB, 0) - rest) > 0.2f,
+                    layerB ? "B: the One-Shot ring sweeps again on the next key" : "A: the One-Shot ring sweeps again on the next key");
+        }
+        std::cout << "ARP SYNC: 1/16 at 120 BPM is 8 steps a second; Free follows RATE (A and B)" << std::endl;
+        for (const bool layerB : { false, true })
+        {
+            const juce::String pre = layerB ? bp : juce::String();
+            auto stepsPerSecond = [&] (int syncIndex, float rate)
+            {
+                Rig r;
+                r.set (ID::layerFocus, layerB ? 1.0f : 0.0f);
+                r.set (ID::syncTempo, 120.0f);
+                setParam (*r.p, pre + ID::arpOctaves, 1.0f);
+                setParam (*r.p, pre + ID::arpGate, 0.5f);
+                setParam (*r.p, pre + ID::arpRate, rate);
+                setParam (*r.p, pre + ID::arpSync, (float) syncIndex);
+                setParam (*r.p, pre + ID::arpOn, 1.0f);
+                r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });   // held for the whole count
+                int starts = 0, was = 0;
+                for (int i = 0; i < (int) (2.0 * kSampleRate / kBlock); ++i)
+                {
+                    r.block();
+                    const int now = r.p->layerKeysDown (layerB);
+                    if (now > 0 && was == 0) ++starts;
+                    was = now;
+                }
+                return starts / 2.0;
+            };
+            const int sixteenth = SyncDivision::kNames.indexOf ("1/16");
+            expect (sixteenth > 0, "SyncDivision has a 1/16");
+            const double synced = stepsPerSecond (sixteenth, 3.0f);   // RATE 3 must not matter
+            const double free   = stepsPerSecond (0, 3.0f);
+            expect (std::abs (synced - 8.0) <= 1.0, layerB ? "B: ARP SYNC 1/16 at 120 BPM ~ 8 steps/s" : "A: ARP SYNC 1/16 at 120 BPM ~ 8 steps/s");
+            expect (std::abs (free - 3.0) <= 1.0,   layerB ? "B: ARP Free follows RATE 3"               : "A: ARP Free follows RATE 3");
+        }
     }
 }
 

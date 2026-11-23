@@ -1158,7 +1158,7 @@ namespace rack
                 b->setColour (juce::TextButton::textColourOnId,   juce::Colours::white);
                 b->setToggleState (isB == desc.layerB, juce::dontSendNotification);   // this frame's layer is lit
                 b->setTooltip (isB ? "Show layer B's values of this module (edits go to B only)"
-                                   : "Show layer A's values of this module (edits go to both)");
+                                   : "Show layer A's values of this module (edits go to both, except on/off)");
                 b->onClick = [this, isB] { if (isB != desc.layerB && onLayerSwitch) onLayerSwitch (isB); };
                 addChildComponent (*b);
                 return b;

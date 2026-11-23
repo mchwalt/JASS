@@ -89,8 +89,9 @@ info** so nothing is hidden and every control explains itself.
   figure started from silence enters on the next start of the drum pattern.
   **COPY** stamps a step column, **x2** doubles the pattern. SFZ choke groups are
   honoured (a closed hi-hat silences the open one).
-- **Arpeggiator** — up / down / up-down / random. Takes the same place as the
-  STEP SEQ, so only one of the two runs.
+- **Arpeggiator** — up / down / up-down / random, free or on the tempo (SYNC).
+  Takes the same place as its layer's STEP SEQ, so only one of the two runs per
+  layer — A's ARP and B's STEP SEQ play together.
 
 **Envelopes & modulation**
 - **ADSR**, **pitch envelope**, **poly glide** (mono / legato / poly)
