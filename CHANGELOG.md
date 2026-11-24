@@ -68,7 +68,7 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   the mouse (maintainer 2026-11-24). A profile is an editable JSON file in
   `%AppData%\JASS\Controllers` that maps CC numbers to parameters - configuration as a file, not
   code. `MiniLab 3` follows the controller's factory template (knobs: FILTER Cutoff / Resonance,
-  LFO 1 Rate / Depth in the panel order, CHORUS, REVERB, DELAY, GLIDE; faders: ADSR) and maps the DAW program's
+  LFO 1 Rate / Depth in the panel order, CHORUS, DELAY, REVERB, GLIDE; faders: ADSR) and maps the DAW program's
   CCs (86-117 / 14-31, from Arturia's manual and the Bitwig and Live scripts) to the same controls,
   so the knobs work whichever program the MiniLab is in, `Generic (GM)` the GM2 sound
   controller numbers most synths use (74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb,
