@@ -233,16 +233,13 @@ Two independent version numbers — don't conflate them:
   to enable the guard — don't copy the script into `.git/hooks/`, or that
   copy silently shadows every later fix to the tracked hook.)
 - **Private work-in-progress** (since the repo went public, 2026-08-31):
-  experiments and half-baked ideas are not pushed to the public repo.
-  The maintainer keeps a plain private repo (`JASS-private` — GitHub cannot
-  make a *fork* of your own public repo private) attached as a second
-  remote: `git remote add private <url>`, then
-  `git push private experiment/foo`. Finished work still travels
-  `develop` → public `origin` as usual. Two caveats: **GitHub Actions must
-  stay disabled on the mirror** (otherwise `release.yml` mints releases on
-  every `main` push there), and merging an experiment into `develop`
-  publishes its *entire* commit history — squash first if the WIP commits
-  shouldn't go public.
+  experiments and half-baked ideas stay on local branches and are not
+  pushed. Merging an experiment into `develop` publishes its *entire* commit
+  history — squash first if the WIP commits shouldn't go public. Planning
+  papers (`_bmad-output/`, gitignored in this repo) are a separate git repo
+  with its own private remote, `JASS-planning`; the two histories never
+  touch. (The private mirror `JASS-private`, a second remote for
+  experiments, was retired on 2026-11-24 — it was never used.)
 - **CHANGELOG** (`CHANGELOG.md`, Keep-a-Changelog style): collect notes under
   `## [Unreleased]`; promote them to a `## [YYYY.MM.MICRO]` section **as part
   of the PR** that will release them. Entries carry the reasoning, not just

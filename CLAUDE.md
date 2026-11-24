@@ -31,10 +31,11 @@ are easy to get wrong; the full picture is in [`docs/`](docs/) — start with
   is the release PR. **Never push to `main` directly**; enable the guard once per
   clone with `git config core.hooksPath .githooks` — that config line, *never* a
   copy in `.git/hooks/` (a copy shadows every later fix to the tracked hook).
-- **Experiments stay private** (repo is public since 2026-08-31): half-baked
-  ideas go to the private mirror (`git push private experiment/foo`), not to
-  the public `origin`. The pre-push guard only watches the public repo; keep
-  GitHub Actions disabled on the mirror. Details in
+- **Experiments stay local** (repo is public since 2026-08-31): half-baked
+  ideas live on local branches and are not pushed. Planning papers
+  (`_bmad-output/`, gitignored here) are their own private repo,
+  `JASS-planning`; commit stories there. The private mirror `JASS-private`
+  was retired on 2026-11-24. Details in
   [`DEVELOPER_GUIDE.md`](docs/DEVELOPER_GUIDE.md) §6.
 - **Never push on your own initiative** — commit locally, push when the
   maintainer says so. **Never run `gh pr merge` at all**, even when a message
