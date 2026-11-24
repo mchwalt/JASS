@@ -909,7 +909,7 @@ namespace
         expect (shipped.size() == 2, "both factory profiles parse");
         for (const auto& p : shipped)
         {
-            if (p.name == "MiniLab 3") expect (p.controls.size() == 12, "MiniLab 3: all 12 controls known");
+            if (p.name == "MiniLab 3") expect (p.controls.size() == 24, "MiniLab 3: all 24 controls known (ARTURIA + DAW program)");
             if (p.name == CP::kGenericName) expect (p.controls.size() == 6, "Generic (GM): all 6 controls known");
         }
 
