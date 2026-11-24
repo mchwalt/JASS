@@ -103,6 +103,13 @@ file(GLOB JASS_SAMPLES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Samples/*.
                                          "${CMAKE_CURRENT_SOURCE_DIR}/Samples/*.flac")
 juce_add_binary_data(JASS_Samples HEADER_NAME Samples.h NAMESPACE Samples SOURCES ${JASS_SAMPLES})
 
+# Factory controller profiles (Story 22.1): embedded and copied into %AppData%\JASS\Controllers
+# when missing (ControllerProfiles::seedFactoryProfiles) — an edited file is never overwritten.
+# Header/namespace "ControllerProfileFiles" so it cannot clash with Source/Audio/ControllerProfiles.h.
+file(GLOB JASS_CONTROLLER_PROFILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/Resources/Controllers/*.json")
+juce_add_binary_data(JASS_ControllerProfiles HEADER_NAME ControllerProfileFiles.h NAMESPACE ControllerProfileFiles
+                     SOURCES ${JASS_CONTROLLER_PROFILES})
+
 # Vectorisation baseline: AVX, not the compiler default.
 #
 # MSVC on x64 defaults to SSE2, which leaves most of the DSP scalar. MEASURED on the Kunstkopf
@@ -128,7 +135,8 @@ target_compile_definitions(JASS PUBLIC
     # VST3 has no MIDI CC events, so JUCE emulates them with 16 x 130 parameters ("MIDI CC 0|1" ...)
     # that Cubase lists in full. JASS reads no controller, no pitch wheel and no aftertouch
     # (pitchWheelMoved is empty by design), so the 2080 entries buy nothing and go (2026-10-10,
-    # maintainer in Cubase: hundreds of MIDI entries next to the rack modules).
+    # maintainer in Cubase: hundreds of MIDI entries next to the rack modules). The controller
+    # profiles of Story 22.1 act in the standalone only, so the VST3 still reads no CC.
     JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0
     _USE_MATH_DEFINES
 )
@@ -140,6 +148,7 @@ target_link_libraries(JASS
         JASS_DemoPresets
         JASS_Wavetables
         JASS_Samples
+        JASS_ControllerProfiles
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

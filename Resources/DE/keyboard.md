@@ -16,3 +16,14 @@ Die Klaviatur muss den Fokus haben, damit die Buchstabentasten klingen (holt ihn
 **Akkorde**
 
 Normale Tastaturen verschlucken manche Dreier-Kombinationen — der dritte Ton kommt nie an. Oktave verschieben oder über MIDI spielen; die Buchstabentasten senden zudem eine feste Anschlagstärke.
+
+**MIDI-Controller (Drehregler und Fader)**
+
+Drehregler und Fader eines MIDI-Controllers bewegen JASS in der Standalone-App (in einer DAW dort zuweisen).
+
+- **Header-Auswahl** — **Auto** wählt das Profil nach dem Namen des MIDI-Eingangs (MiniLab 3, sonst Generic (GM)); oder von Hand wählen
+- **MiniLab 3** — Regler: Cutoff, Resonance, LFO 1 Depth, LFO 1 Rate, Chorus, Reverb, Delay, Glide; Fader: Attack, Decay, Sustain, Release
+- **Generic (GM)** — CC 74 Cutoff, 71 Resonance, 73 Attack, 72 Release, 91 Reverb, 93 Chorus
+- **Erste Berührung** — ein Regler setzt seinen Wert sofort, der Klang springt dorthin, wo der Regler steht
+- **Layer** — ein Regler bewegt den Layer, den du bearbeitest: A, B oder beide bei A+B
+- **Dateien** — eine `.json` pro Controller in `%AppData%\JASS\Controllers`; dort `cc` und `param` ändern, Datei löschen holt beim nächsten Start die Werksfassung zurück

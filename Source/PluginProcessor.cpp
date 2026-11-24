@@ -2,6 +2,12 @@
 #include "UI/PluginEditor.h"
 #include "Audio/PresetIO.h"
 #include <set>
+#include <bit>
+#if JucePlugin_Build_Standalone
+ // Story 22.1: the standalone's device manager names the enabled MIDI inputs (profile matching).
+ // getInstance() is nullptr in the VST3 and in JASS_Render.
+ #include <juce_audio_plugin_client/Standalone/juce_StandaloneFilterWindow.h>
+#endif
 
 namespace { const std::array<juce::String, 12>& crossModIdTable(); }   // defined below
 
@@ -20,6 +26,7 @@ SynthyProcessor::SynthyProcessor()
     PresetIO::seedDemoPresets();
     PresetIO::seedWavetables();
     PresetIO::seedSamples();     // Story 12.1: SAMPLER example recordings
+    ControllerProfiles::seedFactoryProfiles();   // Story 22.1: MiniLab 3 + Generic (GM), only if missing
     // ... and pre-load them so the SET combo fills up — on a background thread (12.6), because
     // decoding every installed set (grand pianos: ~1.2 GB) held up the start of the app. The
     // hook lets a preset ask for ITS set: that one is pulled to the front of the queue and
@@ -141,6 +148,17 @@ SynthyProcessor::SynthyProcessor()
         loadLiveState();
         apvts.state.addListener(this);
         startTimer(1500);
+
+        // Story 22.1: controller profiles act here only (a DAW maps controllers itself). Own 30 Hz
+        // timer: a knob must follow the hand, the LiveState period (1.5 s) is far too slow.
+        controllerHandPick = PresetIO::getSetting ("ControllerProfile");
+        rescanControllers (true);
+        // The standalone holder opens the MIDI inputs only after the processor exists (its own
+        // 500 ms timer), so the rescan above sees none: the first periodic rescan comes after ~1 s
+        // (30 of 60 ticks), then every ~2 s.
+        controllerTicks = 30;
+        controllerPoll.tick = [this] { pollControllers(); };
+        controllerPoll.startTimerHz (30);
 
         // The standalone wrapper restores its OWN saved state right after construction (the
         // "filterState" in JASS.settings, written at shutdown); re-load the shared LiveState
@@ -308,6 +326,7 @@ SynthyProcessor::~SynthyProcessor()
         apvts.removeParameterListener(id, this);
     if (wrapperType == wrapperType_Standalone)
     {
+        controllerPoll.stopTimer();
         stopTimer();
         apvts.state.removeListener(this);
         saveLiveState();
@@ -1181,6 +1200,11 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         keyboardState.noteOff(kDroneChannel, kDroneNote, 0.0f);
         autoNoteOn = false;
     }
+
+    // Story 22.1: hardware knobs / faders — the standalone only records them here; the message
+    // thread maps and applies them (pollControllers).
+    if (! isHostedByDaw())
+        captureControllers (midiMessages);
 
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
@@ -2217,4 +2241,124 @@ void SynthyProcessor::mirrorToLayerB (const juce::String& idA, float deltaRaw)
     }
     else
         b->setValueNotifyingHost(a->getValue());
+}
+
+//==================================================================================================
+// Story 22.1 — controller profiles (see ControllerProfiles.h and ARCHITECTURE.md, "Controller input").
+
+// Audio thread: the latest value per (channel, CC) and a dirty bit. Raw bytes, no MidiMessage, no
+// allocation. Channels 12..16 are JASS's own (drone, previews, pattern channels) and are skipped.
+void SynthyProcessor::captureControllers (const juce::MidiBuffer& midi) noexcept
+{
+    for (const auto meta : midi)
+    {
+        if (meta.numBytes < 3 || (meta.data[0] & 0xF0) != 0xB0)
+            continue;
+        const int ch = meta.data[0] & 0x0F;   // 0-based: 0..10 = channels 1..11
+        if (ch >= kCcChannels)
+            continue;
+        const int cc = meta.data[1] & 0x7F;
+        ccValue[(size_t) (ch * 128 + cc)].store ((std::uint8_t) (meta.data[2] & 0x7F));
+        ccDirty[(size_t) (ch * 2 + (cc >> 6))].fetch_or (std::uint64_t (1) << (cc & 63));
+    }
+}
+
+namespace
+{
+    // The MIDI inputs switched on in the standalone's audio/MIDI settings. Empty elsewhere.
+    juce::StringArray enabledMidiInputNames()
+    {
+        juce::StringArray names;
+       #if JucePlugin_Build_Standalone
+        if (auto* holder = juce::StandalonePluginHolder::getInstance())
+            for (const auto& d : juce::MidiInput::getAvailableDevices())
+                if (holder->deviceManager.isMidiInputDeviceEnabled (d.identifier))
+                    names.add (d.name);
+       #endif
+        return names;
+    }
+}
+
+void SynthyProcessor::rescanControllers (bool force)
+{
+    const auto inputs = enabledMidiInputNames();
+    const auto sig = ControllerProfiles::folderSignature();
+    if (! force && inputs == controllerInputs && sig == controllerFolderSig)
+        return;
+    const bool reload = force || sig != controllerFolderSig;
+    controllerInputs = inputs;
+    controllerFolderSig = sig;
+    if (reload)
+    {
+        controllerProfiles = ControllerProfiles::loadFolder ([this] (const juce::String& id) { return apvts.getParameter (id) != nullptr; });
+        ++controllerRevision;
+    }
+    controllerActive = ControllerProfiles::pick (controllerProfiles, controllerInputs, controllerHandPick);
+}
+
+void SynthyProcessor::pollControllers()
+{
+    if (++controllerTicks >= 60)   // ~2 s: a newly enabled input, an edited / added / deleted file
+    {
+        controllerTicks = 0;
+        rescanControllers (false);
+    }
+    const auto* profile = juce::isPositiveAndBelow (controllerActive, (int) controllerProfiles.size())
+                              ? &controllerProfiles[(size_t) controllerActive] : nullptr;
+    const int focus = getLayerFocus();
+    for (int ch = 0; ch < kCcChannels; ++ch)
+        for (int w = 0; w < 2; ++w)
+        {
+            auto bits = ccDirty[(size_t) (ch * 2 + w)].exchange (0);
+            while (bits != 0)
+            {
+                const int cc = w * 64 + std::countr_zero (bits);
+                bits &= bits - 1;
+                if (profile == nullptr)
+                    continue;
+                // Absolute 0..127 onto the knob's travel; the parameter's own skew applies. Jump on
+                // first touch.
+                const float v01 = (float) ccValue[(size_t) (ch * 128 + cc)].load() / 127.0f;
+                for (const auto& t : ControllerProfiles::resolve (*profile, ch + 1, cc, focus))
+                    if (auto* p = apvts.getParameter (t.paramId))
+                    {
+                        // A pinned entry wants its one layer — in A+B, linked editing must not
+                        // carry it to B. Unpinned in A+B: A is set and mirrorToLayerB moves B.
+                        const juce::ScopedValueSetter<bool> pin (linkSuspended, linkSuspended || t.pinned);
+                        p->beginChangeGesture();
+                        p->setValueNotifyingHost (v01);
+                        p->endChangeGesture();
+                    }
+            }
+        }
+}
+
+void SynthyProcessor::runControllersForTest (std::vector<ControllerProfiles::Profile> profiles, const juce::MidiBuffer& midi)
+{
+    controllerProfiles = std::move (profiles);
+    controllerActive = controllerProfiles.empty() ? -1 : 0;
+    captureControllers (midi);
+    controllerTicks = 0;   // no folder rescan inside the test
+    pollControllers();
+}
+
+juce::StringArray SynthyProcessor::getControllerProfileNames() const
+{
+    juce::StringArray names;
+    for (const auto& p : controllerProfiles)
+        names.add (p.name);
+    return names;
+}
+
+juce::String SynthyProcessor::getActiveControllerProfile() const
+{
+    return juce::isPositiveAndBelow (controllerActive, (int) controllerProfiles.size())
+               ? controllerProfiles[(size_t) controllerActive].name : juce::String();
+}
+
+void SynthyProcessor::setControllerProfileChoice (const juce::String& name)
+{
+    controllerHandPick = name == "Auto" ? juce::String() : name;
+    PresetIO::setSetting ("ControllerProfile", controllerHandPick);
+    controllerActive = ControllerProfiles::pick (controllerProfiles, controllerInputs, controllerHandPick);
 }

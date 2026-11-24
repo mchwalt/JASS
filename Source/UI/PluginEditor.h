@@ -571,6 +571,11 @@ private:
 
     // Online help (Story 6.1): a header language selector + one shared movable HelpPanel.
     juce::ComboBox langBox;                 // EN / DE
+    // Story 22.1: which controller profile moves the knobs — "Auto" (from the MIDI input names) or a
+    // hand pick. Standalone only (hidden in a DAW). Refilled when the Controllers folder changes.
+    juce::ComboBox controllerBox;
+    int controllerBoxRevision = -1;
+    void refreshControllerBox();
     juce::String currentLang { "EN" };      // active help language (persisted as a global app setting)
     std::unique_ptr<HelpPanel> helpPanel;   // reused for every module; closed via ✕ / ESC
     juce::String currentHelpId;             // module/zone id currently shown (for live re-render on language switch)

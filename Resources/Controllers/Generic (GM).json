@@ -1,0 +1,12 @@
+{
+  "name": "Generic (GM)",
+  "match": "",
+  "controls": [
+    { "name": "Brightness (CC 74)", "cc": 74, "channel": 0, "param": "filterCutoff" },
+    { "name": "Timbre (CC 71)",     "cc": 71, "channel": 0, "param": "filterReso" },
+    { "name": "Attack (CC 73)",     "cc": 73, "channel": 0, "param": "attack" },
+    { "name": "Release (CC 72)",    "cc": 72, "channel": 0, "param": "release" },
+    { "name": "Reverb (CC 91)",     "cc": 91, "channel": 0, "param": "reverbMix" },
+    { "name": "Chorus (CC 93)",     "cc": 93, "channel": 0, "param": "chorusMix" }
+  ]
+}

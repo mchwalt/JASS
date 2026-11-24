@@ -176,13 +176,15 @@ encodes the parameter as a small int precisely to avoid constructing a
 | `currentNoteRatio`, `heldNotesLo/Hi` | played-note ratio for the FREQ knob display |
 | `pluckRequested` | PLUCK button → `exchange(false)` on the audio thread |
 | `autoPlayEnabled`, `liveDirty`, `fixingMixSrc`, `matrixEnablesDirty`, `crossModDirty`, `pendingCrossModCode` | flags described above |
+| `ccValue[11 × 128]`, `ccDirty[11 × 2]` | latest MIDI CC value per channel 1..11 + a dirty bit per CC (Story 22.1, [§3.6](#36-controller-input-story-221)) |
 
 ### 3.4 Timers
 
 | Timer | Rate | Job |
 |---|---|---|
 | `SynthyProcessor` (Standalone only) | 1.5 s debounce | LiveState auto-save when `liveDirty` |
-| `SynthyEditor` | 30 Hz | mod rings, FREQ displays, zone-header sync, coupling drain, F-key poll, keyboard enable gate |
+| `SynthyProcessor::controllerPoll` (Standalone only) | 30 Hz | controller CCs → parameters; every ~2 s re-read enabled MIDI inputs + the Controllers folder (Story 22.1) |
+| `SynthyEditor` | 30 Hz | mod rings, FREQ displays, zone-header sync, coupling drain, F-key poll, keyboard enable gate, controller-profile combo refresh (22.1) |
 | `ModuleFrame` | 20 Hz (only if the module has dynamic state) | dim state, conditional knobs, combo dependencies, slot LEDs |
 | Displays (`WaveformDisplay`, `SpectrumDisplay`, `SpinningTitle3D`) | 30 Hz | repaint |
 | `EnvelopeDisplay` | 20 Hz | ADSR curve |
@@ -197,6 +199,42 @@ they are event-driven via `keyStateChanged`/bubbling (F1–F12 preset bank,
 arrow-key octave switch, Space = PLUCK), with a polled physical-key fallback
 for the F-keys while a modal call-out or combo popup owns the focus (guarded by
 `juce::Process::isForegroundProcess()`).
+
+### 3.6 Controller input (Story 22.1)
+
+Hardware knobs and faders reach parameters through **controller profiles**:
+JSON files in `%AppData%\JASS\Controllers\` (`name`, `match`, `controls[]` of
+`name`, `cc`, `channel` (0 = any), `param` = layer-A id, optional
+`layer: "A" | "B"`). `MiniLab 3.json` and `Generic (GM).json` ship as binary
+data (`JASS_ControllerProfiles`) and are copied in only when missing. Parsing,
+matching and resolution live in `Source/Audio/ControllerProfiles.h` — pure,
+message-thread, checked by `JASS_Render --selftest`.
+
+- **Standalone only.** In a DAW the host maps controllers to parameters itself;
+  reading CCs as well would move a parameter twice. `processBlock` does not
+  even capture them when `isHostedByDaw()`.
+- **The CC path is queued, not direct.** The audio thread only stores the latest
+  value per (channel, CC) into `ccValue` and sets a bit in `ccDirty` — raw
+  bytes, no `MidiMessage`, no `String`, no profile lookup, no parameter write.
+  A 30 Hz message-thread timer (`controllerPoll`) drains the bits, resolves
+  them through the active profile and calls `begin/setValueNotifyingHost/
+  endChangeGesture`. Chosen over a direct write so the profile table needs no
+  lock-free swap and linked editing (`mirrorToLayerB`, a message-thread
+  gesture) works unchanged; the cost is up to ~33 ms of latency on a knob,
+  and intermediate values inside one tick collapse to the last one.
+- **Channels 12..16 are never captured** (drone 16, previews 15 / 12, pattern
+  channels 14 / 13).
+- **Layer:** an unpinned entry follows the focus — A sets the id, B the `b` id,
+  A+B sets A and linked editing moves B by the same knob distance. A pinned
+  entry sets its layer only (in A+B with `linkSuspended`, so it is not
+  mirrored). A non-layered id is set as it is.
+- **Which profile:** a hand pick from the header combo (`Settings.json`
+  key `ControllerProfile`, empty = Auto) if it names a loaded profile; else the
+  first profile whose `match` occurs in an enabled MIDI input name (case and
+  spaces ignored); else `Generic (GM)`. One profile at a time: the JUCE
+  standalone merges every input into one buffer without a port id.
+- Values: absolute `v / 127` onto the normalised range (the parameter's skew
+  applies), jump on first touch. Not part of presets.
 
 ---
 

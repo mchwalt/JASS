@@ -29,6 +29,7 @@
 #include "../PluginProcessor.h"
 #include "../Audio/PresetIO.h"
 #include "../Audio/SeqMidiIO.h"   // review group 2: MIDI import / export per lane
+#include "../Audio/ControllerProfiles.h"   // Story 22.1: controllerChecks
 
 namespace
 {
@@ -883,6 +884,131 @@ namespace
     }
 }
 
+namespace
+{
+    // Story 22.1: controller profiles — parse (shipped files, unknown id, broken JSON), matching and
+    // fallback, hand pick, focus A / B / A+B and pinned entries, non-layered ids, reserved channels,
+    // and the host path (a DAW: CCs move nothing).
+    void controllerChecks()
+    {
+        std::cout << "Controller profiles" << std::endl;
+        using CP = ControllerProfiles;
+        Rig r;
+        auto exists = [&] (const juce::String& id) { return r.p->getAPVTS().getParameter (id) != nullptr; };
+
+        // The shipped files parse against the real parameter layout, every entry known.
+        std::vector<CP::Profile> shipped;
+        for (int i = 0; i < ControllerProfileFiles::namedResourceListSize; ++i)
+        {
+            int size = 0;
+            const char* data = ControllerProfileFiles::getNamedResource (ControllerProfileFiles::namedResourceList[i], size);
+            CP::Profile p;
+            if (data != nullptr && CP::parseText (juce::String::fromUTF8 (data, size), "?", exists, p))
+                shipped.push_back (p);
+        }
+        expect (shipped.size() == 2, "both factory profiles parse");
+        for (const auto& p : shipped)
+        {
+            if (p.name == "MiniLab 3") expect (p.controls.size() == 12, "MiniLab 3: all 12 controls known");
+            if (p.name == CP::kGenericName) expect (p.controls.size() == 6, "Generic (GM): all 6 controls known");
+        }
+
+        CP::Profile test;
+        const bool parsed = CP::parseText (R"({ "name": "Test", "match": "Test Box", "controls": [
+              { "name": "ok",     "cc": 74, "channel": 0, "param": "filterCutoff" },
+              { "name": "nope",   "cc": 75, "channel": 0, "param": "nope" },
+              { "name": "badcc",  "cc": 300, "param": "filterReso" },
+              { "name": "nocc",   "param": "filterReso" },
+              { "name": "hugecc", "cc": 1e300, "param": "filterReso" },
+              { "name": "strch",  "cc": 77, "channel": "2", "param": "filterReso" },
+              { "name": "resch",  "cc": 78, "channel": 15, "param": "filterReso" },
+              { "name": "badpin", "cc": 76, "param": "filterReso", "layer": "C" },
+              { "name": "pinB",   "cc": 20, "channel": 2, "param": "filterCutoff", "layer": "B" },
+              { "name": "pinA",   "cc": 21, "param": "filterCutoff", "layer": "a" },
+              { "name": "tempo",  "cc": 22, "param": "syncTempo" },
+              42 ] })", "fallback", exists, test);
+        expect (parsed && test.name == "Test", "profile parses");
+        expect (test.controls.size() == 4, "unknown id and malformed entries skipped, the rest kept");
+        CP::Profile broken;
+        expect (! CP::parseText ("{ \"name\": \"Broken\", \"controls\": [ ", "Broken", exists, broken), "broken JSON: not offered");
+        expect (! CP::parseText ("{ \"name\": \"NoControls\" }", "NoControls", exists, broken), "no controls array: not offered");
+
+        auto ids = [] (const std::vector<CP::Target>& t) { juce::StringArray a; for (const auto& x : t) a.add (x.paramId + (x.pinned ? "!" : "")); return a.joinIntoString (","); };
+        expect (ids (CP::resolve (test, 1, 74, 0)) == "filterCutoff",  "focus A: CC74 -> filterCutoff");
+        expect (ids (CP::resolve (test, 1, 74, 1)) == "bfilterCutoff", "focus B: CC74 -> bfilterCutoff");
+        expect (ids (CP::resolve (test, 1, 74, 2)) == "filterCutoff",  "focus A+B: CC74 -> A (linked editing moves B)");
+        expect (ids (CP::resolve (test, 2, 20, 0)) == "bfilterCutoff!", "pinned B moves B in focus A");
+        expect (ids (CP::resolve (test, 1, 20, 0)).isEmpty(),            "a channel-bound entry ignores other channels");
+        expect (ids (CP::resolve (test, 1, 21, 2)) == "filterCutoff!",  "pinned A in A+B: A only (no mirror)");
+        expect (ids (CP::resolve (test, 1, 22, 1)) == "syncTempo",      "non-layered id set by its own id in focus B");
+        expect (ids (CP::resolve (test, 1, 5, 0)).isEmpty(),             "unmapped CC: nothing");
+        expect (ids (CP::resolve (test, 15, 74, 0)).isEmpty() && ids (CP::resolve (test, 12, 74, 0)).isEmpty(),
+                "reserved channels 12..16 ignored");
+        expect (ids (CP::resolve (test, 11, 74, 0)) == "filterCutoff",  "channel 11 still read");
+
+        std::vector<CP::Profile> set = shipped;
+        set.push_back (test);
+        std::sort (set.begin(), set.end(), [] (const CP::Profile& a, const CP::Profile& b) { return a.name.compareNatural (b.name) < 0; });
+        auto pickName = [&] (juce::StringArray in, juce::String hand) { const int i = CP::pick (set, in, hand); return i < 0 ? juce::String ("-") : set[(size_t) i].name; };
+        expect (pickName ({ "Minilab3 MIDI" }, {}) == "MiniLab 3",               "port Minilab3 MIDI -> MiniLab 3");
+        expect (pickName ({ "UM-ONE" }, {}) == CP::kGenericName,                "no match (UM-ONE) -> Generic (GM)");
+        expect (pickName ({}, {}) == CP::kGenericName,                          "no input -> Generic (GM)");
+        expect (pickName ({ "UM-ONE" }, "MiniLab 3") == "MiniLab 3",            "hand pick wins over matching");
+        expect (pickName ({ "Minilab3 MIDI" }, "Gone") == "MiniLab 3",          "a vanished hand pick falls back to Auto");
+        expect (pickName ({ "Minilab3 MIDI" }, "Auto") == "MiniLab 3",          "'Auto' is automatic");
+        expect (pickName ({ "UM-ONE", "TESTBOX MIDI" }, {}) == "Test",         "match ignores case and spaces (Test Box -> TESTBOX MIDI)");
+        std::vector<CP::Profile> none;
+        expect (CP::pick (none, { "UM-ONE" }, {}) == -1,                        "no profiles: none active");
+
+        // In a DAW (the Rig is the host path) a CC reaches no parameter.
+        auto* cutoff = r.p->getAPVTS().getParameter (Parameters::ID::filterCutoff);
+        auto* cutoffB = r.p->getAPVTS().getParameter (juce::String (Modules::kLayerBPrefix) + Parameters::ID::filterCutoff);
+        const float before = cutoff->getValue();
+        r.block ({ { 0, juce::MidiMessage::controllerEvent (1, 74, 127) } });
+        expect (cutoff->getValue() == before && ! r.p->anyControllerCapturedForTest(), "hosted: CC74 captured nothing, moves nothing");
+
+        // The CC path itself (capture -> dirty bits -> poll -> parameter), through the test seam.
+        auto setup = [&] (float a01, float b01, int focus)
+        {
+            r.set (Parameters::ID::layerFocus, 0.0f);   // focus A while placing: no mirroring
+            cutoff->setValueNotifyingHost (a01);
+            cutoffB->setValueNotifyingHost (b01);
+            r.set (Parameters::ID::layerFocus, (float) focus);
+        };
+        auto cc = [&] (int ch, int num, int val)
+        {
+            juce::MidiBuffer m;
+            m.addEvent (juce::MidiMessage::controllerEvent (ch, num, val), 0);
+            r.p->runControllersForTest ({ test }, m);
+        };
+        auto near = [] (float x, float y) { return std::abs (x - y) < 0.005f; };
+        setup (0.6f, 0.2f, 2);
+        {
+            const float a0 = cutoff->getValue(), b0 = cutoffB->getValue();
+            cc (1, 74, 127);
+            expect (cutoff->getValue() == 1.0f, "A+B: CC74=127 sets A's cutoff to the top");
+            expect (near (cutoffB->getValue(), b0 + (1.0f - a0)), "A+B: B follows by the same knob distance");
+            expect (! r.p->anyControllerCapturedForTest(), "poll drains every dirty bit");
+        }
+        setup (0.6f, 0.2f, 2);
+        {
+            const float b0 = cutoffB->getValue();
+            cc (1, 21, 127);
+            expect (cutoff->getValue() == 1.0f && cutoffB->getValue() == b0, "A+B: pinned A moves A only");
+        }
+        setup (0.3f, 0.2f, 0);
+        cc (11, 74, 127);
+        expect (cutoff->getValue() == 1.0f, "channel 11 CC lands and applies");
+        setup (0.3f, 0.2f, 0);
+        cc (1, 74, 64);
+        expect (near (cutoff->getValue(), 64.0f / 127.0f), "CC 64 -> 64/127 of the travel");
+        setup (0.3f, 0.2f, 0);
+        cc (15, 74, 127);
+        expect (near (cutoff->getValue(), 0.3f), "reserved channel 15: not captured");
+        r.set (Parameters::ID::layerFocus, 0.0f);
+    }
+}
+
 int main (int argc, char* argv[])
 {
     if (argc >= 2 && juce::String (argv[1]) == "--selftest")
@@ -891,6 +1017,7 @@ int main (int argc, char* argv[])
         routerChecks();
         processorChecks();
         presetChecks();
+        controllerChecks();
         std::cout << (fails == 0 ? "selftest: all passed" : "selftest: FAILED") << std::endl;
         return fails == 0 ? 0 : 4;
     }

@@ -15,6 +15,7 @@
 #include "Audio/PatternLane.h"    // Story 21.8: one STEP SEQ + ARP lane per layer
 #include "DSP/PercSequencer.h"   // Story 16.1 — layer B: four percussion tracks on the master bus
 #include "Audio/PatternStore.h"  // AD-14 (18.5): the sequencer patterns — content, not parameters
+#include "Audio/ControllerProfiles.h"   // Story 22.1: hardware knobs / faders -> parameters
 
 // DIAGNOSTIC BUILD SWITCH (2026-10-20, not for release): log the first blocks after each host PLAY
 // to %AppData%\JASS\hostsync.log — host position, play flag, the STEP SEQ clock before and after
@@ -244,6 +245,23 @@ public:
     void markPresetClean();                       // snapshot current values as the clean baseline
     void markLayerBClean();                       // ...for layer B only, after a load into B (keeps A's)
     void restoreModifiedState(bool modified);     // on LiveState load: clean baseline, or force "modified"
+
+    // Story 22.1 — controller profiles (standalone only; in a DAW the host maps controllers itself).
+    // Message thread. The header combo lists the names; "" = Auto (picked from the enabled MIDI
+    // inputs), anything else is the hand pick, remembered in Settings.json.
+    juce::StringArray getControllerProfileNames() const;
+    juce::String getControllerProfileChoice() const { return controllerHandPick; }
+    juce::String getActiveControllerProfile() const;
+    void setControllerProfileChoice (const juce::String& name);
+    int  getControllerProfilesRevision() const noexcept { return controllerRevision; }   // bumps on a reload
+    // JASS_Render --selftest only: make `profiles[0]` the active profile, then run the CC path
+    // (captureControllers + pollControllers) on `midi` — whatever the wrapper type.
+    void runControllersForTest (std::vector<ControllerProfiles::Profile> profiles, const juce::MidiBuffer& midi);
+    bool anyControllerCapturedForTest() const noexcept
+    {
+        for (const auto& d : ccDirty) if (d.load() != 0) return true;
+        return false;
+    }
 
 private:
     // Story 12.6: the startup preload of the Samples folder runs here instead of blocking the
@@ -514,6 +532,29 @@ private:
     std::unordered_map<juce::String, int> linkIndex;   // layer-A patch param id -> slot in linkLastA (built once)
     std::vector<std::atomic<float>> linkLastA;         // A's last value per patch param (raw units; any thread)
     bool linkSuspended = false;                        // RANDOM / bulk writes: nothing to mirror
+
+    // Story 22.1 — the CC path. Audio thread: captureControllers stores the latest value per
+    // (channel, CC) and sets a dirty bit — no allocation, lock, String or parameter write. Message
+    // thread: controllerPoll (30 Hz) drains the dirty bits, resolves them through the active
+    // profile and sets the parameters; every ~2 s it re-reads the enabled MIDI inputs and the
+    // Controllers folder. Channels 12..16 are JASS's own and are never captured.
+    static constexpr int kCcChannels = ControllerProfiles::kFirstReservedChannel - 1;   // 1..11
+    std::array<std::atomic<std::uint8_t>, (size_t) kCcChannels * 128> ccValue {};
+    std::array<std::atomic<std::uint64_t>, (size_t) kCcChannels * 2> ccDirty {};      // 128 bits per channel
+    void captureControllers (const juce::MidiBuffer& midi) noexcept;                   // audio thread
+    struct ControllerPoll : juce::Timer
+    {
+        std::function<void()> tick;
+        void timerCallback() override { if (tick) tick(); }
+    };
+    ControllerPoll controllerPoll;
+    std::vector<ControllerProfiles::Profile> controllerProfiles;   // message thread only
+    int controllerActive = -1;                                    // index into controllerProfiles
+    juce::String controllerHandPick, controllerFolderSig;
+    juce::StringArray controllerInputs;                           // enabled MIDI inputs last seen
+    int controllerTicks = 0, controllerRevision = 0;
+    void pollControllers();                                       // message thread, 30 Hz
+    void rescanControllers (bool force);                          // inputs + folder, re-pick
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)

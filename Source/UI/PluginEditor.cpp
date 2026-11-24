@@ -640,6 +640,19 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     };
     addAndMakeVisible(langBox);
 
+    // Controller profile (Story 22.1): Auto + every profile in %AppData%\JASS\Controllers. The
+    // pick is an installation setting (Settings.json), not part of a preset. Standalone only.
+    controllerBox.setColour(juce::ComboBox::backgroundColourId, juce::Colour(0xff334155));
+    controllerBox.onChange = [this]
+    {
+        const int id = controllerBox.getSelectedId();
+        processor.setControllerProfileChoice(id <= 1 ? juce::String() : controllerBox.getItemText(id - 1));
+        refreshControllerBox();
+    };
+    refreshControllerBox();
+    if (! processor.isHostedByDaw())
+        addAndMakeVisible(controllerBox);
+
     // Current-preset display
     presetNameLabel.setFont(juce::FontOptions(15.0f, juce::Font::bold));
     presetNameLabel.setColour(juce::Label::textColourId, juce::Colour(0xffaab3c0));
@@ -870,8 +883,40 @@ void SynthyEditor::showModulesMenu()
     modulesCallout = &(new KeepOpenCallout (std::move (panel), modulesBtn.getScreenBounds()))->box;
 }
 
+// Story 22.1: fill the controller combo (Auto + profile names) when the profile list changed, and
+// keep the selection and the tooltip (which profile Auto chose) current.
+void SynthyEditor::refreshControllerBox()
+{
+    // Item 1 reads "Auto: <profile>" while Auto is in charge — a fixed readout of what it chose.
+    const auto choice = processor.getControllerProfileChoice();
+    const auto active = processor.getActiveControllerProfile();
+    const juce::String autoText = choice.isNotEmpty() ? juce::String("Auto")
+                                : "Auto: " + (active.isNotEmpty() ? active : juce::String("none"));
+    if (controllerBoxRevision != processor.getControllerProfilesRevision() || controllerBox.getItemText(0) != autoText)
+    {
+        controllerBoxRevision = processor.getControllerProfilesRevision();
+        controllerBox.clear(juce::dontSendNotification);
+        controllerBox.addItem(autoText, 1);
+        int id = 2;
+        for (const auto& n : processor.getControllerProfileNames())
+            controllerBox.addItem(n, id++);
+    }
+    int sel = 1;
+    for (int i = 1; i < controllerBox.getNumItems(); ++i)
+        if (choice.isNotEmpty() && controllerBox.getItemText(i) == choice)
+            sel = i + 1;
+    if (controllerBox.getSelectedId() != sel)
+        controllerBox.setSelectedId(sel, juce::dontSendNotification);
+    const juce::String tip = "MIDI controller profile (files in %AppData%\\JASS\\Controllers). Active: "
+                           + (active.isNotEmpty() ? active : juce::String("none"));
+    if (controllerBox.getTooltip() != tip)
+        controllerBox.setTooltip(tip);
+}
+
 void SynthyEditor::timerCallback()
 {
+    if (! processor.isHostedByDaw())
+        refreshControllerBox();
     // RT-safety (11.1): run any auto-enable coupling deferred from the audio thread (host automation)
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
@@ -3158,6 +3203,8 @@ void SynthyEditor::resized()
     modulesBtn.setBounds(headerRow.removeFromRight(120).reduced(8, 17));
     // Help-language selector sits just left of the MODULES button (Story 6.1).
     langBox.setBounds(headerRow.removeFromRight(66).reduced(4, 20));
+    // Controller profile (22.1) just left of the language box.
+    controllerBox.setBounds(headerRow.removeFromRight(140).reduced(4, 20));
     // Left cluster: the file buttons (SAVE/LOAD/DELETE on top, RANDOM/RESET below) AND the
     // current-preset name belong together (the preset name is about what was loaded/saved).
     // Three columns since DELETE joined; the block widened so no button got smaller.

@@ -63,6 +63,20 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
+- **Controller profiles - hardware knobs and faders move JASS.** JASS ignored every MIDI
+  controller message, so a MiniLab 3's knobs did nothing and the sound could only be shaped with
+  the mouse (maintainer 2026-11-24). A profile is an editable JSON file in
+  `%AppData%\JASS\Controllers` that maps CC numbers to parameters - configuration as a file, not
+  code. `MiniLab 3` follows the controller's factory template (knobs: FILTER Cutoff / Resonance,
+  LFO 1 Depth / Rate, CHORUS, REVERB, DELAY, GLIDE; faders: ADSR), `Generic (GM)` the GM2 sound
+  controller numbers most synths use (74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb,
+  93 chorus), so a keyboard behind the UM-ONE does something sensible too. Both are copied in only
+  when missing: an edited file is never overwritten, a deleted one comes back. The profile is
+  picked from the MIDI input name, or by hand in the new header combo (remembered, not part of
+  presets). A control moves the layer you edit - A, B, or both in A+B - unless its entry pins
+  `"layer"`. Standalone only: in a DAW the host maps controllers itself, reading them as well would
+  move a parameter twice. The audio thread only records values; a message-thread timer applies
+  them (Story 22.1).
 - **ARP SYNC - the arpeggio on the tempo grid.** The ARPEGGIATOR ran on RATE in steps per second
   only; it predates tempo sync and was never brought along when the LFOs, DELAY, STEP SEQ and PERC
   got it (maintainer 2026-11-23). SYNC offers the same note values as STEP SEQ against the MASTER

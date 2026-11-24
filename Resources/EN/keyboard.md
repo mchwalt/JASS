@@ -16,3 +16,14 @@ The keyboard must have focus for the letter keys to sound (it grabs focus on lau
 **Chords**
 
 Ordinary keyboards drop some three-key combinations — the third note never arrives. Shift the octave, or play chords over MIDI; the letter keys also send one fixed velocity.
+
+**MIDI controller (knobs and faders)**
+
+Knobs and faders of a MIDI controller move JASS in the standalone app (in a DAW, map them there).
+
+- **Header combo** — **Auto** picks the profile from the MIDI input name (MiniLab 3, otherwise Generic (GM)); or pick one by hand
+- **MiniLab 3** — knobs: Cutoff, Resonance, LFO 1 Depth, LFO 1 Rate, Chorus, Reverb, Delay, Glide; faders: Attack, Decay, Sustain, Release
+- **Generic (GM)** — CC 74 Cutoff, 71 Resonance, 73 Attack, 72 Release, 91 Reverb, 93 Chorus
+- **First touch** — a knob sets its value at once, so the sound jumps to where the knob stands
+- **Layer** — a control moves the layer you edit: A, B, or both in A+B
+- **Files** — one `.json` per controller in `%AppData%\JASS\Controllers`; edit `cc` and `param` there, delete a file to get the factory version back on the next start
