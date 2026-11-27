@@ -910,7 +910,7 @@ namespace
         expect (shipped.size() == 2, "both factory profiles parse");
         for (const auto& p : shipped)
         {
-            if (p.name == "MiniLab 3") expect (p.controls.size() == 29, "MiniLab 3: all 29 controls known (ARTURIA + DAW program, each with Shift and Shift + encoder; the DAW program's encoder click)");
+            if (p.name == "MiniLab 3") expect (p.controls.size() == 30, "MiniLab 3: all 30 controls known (ARTURIA + DAW program, each with Shift, Shift + encoder and the encoder click)");
             if (p.name == CP::kGenericName) expect (p.controls.size() == 6, "Generic (GM): all 6 controls known");
         }
 
@@ -1339,6 +1339,10 @@ namespace
                 bool power = false;
                 for (const auto& c : minilab->controls)
                     power = power || (c.kind == CP::Kind::Power && c.cc == 118);
+                bool powerArturia = false;
+                for (const auto& c : minilab->controls)
+                    powerArturia = powerArturia || (c.kind == CP::Kind::Power && c.cc == 115);
+                expect (powerArturia, "MiniLab 3, ARTURIA program: the encoder click (CC 115, measured 2026-11-28) is @power");
                 expect (power, "MiniLab 3, DAW program: the encoder click (CC 118) is @power");
             }
             // Measured at the device 2026-11-27: turned fast it sends 66 / 61 (accelerated) — still one BPM per message.
