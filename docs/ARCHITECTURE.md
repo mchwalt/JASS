@@ -176,7 +176,7 @@ encodes the parameter as a small int precisely to avoid constructing a
 | `currentNoteRatio`, `heldNotesLo/Hi` | played-note ratio for the FREQ knob display |
 | `pluckRequested` | PLUCK button → `exchange(false)` on the audio thread |
 | `autoPlayEnabled`, `liveDirty`, `fixingMixSrc`, `matrixEnablesDirty`, `crossModDirty`, `pendingCrossModCode` | flags described above |
-| `ccValue[11 × 128]`, `ccSlotValue[2 × 11 × 128]`, `ccDirty[2 × 11 × 2]`, `ccRelative[11 × 128]`, `ccShiftCc`, `ccShiftHeld` | latest MIDI CC value per channel 1..11, the same per Shift state (not held / held) with a dirty bit per CC, the summed relative delta, and the controller's Shift (Stories 22.1 / 22.5, [§3.6](#36-controller-input-story-221)) |
+| `ccValue[11 × 128]`, `ccSlotValue[2 × 11 × 128]`, `ccDirty[2 × 11 × 2]`, `ccRelative[11 × 128]`, `ccShiftCc[4]`, `ccShiftHeld` | latest MIDI CC value per channel 1..11, the same per Shift state (not held / held) with a dirty bit per CC, the summed relative steps, and the controller's Shift (Stories 22.1 / 22.5, [§3.6](#36-controller-input-story-221)) |
 
 ### 3.4 Timers
 
@@ -226,13 +226,16 @@ message-thread, checked by `JASS_Render --selftest`.
   (the n-th control of the selected module's bank of seven, with an optional
   `fallback` id used while nothing is selected), `@select` (picks the module;
   with Shift held, the bank), `@shift`, or `@tempoFine` (relative encoder,
-  TEMPO ±1 BPM per detent). Capture tracks Shift on the audio thread — its CC
-  is published by the message thread on every profile re-pick — and files each
+  TEMPO ±1 BPM per message). Capture tracks Shift on the audio thread — its CCs
+  (every `@shift` entry is the same Shift: the MiniLab 3 uses CC 27 in its DAW
+  program and CC 9 in the ARTURIA one) are published by the message thread on
+  every profile re-pick — and files each
   value under the Shift state it was sent with, so a short Shift press inside
   one tick cannot turn a bank move into a module jump; the MiniLab's
   program-change SysEx and a change of the MIDI inputs release Shift. A
-  relative encoder's `value - 64` is summed per CC so no detent is lost between
-  ticks. The poll runs two passes: `@select` first, then everything else
+  relative encoder counts one step per message, by its direction only (turned
+  fast, the MiniLab accelerates to ±2 / ±3 per message), summed per CC so no
+  step is lost between ticks. The poll runs two passes: `@select` first, then everything else
   (dirty CCs drain in CC order, and the selector's CC may come last). The
   processor owns the selection, keyed by the rack's layout-entry id plus the
   layer of the frame on screen; it exists only while the active profile has

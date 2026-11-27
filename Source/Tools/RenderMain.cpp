@@ -909,7 +909,7 @@ namespace
         expect (shipped.size() == 2, "both factory profiles parse");
         for (const auto& p : shipped)
         {
-            if (p.name == "MiniLab 3") expect (p.controls.size() == 26, "MiniLab 3: all 26 controls known (ARTURIA + DAW program, Shift, Shift + encoder)");
+            if (p.name == "MiniLab 3") expect (p.controls.size() == 28, "MiniLab 3: all 28 controls known (ARTURIA + DAW program, each with Shift and Shift + encoder)");
             if (p.name == CP::kGenericName) expect (p.controls.size() == 6, "Generic (GM): all 6 controls known");
         }
 
@@ -1019,6 +1019,8 @@ namespace
                 "bank count: seven controls per bank");
         expect (! CP::toggleOn (63) && CP::toggleOn (64), "toggle: on from CC 64");
         expect (CP::relativeDelta (65) == 1 && CP::relativeDelta (63) == -1 && CP::relativeDelta (66) == 2, "relative encoder: value - 64");
+        expect (CP::relativeStep (65) == 1 && CP::relativeStep (66) == 1 && CP::relativeStep (61) == -1 && CP::relativeStep (64) == 0,
+                "relative encoder: one step per message, whatever the acceleration");
         expect (CP::tempoAfterDetents (249.0, 3) == 250.0 && CP::tempoAfterDetents (41.0, -5) == 40.0 && CP::tempoAfterDetents (120.4, 1) == 121.0,
                 "fine tempo: whole BPM, clamped 40..250");
         const juce::uint8 pcBody[] = { 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x62, 0x01 };
@@ -1280,10 +1282,10 @@ namespace
         expect (raw (Parameters::ID::syncTempo) == 122.0f, "one detent down: -1 BPM");
         r.set (Parameters::ID::syncTempo, 249.0f);
         run (mod, { Ev { 1, 29, 66 } });
-        expect (raw (Parameters::ID::syncTempo) == 250.0f, "accelerated +2 at 249: clamped to 250");
+        expect (raw (Parameters::ID::syncTempo) == 250.0f, "up at 249: clamped to 250");
         r.set (Parameters::ID::syncTempo, 41.0f);
         run (mod, { Ev { 1, 29, 60 } });
-        expect (raw (Parameters::ID::syncTempo) == 40.0f, "-4 at 41: clamped to 40");
+        expect (raw (Parameters::ID::syncTempo) == 40.0f, "down at 41: clamped to 40");
         // Detents turned under a profile that does not map them are not inherited later.
         run (test, { Ev { 1, 29, 70 } });
         run (mod, { Ev { 1, 29, 65 } });
@@ -1329,7 +1331,24 @@ namespace
             expect (prm ("glideTime")->getValue() == glide0 && ! sel().valid, "MiniLab 3: knob 8 no longer moves GLIDE; with no frame list it selects nothing");
             r.set (Parameters::ID::syncTempo, 120.0f);
             run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 65 }, Ev { 1, 27, 0 } });
-            expect (raw (Parameters::ID::syncTempo) == 121.0f, "MiniLab 3: Shift + encoder (CC 29) = +1 BPM");
+            expect (raw (Parameters::ID::syncTempo) == 121.0f, "MiniLab 3, DAW program: Shift + encoder (CC 29) = +1 BPM");
+            // Measured at the device 2026-11-27: turned fast it sends 66 / 61 (accelerated) — still one BPM per message.
+            run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 66 }, Ev { 1, 29, 66 }, Ev { 1, 27, 0 } });
+            expect (raw (Parameters::ID::syncTempo) == 123.0f, "MiniLab 3: two accelerated messages (66) = +2 BPM, not +4");
+            run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 61 }, Ev { 1, 27, 0 } });
+            expect (raw (Parameters::ID::syncTempo) == 122.0f, "MiniLab 3: one accelerated message down (61) = -1 BPM");
+            // ARTURIA program: Shift is CC 9, Shift + encoder CC 112 and sends 64 then 65 per click.
+            run (*minilab, { Ev { 1, 9, 127 } });
+            expect (r.p->controllerShiftHeldForTest(), "MiniLab 3, ARTURIA program: Shift (CC 9) is held");
+            run (*minilab, { Ev { 1, 112, 64 }, Ev { 1, 112, 65 }, Ev { 1, 9, 0 } });
+            expect (raw (Parameters::ID::syncTempo) == 123.0f && ! r.p->controllerShiftHeldForTest(),
+                    "MiniLab 3, ARTURIA program: Shift + encoder (CC 112: 64, 65) = +1 BPM");
+            // Shift pressed in one program and released in the other (Shift + Pad 3 switches): the
+            // release arrives on the other program's CC and must still release the one Shift.
+            run (*minilab, { Ev { 1, 9, 127 } });
+            const bool heldAcross = r.p->controllerShiftHeldForTest();
+            run (*minilab, { Ev { 1, 27, 0 } });
+            expect (heldAcross && ! r.p->controllerShiftHeldForTest(), "Shift pressed as CC 9, released as CC 27: released");
             r.set (Parameters::ID::layerFocus, 0.0f);
         }
 

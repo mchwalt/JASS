@@ -72,7 +72,9 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   VOL, TEMPO, LAYERS A LVL and B LVL, a two-channel mixer for Dual / Split - whatever layer is
   being edited; Shift + main encoder sets TEMPO in 1 BPM steps, because a fader's travel over
   40-250 BPM is too coarse to hit a tempo (the encoder sends one message per click, and every
-  click counts; documented for the MiniLab's DAW program only). The first layout had ADSR on the
+  message counts as one BPM - turned fast the MiniLab sends accelerated steps, which a fine
+  control must not follow; Shift and encoder numbers of both programs measured at the device,
+  2026-11-27). The first layout had ADSR on the
   faders and GLIDE on knob 8; the click test (2026-11-24) showed that a fixed set of knobs has to
   be hand-matched to the rack and fits no patch type well, so knob 8 is now kept free to pick the
   module the knobs follow (Story 22.5, next step - it does nothing yet) and ADSR will be reached

@@ -26,7 +26,9 @@
     { "name": "Fader 2 (DAW program)", "cc": 15,  "channel": 0, "param": "syncTempo" },
     { "name": "Fader 3 (DAW program)", "cc": 30,  "channel": 0, "param": "layerALevel" },
     { "name": "Fader 4 (DAW program)", "cc": 31,  "channel": 0, "param": "layerBLevel" },
-    { "name": "Shift",           "cc": 27, "channel": 0, "param": "@shift" },
-    { "name": "Shift + encoder", "cc": 29, "channel": 0, "param": "@tempoFine" }
+    { "name": "Shift",                         "cc": 9,   "channel": 0, "param": "@shift" },
+    { "name": "Shift + encoder",               "cc": 112, "channel": 0, "param": "@tempoFine" },
+    { "name": "Shift (DAW program)",           "cc": 27,  "channel": 0, "param": "@shift" },
+    { "name": "Shift + encoder (DAW program)", "cc": 29,  "channel": 0, "param": "@tempoFine" }
   ]
 }

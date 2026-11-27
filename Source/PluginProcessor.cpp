@@ -2267,14 +2267,17 @@ void SynthyProcessor::captureControllers (const juce::MidiBuffer& midi) noexcept
             continue;
         const int cc = meta.data[1] & 0x7F;
         const int value = meta.data[2] & 0x7F;
-        if (const int shift = ccShiftCc.load(); shift >= 0 && (shift & 0x7F) == cc
-                                                && ((shift >> 8) == 0 || (shift >> 8) == ch + 1))
-            ccShiftHeld.store (ControllerProfiles::toggleOn (value));
+        // A device may send its Shift on a different CC per program (the MiniLab 3: CC 27 in the
+        // DAW program, CC 9 in the ARTURIA one) — any of them is the one Shift.
+        for (const auto& published : ccShiftCc)
+            if (const int shift = published.load(); shift >= 0 && (shift & 0x7F) == cc
+                                                    && ((shift >> 8) == 0 || (shift >> 8) == ch + 1))
+                ccShiftHeld.store (ControllerProfiles::toggleOn (value));
         const size_t slot = ccShiftHeld.load() ? 1 : 0;
         const size_t at = (size_t) (ch * 128 + cc);
         ccValue[at].store ((std::uint8_t) value);
         ccSlotValue[slot * kCcSlots + at].store ((std::uint8_t) value);
-        ccRelative[at].fetch_add (ControllerProfiles::relativeDelta (value));
+        ccRelative[at].fetch_add (ControllerProfiles::relativeStep (value));
         ccDirty[slot * kCcWords + (size_t) (ch * 2 + (cc >> 6))].fetch_or (std::uint64_t (1) << (cc & 63));
     }
 }
@@ -2326,15 +2329,18 @@ const ControllerProfiles::Profile* SynthyProcessor::activeControllerProfile() co
 void SynthyProcessor::controllerProfilePicked()
 {
     const auto* profile = activeControllerProfile();
-    int shift = -1;
+    // Every "@shift" entry is the one Shift (one CC per device program); more than kShiftCcs are ignored.
+    std::array<int, kShiftCcs> shifts;
+    shifts.fill (-1);
+    size_t n = 0;
     if (profile != nullptr)
         for (const auto& c : profile->controls)
-            if (c.kind == ControllerProfiles::Kind::Shift)
-            {
-                shift = (c.channel << 8) | c.cc;   // the first "@shift" entry is the Shift
-                break;
-            }
-    if (ccShiftCc.exchange (shift) != shift)
+            if (c.kind == ControllerProfiles::Kind::Shift && n < shifts.size())
+                shifts[n++] = (c.channel << 8) | c.cc;
+    bool changed = false;
+    for (size_t i = 0; i < shifts.size(); ++i)
+        changed = (ccShiftCc[i].exchange (shifts[i]) != shifts[i]) || changed;
+    if (changed)
         ccShiftHeld.store (false);
     if (profile == nullptr || ! profile->hasModuleTargets())
         clearControllerSelection();

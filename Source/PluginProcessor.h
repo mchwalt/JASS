@@ -575,7 +575,7 @@ private:
     // thread) and keeps, for every (channel, CC), one value slot + dirty bit for "Shift held" and
     // one for "not held" — so a short Shift press inside one poll tick cannot turn a bank move
     // into a module jump, and capture need not know which CC is the selector. A relative encoder
-    // sends one message per detent: `ccRelative` sums `value - 64` so no detent is lost between
+    // sends one message per detent: `ccRelative` sums one step per message (its direction) so none is lost between
     // two ticks. The MiniLab's program-change SysEx releases Shift, in buffer order.
     static constexpr int kCcChannels = ControllerProfiles::kFirstReservedChannel - 1;   // 1..11
     static constexpr size_t kCcSlots = (size_t) kCcChannels * 128;                      // per Shift slot
@@ -583,8 +583,10 @@ private:
     std::array<std::atomic<std::uint8_t>, kCcSlots> ccValue {};                        // the latest value, either slot
     std::array<std::atomic<std::uint8_t>, kCcSlots * 2> ccSlotValue {};                // [not held | Shift held]
     std::array<std::atomic<std::uint64_t>, kCcWords * 2> ccDirty {};                   // [not held | Shift held]
-    std::array<std::atomic<std::int32_t>, kCcSlots> ccRelative {};                     // summed value - 64
-    std::atomic<int>  ccShiftCc { -1 };       // (channel << 8) | cc of the active profile's "@shift", channel 0 = any; -1 = none
+    std::array<std::atomic<std::int32_t>, kCcSlots> ccRelative {};                     // summed steps (+1 / -1 per message)
+    // (channel << 8) | cc of each "@shift" entry of the active profile, channel 0 = any; -1 = unused.
+    static constexpr size_t kShiftCcs = 4;
+    std::array<std::atomic<int>, kShiftCcs> ccShiftCc { -1, -1, -1, -1 };
     std::atomic<bool> ccShiftHeld { false };  // audio thread (the CC, the SysEx) and message thread (resets)
     void captureControllers (const juce::MidiBuffer& midi) noexcept;                   // audio thread
     struct ControllerPoll : juce::Timer

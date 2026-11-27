@@ -30,8 +30,9 @@
 //                               "fallback": "<param id>" is what the entry moves while no module is
 //                               selected (the fixed 22.1 mapping)
 //   "@select"                   picks the module by its position; while Shift is held, the bank
-//   "@shift"                    the controller's momentary Shift (CC >= 64 = held)
-//   "@tempoFine"                a relative encoder (binary offset 64): TEMPO +-1 BPM per detent
+//   "@shift"                    the controller's momentary Shift (CC >= 64 = held); several entries
+//                               are the same Shift (a device may use one CC per program)
+//   "@tempoFine"                a relative encoder (binary offset 64): TEMPO +-1 BPM per message
 //
 // A bank is seven controls ("page" is taken by the step pages of STEP SEQ / PERC).
 class ControllerProfiles
@@ -93,6 +94,9 @@ public:
     static bool toggleOn (int ccValue) noexcept { return ccValue >= 64; }
     // A relative encoder in binary offset: 65 = one detent up, 63 = one down, 66 = two up (accelerated).
     static int relativeDelta (int ccValue) noexcept { return ccValue - 64; }
+    // What one message counts: its direction only. Turned fast, the MiniLab 3 accelerates to
+    // +-2 / +-3 per message (measured 2026-11-27) — a fine control wants one step per message.
+    static int relativeStep (int ccValue) noexcept { return ccValue > 64 ? 1 : ccValue < 64 ? -1 : 0; }
     // TEMPO after `detents` encoder steps: whole BPM, inside lo..hi.
     static double tempoAfterDetents (double bpm, int detents, double lo = 40.0, double hi = 250.0) noexcept
     {

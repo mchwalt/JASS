@@ -24,7 +24,7 @@ Drehregler und Fader eines MIDI-Controllers bewegen JASS in der Standalone-App (
 - **Header-Auswahl** — **Auto** wählt das Profil nach dem Namen des MIDI-Eingangs (MiniLab 3, sonst Generic (GM)); oder von Hand wählen
 - **MiniLab 3 Regler** — 1–7: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb; Regler 8 tut noch nichts; gleich im ARTURIA- und im DAW-Programm (Shift + Pad 3)
 - **MiniLab 3 Fader** — MASTER VOL, TEMPO, A LVL, B LVL, egal welchen Layer du bearbeitest
-- **Tempo fein** — Shift + Hauptencoder bewegt TEMPO um 1 BPM pro Raste (DAW-Programm)
+- **Tempo fein** — Shift + Hauptencoder bewegt TEMPO um 1 BPM pro Raste
 - **Generic (GM)** — CC 74 Cutoff, 71 Resonance, 73 Attack, 72 Release, 91 Reverb, 93 Chorus
 - **Erste Berührung** — ein Regler oder Fader setzt seinen Wert sofort, der Klang springt dorthin, wo er steht; auch der MASTER-VOL-Fader (oben = voller Pegel, Standard ist die Hälfte)
 - **Layer** — ein Regler bewegt den Layer, den du bearbeitest: A, B oder beide bei A+B
