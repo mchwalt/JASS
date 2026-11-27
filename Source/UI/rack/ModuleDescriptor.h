@@ -542,4 +542,73 @@ namespace rack
         jassert (bodySlots (d.body) <= sizeClassSpec (d.sizeClass).slotCapacity);
         juce::ignoreUnused (d);
     }
+
+    // --- Countable controls (Story 22.5: the hardware knobs follow the selected module) --------
+    // What knob n of a controller reaches in a module: its knobs, combos and toggles in DISPLAY
+    // order — derived from the descriptor as the rack shows it, never written per module.
+    // Skipped: spacers, captions, displays and actions (no parameter); pattern cells and paged
+    // step knobs (a figure is not entered by hardware knobs); indexIsValue and itemValues combos
+    // (an item's position is not the parameter's value there) and a combo without items (a knob
+    // slot that could never react). A cell's corner switch (toggleParamId / accentParamId) and
+    // its alt row (altParamId) are not controls of their own — the cell's main id is.
+    // A control dimmed by activeWhen IS counted: knob positions must not shift when a module's
+    // state changes. Pure: ModuleFrame and JASS_Render --selftest both call it.
+    struct CountableControl
+    {
+        enum class Kind { Knob, Combo, Toggle };
+        juce::String paramId;     // as the descriptor carries it (a layer-B frame: the "b" id)
+        Kind kind = Kind::Knob;
+        int  items = 0;           // Combo: number of items right now (a provider is asked)
+    };
+
+    inline std::vector<CountableControl> countableControls (const ModuleDescriptor& d)
+    {
+        auto isPagedStep = [&d] (const juce::String& id)
+        {
+            if (d.paging.pageCount <= 1 || d.paging.stepsPerPage <= 0)
+                return false;
+            for (const auto& pre : d.paging.pagedPrefixes)
+                if (id.length() > pre.length() && id.startsWith (pre)
+                    && id.substring (pre.length()).containsOnly ("0123456789"))
+                    return true;
+            return false;
+        };
+
+        std::vector<CountableControl> out;
+        for (const auto& el : d.body)
+        {
+            if (auto* k = std::get_if<Knob> (&el))
+            {
+                if (k->paramId.isNotEmpty() && k->patternStep < 0 && ! isPagedStep (k->paramId))
+                    out.push_back ({ k->paramId, CountableControl::Kind::Knob, 0 });
+            }
+            else if (auto* c = std::get_if<Combo> (&el))
+            {
+                if (c->paramId.isEmpty() || c->indexIsValue || c->itemValues)
+                    continue;
+                int items = 0;
+                if (auto* statik = std::get_if<juce::StringArray> (&c->items))
+                    items = statik->size();
+                else if (auto* provider = std::get_if<std::function<juce::StringArray()>> (&c->items))
+                    items = *provider ? (*provider)().size() : 0;
+                if (items < 1)
+                    continue;
+                out.push_back ({ c->paramId, CountableControl::Kind::Combo, items });
+            }
+            else if (auto* t = std::get_if<Toggle> (&el))
+            {
+                if (t->paramId.isNotEmpty())
+                    out.push_back ({ t->paramId, CountableControl::Kind::Toggle, 0 });
+            }
+        }
+        return out;
+    }
+
+    inline juce::StringArray countableParamIds (const ModuleDescriptor& d)
+    {
+        juce::StringArray ids;
+        for (const auto& c : countableControls (d))
+            ids.add (c.paramId);
+        return ids;
+    }
 }

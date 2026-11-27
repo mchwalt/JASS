@@ -91,6 +91,20 @@ namespace rack
         // Story 7.6: Shift held ⇒ the ↺ shows that a click goes to factory (editor polls Shift).
         void showFactoryReset (bool factory);
 
+        // --- Story 22.5: the hardware knobs follow the selected module -----------------------
+        // Fired on a mouse press anywhere on the module — title bar, body, any control, power and
+        // ↺ — and on a wheel turn over one of its controls; never on the A | B switch and the help
+        // icon (those say nothing about which module the player wants under the knobs). The rack
+        // hands it on; whether it selects anything is the processor's decision (the active
+        // controller profile). `titleBar` = a press on the title bar itself (the header strip or
+        // the title, no child control): on the module that is already selected it unselects.
+        std::function<void(bool titleBar)> onTouched;
+        // The marker: an outline around the frame and, with more than one bank of seven, the
+        // bank as "2/3" in the title bar. A fixed mark, no tooltip.
+        void setControllerMark (bool selected, const juce::String& bankText);
+        // What the knobs reach here, in display order (see rack::countableControls).
+        std::vector<CountableControl> countableControls() const { return rack::countableControls (desc); }
+
     private:
         void applyCollapsed();   // show/hide the Display cells + re-flow this frame's body
         void timerCallback() override;
@@ -166,6 +180,20 @@ namespace rack
         std::atomic<float>* enableValue = nullptr;   // raw value of the enable param (nullptr => always-on)
         bool dimmed = false;
         bool hostLocked = false;   // lockForHost() — see there
+        bool controllerSelected = false;      // 22.5: this module has the hardware knobs
+        // 22.5: the touch hook. A listener of its own (registered nested on this frame), so the
+        // children's mouse events do not run through the frame's Component handlers; it hears
+        // presses and wheel turns only.
+        struct TouchListener : juce::MouseListener
+        {
+            explicit TouchListener (ModuleFrame& f) : owner (f) {}
+            void mouseDown (const juce::MouseEvent& e) override { owner.touched (e, false); }
+            void mouseWheelMove (const juce::MouseEvent& e, const juce::MouseWheelDetails&) override { owner.touched (e, true); }
+            ModuleFrame& owner;
+        };
+        TouchListener touchListener { *this };
+        void touched (const juce::MouseEvent&, bool wheel);
+        juce::String controllerBankText;      // "2/3"; empty with a single bank
 
         // --- live-feed targets (Story 1.4) ---
         // Knobs carrying a modTarget: their ring is animated by updateLiveFeed when the

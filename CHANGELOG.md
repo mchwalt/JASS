@@ -67,8 +67,9 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   controller message, so a MiniLab 3's knobs did nothing and the sound could only be shaped with
   the mouse (maintainer 2026-11-24). A profile is an editable JSON file in
   `%AppData%\JASS\Controllers` that maps CC numbers to parameters - configuration as a file, not
-  code. `MiniLab 3`: knobs 1-7 move FILTER Cutoff / Resonance, LFO 1 Rate / Depth in the panel
-  order, CHORUS, DELAY, REVERB; the four faders move what belongs to no single module - MASTER
+  code. `MiniLab 3`: knobs 1-7 follow the marked module (next entry) and, with nothing marked,
+  move FILTER Cutoff / Resonance, LFO 1 Rate / Depth in the panel order, CHORUS, DELAY, REVERB;
+  the four faders move what belongs to no single module - MASTER
   VOL, TEMPO, LAYERS A LVL and B LVL, a two-channel mixer for Dual / Split - whatever layer is
   being edited; Shift + main encoder sets TEMPO in 1 BPM steps, because a fader's travel over
   40-250 BPM is too coarse to hit a tempo (the encoder sends one message per click, and every
@@ -76,12 +77,12 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   control must not follow; Shift and encoder numbers of both programs measured at the device,
   2026-11-27). The first layout had ADSR on the
   faders and GLIDE on knob 8; the click test (2026-11-24) showed that a fixed set of knobs has to
-  be hand-matched to the rack and fits no patch type well, so knob 8 is now kept free to pick the
-  module the knobs follow (Story 22.5, next step - it does nothing yet) and ADSR will be reached
-  through its own module. For that the file format gained special targets: `param` may be
-  `@module:1`..`7` (the n-th control of the selected module) with an optional `fallback`
-  parameter, `@select`, `@shift` or `@tempoFine`. The DAW program's CCs (86-117 / 14-31, from Arturia's manual and the
-  Bitwig and Live scripts) map to the same controls, so the knobs work whichever program the
+  be hand-matched to the rack and fits no patch type well, so knob 8 now picks the module the
+  knobs follow and ADSR is reached through its own module. For that the file format gained
+  special targets: `param` may be `@module:1`..`7` (the n-th control of the selected module)
+  with an optional `fallback` parameter, `@select`, `@shift` or `@tempoFine`. The DAW program's
+  CCs (86-117 / 14-31, from Arturia's manual and the Bitwig and Live scripts) map to the same
+  controls, so the knobs work whichever program the
   MiniLab is in. The MASTER VOL fader jumps on first touch like every control: its top is full
   level, the default is half. `Generic (GM)` uses the GM2 sound
   controller numbers most synths use (74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb,
@@ -92,7 +93,33 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   part of presets). A control moves the layer you edit - A, B, or both in A+B - unless its entry
   pins `"layer"`. Standalone only: in a DAW the host maps controllers itself, reading them as well
   would move a parameter twice. The audio thread only records values; a message-thread timer
-  applies them (Stories 22.1 and 22.5, step a).
+  applies them (Stories 22.1 and 22.5).
+- **The controller's knobs follow the marked module.** A fixed knob layout fits no patch type:
+  in a GRAIN or SAMPLER patch half the MiniLab's knobs moved modules that were off, and the order
+  had to be hand-matched to the rack (maintainer 2026-11-24, after the 22.1 click test). Now a
+  module is marked - by a click on its title bar, by touching one of its controls, its power
+  switch or its reset, or by turning knob 8 through the modules on screen (top to bottom, left to
+  right) - and knobs 1-7 move its controls left to right. The order is derived from the rack as
+  it is drawn, not written per module, so every module is reachable and a new one needs nothing.
+  Knobs, combos (stepped through over the knob's travel) and switches (on from half way) count;
+  spacers, displays, buttons and the step cells of STEP SEQ / PERC do not, nor do the list combos
+  whose items are not the parameter's range (SAMPLER SET, WAVETABLE BANK, PERC KIT, the MOD
+  MATRIX's MOD and PARAM). A module with more than seven controls has banks: Shift + knob 8
+  changes the bank, called a bank because 'page' already means the step pages. The mark is a
+  white frame, and the
+  bank stands in the title bar ('2/3') - a fixed mark, no tooltip. One rule decides what happens
+  when the rack changes: the module stays marked as long as it is still on screen, on whichever
+  layer's frame is now shown (a switch between A, B and A+B, or the A | B switch of a module in
+  A+B - the knobs then move that frame's values), and the mark is dropped only when the module is
+  gone. The A | B switch and the help icon do not mark a module: one swaps the frame, the other
+  opens a text. A second click on the marked module's title bar unmarks it - there was no way
+  back to the fixed knobs short of loading a preset; a click on one of its controls keeps the
+  mark, so editing never loses it. Nothing is marked after a start, a preset load or the header
+  RESET - a new sound starts from the same place - and then the knobs do what the
+  entry above lists - so a patch can be played before anything is clicked. Marking exists only
+  while the active profile has such knobs (`@module` / `@select`); with `Generic (GM)` the rack
+  looks and behaves as before, and in a DAW nothing is marked at all. Knob 8 is absolute like
+  every control, so it jumps on first touch (Story 22.5, step b).
 - **ARP SYNC - the arpeggio on the tempo grid.** The ARPEGGIATOR ran on RATE in steps per second
   only; it predates tempo sync and was never brought along when the LFOs, DELAY, STEP SEQ and PERC
   got it (maintainer 2026-11-23). SYNC offers the same note values as STEP SEQ against the MASTER

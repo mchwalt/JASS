@@ -603,7 +603,9 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     // MODULES menu's reset. Clean snapshot AFTER the module resets, so Init reads as Init.
     resetBtn.onClick = [this] { processor.resetToDefault(); setPresetName("Init");
                                 if (rackBody) rackBody->resetAllModules();
-                                processor.markPresetClean(); };
+                                processor.markPresetClean();
+                                processor.clearControllerSelection();   // 22.5: like a preset load
+                                syncControllerMark(); };
 
     // Show/hide MODULES menu (Story 4.2): opens a popup of zones + modules to toggle.
     addAndMakeVisible(modulesBtn);
@@ -710,6 +712,25 @@ SynthyEditor::SynthyEditor(SynthyProcessor& p)
     if (rackBody)
     {
         rackBody->onLayoutChanged = [this] { refitHeight(); };
+        // Story 22.5 (standalone only, like every controller input): a touched module asks the
+        // processor for the hardware knobs — it refuses while the active profile has no
+        // "@module" / "@select" entry — and every applied layout reports the frames on screen.
+        // Wired before the first layout below, so the processor's list is never behind the rack.
+        if (! processor.isHostedByDaw())
+        {
+            rackBody->onModuleTouched = [this] (const juce::String& entryId, bool layerB, bool titleBar)
+            {
+                // The title bar of the module that is already selected unselects it; one of its
+                // controls keeps it (maintainer 2026-11-27).
+                const auto sel = processor.getControllerSelection();
+                if (titleBar && sel.valid && sel.entryId == entryId && sel.layerB == layerB)
+                    processor.clearControllerSelection();
+                else
+                    processor.selectControllerModule (entryId, layerB);
+                syncControllerMark();
+            };
+            rackBody->onShownFramesChanged = [this] { pushControllerFrames(); };
+        }
         // AD-13 (Story 18.1): in a DAW the host owns mute, level and tempo — MASTER renders locked
         // + dimmed; its stored params stay as they are for the standalone.
         if (processor.isHostedByDaw())
@@ -913,10 +934,49 @@ void SynthyEditor::refreshControllerBox()
         controllerBox.setTooltip(tip);
 }
 
+// Story 22.5: hand the processor what the rack shows — the selectable frames in reading order,
+// each with its countable controls (all banks). The processor keeps the selection while its module
+// is still in the list (on the other layer's frame too) and drops it otherwise.
+void SynthyEditor::pushControllerFrames()
+{
+    if (rackBody == nullptr || processor.isHostedByDaw())
+        return;
+    std::vector<SynthyProcessor::ControllerFrame> frames;
+    for (const auto& shown : rackBody->shownFramesInReadingOrder())
+    {
+        SynthyProcessor::ControllerFrame f { shown.entryId, shown.layerB, {} };
+        for (const auto& c : shown.frame->countableControls())
+            f.controls.push_back (ControllerProfiles::moduleControlFrom (c));
+        if (! f.controls.empty())   // nothing to turn: not selectable
+            frames.push_back (std::move (f));
+    }
+    processor.setControllerFrames (std::move (frames));
+    syncControllerMark();
+}
+
+// The marker follows the processor's selection: a touch, knob 8, Shift + knob 8, a frame swap, a
+// profile without module targets — whatever changed it, the revision says so.
+void SynthyEditor::syncControllerMark()
+{
+    if (rackBody == nullptr || processor.isHostedByDaw())
+        return;
+    const int revision = processor.getControllerSelectionRevision();
+    if (revision == controllerMarkRevision)
+        return;
+    controllerMarkRevision = revision;
+    const auto sel = processor.getControllerSelection();
+    rackBody->setControllerMark (sel.valid, sel.entryId, sel.layerB,
+                                 sel.bankCount > 1 ? juce::String (sel.bank + 1) + "/" + juce::String (sel.bankCount)
+                                                   : juce::String());
+}
+
 void SynthyEditor::timerCallback()
 {
     if (! processor.isHostedByDaw())
+    {
         refreshControllerBox();
+        syncControllerMark();   // 22.5: knob 8 / Shift + knob 8 / a profile change moved the selection
+    }
     // RT-safety (11.1): run any auto-enable coupling deferred from the audio thread (host automation)
     // here on the message thread — where allocating + setValueNotifyingHost is safe.
     processor.reconcileParamCouplingsIfDirty();
@@ -1263,6 +1323,8 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
         processor.requestGlobalLfoRearm();
         processor.markLayerBClean();   // B's ↺ / double-click now return to THIS sound (review)
         if (rackBody) rackBody->revealAfterLayerLoad();
+        processor.clearControllerSelection();   // 22.5: a loaded sound starts with nothing selected
+        syncControllerMark();
         return;
     }
     if (! res.ok)
@@ -1301,6 +1363,10 @@ void SynthyEditor::loadPresetFile(const juce::File& f)
     // the previous one (review decision 2026-11-24).
     if (rackBody != nullptr)
         rackBody->clearLayerPicks();
+    // 22.5: nothing is selected after a preset load — the controller knobs are back on their fixed
+    // fallback until a module is touched or knob 8 picks one.
+    processor.clearControllerSelection();
+    syncControllerMark();
 
     if (res.migrated)
     {

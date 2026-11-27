@@ -22,7 +22,12 @@ Ordinary keyboards drop some three-key combinations — the third note never arr
 Knobs and faders of a MIDI controller move JASS in the standalone app (in a DAW, map them there).
 
 - **Header combo** — **Auto** picks the profile from the MIDI input name (MiniLab 3, otherwise Generic (GM)); or pick one by hand
-- **MiniLab 3 knobs** — 1–7: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb; knob 8 does nothing yet; same in the ARTURIA and the DAW program (Shift + Pad 3)
+- **MiniLab 3 knobs 1–7** — the controls of the marked module, left to right: knobs, combos (step through their items) and switches (on from half way); skipped: step cells and the list combos SET, BANK, KIT and the MOD MATRIX's MOD and PARAM
+- **Nothing marked** — knobs 1–7: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb
+- **Mark a module** — with the MiniLab 3 profile: click its title bar or one of its controls, or turn knob 8 (it jumps on first touch); the marked module has a white frame
+- **Unmark** — click the marked module's title bar again; loading a preset or RESET unmarks too
+- **Banks** — a module with more than 7 controls: hold Shift and turn knob 8; the title bar shows the bank, e.g. 2/3
+- **Programs** — same in the ARTURIA and the DAW program (Shift + Pad 3)
 - **MiniLab 3 faders** — MASTER VOL, TEMPO, A LVL, B LVL, whatever layer you edit
 - **Fine tempo** — Shift + main encoder moves TEMPO by 1 BPM per click
 - **Generic (GM)** — CC 74 Cutoff, 71 Resonance, 73 Attack, 72 Release, 91 Reverb, 93 Chorus

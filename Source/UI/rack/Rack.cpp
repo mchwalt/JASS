@@ -301,6 +301,7 @@ namespace rack
         addAndMakeVisible (*f);
         // Forward this frame's help-icon click up to the editor (Story 6.1).
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
+        f->onTouched = [this, id] (bool titleBar) { if (onModuleTouched) onModuleTouched (id, false, titleBar); };   // 22.5
         // A frame with a display fold (16.2) changes size at runtime: re-read its footprint
         // and re-pack the rack live — the rows below shift, exactly what the fold promises.
         f->onFootprintChanged = [this, f]
@@ -433,6 +434,7 @@ namespace rack
         for (const auto& p : placed)   // A's frame gets the same switch
             if (p.id == layerAId && p.frame != nullptr) wireLayerSwitch (*p.frame, layerAId);
         f->onHelp = [this] (const juce::String& mid) { if (onModuleHelp) onModuleHelp (mid); };
+        f->onTouched = [this, layerAId] (bool titleBar) { if (onModuleTouched) onModuleTouched (layerAId, true, titleBar); };   // 22.5
         f->onFootprintChanged = [this, f]
         {
             for (auto& p : placedB)
@@ -1208,9 +1210,38 @@ namespace rack
                 if (zh.resetBtn  != nullptr && zh.resetBtn->isVisible())  zh.resetBtn->toFront (false);
                 if (zh.infoBtn   != nullptr && zh.infoBtn->isVisible())   zh.infoBtn->toFront (false);
             }
+
+            // 22.5: what is on screen may have changed — the editor passes the list on to the
+            // processor, which keeps or drops the controller selection.
+            if (onShownFramesChanged) onShownFramesChanged();
         }
 
         return y + kPad;
+    }
+
+    std::vector<Rack::ShownFrame> Rack::shownFramesInReadingOrder() const
+    {
+        std::vector<ShownFrame> out;
+        for (const auto& p : placed)
+            if (p.frame != nullptr && p.frame->isVisible()) out.push_back ({ p.id, false, p.frame });
+        for (const auto& p : placedB)
+            if (p.frame != nullptr && p.frame->isVisible()) out.push_back ({ p.id, true, p.frame });
+        // Reading order by the frames' top-left corners: every frame of a grid row starts at the
+        // same y, so (y, x) is row by row, left to right.
+        std::stable_sort (out.begin(), out.end(), [] (const ShownFrame& a, const ShownFrame& b)
+        {
+            const auto pa = a.frame->getPosition(), pb = b.frame->getPosition();
+            return pa.y != pb.y ? pa.y < pb.y : pa.x < pb.x;
+        });
+        return out;
+    }
+
+    void Rack::setControllerMark (bool valid, const juce::String& entryId, bool layerB, const juce::String& bankText)
+    {
+        for (const auto& p : placed)
+            if (p.frame != nullptr) p.frame->setControllerMark (valid && ! layerB && p.id == entryId, bankText);
+        for (const auto& p : placedB)
+            if (p.frame != nullptr) p.frame->setControllerMark (valid && layerB && p.id == entryId, bankText);
     }
 
     int Rack::zoneRowsIn (Zone zone, int view) const

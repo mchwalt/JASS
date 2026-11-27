@@ -130,6 +130,14 @@ false` params are skipped, `Choice` → `Combo`, `Bool` → `Toggle`, everything
 else → `Knob` (with mod ring and, when `freqDisplay`, the guarded
 display-transform pair). `extraBody` is appended last.
 
+**The display order is also the hardware knob order (Story 22.5).** A
+controller's knobs 1–7 take the selected module's knobs, combos and toggles in
+the order the body shows them (`rack::countableControls`), so `params` /
+`bodyOrder` decide what lies under which knob. `indexIsValue` / `itemValues`
+combos and pattern cells are not reachable from a controller; more than seven
+controls means banks of seven. Details:
+[ARCHITECTURE §3.6](ARCHITECTURE.md#36-controller-input-story-221).
+
 ## 4. Registry (`ModuleRegistry`, `AllModules.h`)
 
 - `Modules::all()` (`AllModules.h`) returns the ordered list of **38 module

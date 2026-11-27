@@ -287,7 +287,7 @@ public:
     // A click / touch. False = refused: the active profile has no "@module" / "@select" entry, or
     // the frame is not in the list. Selecting the selected module again keeps its bank.
     bool selectControllerModule (const juce::String& entryId, bool layerB);
-    void clearControllerSelection();                             // no caller yet: the editor will call it on a preset load (step b)
+    void clearControllerSelection();                             // the editor calls it on a preset load: nothing selected afterwards
     ControllerSelection getControllerSelection() const;
     int  getControllerSelectionRevision() const noexcept { return controllerSelRevision; }   // bumps on every change
     bool controllerProfileSelectsModules() const;                // the active profile has "@module" / "@select"

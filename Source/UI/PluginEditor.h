@@ -385,6 +385,13 @@ public:
     {
         stopTimer();
         processor.onStateReloaded = nullptr;   // the async re-load must not reach a dead editor
+        if (rackBody != nullptr && rackBody->onShownFramesChanged != nullptr)
+        {
+            // 22.5: no rack on screen, nothing to select — the knobs are back on their fallback.
+            rackBody->onShownFramesChanged = nullptr;
+            rackBody->onModuleTouched = nullptr;
+            processor.setControllerFrames ({});
+        }
         processor.getKeyboardState().removeListener (this);
         for (int l = 0; l < SynthyProcessor::kNumLanes; ++l)
             processor.setSeqRecordArmed (l, false);   // a closed window must never leave a sequencer
@@ -576,6 +583,12 @@ private:
     juce::ComboBox controllerBox;
     int controllerBoxRevision = -1;
     void refreshControllerBox();
+    // Story 22.5: the knobs follow the selected module. The processor owns the selection; the
+    // editor pushes the frames the rack shows (after every applied layout) and reads the selection
+    // back for the marker. Standalone only — in a DAW neither is wired.
+    void pushControllerFrames();
+    void syncControllerMark();
+    int controllerMarkRevision = -1;        // selection revision the marker was last drawn for
     juce::String currentLang { "EN" };      // active help language (persisted as a global app setting)
     std::unique_ptr<HelpPanel> helpPanel;   // reused for every module; closed via ✕ / ESC
     juce::String currentHelpId;             // module/zone id currently shown (for live re-render on language switch)

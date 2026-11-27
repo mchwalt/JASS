@@ -79,6 +79,16 @@ public:
         ControlKind kind = ControlKind::Knob;
         int items = 0;            // Combo: number of items
     };
+    // The one conversion from the rack's countable control (rack::CountableControl — a template,
+    // so this header needs no rack include). The editor and the selftest both push through it.
+    template <class Countable>
+    static ModuleControl moduleControlFrom (const Countable& c)
+    {
+        using K = typename Countable::Kind;
+        return { c.paramId,
+                 c.kind == K::Combo ? ControlKind::Combo : c.kind == K::Toggle ? ControlKind::Toggle : ControlKind::Knob,
+                 c.items };
+    }
 
     //==============================================================================================
     // Pure value math (Story 22.5).

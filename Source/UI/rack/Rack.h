@@ -189,6 +189,22 @@ namespace rack
         // id so the editor can resolve title + help text and show the shared HelpPanel.
         std::function<void(const juce::String& id)> onModuleHelp;
 
+        // --- Story 22.5: the hardware knobs follow the selected module ----------------------
+        // A frame is named by its layout-entry id (the layer-A id) plus the layer of the frame —
+        // the key the processor's selection uses. The rack only reports: a touch, and what it
+        // shows; which module is selected (and whether a touch selects at all) is decided by the
+        // processor, and the editor hands the result back for the marker.
+        // `titleBar`: the press was on the frame's title bar, not on one of its controls.
+        std::function<void(const juce::String& entryId, bool layerB, bool titleBar)> onModuleTouched;
+        // Fired at the end of every applied layout: the set of frames on screen may have changed
+        // (show / hide, view A / B / A+B, a frame swap inside A+B, a resize).
+        std::function<void()> onShownFramesChanged;
+        struct ShownFrame { juce::String entryId; bool layerB = false; ModuleFrame* frame = nullptr; };
+        // The frames on screen in reading order: top to bottom, left to right.
+        std::vector<ShownFrame> shownFramesInReadingOrder() const;
+        // Mark the selected frame (outline + bank text), unmark every other. valid false = none.
+        void setControllerMark (bool valid, const juce::String& entryId, bool layerB, const juce::String& bankText);
+
         // Total stacked height the current population needs at `width` — lets the
         // editor size/verify the fixed window without scrolling (AC4). Every zone is as tall as
         // the tallest of the views A, B and A+B, so switching never resizes the window (2026-11-19).

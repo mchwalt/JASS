@@ -30,6 +30,7 @@
 #include "../Audio/PresetIO.h"
 #include "../Audio/SeqMidiIO.h"   // review group 2: MIDI import / export per lane
 #include "../Audio/ControllerProfiles.h"   // Story 22.1: controllerChecks
+#include "../Modules/AllModules.h"         // Story 22.5: countable controls of real module descriptors
 
 namespace
 {
@@ -1350,6 +1351,114 @@ namespace
             run (*minilab, { Ev { 1, 27, 0 } });
             expect (heldAcross && ! r.p->controllerShiftHeldForTest(), "Shift pressed as CC 9, released as CC 27: released");
             r.set (Parameters::ID::layerFocus, 0.0f);
+        }
+
+        //------------------------------------------------------------------------------------------
+        // Story 22.5, step b: what the knobs reach in a module is derived from its descriptor
+        // (rack::countableControls) — the same function the rack's frames hand to the editor.
+        std::cout << "Controller profiles: countable controls of a module (22.5, step b)" << std::endl;
+        {
+            using CC = rack::CountableControl;
+            auto layerB = [&] (ModuleSpec m)   // the editor's LS: a patch module's spec with layer B's ids
+            {
+                for (auto& p : m.params) p.id = bp + p.id;
+                if (m.enableParamId.isNotEmpty()) m.enableParamId = bp + m.enableParamId;
+                for (auto& id : m.bodyOrder) if (id.isNotEmpty() && ! id.startsWith ("step:")) id = bp + id;
+                return m;
+            };
+            auto allExist = [&] (const juce::StringArray& list) { bool ok = ! list.isEmpty(); for (const auto& id : list) ok = ok && exists (id); return ok; };
+
+            // Without bodyOrder: the params in registration order, the enable bool is the header's.
+            const auto filterDesc = makeModuleDescriptor (Modules::filter());
+            const auto filterIds = rack::countableParamIds (filterDesc);
+            expect (filterIds.joinIntoString (",") == "filterType,filterCutoff,filterReso,filterTrack" && allExist (filterIds),
+                    "FILTER (no bodyOrder): TYPE, CUTOFF, RESO, TRACK in display order, the enable switch not counted");
+            const auto filterControls = rack::countableControls (filterDesc);
+            expect (filterControls.size() == 4 && filterControls[0].kind == CC::Kind::Combo && filterControls[0].items == 2
+                    && filterControls[1].kind == CC::Kind::Knob,
+                    "FILTER: a combo carries its item count, a knob is a knob");
+
+            // With bodyOrder: display order, pattern cells ("step:n") and spacers skipped.
+            const auto seqDesc = makeModuleDescriptor (Modules::stepSeq());
+            const auto seqIds = rack::countableParamIds (seqDesc);
+            expect (seqIds.joinIntoString (",") == "seqSync,seqRate,seqLength,seqGate,seqAccent" && allExist (seqIds),
+                    "STEP SEQ (bodyOrder): the five globals in display order, pattern cells and spacers skipped");
+            expect (rack::countableControls (seqDesc)[0].kind == CC::Kind::Combo
+                    && rack::countableControls (seqDesc)[0].items == prm ("seqSync")->getNumSteps(),
+                    "STEP SEQ: SYNC's item count is the parameter's");
+
+            // Layer B: the frame's own ids.
+            const auto filterB = rack::countableParamIds (makeModuleDescriptor (layerB (Modules::filter())));
+            const auto seqB = rack::countableParamIds (makeModuleDescriptor (layerB (Modules::stepSeq())));
+            expect (filterB.joinIntoString (",") == "bfilterType,bfilterCutoff,bfilterReso,bfilterTrack" && allExist (filterB)
+                    && seqB.joinIntoString (",") == "bseqSync,bseqRate,bseqLength,bseqGate,bseqAccent" && allExist (seqB),
+                    "layer B descriptors: the b ids, with and without bodyOrder");
+
+            // A SYNTHETIC descriptor with every kind of element the editor adds after building
+            // (indexIsValue / itemValues combos, corner switches, alt rows, actions, captions,
+            // displays, toggles, paged step knobs). The editor-built descriptors themselves
+            // (SAMPLER, WAVETABLE, PERC, MOD MATRIX) are not covered by the selftest.
+            rack::ModuleDescriptor d;
+            {
+                rack::Combo plain { "filterType", "TYPE", juce::StringArray { "a", "b" } };
+                rack::Combo byIndex { "noiseType", "SET", juce::StringArray { "x", "y", "z" } };
+                byIndex.indexIsValue = true;
+                rack::Combo byValues { "noiseType", "KIT", juce::StringArray { "x", "y" } };
+                byValues.itemValues = [] { return juce::Array<int> { 3, 5 }; };
+                rack::Combo empty { "noiseType", "NONE", juce::StringArray {} };
+                rack::Combo dynamic { "noiseType", "DYN", std::function<juce::StringArray()> ([] { return juce::StringArray { "1", "2", "3", "4" }; }) };
+                rack::Knob cell { "filterCutoff", "CUT" };
+                cell.toggleParamId = "filterOn";
+                cell.accentParamId = "filterOn";
+                cell.altParamId = "filterReso";
+                rack::Knob pattern { {}, "1" };
+                pattern.patternStep = 0;
+                rack::Knob paged { "seqPitch3", "3" };
+                d.paging.pageCount = 4;
+                d.paging.stepsPerPage = 48;
+                d.paging.pagedPrefixes = { "seqPitch" };
+                d.body = { rack::Caption { "x" }, plain, rack::Action { "GO", {}, {} }, byIndex, byValues, empty, cell, pattern, paged,
+                           rack::Toggle { "filterOn", "ON" }, rack::Display { nullptr, 2 }, dynamic, rack::Knob { {}, "nothing" } };
+            }
+            const auto mixed = rack::countableControls (d);
+            expect (rack::countableParamIds (d).joinIntoString (",") == "filterType,filterCutoff,filterOn,noiseType",
+                    "counted: combo, knob (its main id only), toggle, provider combo; skipped: caption, action, indexIsValue combo, itemValues combo, combo without items, pattern cell, paged step, display");
+            expect (mixed.size() == 4 && mixed[2].kind == CC::Kind::Toggle && mixed[3].kind == CC::Kind::Combo && mixed[3].items == 4,
+                    "a toggle is a toggle; a provider combo is asked for its items");
+            expect (rack::countableParamIds (makeModuleDescriptor (Modules::filter())) == filterIds
+                    && rack::countableParamIds (rack::ModuleDescriptor {}).isEmpty(),
+                    "pure: the same descriptor gives the same list; an empty body has no countable control");
+
+            // End to end with real descriptors, as the editor pushes them: FILTER (A) selected.
+            auto frameOf = [] (const char* entry, bool isB, const rack::ModuleDescriptor& desc)
+            {
+                Frame f { entry, isB, {} };
+                for (const auto& c : rack::countableControls (desc))
+                    f.controls.push_back (CP::moduleControlFrom (c));
+                return f;
+            };
+            run (mod, {});
+            r.set (Parameters::ID::layerFocus, 0.0f);
+            r.p->setControllerFrames ({ frameOf ("filter", false, filterDesc), frameOf ("stepseq", false, seqDesc) });
+            expect (r.p->selectControllerModule ("filter", false) && sel().bankCount == 1, "FILTER's real frame: selectable, one bank");
+            r.set ("filterType", 0.0f);
+            cutoff->setValueNotifyingHost (0.3f);
+            const float cutoffBefore = cutoff->getValue();
+            run (mod, { Ev { 1, 30, 127 } });
+            expect (raw ("filterType") == 1.0f && cutoff->getValue() == cutoffBefore && cutoffBefore < 1.0f,
+                    "FILTER selected, knob 1 = 127: its 1st control (TYPE) at its last item, not the fallback");
+            run (mod, { Ev { 1, 30, 0 } });
+            expect (raw ("filterType") == 0.0f, "knob 1 = 0: TYPE back on its first item");
+            r.p->setControllerFrames ({ frameOf ("filter", true, makeModuleDescriptor (layerB (Modules::filter()))), frameOf ("stepseq", false, seqDesc) });
+            r.set ("bfilterType", 0.0f);
+            run (mod, { Ev { 1, 30, 127 } });
+            expect (sel().valid && sel().layerB && raw ("bfilterType") == 1.0f && raw ("filterType") == 0.0f,
+                    "the rack now shows B's FILTER frame: still selected, knob 1 moves the b id");
+            r.p->setControllerFrames ({ frameOf ("stepseq", false, seqDesc) });
+            expect (! sel().valid, "FILTER no longer shown: selection dropped");
+            r.set ("filterType", 0.0f);
+            r.set ("bfilterType", 0.0f);
+            r.p->setControllerFrames ({});
         }
 
         // Hosted (the Rig's processBlock is the DAW path): nothing is captured, Shift included.

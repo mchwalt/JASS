@@ -182,6 +182,10 @@ namespace rack
         if (desc.enableParam.isNotEmpty())
             enableValue = apvts.getRawParameterValue (desc.enableParam);
 
+        // 22.5: a press on the frame or any child, or a wheel turn over a control, is a touch of
+        // this module (see touched). Nested, so the controls keep their own mouse handling.
+        addMouseListener (&touchListener, true);
+
         // Seed the dependent-combo watch cache with the current values so the first poll only fires
         // on a REAL change (e.g. a user picking a MODULE, or a preset load), not on startup.
         lastWatched.resize (desc.comboDeps.size(), 0);
@@ -209,7 +213,36 @@ namespace rack
         }
     }
 
-    ModuleFrame::~ModuleFrame() { stopTimer(); }
+    ModuleFrame::~ModuleFrame() { stopTimer(); removeMouseListener (&touchListener); }
+
+    void ModuleFrame::touched (const juce::MouseEvent& e, bool wheel)
+    {
+        // The A | B switch and the help icon are not touches (maintainer 2026-11-27): one swaps the
+        // frame, the other opens a text. A press counts anywhere else (title bar and body too); the
+        // wheel only over a control — over the bare frame or the title it turns nothing.
+        auto within = [&e] (const juce::Component* c)
+        {
+            return c != nullptr && (e.originalComponent == c || c->isParentOf (e.originalComponent));
+        };
+        if (within (layerABtn.get()) || within (layerBBtn.get()) || within (infoBtn.get()))
+            return;
+        // The title bar: the header strip of the frame itself, or the title label.
+        const bool onFrame  = e.originalComponent == this;
+        const bool titleBar = within (&titleLabel) || (onFrame && e.y < kHeaderH);
+        if (wheel && (onFrame || titleBar))
+            return;
+        if (onTouched) onTouched (titleBar);
+    }
+
+    void ModuleFrame::setControllerMark (bool selected, const juce::String& bankText)
+    {
+        const auto text = selected ? bankText : juce::String();
+        if (selected == controllerSelected && text == controllerBankText)
+            return;
+        controllerSelected = selected;
+        controllerBankText = text;
+        repaint();
+    }
 
     void ModuleFrame::lockForHost()
     {
@@ -1587,6 +1620,28 @@ namespace rack
                 juce::Rectangle<float> dot (dotX, cy - d * 0.5f, d, d);
                 if (active) { g.setColour (juce::Colour (0xff7bd88f)); g.fillEllipse (dot); }
                 else        { g.setColour (juce::Colours::white.withAlpha (0.28f)); g.drawEllipse (dot, 1.0f); }
+            }
+        }
+
+        // Controller selection (22.5): this module has the hardware knobs. A white outline — a
+        // shape, not a colour code, and unlike every other mark in the rack (green dot, grey ring,
+        // the type-coloured write cursor) — painted last, so it stays bright on a module that is
+        // off (an off module can be selected). With more than one bank of seven the bank stands
+        // in the title bar, at the right end of the title: "2/3".
+        if (controllerSelected)
+        {
+            g.setColour (juce::Colours::white.withAlpha (0.92f));
+            g.drawRoundedRectangle (getLocalBounds().toFloat().reduced (1.0f), 6.0f, 2.0f);
+            if (controllerBankText.isNotEmpty())
+            {
+                const auto tb = titleLabel.getBounds();
+                const int w = juce::jmin (34, tb.getWidth());
+                const juce::Rectangle<int> pill (tb.getRight() - w, tb.getY() + 1, w, tb.getHeight() - 2);
+                g.setColour (juce::Colours::white.withAlpha (0.92f));
+                g.fillRoundedRectangle (pill.toFloat(), 3.0f);
+                g.setColour (juce::Colour (0xff15181d));
+                g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
+                g.drawFittedText (controllerBankText, pill, juce::Justification::centred, 1, 0.7f);
             }
         }
     }

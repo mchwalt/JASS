@@ -184,7 +184,7 @@ encodes the parameter as a small int precisely to avoid constructing a
 |---|---|---|
 | `SynthyProcessor` (Standalone only) | 1.5 s debounce | LiveState auto-save when `liveDirty` |
 | `SynthyProcessor::controllerPoll` (Standalone only) | 30 Hz | controller CCs → parameters; every ~2 s re-read enabled MIDI inputs + the Controllers folder (Story 22.1) |
-| `SynthyEditor` | 30 Hz | mod rings, FREQ displays, zone-header sync, coupling drain, F-key poll, keyboard enable gate, controller-profile combo refresh (22.1) |
+| `SynthyEditor` | 30 Hz | mod rings, FREQ displays, zone-header sync, coupling drain, F-key poll, keyboard enable gate, controller-profile combo refresh (22.1), controller selection marker (22.5) |
 | `ModuleFrame` | 20 Hz (only if the module has dynamic state) | dim state, conditional knobs, combo dependencies, slot LEDs |
 | Displays (`WaveformDisplay`, `SpectrumDisplay`, `SpinningTitle3D`) | 30 Hz | repaint |
 | `EnvelopeDisplay` | 20 Hz | ADSR curve |
@@ -239,9 +239,39 @@ message-thread, checked by `JASS_Render --selftest`.
   (dirty CCs drain in CC order, and the selector's CC may come last). The
   processor owns the selection, keyed by the rack's layout-entry id plus the
   layer of the frame on screen; it exists only while the active profile has
-  `@module` / `@select` entries. Until the editor pushes the frames on screen
-  (`setControllerFrames`, the next step of 22.5) nothing can be selected and
-  the knobs run on their fallback.
+  `@module` / `@select` entries. Without a frame list (no editor) nothing can
+  be selected and the knobs run on their fallback.
+- **Selection UI (Story 22.5).** One owner, three roles. The *processor* owns
+  the selection and its bank. The *rack* only reports: a mouse press on a frame
+  or a wheel turn over one of its controls (`ModuleFrame::onTouched` →
+  `Rack::onModuleTouched` — every child through a nested `MouseListener`
+  member, except the A | B switch and the help icon), and at the end of every
+  applied `layout()` that the frames on screen may have changed
+  (`onShownFramesChanged`). The *editor* turns that into
+  `selectControllerModule` and `setControllerFrames` — the visible frames in
+  reading order (`Rack::shownFramesInReadingOrder`, by top-left corner), each
+  with its countable controls — and reads the selection back on its timer
+  (`getControllerSelectionRevision`) to draw the marker
+  (`Rack::setControllerMark`: a white outline, and the bank as "2/3" in the
+  title bar when there is more than one). `setControllerFrames` reconciles:
+  the selection stays while its layout entry is still in the list — on the
+  other layer's frame too (focus switch, A | B swap; the layer flag flips, the
+  bank is kept and clamped) — and is dropped when it is gone. The touch
+  carries whether it was on the title bar: there, on the module already
+  selected, the editor calls `clearControllerSelection` instead (the way to
+  unselect); a control, the power switch, ↺ or the wheel keeps the selection.
+  A preset load and the header RESET call `clearControllerSelection` too; the
+  editor's destructor pushes an empty list. None of it is wired in a DAW.
+- **Countable controls are derived, not written.**
+  `rack::countableControls (ModuleDescriptor)` (`ModuleDescriptor.h`) lists a
+  module's knobs, combos and toggles in display order, from the descriptor the
+  frame was built with (so the editor's adjustments after
+  `makeModuleDescriptor` are in it). Skipped: captions, displays, actions,
+  pattern cells and paged step knobs, `indexIsValue` / `itemValues` combos and
+  combos without items; a cell's corner switch and alt row are not controls of
+  their own. A control dimmed by `activeWhen` is counted all the same: knob
+  positions must not shift when a module's state changes. Pure — the selftest runs it
+  on real specs with and without `bodyOrder` and on layer-B ids.
 - **Channels 12..16 are never captured** (drone 16, previews 15 / 12, pattern
   channels 14 / 13).
 - **Layer:** an unpinned entry follows the focus — A sets the id, B the `b` id,
