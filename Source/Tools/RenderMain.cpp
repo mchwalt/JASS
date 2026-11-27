@@ -1425,6 +1425,8 @@ namespace
                     "counted: combo, knob (its main id only), toggle, provider combo; skipped: caption, action, indexIsValue combo, itemValues combo, combo without items, pattern cell, paged step, display");
             expect (mixed.size() == 4 && mixed[2].kind == CC::Kind::Toggle && mixed[3].kind == CC::Kind::Combo && mixed[3].items == 4,
                     "a toggle is a toggle; a provider combo is asked for its items");
+            expect (mixed.size() == 4 && mixed[0].bodyIndex == 1 && mixed[1].bodyIndex == 6 && mixed[2].bodyIndex == 9 && mixed[3].bodyIndex == 11,
+                    "each countable control names its body element (the frame puts the knob number on that cell)");
             expect (rack::countableParamIds (makeModuleDescriptor (Modules::filter())) == filterIds
                     && rack::countableParamIds (rack::ModuleDescriptor {}).isEmpty(),
                     "pure: the same descriptor gives the same list; an empty body has no countable control");
@@ -1458,6 +1460,32 @@ namespace
             expect (! sel().valid, "FILTER no longer shown: selection dropped");
             r.set ("filterType", 0.0f);
             r.set ("bfilterType", 0.0f);
+
+            // An inactive (dimmed) control keeps its slot but is not moved.
+            {
+                bool cutoffActive = false;
+                Frame f { "filter", false, { MC { "filterCutoff", CP::ControlKind::Knob, 0, [&cutoffActive] { return cutoffActive; } },
+                                             MC { "filterReso", CP::ControlKind::Knob, 0 } } };
+                r.p->setControllerFrames ({ f });
+                r.p->selectControllerModule ("filter", false);
+                cutoff->setValueNotifyingHost (0.3f);
+                prm ("filterReso")->setValueNotifyingHost (0.0f);
+                const float c0 = cutoff->getValue();
+                run (mod, { Ev { 1, 30, 127 }, Ev { 1, 31, 127 } });
+                expect (cutoff->getValue() == c0 && prm ("filterReso")->getValue() == 1.0f,
+                        "inactive control: knob 1 moves nothing (not its fallback either), knob 2 still moves the 2nd control");
+                cutoffActive = true;
+                run (mod, { Ev { 1, 30, 127 } });
+                expect (cutoff->getValue() == 1.0f, "active again: knob 1 moves it without a new push");
+                rack::ModuleDescriptor gated;
+                rack::Knob gk { "filterCutoff", "CUT" };
+                gk.activeWhen = [] { return false; };
+                gated.body = { gk, rack::Knob { "filterReso", "RESO" } };
+                const auto gc = rack::countableControls (gated);
+                expect (gc.size() == 2 && gc[0].active && ! gc[0].active() && ! gc[1].active
+                        && CP::moduleControlFrom (gc[0]).active && ! CP::moduleControlFrom (gc[1]).active,
+                        "a descriptor's activeWhen travels with the countable control into the pushed control");
+            }
             r.p->setControllerFrames ({});
         }
 

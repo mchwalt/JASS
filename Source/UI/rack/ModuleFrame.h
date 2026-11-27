@@ -99,9 +99,10 @@ namespace rack
         // controller profile). `titleBar` = a press on the title bar itself (the header strip or
         // the title, no child control): on the module that is already selected it unselects.
         std::function<void(bool titleBar)> onTouched;
-        // The marker: an outline around the frame and, with more than one bank of seven, the
-        // bank as "2/3" in the title bar. A fixed mark, no tooltip.
-        void setControllerMark (bool selected, const juce::String& bankText);
+        // The marker: an outline around the frame, with more than one bank of seven the bank as
+        // "2/3" in the title bar, and on each control of bank `bank` (0-based) the number of the
+        // hardware knob that moves it ("1" .. "7"). Fixed marks, no tooltip; only painted.
+        void setControllerMark (bool selected, const juce::String& bankText, int bank);
         // What the knobs reach here, in display order (see rack::countableControls).
         std::vector<CountableControl> countableControls() const { return rack::countableControls (desc); }
 
@@ -194,6 +195,8 @@ namespace rack
         TouchListener touchListener { *this };
         void touched (const juce::MouseEvent&, bool wheel);
         juce::String controllerBankText;      // "2/3"; empty with a single bank
+        int controllerBank = 0;               // the bank whose controls carry the knob numbers
+        std::vector<int> controllerCells;     // cell index per countable control, in countable order
 
         // --- live-feed targets (Story 1.4) ---
         // Knobs carrying a modTarget: their ring is animated by updateLiveFeed when the

@@ -202,8 +202,9 @@ namespace rack
         struct ShownFrame { juce::String entryId; bool layerB = false; ModuleFrame* frame = nullptr; };
         // The frames on screen in reading order: top to bottom, left to right.
         std::vector<ShownFrame> shownFramesInReadingOrder() const;
-        // Mark the selected frame (outline + bank text), unmark every other. valid false = none.
-        void setControllerMark (bool valid, const juce::String& entryId, bool layerB, const juce::String& bankText);
+        // Mark the selected frame (outline, bank text, knob numbers on the controls of bank
+        // `bank`), unmark every other. valid false = none.
+        void setControllerMark (bool valid, const juce::String& entryId, bool layerB, const juce::String& bankText, int bank);
 
         // Total stacked height the current population needs at `width` — lets the
         // editor size/verify the fixed window without scrolling (AC4). Every zone is as tall as

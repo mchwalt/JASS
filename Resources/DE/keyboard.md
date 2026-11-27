@@ -24,7 +24,7 @@ Drehregler und Fader eines MIDI-Controllers bewegen JASS in der Standalone-App (
 - **Header-Auswahl** — **Auto** wählt das Profil nach dem Namen des MIDI-Eingangs (MiniLab 3, sonst Generic (GM)); oder von Hand wählen
 - **MiniLab 3 Regler 1–7** — die Regler des markierten Moduls, von links nach rechts: Drehregler, Combos (schalten ihre Einträge durch) und Schalter (an ab der Hälfte); übersprungen: Step-Zellen und die Listen-Combos SET, BANK, KIT sowie MOD und PARAM der MOD MATRIX
 - **Nichts markiert** — Regler 1–7: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb
-- **Modul markieren** — mit dem MiniLab-3-Profil: auf die Titelleiste oder einen seiner Regler klicken, oder Regler 8 drehen (springt bei der ersten Berührung); das markierte Modul hat einen weißen Rahmen
+- **Modul markieren** — mit dem MiniLab-3-Profil: auf die Titelleiste oder einen seiner Regler klicken, oder Regler 8 drehen (springt bei der ersten Berührung); das markierte Modul hat einen weißen Rahmen, seine Regler tragen die Nummer ihres Drehreglers; ein ausgegrauter Regler hat keine und wird nicht bewegt
 - **Markierung aufheben** — noch einmal auf die Titelleiste des markierten Moduls klicken; ein Preset laden oder RESET hebt sie ebenfalls auf
 - **Bänke** — ein Modul mit mehr als 7 Reglern: Shift halten und Regler 8 drehen; die Titelleiste zeigt die Bank, z. B. 2/3
 - **Programme** — gleich im ARTURIA- und im DAW-Programm (Shift + Pad 3)

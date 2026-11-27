@@ -551,14 +551,18 @@ namespace rack
     // (an item's position is not the parameter's value there) and a combo without items (a knob
     // slot that could never react). A cell's corner switch (toggleParamId / accentParamId) and
     // its alt row (altParamId) are not controls of their own — the cell's main id is.
-    // A control dimmed by activeWhen IS counted: knob positions must not shift when a module's
-    // state changes. Pure: ModuleFrame and JASS_Render --selftest both call it.
+    // A control dimmed by activeWhen keeps its slot — the knob numbers of the others must not
+    // shift when a module's state changes — but carries the predicate along (`active`), and a
+    // hardware knob moves nothing on it while it is inactive (maintainer 2026-11-27).
+    // Pure: ModuleFrame and JASS_Render --selftest both call it.
     struct CountableControl
     {
         enum class Kind { Knob, Combo, Toggle };
         juce::String paramId;     // as the descriptor carries it (a layer-B frame: the "b" id)
         Kind kind = Kind::Knob;
         int  items = 0;           // Combo: number of items right now (a provider is asked)
+        int  bodyIndex = -1;      // its element in ModuleDescriptor::body (the frame finds the cell by it)
+        std::function<bool()> active;   // the element's activeWhen; empty = always active
     };
 
     inline std::vector<CountableControl> countableControls (const ModuleDescriptor& d)
@@ -575,12 +579,13 @@ namespace rack
         };
 
         std::vector<CountableControl> out;
-        for (const auto& el : d.body)
+        for (size_t bi = 0; bi < d.body.size(); ++bi)
         {
+            const auto& el = d.body[bi];
             if (auto* k = std::get_if<Knob> (&el))
             {
                 if (k->paramId.isNotEmpty() && k->patternStep < 0 && ! isPagedStep (k->paramId))
-                    out.push_back ({ k->paramId, CountableControl::Kind::Knob, 0 });
+                    out.push_back ({ k->paramId, CountableControl::Kind::Knob, 0, (int) bi, k->activeWhen });
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
@@ -593,12 +598,12 @@ namespace rack
                     items = *provider ? (*provider)().size() : 0;
                 if (items < 1)
                     continue;
-                out.push_back ({ c->paramId, CountableControl::Kind::Combo, items });
+                out.push_back ({ c->paramId, CountableControl::Kind::Combo, items, (int) bi, c->activeWhen });
             }
             else if (auto* t = std::get_if<Toggle> (&el))
             {
                 if (t->paramId.isNotEmpty())
-                    out.push_back ({ t->paramId, CountableControl::Kind::Toggle, 0 });
+                    out.push_back ({ t->paramId, CountableControl::Kind::Toggle, 0, (int) bi, {} });
             }
         }
         return out;

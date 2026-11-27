@@ -234,13 +234,30 @@ namespace rack
         if (onTouched) onTouched (titleBar);
     }
 
-    void ModuleFrame::setControllerMark (bool selected, const juce::String& bankText)
+    void ModuleFrame::setControllerMark (bool selected, const juce::String& bankText, int bank)
     {
         const auto text = selected ? bankText : juce::String();
-        if (selected == controllerSelected && text == controllerBankText)
+        if (! selected) bank = 0;
+        if (selected == controllerSelected && text == controllerBankText && bank == controllerBank)
             return;
         controllerSelected = selected;
         controllerBankText = text;
+        controllerBank = bank;
+        // Where each countable control sits: buildBody makes one cell per body element, in body
+        // order, except for a Display without a component — so a body index maps to a cell index
+        // by counting. Looked up here, not at paint time (a combo's provider is asked).
+        controllerCells.clear();
+        if (selected)
+            for (const auto& c : rack::countableControls (desc))
+            {
+                int cell = 0;
+                for (int bi = 0; bi < c.bodyIndex; ++bi)
+                {
+                    const auto* disp = std::get_if<Display> (&desc.body[(size_t) bi]);
+                    if (disp == nullptr || disp->component != nullptr) ++cell;
+                }
+                controllerCells.push_back (cell);
+            }
         repaint();
     }
 
@@ -1643,6 +1660,33 @@ namespace rack
                 g.setFont (juce::FontOptions (12.0f, juce::Font::bold));
                 g.drawFittedText (controllerBankText, pill, juce::Justification::centred, 1, 0.7f);
             }
+            // The knob numbers: control n of the current bank carries the number of the hardware
+            // knob that moves it, at the top-left corner of its cell — after Shift + knob 8 the
+            // bank text alone did not say WHICH seven controls the knobs now reach (click test b,
+            // 2026-11-27). A control that is not on screen gets no badge; the others keep theirs.
+            g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
+            for (int k = 0; k < 7; ++k)
+            {
+                const int n = controllerBank * 7 + k;
+                if (n < 0 || n >= (int) controllerCells.size()) break;
+                const int ci = controllerCells[(size_t) n];
+                if (ci < 0 || ci >= (int) cells.size()) continue;
+                const auto& cell = cells[(size_t) ci];
+                if (cell.widget == nullptr || ! cell.widget->isVisible() || cell.widget->getBounds().isEmpty()) continue;
+                // An inactive (dimmed) control carries no number: the gap says this knob is idle
+                // right now. The state is the one the timer keeps for the dimming itself.
+                bool inactive = false;
+                for (const auto& ck : condKnobs)
+                    inactive = inactive || (ck.widget == cell.widget && ! ck.dimOnly && ck.active == 0);
+                if (inactive) continue;
+                auto b = cell.widget->getBounds();
+                if (cell.caption != nullptr) b = b.getUnion (cell.caption->getBounds());
+                const juce::Rectangle<int> badge (b.getX(), b.getY(), 13, 13);
+                g.setColour (juce::Colours::white.withAlpha (0.92f));
+                g.fillRoundedRectangle (badge.toFloat(), 3.0f);
+                g.setColour (juce::Colour (0xff15181d));
+                g.drawText (juce::String (k + 1), badge, juce::Justification::centred, false);
+            }
         }
     }
 
@@ -1805,6 +1849,7 @@ namespace rack
             const char want = ck.predicate() ? (char) 1 : (char) 0;
             if (ck.active == want) continue;
             ck.active = want;
+            if (controllerSelected) repaint();   // 22.5: the knob-number badge comes or goes
             const bool on = (want == 1);
             if (ck.widget != nullptr)
             {

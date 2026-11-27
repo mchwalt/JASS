@@ -252,8 +252,9 @@ message-thread, checked by `JASS_Render --selftest`.
   reading order (`Rack::shownFramesInReadingOrder`, by top-left corner), each
   with its countable controls — and reads the selection back on its timer
   (`getControllerSelectionRevision`) to draw the marker
-  (`Rack::setControllerMark`: a white outline, and the bank as "2/3" in the
-  title bar when there is more than one). `setControllerFrames` reconciles:
+  (`Rack::setControllerMark`: a white outline, the bank as "2/3" in the
+  title bar when there is more than one, and the knob's number 1–7 on each
+  control of the current bank — found through `CountableControl::bodyIndex`). `setControllerFrames` reconciles:
   the selection stays while its layout entry is still in the list — on the
   other layer's frame too (focus switch, A | B swap; the layer flag flips, the
   bank is kept and clamped) — and is dropped when it is gone. The touch
@@ -269,8 +270,11 @@ message-thread, checked by `JASS_Render --selftest`.
   `makeModuleDescriptor` are in it). Skipped: captions, displays, actions,
   pattern cells and paged step knobs, `indexIsValue` / `itemValues` combos and
   combos without items; a cell's corner switch and alt row are not controls of
-  their own. A control dimmed by `activeWhen` is counted all the same: knob
-  positions must not shift when a module's state changes. Pure — the selftest runs it
+  their own. A control dimmed by `activeWhen` keeps its slot (the knob
+  numbers of the others must not shift when a module's state changes) but is
+  not moved while inactive: the predicate travels with the pushed control
+  (`ModuleControl::active`), `applyModuleControl` asks it when a value arrives,
+  and the frame leaves out its number badge. Pure — the selftest runs it
   on real specs with and without `bodyOrder` and on layer-B ids.
 - **Channels 12..16 are never captured** (drone 16, previews 15 / 12, pattern
   channels 14 / 13).

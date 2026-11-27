@@ -2458,6 +2458,8 @@ void SynthyProcessor::applyModuleControl (const ControllerProfiles::ModuleContro
     auto* p = apvts.getParameter (mc.paramId);
     if (p == nullptr)
         return;
+    if (mc.active && ! mc.active())   // dimmed on screen: the knob is idle, its slot stays
+        return;
     const float v01 = (float) ccValue7 / 127.0f;
     switch (mc.kind)
     {

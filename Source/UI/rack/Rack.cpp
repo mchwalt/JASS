@@ -1236,12 +1236,12 @@ namespace rack
         return out;
     }
 
-    void Rack::setControllerMark (bool valid, const juce::String& entryId, bool layerB, const juce::String& bankText)
+    void Rack::setControllerMark (bool valid, const juce::String& entryId, bool layerB, const juce::String& bankText, int bank)
     {
         for (const auto& p : placed)
-            if (p.frame != nullptr) p.frame->setControllerMark (valid && ! layerB && p.id == entryId, bankText);
+            if (p.frame != nullptr) p.frame->setControllerMark (valid && ! layerB && p.id == entryId, bankText, bank);
         for (const auto& p : placedB)
-            if (p.frame != nullptr) p.frame->setControllerMark (valid && layerB && p.id == entryId, bankText);
+            if (p.frame != nullptr) p.frame->setControllerMark (valid && layerB && p.id == entryId, bankText, bank);
     }
 
     int Rack::zoneRowsIn (Zone zone, int view) const

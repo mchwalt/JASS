@@ -78,6 +78,10 @@ public:
         juce::String paramId;     // as the frame on screen uses it (a layer-B frame: the "b" id)
         ControlKind kind = ControlKind::Knob;
         int items = 0;            // Combo: number of items
+        // Optional: false = the control is dimmed on screen right now (RATE while SYNC is on a
+        // note value) — it keeps its slot, but a knob moves nothing on it. Asked on the message
+        // thread when a value arrives, so it follows the module's state without a new push.
+        std::function<bool()> active;
     };
     // The one conversion from the rack's countable control (rack::CountableControl — a template,
     // so this header needs no rack include). The editor and the selftest both push through it.
@@ -87,7 +91,7 @@ public:
         using K = typename Countable::Kind;
         return { c.paramId,
                  c.kind == K::Combo ? ControlKind::Combo : c.kind == K::Toggle ? ControlKind::Toggle : ControlKind::Knob,
-                 c.items };
+                 c.items, c.active };
     }
 
     //==============================================================================================

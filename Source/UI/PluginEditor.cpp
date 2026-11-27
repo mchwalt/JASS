@@ -967,7 +967,8 @@ void SynthyEditor::syncControllerMark()
     const auto sel = processor.getControllerSelection();
     rackBody->setControllerMark (sel.valid, sel.entryId, sel.layerB,
                                  sel.bankCount > 1 ? juce::String (sel.bank + 1) + "/" + juce::String (sel.bankCount)
-                                                   : juce::String());
+                                                   : juce::String(),
+                                 sel.bank);
 }
 
 void SynthyEditor::timerCallback()

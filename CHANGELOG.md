@@ -105,8 +105,14 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   spacers, displays, buttons and the step cells of STEP SEQ / PERC do not, nor do the list combos
   whose items are not the parameter's range (SAMPLER SET, WAVETABLE BANK, PERC KIT, the MOD
   MATRIX's MOD and PARAM). A module with more than seven controls has banks: Shift + knob 8
-  changes the bank, called a bank because 'page' already means the step pages. The mark is a
-  white frame, and the
+  changes the bank, called a bank because 'page' already means the step pages. Each control
+  under a knob carries that knob's number (1-7) in its corner: after a bank change the bank
+  alone did not say which seven controls the knobs now reach (click test, 2026-11-27).
+  A control that is greyed out because it does not apply right now (RATE while SYNC is on a
+  note value, STEREO's WIDTH outside Pseudo-Stereo) keeps its knob but is not moved and shows
+  no number - at first the knobs turned those too, which changed values nobody could see acting
+  (click test, 2026-11-27); the other numbers stay where they are. The mark is a white frame,
+  and the
   bank stands in the title bar ('2/3') - a fixed mark, no tooltip. One rule decides what happens
   when the rack changes: the module stays marked as long as it is still on screen, on whichever
   layer's frame is now shown (a switch between A, B and A+B, or the A | B switch of a module in
