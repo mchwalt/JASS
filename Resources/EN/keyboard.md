@@ -22,8 +22,10 @@ Ordinary keyboards drop some three-key combinations — the third note never arr
 Knobs and faders of a MIDI controller move JASS in the standalone app (in a DAW, map them there).
 
 - **Header combo** — **Auto** picks the profile from the MIDI input name (MiniLab 3, otherwise Generic (GM)); or pick one by hand
-- **MiniLab 3** — knobs: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb, Glide; faders: Attack, Decay, Sustain, Release; same in the ARTURIA and the DAW program (Shift + Pad 3)
+- **MiniLab 3 knobs** — 1–7: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb; knob 8 does nothing yet; same in the ARTURIA and the DAW program (Shift + Pad 3)
+- **MiniLab 3 faders** — MASTER VOL, TEMPO, A LVL, B LVL, whatever layer you edit
+- **Fine tempo** — Shift + main encoder moves TEMPO by 1 BPM per click (DAW program)
 - **Generic (GM)** — CC 74 Cutoff, 71 Resonance, 73 Attack, 72 Release, 91 Reverb, 93 Chorus
-- **First touch** — a knob sets its value at once, so the sound jumps to where the knob stands
+- **First touch** — a knob or fader sets its value at once, so the sound jumps to where it stands; the MASTER VOL fader too (top = full level, the default is half)
 - **Layer** — a control moves the layer you edit: A, B, or both in A+B
-- **Files** — one `.json` per controller in `%AppData%\JASS\Controllers`; edit `cc` and `param` there, delete a file to get the factory version back on the next start
+- **Files** — one `.json` per controller in `%AppData%\JASS\Controllers`; edit `cc` and `param` there (MiniLab 3 knobs 1–7: `fallback`), delete a file to get the factory version back on the next start

@@ -67,18 +67,30 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   controller message, so a MiniLab 3's knobs did nothing and the sound could only be shaped with
   the mouse (maintainer 2026-11-24). A profile is an editable JSON file in
   `%AppData%\JASS\Controllers` that maps CC numbers to parameters - configuration as a file, not
-  code. `MiniLab 3` follows the controller's factory template (knobs: FILTER Cutoff / Resonance,
-  LFO 1 Rate / Depth in the panel order, CHORUS, DELAY, REVERB, GLIDE; faders: ADSR) and maps the DAW program's
-  CCs (86-117 / 14-31, from Arturia's manual and the Bitwig and Live scripts) to the same controls,
-  so the knobs work whichever program the MiniLab is in, `Generic (GM)` the GM2 sound
+  code. `MiniLab 3`: knobs 1-7 move FILTER Cutoff / Resonance, LFO 1 Rate / Depth in the panel
+  order, CHORUS, DELAY, REVERB; the four faders move what belongs to no single module - MASTER
+  VOL, TEMPO, LAYERS A LVL and B LVL, a two-channel mixer for Dual / Split - whatever layer is
+  being edited; Shift + main encoder sets TEMPO in 1 BPM steps, because a fader's travel over
+  40-250 BPM is too coarse to hit a tempo (the encoder sends one message per click, and every
+  click counts; documented for the MiniLab's DAW program only). The first layout had ADSR on the
+  faders and GLIDE on knob 8; the click test (2026-11-24) showed that a fixed set of knobs has to
+  be hand-matched to the rack and fits no patch type well, so knob 8 is now kept free to pick the
+  module the knobs follow (Story 22.5, next step - it does nothing yet) and ADSR will be reached
+  through its own module. For that the file format gained special targets: `param` may be
+  `@module:1`..`7` (the n-th control of the selected module) with an optional `fallback`
+  parameter, `@select`, `@shift` or `@tempoFine`. The DAW program's CCs (86-117 / 14-31, from Arturia's manual and the
+  Bitwig and Live scripts) map to the same controls, so the knobs work whichever program the
+  MiniLab is in. The MASTER VOL fader jumps on first touch like every control: its top is full
+  level, the default is half. `Generic (GM)` uses the GM2 sound
   controller numbers most synths use (74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb,
   93 chorus), so a keyboard behind the UM-ONE does something sensible too. Both are copied in only
-  when missing: an edited file is never overwritten, a deleted one comes back. The profile is
-  picked from the MIDI input name, or by hand in the new header combo (remembered, not part of
-  presets). A control moves the layer you edit - A, B, or both in A+B - unless its entry pins
-  `"layer"`. Standalone only: in a DAW the host maps controllers itself, reading them as well would
-  move a parameter twice. The audio thread only records values; a message-thread timer applies
-  them (Story 22.1).
+  when missing: an edited file is never overwritten, a deleted one comes back - so a
+  `MiniLab 3.json` written by an earlier build keeps the old layout until it is deleted. The
+  profile is picked from the MIDI input name, or by hand in the new header combo (remembered, not
+  part of presets). A control moves the layer you edit - A, B, or both in A+B - unless its entry
+  pins `"layer"`. Standalone only: in a DAW the host maps controllers itself, reading them as well
+  would move a parameter twice. The audio thread only records values; a message-thread timer
+  applies them (Stories 22.1 and 22.5, step a).
 - **ARP SYNC - the arpeggio on the tempo grid.** The ARPEGGIATOR ran on RATE in steps per second
   only; it predates tempo sync and was never brought along when the LFOs, DELAY, STEP SEQ and PERC
   got it (maintainer 2026-11-23). SYNC offers the same note values as STEP SEQ against the MASTER

@@ -263,6 +263,38 @@ public:
         return false;
     }
 
+    // Story 22.5 — knobs follow the module. Message thread. The processor owns the selection and
+    // its bank; the editor pushes what the rack shows (only on change) and reads the selection back
+    // to draw the marker. A frame is keyed by the rack's layout-entry id (the layer-A id) plus the
+    // layer of the frame on screen — never by an index.
+    struct ControllerFrame
+    {
+        juce::String entryId;                                    // layout-entry id (layer-A id)
+        bool layerB = false;                                     // the frame on screen is B's
+        std::vector<ControllerProfiles::ModuleControl> controls; // countable controls, all banks, display order
+    };
+    struct ControllerSelection
+    {
+        bool valid = false;
+        juce::String entryId;
+        bool layerB = false;
+        int bank = 0, bankCount = 0;                             // bank is 0-based; the marker shows bank + 1 "/" bankCount
+    };
+    // The selectable frames on screen in reading order (frames without a countable control are
+    // dropped). Keeps the selection while its module is still shown — on the other layer's frame
+    // too (a swap: flag flips, bank kept and clamped) — and drops it when the module is gone.
+    void setControllerFrames (std::vector<ControllerFrame> frames);
+    // A click / touch. False = refused: the active profile has no "@module" / "@select" entry, or
+    // the frame is not in the list. Selecting the selected module again keeps its bank.
+    bool selectControllerModule (const juce::String& entryId, bool layerB);
+    void clearControllerSelection();                             // no caller yet: the editor will call it on a preset load (step b)
+    ControllerSelection getControllerSelection() const;
+    int  getControllerSelectionRevision() const noexcept { return controllerSelRevision; }   // bumps on every change
+    bool controllerProfileSelectsModules() const;                // the active profile has "@module" / "@select"
+    // JASS_Render --selftest only.
+    bool controllerShiftHeldForTest() const noexcept { return ccShiftHeld.load(); }
+    void controllerInputsChangedForTest() { controllerInputsChanged(); }
+
 private:
     // Story 12.6: the startup preload of the Samples folder runs here instead of blocking the
     // constructor. Four-layer piano sets are ~1.2 GB decoded, which used to be dead time before
@@ -538,9 +570,22 @@ private:
     // thread: controllerPoll (30 Hz) drains the dirty bits, resolves them through the active
     // profile and sets the parameters; every ~2 s it re-reads the enabled MIDI inputs and the
     // Controllers folder. Channels 12..16 are JASS's own and are never captured.
+    //
+    // Story 22.5: capture also tracks the controller's Shift (its CC is published by the message
+    // thread) and keeps, for every (channel, CC), one value slot + dirty bit for "Shift held" and
+    // one for "not held" — so a short Shift press inside one poll tick cannot turn a bank move
+    // into a module jump, and capture need not know which CC is the selector. A relative encoder
+    // sends one message per detent: `ccRelative` sums `value - 64` so no detent is lost between
+    // two ticks. The MiniLab's program-change SysEx releases Shift, in buffer order.
     static constexpr int kCcChannels = ControllerProfiles::kFirstReservedChannel - 1;   // 1..11
-    std::array<std::atomic<std::uint8_t>, (size_t) kCcChannels * 128> ccValue {};
-    std::array<std::atomic<std::uint64_t>, (size_t) kCcChannels * 2> ccDirty {};      // 128 bits per channel
+    static constexpr size_t kCcSlots = (size_t) kCcChannels * 128;                      // per Shift slot
+    static constexpr size_t kCcWords = (size_t) kCcChannels * 2;                        // 128 dirty bits per channel
+    std::array<std::atomic<std::uint8_t>, kCcSlots> ccValue {};                        // the latest value, either slot
+    std::array<std::atomic<std::uint8_t>, kCcSlots * 2> ccSlotValue {};                // [not held | Shift held]
+    std::array<std::atomic<std::uint64_t>, kCcWords * 2> ccDirty {};                   // [not held | Shift held]
+    std::array<std::atomic<std::int32_t>, kCcSlots> ccRelative {};                     // summed value - 64
+    std::atomic<int>  ccShiftCc { -1 };       // (channel << 8) | cc of the active profile's "@shift", channel 0 = any; -1 = none
+    std::atomic<bool> ccShiftHeld { false };  // audio thread (the CC, the SysEx) and message thread (resets)
     void captureControllers (const juce::MidiBuffer& midi) noexcept;                   // audio thread
     struct ControllerPoll : juce::Timer
     {
@@ -555,6 +600,18 @@ private:
     int controllerTicks = 0, controllerRevision = 0;
     void pollControllers();                                       // message thread, 30 Hz
     void rescanControllers (bool force);                          // inputs + folder, re-pick
+    // Story 22.5 (message thread only).
+    const ControllerProfiles::Profile* activeControllerProfile() const;
+    void controllerProfilePicked();                               // after every re-pick: publish Shift CC, gate the selection
+    void controllerInputsChanged();                               // a lost Shift release must not stick
+    void applyControllerValue (juce::RangedAudioParameter& p, float v01, bool pinned);
+    void applyModuleControl (const ControllerProfiles::ModuleControl& mc, int ccValue7);
+    const ControllerFrame* selectedControllerFrame() const;
+    void setControllerSelection (const juce::String& entryId, bool layerB, int bank);
+    std::vector<ControllerFrame> controllerFrames;                // selectable frames on screen, reading order
+    ControllerSelection controllerSel;                            // bankCount is filled by the getter
+    int controllerSelRevision = 0;
+    int controllerLastSelectIndex = -1;                           // the last index knob 8 produced
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)

@@ -2244,22 +2244,38 @@ void SynthyProcessor::mirrorToLayerB (const juce::String& idA, float deltaRaw)
 }
 
 //==================================================================================================
-// Story 22.1 — controller profiles (see ControllerProfiles.h and ARCHITECTURE.md, "Controller input").
+// Story 22.1 / 22.5 — controller profiles (see ControllerProfiles.h and ARCHITECTURE.md, "Controller input").
 
 // Audio thread: the latest value per (channel, CC) and a dirty bit. Raw bytes, no MidiMessage, no
 // allocation. Channels 12..16 are JASS's own (drone, previews, pattern channels) and are skipped.
+// 22.5: Shift is tracked here, in buffer order, so every value lands in the slot of the Shift state
+// it was sent under; the program-change SysEx releases Shift; a relative delta is summed per CC.
 void SynthyProcessor::captureControllers (const juce::MidiBuffer& midi) noexcept
 {
     for (const auto meta : midi)
     {
+        // Before the CC filter: the device changed its program, a held Shift's release is lost.
+        if (ControllerProfiles::isProgramChangeSysEx (meta.data, meta.numBytes))
+        {
+            ccShiftHeld.store (false);
+            continue;
+        }
         if (meta.numBytes < 3 || (meta.data[0] & 0xF0) != 0xB0)
             continue;
         const int ch = meta.data[0] & 0x0F;   // 0-based: 0..10 = channels 1..11
         if (ch >= kCcChannels)
             continue;
         const int cc = meta.data[1] & 0x7F;
-        ccValue[(size_t) (ch * 128 + cc)].store ((std::uint8_t) (meta.data[2] & 0x7F));
-        ccDirty[(size_t) (ch * 2 + (cc >> 6))].fetch_or (std::uint64_t (1) << (cc & 63));
+        const int value = meta.data[2] & 0x7F;
+        if (const int shift = ccShiftCc.load(); shift >= 0 && (shift & 0x7F) == cc
+                                                && ((shift >> 8) == 0 || (shift >> 8) == ch + 1))
+            ccShiftHeld.store (ControllerProfiles::toggleOn (value));
+        const size_t slot = ccShiftHeld.load() ? 1 : 0;
+        const size_t at = (size_t) (ch * 128 + cc);
+        ccValue[at].store ((std::uint8_t) value);
+        ccSlotValue[slot * kCcSlots + at].store ((std::uint8_t) value);
+        ccRelative[at].fetch_add (ControllerProfiles::relativeDelta (value));
+        ccDirty[slot * kCcWords + (size_t) (ch * 2 + (cc >> 6))].fetch_or (std::uint64_t (1) << (cc & 63));
     }
 }
 
@@ -2286,6 +2302,8 @@ void SynthyProcessor::rescanControllers (bool force)
     if (! force && inputs == controllerInputs && sig == controllerFolderSig)
         return;
     const bool reload = force || sig != controllerFolderSig;
+    if (inputs != controllerInputs)
+        controllerInputsChanged();
     controllerInputs = inputs;
     controllerFolderSig = sig;
     if (reload)
@@ -2294,6 +2312,164 @@ void SynthyProcessor::rescanControllers (bool force)
         ++controllerRevision;
     }
     controllerActive = ControllerProfiles::pick (controllerProfiles, controllerInputs, controllerHandPick);
+    controllerProfilePicked();
+}
+
+const ControllerProfiles::Profile* SynthyProcessor::activeControllerProfile() const
+{
+    return juce::isPositiveAndBelow (controllerActive, (int) controllerProfiles.size())
+               ? &controllerProfiles[(size_t) controllerActive] : nullptr;
+}
+
+// After every re-pick (rescan, hand pick): tell the audio thread which CC is Shift, and drop the
+// selection when the profile now active has no "@module" / "@select" entry.
+void SynthyProcessor::controllerProfilePicked()
+{
+    const auto* profile = activeControllerProfile();
+    int shift = -1;
+    if (profile != nullptr)
+        for (const auto& c : profile->controls)
+            if (c.kind == ControllerProfiles::Kind::Shift)
+            {
+                shift = (c.channel << 8) | c.cc;   // the first "@shift" entry is the Shift
+                break;
+            }
+    if (ccShiftCc.exchange (shift) != shift)
+        ccShiftHeld.store (false);
+    if (profile == nullptr || ! profile->hasModuleTargets())
+        clearControllerSelection();
+}
+
+// The enabled MIDI inputs changed (cable pulled, device switched off): a Shift that was held never
+// sends its release — do not stay in bank mode.
+void SynthyProcessor::controllerInputsChanged()
+{
+    ccShiftHeld.store (false);
+}
+
+bool SynthyProcessor::controllerProfileSelectsModules() const
+{
+    const auto* profile = activeControllerProfile();
+    return profile != nullptr && profile->hasModuleTargets();
+}
+
+const SynthyProcessor::ControllerFrame* SynthyProcessor::selectedControllerFrame() const
+{
+    if (controllerSel.valid)
+        for (const auto& f : controllerFrames)
+            if (f.entryId == controllerSel.entryId && f.layerB == controllerSel.layerB)
+                return &f;
+    return nullptr;
+}
+
+void SynthyProcessor::setControllerSelection (const juce::String& entryId, bool layerB, int bank)
+{
+    if (controllerSel.valid && controllerSel.entryId == entryId && controllerSel.layerB == layerB && controllerSel.bank == bank)
+        return;
+    controllerSel.valid = true;
+    controllerSel.entryId = entryId;
+    controllerSel.layerB = layerB;
+    controllerSel.bank = bank;
+    ++controllerSelRevision;
+}
+
+void SynthyProcessor::clearControllerSelection()
+{
+    controllerLastSelectIndex = -1;   // the selector's next message selects again
+    if (! controllerSel.valid)
+        return;
+    controllerSel = {};
+    ++controllerSelRevision;
+}
+
+SynthyProcessor::ControllerSelection SynthyProcessor::getControllerSelection() const
+{
+    auto s = controllerSel;
+    if (const auto* f = selectedControllerFrame())
+        s.bankCount = ControllerProfiles::bankCount ((int) f->controls.size());
+    return s;
+}
+
+bool SynthyProcessor::selectControllerModule (const juce::String& entryId, bool layerB)
+{
+    if (! controllerProfileSelectsModules())
+        return false;
+    for (const auto& f : controllerFrames)
+        if (f.entryId == entryId && f.layerB == layerB)
+        {
+            if (! (controllerSel.valid && controllerSel.entryId == entryId && controllerSel.layerB == layerB))
+                setControllerSelection (entryId, layerB, 0);   // a new selection starts at bank 1
+            return true;
+        }
+    return false;
+}
+
+void SynthyProcessor::setControllerFrames (std::vector<ControllerFrame> frames)
+{
+    // A module without a countable control is not selectable.
+    frames.erase (std::remove_if (frames.begin(), frames.end(), [] (const ControllerFrame& f) { return f.controls.empty(); }),
+                  frames.end());
+    const int revisionBefore = controllerSelRevision;
+    const auto* before = selectedControllerFrame();
+    const int banksBefore = before != nullptr ? ControllerProfiles::bankCount ((int) before->controls.size()) : 0;
+    controllerFrames = std::move (frames);
+    if (! controllerSel.valid)
+        return;
+    // One rule for every change of what the rack shows: the selection stays while the same module
+    // is still on screen — on the other layer's frame too (a swap: the flag flips, the bank is
+    // kept) — and is dropped only when the module is gone.
+    const ControllerFrame* same = nullptr;
+    const ControllerFrame* other = nullptr;
+    for (const auto& f : controllerFrames)
+        if (f.entryId == controllerSel.entryId)
+            (f.layerB == controllerSel.layerB ? same : other) = &f;
+    if (const auto* f = same != nullptr ? same : other)
+    {
+        const int banks = ControllerProfiles::bankCount ((int) f->controls.size());
+        setControllerSelection (f->entryId, f->layerB, juce::jlimit (0, banks - 1, controllerSel.bank));
+        if (controllerSelRevision == revisionBefore && banks != banksBefore)
+            ++controllerSelRevision;   // same module, layer and bank, but the marker's "n/m" changed
+    }
+    else
+        clearControllerSelection();
+}
+
+void SynthyProcessor::applyControllerValue (juce::RangedAudioParameter& p, float v01, bool pinned)
+{
+    // A pinned entry wants its one layer — in A+B, linked editing must not carry it to B.
+    // Unpinned in A+B: A is set and mirrorToLayerB moves B.
+    const juce::ScopedValueSetter<bool> pin (linkSuspended, linkSuspended || pinned);
+    p.beginChangeGesture();
+    p.setValueNotifyingHost (juce::jlimit (0.0f, 1.0f, v01));
+    p.endChangeGesture();
+}
+
+// One control of the selected module. Its id is used as it is: a B frame carries the "b" id, an A
+// frame in A+B keeps linked editing. A combo steps through its items over the knob's travel, a
+// toggle is on from half way.
+void SynthyProcessor::applyModuleControl (const ControllerProfiles::ModuleControl& mc, int ccValue7)
+{
+    auto* p = apvts.getParameter (mc.paramId);
+    if (p == nullptr)
+        return;
+    const float v01 = (float) ccValue7 / 127.0f;
+    switch (mc.kind)
+    {
+        case ControllerProfiles::ControlKind::Knob:
+            applyControllerValue (*p, v01, false);
+            break;
+        case ControllerProfiles::ControlKind::Combo:
+            if (const int item = ControllerProfiles::stepIndex (v01, mc.items); item >= 0)
+            {
+                // Item -> the parameter's own value: its range need not start at 0 or step by 1.
+                const auto& range = p->getNormalisableRange();
+                applyControllerValue (*p, p->convertTo0to1 (range.start + (float) item * juce::jmax (1.0f, range.interval)), false);
+            }
+            break;
+        case ControllerProfiles::ControlKind::Toggle:
+            applyControllerValue (*p, ControllerProfiles::toggleOn (ccValue7) ? 1.0f : 0.0f, false);
+            break;
+    }
 }
 
 void SynthyProcessor::pollControllers()
@@ -2303,40 +2479,128 @@ void SynthyProcessor::pollControllers()
         controllerTicks = 0;
         rescanControllers (false);
     }
-    const auto* profile = juce::isPositiveAndBelow (controllerActive, (int) controllerProfiles.size())
-                              ? &controllerProfiles[(size_t) controllerActive] : nullptr;
+    using CP = ControllerProfiles;
+    std::array<std::uint64_t, kCcWords * 2> dirty;
+    bool any = false;
+    for (size_t i = 0; i < dirty.size(); ++i)
+    {
+        dirty[i] = ccDirty[i].exchange (0);
+        any = any || dirty[i] != 0;
+    }
+    if (! any)
+        return;
     const int focus = getLayerFocus();
-    for (int ch = 0; ch < kCcChannels; ++ch)
-        for (int w = 0; w < 2; ++w)
-        {
-            auto bits = ccDirty[(size_t) (ch * 2 + w)].exchange (0);
-            while (bits != 0)
+
+    // fn (channel 1..11, cc, at, dirty in the not-held slot, dirty in the Shift-held slot), in
+    // channel / CC order.
+    auto forEachDirty = [&] (auto&& fn)
+    {
+        for (int ch = 0; ch < kCcChannels; ++ch)
+            for (int w = 0; w < 2; ++w)
             {
-                const int cc = w * 64 + std::countr_zero (bits);
-                bits &= bits - 1;
-                if (profile == nullptr)
-                    continue;
-                // Absolute 0..127 onto the knob's travel; the parameter's own skew applies. Jump on
-                // first touch.
-                const float v01 = (float) ccValue[(size_t) (ch * 128 + cc)].load() / 127.0f;
-                for (const auto& t : ControllerProfiles::resolve (*profile, ch + 1, cc, focus))
-                    if (auto* p = apvts.getParameter (t.paramId))
-                    {
-                        // A pinned entry wants its one layer — in A+B, linked editing must not
-                        // carry it to B. Unpinned in A+B: A is set and mirrorToLayerB moves B.
-                        const juce::ScopedValueSetter<bool> pin (linkSuspended, linkSuspended || t.pinned);
-                        p->beginChangeGesture();
-                        p->setValueNotifyingHost (v01);
-                        p->endChangeGesture();
-                    }
+                const auto plain = dirty[(size_t) (ch * 2 + w)], held = dirty[kCcWords + (size_t) (ch * 2 + w)];
+                auto bits = plain | held;
+                while (bits != 0)
+                {
+                    const int b = std::countr_zero (bits);
+                    bits &= bits - 1;
+                    fn (ch + 1, w * 64 + b, (size_t) (ch * 128 + w * 64 + b), ((plain >> b) & 1) != 0, ((held >> b) & 1) != 0);
+                }
             }
+    };
+
+    // Pass 1 — the selector, before any other control: in the DAW program knob 8 (CC 117) drains
+    // after knobs 1..7, and they must already act on the module it picked. (Shift itself is
+    // tracked at capture.) Shift held: the bank of the selected module; not held: the module.
+    if (const auto* profile = activeControllerProfile(); profile != nullptr && profile->hasModuleTargets())
+        forEachDirty ([&] (int channel, int cc, size_t at, bool plain, bool held)
+        {
+            for (size_t i = 0; i < profile->controls.size(); ++i)
+            {
+                const auto& c = profile->controls[i];
+                if (c.kind != CP::Kind::Select || ! CP::matches (c, channel, cc))
+                    continue;
+                if (held)
+                {
+                    const float v01 = (float) ccSlotValue[kCcSlots + at].load() / 127.0f;
+                    if (const auto* f = selectedControllerFrame())   // ignored with nothing selected
+                        setControllerSelection (f->entryId, f->layerB,
+                                                juce::jmax (0, CP::stepIndex (v01, CP::bankCount ((int) f->controls.size()))));
+                    // The knob stands somewhere else now: remember that position, so the first
+                    // message after Shift is released does not jump to another module by itself.
+                    controllerLastSelectIndex = CP::stepIndex (v01, (int) controllerFrames.size());
+                }
+                if (plain)
+                {
+                    // Absolute: the position picks the module, so the first touch jumps. A module is
+                    // selected only when the index differs from the last one this knob produced —
+                    // a list change or a mouse selection never reselects by itself.
+                    const float v01 = (float) ccSlotValue[at].load() / 127.0f;
+                    const int index = CP::stepIndex (v01, (int) controllerFrames.size());
+                    if (index >= 0 && index != controllerLastSelectIndex)
+                    {
+                        const auto& f = controllerFrames[(size_t) index];
+                        if (! (controllerSel.valid && controllerSel.entryId == f.entryId && controllerSel.layerB == f.layerB))
+                            setControllerSelection (f.entryId, f.layerB, 0);
+                    }
+                    controllerLastSelectIndex = index;
+                }
+            }
+        });
+
+    // Pass 2 — everything else. The relative sum is drained for every dirty CC, mapped or not, so
+    // a later profile never inherits old detents.
+    forEachDirty ([&] (int channel, int cc, size_t at, bool, bool)
+    {
+        const int detents = ccRelative[at].exchange (0);
+        const auto* profile = activeControllerProfile();
+        if (profile == nullptr)
+            return;
+        // Absolute 0..127 onto the knob's travel; the parameter's own skew applies. Jump on first
+        // touch.
+        const int value = ccValue[at].load();
+        for (size_t i = 0; i < profile->controls.size(); ++i)
+        {
+            const auto& c = profile->controls[i];
+            if (! CP::matches (c, channel, cc))
+                continue;
+            if (c.kind == CP::Kind::TempoFine)
+            {
+                if (auto* p = apvts.getParameter (Parameters::ID::syncTempo); p != nullptr && detents != 0)
+                {
+                    const auto& range = p->getNormalisableRange();
+                    const double bpm = CP::tempoAfterDetents (p->convertFrom0to1 (p->getValue()), detents,
+                                                              juce::jmax (40.0, (double) range.start), juce::jmin (250.0, (double) range.end));
+                    applyControllerValue (*p, p->convertTo0to1 ((float) bpm), false);
+                }
+                continue;
+            }
+            if (c.kind == CP::Kind::Module)
+                if (const auto* f = selectedControllerFrame())
+                {
+                    // The n-th control of the current bank; a knob beyond the list moves nothing.
+                    const size_t n = (size_t) (controllerSel.bank * CP::kBankSize + c.moduleSlot - 1);
+                    if (n < f->controls.size())
+                    {
+                        const auto mc = f->controls[n];   // a copy: a parameter write may relayout the rack
+                        applyModuleControl (mc, value);
+                    }
+                    continue;
+                }
+            // The fixed path: a plain entry, or an "@module:n" entry's fallback while nothing is selected.
+            CP::Target t;
+            if (CP::fixedTarget (c, focus, t))
+                if (auto* p = apvts.getParameter (t.paramId))
+                    applyControllerValue (*p, (float) value / 127.0f, t.pinned);
         }
+    });
 }
 
 void SynthyProcessor::runControllersForTest (std::vector<ControllerProfiles::Profile> profiles, const juce::MidiBuffer& midi)
 {
     controllerProfiles = std::move (profiles);
     controllerActive = controllerProfiles.empty() ? -1 : 0;
+    controllerProfilePicked();
     captureControllers (midi);
     controllerTicks = 0;   // no folder rescan inside the test
     pollControllers();
@@ -2352,8 +2616,8 @@ juce::StringArray SynthyProcessor::getControllerProfileNames() const
 
 juce::String SynthyProcessor::getActiveControllerProfile() const
 {
-    return juce::isPositiveAndBelow (controllerActive, (int) controllerProfiles.size())
-               ? controllerProfiles[(size_t) controllerActive].name : juce::String();
+    const auto* profile = activeControllerProfile();
+    return profile != nullptr ? profile->name : juce::String();
 }
 
 void SynthyProcessor::setControllerProfileChoice (const juce::String& name)
@@ -2361,4 +2625,5 @@ void SynthyProcessor::setControllerProfileChoice (const juce::String& name)
     controllerHandPick = name == "Auto" ? juce::String() : name;
     PresetIO::setSetting ("ControllerProfile", controllerHandPick);
     controllerActive = ControllerProfiles::pick (controllerProfiles, controllerInputs, controllerHandPick);
+    controllerProfilePicked();
 }

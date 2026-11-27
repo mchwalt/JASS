@@ -909,7 +909,7 @@ namespace
         expect (shipped.size() == 2, "both factory profiles parse");
         for (const auto& p : shipped)
         {
-            if (p.name == "MiniLab 3") expect (p.controls.size() == 24, "MiniLab 3: all 24 controls known (ARTURIA + DAW program)");
+            if (p.name == "MiniLab 3") expect (p.controls.size() == 26, "MiniLab 3: all 26 controls known (ARTURIA + DAW program, Shift, Shift + encoder)");
             if (p.name == CP::kGenericName) expect (p.controls.size() == 6, "Generic (GM): all 6 controls known");
         }
 
@@ -1006,6 +1006,336 @@ namespace
         cc (15, 74, 127);
         expect (near (cutoff->getValue(), 0.3f), "reserved channel 15: not captured");
         r.set (Parameters::ID::layerFocus, 0.0f);
+
+        //------------------------------------------------------------------------------------------
+        // Story 22.5, step a: special targets, the value math, Shift, fine tempo, the faders on the
+        // globals, and the selection behind its test hook (no editor pushes a frame list yet).
+        std::cout << "Controller profiles: knobs follow the module (22.5, processor side)" << std::endl;
+
+        expect (CP::stepIndex (0.0f, 6) == 0 && CP::stepIndex (1.0f, 6) == 5, "selector: 0 / 127 pick the first / last of 6");
+        expect (CP::stepIndex (100.0f / 127.0f, 4) == 3, "combo with 4 items, knob at 100: item 3");
+        expect (CP::stepIndex (0.5f, 2) == 1 && CP::stepIndex (0.49f, 2) == 0 && CP::stepIndex (0.5f, 0) == -1, "step index: halves, nothing to pick");
+        expect (CP::bankCount (0) == 0 && CP::bankCount (7) == 1 && CP::bankCount (8) == 2 && CP::bankCount (10) == 2 && CP::bankCount (21) == 3,
+                "bank count: seven controls per bank");
+        expect (! CP::toggleOn (63) && CP::toggleOn (64), "toggle: on from CC 64");
+        expect (CP::relativeDelta (65) == 1 && CP::relativeDelta (63) == -1 && CP::relativeDelta (66) == 2, "relative encoder: value - 64");
+        expect (CP::tempoAfterDetents (249.0, 3) == 250.0 && CP::tempoAfterDetents (41.0, -5) == 40.0 && CP::tempoAfterDetents (120.4, 1) == 121.0,
+                "fine tempo: whole BPM, clamped 40..250");
+        const juce::uint8 pcBody[] = { 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x62, 0x01 };
+        const auto programChange = juce::MidiMessage::createSysExMessage (pcBody, (int) sizeof (pcBody));
+        const juce::uint8 otherBody[] = { 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x63, 0x01 };
+        const auto otherSysEx = juce::MidiMessage::createSysExMessage (otherBody, (int) sizeof (otherBody));
+        expect (CP::isProgramChangeSysEx (programChange.getRawData(), programChange.getRawDataSize())
+                && ! CP::isProgramChangeSysEx (otherSysEx.getRawData(), otherSysEx.getRawDataSize()),
+                "the MiniLab's program-change SysEx is recognised, another one is not");
+
+        CP::Profile mod;
+        const bool modParsed = CP::parseText (R"({ "name": "Mod", "match": "Mod Box", "controls": [
+              { "name": "k1",    "cc": 30, "param": "@module:1", "fallback": "filterCutoff" },
+              { "name": "k2",    "cc": 31, "param": "@module:2", "fallback": "nope" },
+              { "name": "k3",    "cc": 34, "param": "@module:3" },
+              { "name": "k5",    "cc": 35, "param": "@module:5" },
+              { "name": "k8",    "cc": 32, "param": "@module:8" },
+              { "name": "k0",    "cc": 33, "param": "@module:0" },
+              { "name": "what",  "cc": 36, "param": "@whatever" },
+              { "name": "sel",   "cc": 40, "param": "@select" },
+              { "name": "shift", "cc": 27, "param": "@shift" },
+              { "name": "fine",  "cc": 29, "param": "@tempoFine" },
+              { "name": "vol",   "cc": 41, "param": "masterVol" } ] })", "fallback", exists, mod);
+        expect (modParsed && mod.controls.size() == 8, "special targets parse without a parameter check; @module:8, @module:0, @whatever skipped");
+        expect (mod.hasModuleTargets() && ! test.hasModuleTargets(), "a profile knows whether it has @module / @select entries");
+        expect (mod.controls.size() == 8 && mod.controls[1].kind == CP::Kind::Module && mod.controls[1].moduleSlot == 2 && mod.controls[1].param.isEmpty(),
+                "an unknown fallback drops only the fallback");
+        {
+            bool at = false;
+            for (int n = 0; n < 128; ++n)
+                for (const auto& t : CP::resolve (mod, 1, n, 0))
+                    at = at || t.paramId.startsWithChar ('@') || t.paramId.isEmpty();
+            expect (! at, "resolve never returns an @ target as a parameter id");
+        }
+        expect (ids (CP::resolve (mod, 1, 30, 0)) == "filterCutoff" && ids (CP::resolve (mod, 1, 30, 1)) == "bfilterCutoff",
+                "nothing selected: @module:1 resolves to its fallback, by the focus");
+        expect (ids (CP::resolve (mod, 1, 31, 0)).isEmpty() && ids (CP::resolve (mod, 1, 40, 0)).isEmpty()
+                && ids (CP::resolve (mod, 1, 27, 0)).isEmpty() && ids (CP::resolve (mod, 1, 29, 0)).isEmpty(),
+                "no fallback, @select, @shift, @tempoFine: no fixed parameter");
+
+        const CP::Profile* minilab = nullptr;
+        const CP::Profile* generic = nullptr;
+        for (const auto& p : shipped)
+        {
+            if (p.name == "MiniLab 3")      minilab = &p;
+            if (p.name == CP::kGenericName) generic = &p;
+        }
+        expect (minilab != nullptr && generic != nullptr && minilab->hasModuleTargets() && ! generic->hasModuleTargets(),
+                "MiniLab 3 has module targets, Generic (GM) has none");
+
+        auto& apvts = r.p->getAPVTS();
+        auto prm = [&] (const juce::String& id) { return apvts.getParameter (id); };
+        auto raw = [&] (const juce::String& id) { auto* p = prm (id); return p != nullptr ? p->convertFrom0to1 (p->getValue()) : -999.0f; };
+        using Ev = std::tuple<int, int, int>;   // channel, cc, value
+        auto run = [&] (const CP::Profile& profile, std::initializer_list<Ev> events)
+        {
+            juce::MidiBuffer m;
+            int pos = 0;
+            for (const auto& [ch, num, val] : events)
+                m.addEvent (juce::MidiMessage::controllerEvent (ch, num, val), pos++);
+            r.p->runControllersForTest ({ profile }, m);
+        };
+        auto runMsg = [&] (const CP::Profile& profile, const juce::MidiMessage& msg)
+        {
+            juce::MidiBuffer m;
+            m.addEvent (msg, 0);
+            r.p->runControllersForTest ({ profile }, m);
+        };
+        auto sel = [&] { return r.p->getControllerSelection(); };
+        using Frame = SynthyProcessor::ControllerFrame;
+        using MC = CP::ModuleControl;
+        const juce::String bp (Modules::kLayerBPrefix);
+        // FILTER as a frame with ten controls (two banks): knob, combo (4 items), toggle, knobs.
+        auto filterFrame = [&] (bool layerB, int count = 10)
+        {
+            const juce::String pre = layerB ? bp : juce::String();
+            Frame f { "filter", layerB, {
+                { pre + "filterCutoff", CP::ControlKind::Knob, 0 }, { pre + "noiseType", CP::ControlKind::Combo, 4 },
+                { pre + "filterOn", CP::ControlKind::Toggle, 0 },   { pre + "filterReso", CP::ControlKind::Knob, 0 },
+                { pre + "attack", CP::ControlKind::Knob, 0 },       { pre + "decay", CP::ControlKind::Knob, 0 },
+                { pre + "sustain", CP::ControlKind::Knob, 0 },      { pre + "release", CP::ControlKind::Knob, 0 },
+                { pre + "lfo1Rate", CP::ControlKind::Knob, 0 },     { pre + "lfo1Depth", CP::ControlKind::Knob, 0 } } };
+            f.controls.resize ((size_t) count);
+            return f;
+        };
+        auto one = [] (const char* entry, const char* id) { return Frame { entry, false, { MC { id, CP::ControlKind::Knob, 0 } } }; };
+        auto sixFrames = [&]
+        {
+            return std::vector<Frame> { filterFrame (false), one ("amp", "attack"), one ("lfo1", "lfo1Rate"), Frame { "caption", false, {} },
+                                        one ("chorus", "chorusMix"), one ("delay", "delayMix"), one ("reverb", "reverbMix") };
+        };
+        expect (prm ("noiseType") != nullptr && prm ("noiseType")->getNumSteps() == 4 && prm ("filterOn") != nullptr && prm ("release") != nullptr,
+                "test parameters exist (noiseType has 4 items)");
+
+        // Profile gating: no selection while the active profile has no @module / @select entry.
+        run (test, {});
+        r.p->setControllerFrames (sixFrames());
+        expect (! r.p->controllerProfileSelectsModules() && ! r.p->selectControllerModule ("filter", false) && ! sel().valid,
+                "profile without module targets: a click selects nothing");
+
+        // Nothing selected: the fallback moves, by the focus (22.1 rules).
+        run (mod, {});
+        setup (0.3f, 0.2f, 0);
+        run (mod, { Ev { 1, 30, 127 } });
+        expect (! sel().valid && cutoff->getValue() == 1.0f && near (cutoffB->getValue(), 0.2f), "nothing selected, focus A: knob 1 moves its fallback filterCutoff");
+        setup (0.3f, 0.2f, 1);
+        run (mod, { Ev { 1, 30, 127 } });
+        expect (near (cutoff->getValue(), 0.3f) && cutoffB->getValue() == 1.0f, "nothing selected, focus B: the fallback's b id");
+        r.set (Parameters::ID::layerFocus, 0.0f);
+
+        // Knob 8: first / last of the six selectable frames (the frame without controls is not one).
+        run (mod, { Ev { 1, 40, 0 } });
+        expect (sel().valid && sel().entryId == "filter" && ! sel().layerB && sel().bank == 0 && sel().bankCount == 2,
+                "knob 8 = 0: the first module, bank 1 of 2");
+        run (mod, { Ev { 1, 40, 127 } });
+        expect (sel().valid && sel().entryId == "reverb" && sel().bankCount == 1, "knob 8 = 127: the last of 6 selectable modules");
+        {
+            const int rev = r.p->getControllerSelectionRevision();
+            expect (r.p->selectControllerModule ("filter", false) && sel().entryId == "filter" && r.p->getControllerSelectionRevision() != rev,
+                    "a click selects (profile with module targets)");
+            run (mod, { Ev { 1, 40, 126 } });
+            expect (sel().entryId == "filter", "knob 8 inside the same slot: a mouse selection is not overridden");
+            expect (! r.p->selectControllerModule ("nowhere", false) && ! r.p->selectControllerModule ("filter", true) && sel().entryId == "filter",
+                    "a frame that is not on screen cannot be selected");
+        }
+
+        // Knobs 1..7 on the selected module: knob, combo, toggle; no fallback while selected.
+        setup (0.3f, 0.2f, 0);
+        run (mod, { Ev { 1, 30, 127 } });
+        expect (cutoff->getValue() == 1.0f, "FILTER selected: knob 1 = 127 -> its 1st control at max");
+        r.set ("noiseType", 0.0f);
+        run (mod, { Ev { 1, 31, 100 } });
+        expect (raw ("noiseType") == 3.0f, "2nd control, a combo with 4 items, knob at 100: item 3");
+        run (mod, { Ev { 1, 31, 40 } });
+        expect (raw ("noiseType") == 1.0f, "combo, knob at 40: item 1");
+        run (mod, { Ev { 1, 34, 63 } });
+        const bool toggleOff = raw ("filterOn") < 0.5f;
+        run (mod, { Ev { 1, 34, 64 } });
+        expect (toggleOff && raw ("filterOn") > 0.5f, "3rd control, a toggle: off at 63, on at 64");
+
+        // Banks: Shift held + knob 8.
+        r.set ("release", 0.0f);
+        r.set ("attack", 0.0f);
+        const float release0 = prm ("release")->getValue(), attack0 = prm ("attack")->getValue();
+        run (mod, { Ev { 1, 27, 127 } });
+        expect (r.p->controllerShiftHeldForTest(), "Shift CC 127: held");
+        run (mod, { Ev { 1, 40, 127 } });
+        expect (sel().entryId == "filter" && sel().bank == 1 && sel().bankCount == 2, "Shift + knob 8 = 127: bank 2/2, the module stays");
+        run (mod, { Ev { 1, 27, 0 } });
+        expect (! r.p->controllerShiftHeldForTest(), "Shift CC 0: released");
+        setup (0.3f, 0.2f, 0);
+        run (mod, { Ev { 1, 30, 127 } });
+        expect (prm ("release")->getValue() == 1.0f && release0 < 1.0f && near (cutoff->getValue(), 0.3f), "bank 2: knob 1 moves control 8");
+        run (mod, { Ev { 1, 35, 127 } });
+        expect (prm ("attack")->getValue() == attack0, "bank 2 has 3 controls: knob 5 moves nothing");
+        expect (r.p->selectControllerModule ("filter", false) && sel().bank == 1, "touching the selected module again keeps its bank");
+        // A short Shift press inside one tick: the knob-8 value sent under Shift is a bank move,
+        // not a module jump.
+        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 0 }, Ev { 1, 27, 0 } });
+        expect (sel().entryId == "filter" && sel().bank == 0 && ! r.p->controllerShiftHeldForTest(), "Shift press + knob 8 + release in one tick: bank 1, no module jump");
+        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 }, Ev { 1, 27, 0 } });
+        expect (sel().entryId == "filter" && sel().bank == 1, "the same with knob 8 = 127: bank 2, still FILTER (not the last module)");
+        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 64 }, Ev { 1, 27, 0 } });
+        run (mod, { Ev { 1, 40, 64 } });
+        expect (sel().entryId == "filter" && sel().bank == 1, "knob 8 left where Shift + knob 8 put it: its first plain message does not jump to another module");
+        // In the DAW program the selector's CC comes after the knobs: it is applied first all the same.
+        r.p->selectControllerModule ("amp", false);
+        r.set ("attack", 0.0f);
+        setup (0.3f, 0.2f, 0);
+        run (mod, { Ev { 1, 30, 127 }, Ev { 1, 40, 0 } });
+        expect (sel().entryId == "filter" && sel().bank == 0 && cutoff->getValue() == 1.0f && prm ("attack")->getValue() == attack0,
+                "selector and knob 1 in one tick: the module is picked first, the bank starts at 1");
+
+        // A lost Shift release.
+        run (mod, { Ev { 1, 27, 127 } });
+        runMsg (mod, otherSysEx);
+        const bool stillHeld = r.p->controllerShiftHeldForTest();
+        runMsg (mod, programChange);
+        expect (stillHeld && ! r.p->controllerShiftHeldForTest(), "program-change SysEx releases Shift, another SysEx does not");
+        run (mod, { Ev { 1, 40, 127 } });
+        expect (sel().entryId == "reverb", "after the SysEx knob 8 selects modules again");
+        run (mod, { Ev { 1, 27, 127 } });
+        r.p->controllerInputsChangedForTest();
+        expect (! r.p->controllerShiftHeldForTest(), "MIDI inputs changed: Shift released");
+        run (mod, { Ev { 1, 27, 127 } });
+        run (test, {});
+        expect (! r.p->controllerShiftHeldForTest() && ! sel().valid, "profile without @shift / module targets picked: Shift released, selection dropped");
+        {
+            // A channel-bound Shift listens on its channel only.
+            CP::Profile shiftCh;
+            CP::parseText (R"({ "name": "ShiftCh", "controls": [ { "name": "shift", "cc": 27, "channel": 2, "param": "@shift" } ] })",
+                           "fallback", exists, shiftCh);
+            run (shiftCh, { Ev { 2, 27, 127 } });
+            const bool heldOn2 = r.p->controllerShiftHeldForTest();
+            run (shiftCh, { Ev { 2, 27, 0 } });
+            run (shiftCh, { Ev { 1, 27, 127 } });
+            expect (shiftCh.controls.size() == 1 && heldOn2 && ! r.p->controllerShiftHeldForTest(),
+                    "@shift bound to channel 2: held by its CC on channel 2, not by the same CC on channel 1");
+        }
+        run (mod, {});
+        r.p->clearControllerSelection();
+        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 } });
+        expect (! sel().valid, "Shift + knob 8 with nothing selected: ignored");
+        run (mod, { Ev { 1, 27, 0 } });
+
+        // What the rack shows changes: the selection stays while the module is still on screen.
+        r.p->selectControllerModule ("filter", false);
+        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 }, Ev { 1, 27, 0 } });
+        {
+            auto frames = sixFrames();
+            frames[0] = filterFrame (true);
+            r.p->setControllerFrames (frames);
+            expect (sel().valid && sel().entryId == "filter" && sel().layerB && sel().bank == 1, "frame swap A -> B: FILTER stays selected, bank kept");
+            r.set ((bp + "release").toRawUTF8(), 0.0f);
+            r.set ("release", 0.0f);
+            run (mod, { Ev { 1, 30, 127 } });
+            expect (prm (bp + "release")->getValue() == 1.0f && prm ("release")->getValue() < 1.0f, "after the swap knob 1 moves the b id");
+            frames[0] = filterFrame (true, 3);
+            r.p->setControllerFrames (frames);
+            expect (sel().valid && sel().bank == 0 && sel().bankCount == 1, "fewer controls: the bank is clamped");
+            frames.erase (frames.begin());
+            r.p->setControllerFrames (frames);
+            expect (! sel().valid, "module no longer shown: selection dropped");
+            setup (0.3f, 0.2f, 0);
+            run (mod, { Ev { 1, 30, 127 } });
+            expect (cutoff->getValue() == 1.0f, "selection dropped: knob 1 is back on its fallback");
+        }
+        r.p->setControllerFrames (sixFrames());
+        r.p->selectControllerModule ("filter", false);
+        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 }, Ev { 1, 27, 0 } });
+        r.p->selectControllerModule ("amp", false);
+        r.p->selectControllerModule ("filter", false);
+        expect (sel().bank == 0, "a new selection starts at bank 1");
+        {
+            const int rev = r.p->getControllerSelectionRevision();
+            auto frames = sixFrames();
+            frames[0] = filterFrame (false, 3);
+            r.p->setControllerFrames (frames);
+            expect (sel().valid && sel().bank == 0 && sel().bankCount == 1 && r.p->getControllerSelectionRevision() != rev,
+                    "only the bank count changed: the selection revision bumps all the same");
+            r.p->setControllerFrames (sixFrames());
+        }
+        // An A frame in A+B keeps linked editing.
+        setup (0.6f, 0.2f, 2);
+        {
+            const float a0 = cutoff->getValue(), b0 = cutoffB->getValue();
+            run (mod, { Ev { 1, 30, 127 } });
+            expect (cutoff->getValue() == 1.0f && near (cutoffB->getValue(), b0 + (1.0f - a0)), "A frame selected in A+B: B follows by linked editing");
+        }
+        r.set (Parameters::ID::layerFocus, 0.0f);
+        r.p->clearControllerSelection();
+        expect (! sel().valid, "clearControllerSelection: nothing selected");
+
+        // Fine tempo: one message per detent, none lost inside a tick.
+        r.set (Parameters::ID::syncTempo, 120.0f);
+        run (mod, { Ev { 1, 29, 65 }, Ev { 1, 29, 65 }, Ev { 1, 29, 65 } });
+        expect (raw (Parameters::ID::syncTempo) == 123.0f, "Shift + encoder, 3 detents in one tick: tempo +3 BPM");
+        run (mod, { Ev { 1, 29, 63 } });
+        expect (raw (Parameters::ID::syncTempo) == 122.0f, "one detent down: -1 BPM");
+        r.set (Parameters::ID::syncTempo, 249.0f);
+        run (mod, { Ev { 1, 29, 66 } });
+        expect (raw (Parameters::ID::syncTempo) == 250.0f, "accelerated +2 at 249: clamped to 250");
+        r.set (Parameters::ID::syncTempo, 41.0f);
+        run (mod, { Ev { 1, 29, 60 } });
+        expect (raw (Parameters::ID::syncTempo) == 40.0f, "-4 at 41: clamped to 40");
+        // Detents turned under a profile that does not map them are not inherited later.
+        run (test, { Ev { 1, 29, 70 } });
+        run (mod, { Ev { 1, 29, 65 } });
+        expect (raw (Parameters::ID::syncTempo) == 41.0f, "unmapped detents are drained, not kept for a later profile");
+
+        // The shipped MiniLab 3 layout: faders on the globals in every focus, both programs; knobs
+        // on their fallback while nothing is selected; knob 8 no longer moves GLIDE.
+        if (minilab != nullptr)
+        {
+            // Every knob's fallback id: an unknown one would only drop the fallback, not the entry.
+            const std::pair<int, const char*> knobFallbacks[] = {
+                { 74, "filterCutoff" }, { 71, "filterReso" }, { 76, "lfo1Rate" }, { 77, "lfo1Depth" },
+                { 93, "chorusMix" },    { 18, "delayMix" },   { 19, "reverbMix" },
+                { 86, "filterCutoff" }, { 87, "filterReso" }, { 89, "lfo1Rate" }, { 90, "lfo1Depth" },
+                { 110, "chorusMix" },   { 111, "delayMix" },  { 116, "reverbMix" } };
+            bool fallbacksOk = true;
+            for (const auto& [knobCc, id] : knobFallbacks)
+                fallbacksOk = fallbacksOk && ids (CP::resolve (*minilab, 1, knobCc, 0)) == id;
+            expect (fallbacksOk, "MiniLab 3: knobs 1..7 of both programs fall back to the 22.1 parameters");
+            const char* globals[] = { Parameters::ID::masterVol, Parameters::ID::syncTempo, Parameters::ID::layerALevel, Parameters::ID::layerBLevel };
+            const int arturia[] = { 82, 83, 85, 17 }, daw[] = { 14, 15, 30, 31 };
+            bool fadersOk = true;
+            for (int focus = 0; focus < 3; ++focus)
+                for (const int* ccs : { arturia, daw })
+                    for (int i = 0; i < 4; ++i)
+                    {
+                        r.set (Parameters::ID::layerFocus, 0.0f);
+                        setParam (*r.p, globals[i], prm (globals[i])->getNormalisableRange().start);
+                        r.set (Parameters::ID::layerFocus, (float) focus);
+                        run (*minilab, { Ev { 1, ccs[i], 127 } });
+                        fadersOk = fadersOk && prm (globals[i])->getValue() == 1.0f;
+                    }
+            expect (fadersOk, "MiniLab 3: faders 1..4 move MASTER VOL, TEMPO, A LVL, B LVL in focus A, B and A+B, both programs");
+            setup (0.3f, 0.2f, 0);
+            run (*minilab, { Ev { 1, 74, 127 } });
+            const bool arturiaKnob = cutoff->getValue() == 1.0f;
+            setup (0.3f, 0.2f, 0);
+            run (*minilab, { Ev { 1, 86, 127 } });
+            expect (arturiaKnob && cutoff->getValue() == 1.0f, "MiniLab 3, nothing selected: knob 1 (CC 74 / 86) moves FILTER Cutoff as in 22.1");
+            const float glide0 = prm ("glideTime")->getValue();
+            r.p->setControllerFrames ({});
+            run (*minilab, { Ev { 1, 16, glide0 > 0.5f ? 0 : 127 }, Ev { 1, 117, glide0 > 0.5f ? 0 : 127 } });
+            expect (prm ("glideTime")->getValue() == glide0 && ! sel().valid, "MiniLab 3: knob 8 no longer moves GLIDE; with no frame list it selects nothing");
+            r.set (Parameters::ID::syncTempo, 120.0f);
+            run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 65 }, Ev { 1, 27, 0 } });
+            expect (raw (Parameters::ID::syncTempo) == 121.0f, "MiniLab 3: Shift + encoder (CC 29) = +1 BPM");
+            r.set (Parameters::ID::layerFocus, 0.0f);
+        }
+
+        // Hosted (the Rig's processBlock is the DAW path): nothing is captured, Shift included.
+        r.block ({ { 0, juce::MidiMessage::controllerEvent (1, 27, 127) }, { 1, juce::MidiMessage::controllerEvent (1, 29, 65) } });
+        expect (! r.p->anyControllerCapturedForTest() && ! r.p->controllerShiftHeldForTest(), "hosted: Shift and encoder are not captured");
     }
 }
 

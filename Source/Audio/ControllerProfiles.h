@@ -1,5 +1,6 @@
 #pragma once
 #include <JuceHeader.h>
+#include <cmath>
 #include <functional>
 #include <vector>
 #include "PresetIO.h"                  // jassFolder()
@@ -14,7 +15,7 @@
 //     "controls": [ { "name": "Knob 1", "cc": 74, "channel": 0, "param": "filterCutoff" }, ... ] }
 //
 // `channel` 0 = any, 1..11 = that channel only (12..16 are reserved by JASS and never read);
-// `param` is the layer-A id; an optional `"layer": "A" | "B"` pins the entry to one layer, without
+// `param` is the layer-A id (or a special target, below); an optional `"layer": "A" | "B"` pins the entry to one layer, without
 // it the entry follows the A | B | A+B focus. A malformed entry or an unknown id is skipped with a
 // DBG line — the rest of the profile still works; an unparsable file is not offered at all.
 //
@@ -22,6 +23,17 @@
 // them to resolve() from a message-thread timer (see SynthyProcessor::pollControllers). Nothing in
 // here is touched by the audio thread, so it needs no lock. Testable without a device
 // (JASS_Render --selftest, controllerChecks).
+//
+// Story 22.5: `param` may also be a special target instead of a parameter id:
+//
+//   "@module:1" .. "@module:7"  the n-th control of the selected module's current bank; an optional
+//                               "fallback": "<param id>" is what the entry moves while no module is
+//                               selected (the fixed 22.1 mapping)
+//   "@select"                   picks the module by its position; while Shift is held, the bank
+//   "@shift"                    the controller's momentary Shift (CC >= 64 = held)
+//   "@tempoFine"                a relative encoder (binary offset 64): TEMPO +-1 BPM per detent
+//
+// A bank is seven controls ("page" is taken by the step pages of STEP SEQ / PERC).
 class ControllerProfiles
 {
 public:
@@ -32,20 +44,75 @@ public:
 
     static constexpr const char* kGenericName = "Generic (GM)";   // the fallback when no "match" fits
 
+    static constexpr int kBankSize = 7;                            // controls per bank (knobs 1..7)
+
     enum class Pin { Follow, A, B };
+    enum class Kind { Param, Module, Select, Shift, TempoFine };   // Param = a fixed parameter id
     struct Control
     {
         juce::String name;
         int cc = -1;
         int channel = 0;          // 0 = any
-        juce::String param;       // layer-A id
+        juce::String param;       // Kind::Param: layer-A id; Kind::Module: the fallback id (may be empty); else empty
         Pin layer = Pin::Follow;
+        Kind kind = Kind::Param;
+        int moduleSlot = 0;       // Kind::Module: 1..kBankSize
     };
     struct Profile
     {
         juce::String name, match;
         std::vector<Control> controls;
+        // Selection (and its marker) exists only while the active profile has such an entry.
+        bool hasModuleTargets() const noexcept
+        {
+            for (const auto& c : controls)
+                if (c.kind == Kind::Module || c.kind == Kind::Select) return true;
+            return false;
+        }
     };
+    // One control of a selectable module as the rack shows it (pushed by the editor, display order).
+    enum class ControlKind { Knob, Combo, Toggle };
+    struct ModuleControl
+    {
+        juce::String paramId;     // as the frame on screen uses it (a layer-B frame: the "b" id)
+        ControlKind kind = ControlKind::Knob;
+        int items = 0;            // Combo: number of items
+    };
+
+    //==============================================================================================
+    // Pure value math (Story 22.5).
+
+    // A knob's travel split into `count` equal parts: which part `v01` is in. -1 when count < 1.
+    // Used for the module selector, the bank selector and a combo's item.
+    static int stepIndex (float v01, int count) noexcept
+    {
+        if (count < 1) return -1;
+        return juce::jlimit (0, count - 1, (int) std::floor (juce::jlimit (0.0f, 1.0f, v01) * (float) count));
+    }
+    static int bankCount (int controls) noexcept { return controls <= 0 ? 0 : (controls + kBankSize - 1) / kBankSize; }
+    static bool toggleOn (int ccValue) noexcept { return ccValue >= 64; }
+    // A relative encoder in binary offset: 65 = one detent up, 63 = one down, 66 = two up (accelerated).
+    static int relativeDelta (int ccValue) noexcept { return ccValue - 64; }
+    // TEMPO after `detents` encoder steps: whole BPM, inside lo..hi.
+    static double tempoAfterDetents (double bpm, int detents, double lo = 40.0, double hi = 250.0) noexcept
+    {
+        return juce::jlimit (lo, hi, std::round (bpm) + (double) detents);
+    }
+    // The MiniLab 3 reports a program change (ARTURIA / DAW / User) as
+    // F0 00 20 6B 7F 42 02 00 40 62 xx F7. Raw bytes, safe on the audio thread.
+    static bool isProgramChangeSysEx (const juce::uint8* d, int n) noexcept
+    {
+        static constexpr juce::uint8 head[] = { 0xF0, 0x00, 0x20, 0x6B, 0x7F, 0x42, 0x02, 0x00, 0x40, 0x62 };
+        if (d == nullptr || n != 12 || d[11] != 0xF7)
+            return false;
+        for (int i = 0; i < 10; ++i)
+            if (d[i] != head[i]) return false;
+        return true;
+    }
+    static bool matches (const Control& c, int channel, int cc) noexcept
+    {
+        return c.cc == cc && (c.channel == 0 || c.channel == channel);
+    }
     // One parameter a CC moves. `pinned` = the entry named its layer: in A+B the processor must not
     // mirror it to B (linked editing), the entry wants that one layer only.
     struct Target
@@ -105,7 +172,32 @@ public:
             else if (layer == "B")    c.layer = Pin::B;
             else { DBG ("Controller profile '" << p.name << "': '" << c.name << "' layer must be A or B, skipped"); continue; }
 
-            if (c.param.isEmpty() || (paramExists != nullptr && ! paramExists (c.param)))
+            auto known = [&] (const juce::String& id)
+            { return id.isNotEmpty() && ! id.startsWithChar ('@') && (paramExists == nullptr || paramExists (id)); };
+            if (c.param.startsWithChar ('@'))
+            {
+                // A special target (22.5) is no parameter id: it is never checked against the layout
+                // and never leaves this class as one.
+                const auto target = c.param;
+                c.param.clear();
+                if      (target == "@select")    c.kind = Kind::Select;
+                else if (target == "@shift")     c.kind = Kind::Shift;
+                else if (target == "@tempoFine") c.kind = Kind::TempoFine;
+                else if (target.startsWith ("@module:") && target.length() == 9
+                         && target[8] >= '1' && target[8] < '1' + kBankSize)
+                {
+                    c.kind = Kind::Module;
+                    c.moduleSlot = (int) (target[8] - '0');
+                    // An unknown fallback drops only the fallback: the knob still follows the module.
+                    const auto fb = eo->getProperty ("fallback").toString().trim();
+                    if (known (fb))
+                        c.param = fb;
+                    else if (fb.isNotEmpty())
+                    { DBG ("Controller profile '" << p.name << "': '" << c.name << "' unknown fallback '" << fb << "', fallback dropped"); }
+                }
+                else { DBG ("Controller profile '" << p.name << "': unknown target '" << target << "', skipped"); continue; }
+            }
+            else if (! known (c.param))
             { DBG ("Controller profile '" << p.name << "': unknown parameter '" << c.param << "', skipped"); continue; }
 
             p.controls.push_back (std::move (c));
@@ -149,28 +241,37 @@ public:
         return indexOf (kGenericName);
     }
 
-    // What CC `cc` on `channel` (1..16) moves, with the layer focus `focus` (0 A, 1 B, 2 A+B).
-    // A layered parameter follows the focus (B: the "b" id; A+B: A's id — linked editing moves B by
-    // the same knob distance), unless the entry is pinned; anything else is set by its own id.
+    // The fixed parameter one entry moves with the layer focus `focus` (0 A, 1 B, 2 A+B): its
+    // `param`, or for an "@module:n" entry its fallback. A layered parameter follows the focus (B:
+    // the "b" id; A+B: A's id — linked editing moves B by the same knob distance), unless the entry
+    // is pinned; anything else is set by its own id. False = the entry has no fixed parameter
+    // ("@select", "@shift", "@tempoFine", an "@module:n" without fallback).
+    static bool fixedTarget (const Control& c, int focus, Target& out,
+                             const IdPredicate& isLayered = Modules::isLayeredParamId)
+    {
+        if ((c.kind != Kind::Param && c.kind != Kind::Module) || c.param.isEmpty())
+            return false;
+        const juce::String bp (Modules::kLayerBPrefix);
+        if (! isLayered (c.param))     out = { c.param, false };
+        else if (c.layer == Pin::A)    out = { c.param, true };
+        else if (c.layer == Pin::B)    out = { bp + c.param, true };
+        else                           out = { focus == 1 ? bp + c.param : c.param, false };
+        return true;
+    }
+
+    // What CC `cc` on `channel` (1..16) moves while no module is selected — the fixed path. Never
+    // returns an "@..." target as a parameter id.
     static std::vector<Target> resolve (const Profile& profile, int channel, int cc, int focus,
                                         const IdPredicate& isLayered = Modules::isLayeredParamId)
     {
         std::vector<Target> out;
         if (! isControllerChannel (channel))
             return out;
-        const juce::String bp (Modules::kLayerBPrefix);
         for (const auto& c : profile.controls)
         {
-            if (c.cc != cc || (c.channel != 0 && c.channel != channel))
-                continue;
-            if (! isLayered (c.param))
-                out.push_back ({ c.param, false });
-            else if (c.layer == Pin::A)
-                out.push_back ({ c.param, true });
-            else if (c.layer == Pin::B)
-                out.push_back ({ bp + c.param, true });
-            else
-                out.push_back ({ focus == 1 ? bp + c.param : c.param, false });
+            Target t;
+            if (matches (c, channel, cc) && fixedTarget (c, focus, t, isLayered))
+                out.push_back (std::move (t));
         }
         return out;
     }
