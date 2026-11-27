@@ -910,7 +910,7 @@ namespace
         expect (shipped.size() == 2, "both factory profiles parse");
         for (const auto& p : shipped)
         {
-            if (p.name == "MiniLab 3") expect (p.controls.size() == 28, "MiniLab 3: all 28 controls known (ARTURIA + DAW program, each with Shift and Shift + encoder)");
+            if (p.name == "MiniLab 3") expect (p.controls.size() == 29, "MiniLab 3: all 29 controls known (ARTURIA + DAW program, each with Shift and Shift + encoder; the DAW program's encoder click)");
             if (p.name == CP::kGenericName) expect (p.controls.size() == 6, "Generic (GM): all 6 controls known");
         }
 
@@ -1044,10 +1044,11 @@ namespace
               { "name": "sel",   "cc": 40, "param": "@select" },
               { "name": "shift", "cc": 27, "param": "@shift" },
               { "name": "fine",  "cc": 29, "param": "@tempoFine" },
+              { "name": "power", "cc": 42, "param": "@power" },
               { "name": "vol",   "cc": 41, "param": "masterVol" } ] })", "fallback", exists, mod);
-        expect (modParsed && mod.controls.size() == 8, "special targets parse without a parameter check; @module:8, @module:0, @whatever skipped");
+        expect (modParsed && mod.controls.size() == 9 && mod.controls[7].kind == CP::Kind::Power, "special targets parse without a parameter check; @module:8, @module:0, @whatever skipped");
         expect (mod.hasModuleTargets() && ! test.hasModuleTargets(), "a profile knows whether it has @module / @select entries");
-        expect (mod.controls.size() == 8 && mod.controls[1].kind == CP::Kind::Module && mod.controls[1].moduleSlot == 2 && mod.controls[1].param.isEmpty(),
+        expect (mod.controls.size() == 9 && mod.controls[1].kind == CP::Kind::Module && mod.controls[1].moduleSlot == 2 && mod.controls[1].param.isEmpty(),
                 "an unknown fallback drops only the fallback");
         {
             bool at = false;
@@ -1059,8 +1060,9 @@ namespace
         expect (ids (CP::resolve (mod, 1, 30, 0)) == "filterCutoff" && ids (CP::resolve (mod, 1, 30, 1)) == "bfilterCutoff",
                 "nothing selected: @module:1 resolves to its fallback, by the focus");
         expect (ids (CP::resolve (mod, 1, 31, 0)).isEmpty() && ids (CP::resolve (mod, 1, 40, 0)).isEmpty()
-                && ids (CP::resolve (mod, 1, 27, 0)).isEmpty() && ids (CP::resolve (mod, 1, 29, 0)).isEmpty(),
-                "no fallback, @select, @shift, @tempoFine: no fixed parameter");
+                && ids (CP::resolve (mod, 1, 27, 0)).isEmpty() && ids (CP::resolve (mod, 1, 29, 0)).isEmpty()
+                && ids (CP::resolve (mod, 1, 42, 0)).isEmpty(),
+                "no fallback, @select, @shift, @tempoFine, @power: no fixed parameter");
 
         const CP::Profile* minilab = nullptr;
         const CP::Profile* generic = nullptr;
@@ -1333,6 +1335,12 @@ namespace
             r.set (Parameters::ID::syncTempo, 120.0f);
             run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 65 }, Ev { 1, 27, 0 } });
             expect (raw (Parameters::ID::syncTempo) == 121.0f, "MiniLab 3, DAW program: Shift + encoder (CC 29) = +1 BPM");
+            {
+                bool power = false;
+                for (const auto& c : minilab->controls)
+                    power = power || (c.kind == CP::Kind::Power && c.cc == 118);
+                expect (power, "MiniLab 3, DAW program: the encoder click (CC 118) is @power");
+            }
             // Measured at the device 2026-11-27: turned fast it sends 66 / 61 (accelerated) — still one BPM per message.
             run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 66 }, Ev { 1, 29, 66 }, Ev { 1, 27, 0 } });
             expect (raw (Parameters::ID::syncTempo) == 123.0f, "MiniLab 3: two accelerated messages (66) = +2 BPM, not +4");
@@ -1460,6 +1468,42 @@ namespace
             expect (! sel().valid, "FILTER no longer shown: selection dropped");
             r.set ("filterType", 0.0f);
             r.set ("bfilterType", 0.0f);
+
+            // "@power": a press on the button switches the selected module on or off.
+            {
+                auto on = [&] (const char* id) { return raw (id) > 0.5f; };
+                auto filterA = frameOf ("filter", false, filterDesc);
+                filterA.enableParam = filterDesc.enableParam;
+                r.p->setControllerFrames ({ filterA, frameOf ("stepseq", false, seqDesc) });
+                r.p->selectControllerModule ("filter", false);
+                r.set ("filterOn", 0.0f);
+                r.set ("bfilterOn", 0.0f);
+                run (mod, { Ev { 1, 42, 127 } });
+                const bool onAfterPress = on ("filterOn");
+                run (mod, { Ev { 1, 42, 0 } });
+                const bool onAfterRelease = on ("filterOn");
+                run (mod, { Ev { 1, 42, 127 } });
+                expect (filterDesc.enableParam == "filterOn" && onAfterPress && onAfterRelease && ! on ("filterOn"),
+                        "@power: selected module off -> press -> on (the release changes nothing) -> press -> off");
+                run (mod, { Ev { 1, 42, 127 }, Ev { 1, 42, 0 } });
+                expect (on ("filterOn"), "@power: press and release inside one tick still toggle once");
+                run (mod, { Ev { 1, 42, 127 }, Ev { 1, 42, 0 }, Ev { 1, 42, 127 }, Ev { 1, 42, 0 } });
+                expect (on ("filterOn"), "@power: two presses inside one tick leave it as it was");
+                r.p->clearControllerSelection();
+                run (mod, { Ev { 1, 42, 127 } });
+                expect (on ("filterOn"), "@power with nothing selected: nothing");
+                r.p->selectControllerModule ("stepseq", false);   // pushed without an enable id
+                run (mod, { Ev { 1, 42, 127 } });
+                expect (on ("filterOn") && ! on ("seqOn"), "@power on a frame without an enable id: nothing");
+                auto filterBFrame = frameOf ("filter", true, makeModuleDescriptor (layerB (Modules::filter())));
+                filterBFrame.enableParam = "bfilterOn";
+                r.p->setControllerFrames ({ filterBFrame });
+                r.p->selectControllerModule ("filter", true);
+                run (mod, { Ev { 1, 42, 127 } });
+                expect (on ("bfilterOn") && on ("filterOn"), "@power on a B frame: the b id is switched, A's stays");
+                r.set ("filterOn", 0.0f);
+                r.set ("bfilterOn", 0.0f);
+            }
 
             // An inactive (dimmed) control keeps its slot but is not moved.
             {

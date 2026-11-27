@@ -272,6 +272,7 @@ public:
         juce::String entryId;                                    // layout-entry id (layer-A id)
         bool layerB = false;                                     // the frame on screen is B's
         std::vector<ControllerProfiles::ModuleControl> controls; // countable controls, all banks, display order
+        juce::String enableParam;                                // the frame's on/off parameter as it uses it (B frame: the "b" id); "" = none
     };
     struct ControllerSelection
     {
@@ -584,6 +585,9 @@ private:
     std::array<std::atomic<std::uint8_t>, kCcSlots * 2> ccSlotValue {};                // [not held | Shift held]
     std::array<std::atomic<std::uint64_t>, kCcWords * 2> ccDirty {};                   // [not held | Shift held]
     std::array<std::atomic<std::int32_t>, kCcSlots> ccRelative {};                     // summed steps (+1 / -1 per message)
+    // Button presses (messages with value >= 64) per CC since the last poll: press and release
+    // inside one tick leave the latest value at 0, the count still says "pressed once" ("@power").
+    std::array<std::atomic<std::int32_t>, kCcSlots> ccPresses {};
     // (channel << 8) | cc of each "@shift" entry of the active profile, channel 0 = any; -1 = unused.
     static constexpr size_t kShiftCcs = 4;
     std::array<std::atomic<int>, kShiftCcs> ccShiftCc { -1, -1, -1, -1 };

@@ -29,6 +29,7 @@
     { "name": "Shift",                         "cc": 9,   "channel": 0, "param": "@shift" },
     { "name": "Shift + encoder",               "cc": 112, "channel": 0, "param": "@tempoFine" },
     { "name": "Shift (DAW program)",           "cc": 27,  "channel": 0, "param": "@shift" },
-    { "name": "Shift + encoder (DAW program)", "cc": 29,  "channel": 0, "param": "@tempoFine" }
+    { "name": "Shift + encoder (DAW program)", "cc": 29,  "channel": 0, "param": "@tempoFine" },
+    { "name": "Encoder click (DAW program)",   "cc": 118, "channel": 0, "param": "@power" }
   ]
 }

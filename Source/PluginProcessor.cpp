@@ -2278,6 +2278,8 @@ void SynthyProcessor::captureControllers (const juce::MidiBuffer& midi) noexcept
         ccValue[at].store ((std::uint8_t) value);
         ccSlotValue[slot * kCcSlots + at].store ((std::uint8_t) value);
         ccRelative[at].fetch_add (ControllerProfiles::relativeStep (value));
+        if (ControllerProfiles::toggleOn (value))
+            ccPresses[at].fetch_add (1);
         ccDirty[slot * kCcWords + (size_t) (ch * 2 + (cc >> 6))].fetch_or (std::uint64_t (1) << (cc & 63));
     }
 }
@@ -2556,11 +2558,12 @@ void SynthyProcessor::pollControllers()
             }
         });
 
-    // Pass 2 — everything else. The relative sum is drained for every dirty CC, mapped or not, so
-    // a later profile never inherits old detents.
+    // Pass 2 — everything else. The relative sum and the press count are drained for every dirty
+    // CC, mapped or not, so a later profile never inherits old detents or presses.
     forEachDirty ([&] (int channel, int cc, size_t at, bool, bool)
     {
         const int detents = ccRelative[at].exchange (0);
+        const int presses = ccPresses[at].exchange (0);
         const auto* profile = activeControllerProfile();
         if (profile == nullptr)
             return;
@@ -2581,6 +2584,16 @@ void SynthyProcessor::pollControllers()
                                                               juce::jmax (40.0, (double) range.start), juce::jmin (250.0, (double) range.end));
                     applyControllerValue (*p, p->convertTo0to1 ((float) bpm), false);
                 }
+                continue;
+            }
+            if (c.kind == CP::Kind::Power)
+            {
+                // Each press switches the selected module on or off; two presses inside one tick
+                // cancel out. Nothing selected, or a module without an enable switch: nothing.
+                if ((presses & 1) != 0)
+                    if (const auto* f = selectedControllerFrame(); f != nullptr && f->enableParam.isNotEmpty())
+                        if (auto* p = apvts.getParameter (f->enableParam))
+                            applyControllerValue (*p, p->getValue() >= 0.5f ? 0.0f : 1.0f, false);
                 continue;
             }
             if (c.kind == CP::Kind::Module)

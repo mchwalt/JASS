@@ -33,6 +33,8 @@
 //   "@shift"                    the controller's momentary Shift (CC >= 64 = held); several entries
 //                               are the same Shift (a device may use one CC per program)
 //   "@tempoFine"                a relative encoder (binary offset 64): TEMPO +-1 BPM per message
+//   "@power"                    a button: each press (CC >= 64) switches the selected module on or
+//                               off (its enable switch); several entries, one per device program
 //
 // A bank is seven controls ("page" is taken by the step pages of STEP SEQ / PERC).
 class ControllerProfiles
@@ -48,7 +50,7 @@ public:
     static constexpr int kBankSize = 7;                            // controls per bank (knobs 1..7)
 
     enum class Pin { Follow, A, B };
-    enum class Kind { Param, Module, Select, Shift, TempoFine };   // Param = a fixed parameter id
+    enum class Kind { Param, Module, Select, Shift, TempoFine, Power };   // Param = a fixed parameter id
     struct Control
     {
         juce::String name;
@@ -201,6 +203,7 @@ public:
                 if      (target == "@select")    c.kind = Kind::Select;
                 else if (target == "@shift")     c.kind = Kind::Shift;
                 else if (target == "@tempoFine") c.kind = Kind::TempoFine;
+                else if (target == "@power")     c.kind = Kind::Power;
                 else if (target.startsWith ("@module:") && target.length() == 9
                          && target[8] >= '1' && target[8] < '1' + kBankSize)
                 {
@@ -263,7 +266,7 @@ public:
     // `param`, or for an "@module:n" entry its fallback. A layered parameter follows the focus (B:
     // the "b" id; A+B: A's id — linked editing moves B by the same knob distance), unless the entry
     // is pinned; anything else is set by its own id. False = the entry has no fixed parameter
-    // ("@select", "@shift", "@tempoFine", an "@module:n" without fallback).
+    // ("@select", "@shift", "@tempoFine", "@power", an "@module:n" without fallback).
     static bool fixedTarget (const Control& c, int focus, Target& out,
                              const IdPredicate& isLayered = Modules::isLayeredParamId)
     {

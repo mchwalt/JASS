@@ -945,6 +945,7 @@ void SynthyEditor::pushControllerFrames()
     for (const auto& shown : rackBody->shownFramesInReadingOrder())
     {
         SynthyProcessor::ControllerFrame f { shown.entryId, shown.layerB, {} };
+        f.enableParam = shown.frame->enableParamId();   // "@power": the encoder press switches it
         for (const auto& c : shown.frame->countableControls())
             f.controls.push_back (ControllerProfiles::moduleControlFrom (c));
         if (! f.controls.empty())   // nothing to turn: not selectable

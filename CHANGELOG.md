@@ -125,7 +125,12 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   entry above lists - so a patch can be played before anything is clicked. Marking exists only
   while the active profile has such knobs (`@module` / `@select`); with `Generic (GM)` the rack
   looks and behaves as before, and in a DAW nothing is marked at all. Knob 8 is absolute like
-  every control, so it jumps on first touch (Story 22.5, step b).
+  every control, so it jumps on first touch. A press on the main encoder switches the marked
+  module on or off: a module that is visible but off could be marked and adjusted, but not
+  switched on without the mouse (maintainer 2026-11-27). In the profile it is the target
+  `@power`; presses are counted, so a quick press that begins and ends between two reads is not
+  lost. Nothing marked, or a module without a power switch: the press does nothing
+  (Story 22.5, step b).
 - **ARP SYNC - the arpeggio on the tempo grid.** The ARPEGGIATOR ran on RATE in steps per second
   only; it predates tempo sync and was never brought along when the LFOs, DELAY, STEP SEQ and PERC
   got it (maintainer 2026-11-23). SYNC offers the same note values as STEP SEQ against the MASTER

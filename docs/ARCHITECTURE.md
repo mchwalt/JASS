@@ -176,7 +176,7 @@ encodes the parameter as a small int precisely to avoid constructing a
 | `currentNoteRatio`, `heldNotesLo/Hi` | played-note ratio for the FREQ knob display |
 | `pluckRequested` | PLUCK button → `exchange(false)` on the audio thread |
 | `autoPlayEnabled`, `liveDirty`, `fixingMixSrc`, `matrixEnablesDirty`, `crossModDirty`, `pendingCrossModCode` | flags described above |
-| `ccValue[11 × 128]`, `ccSlotValue[2 × 11 × 128]`, `ccDirty[2 × 11 × 2]`, `ccRelative[11 × 128]`, `ccShiftCc[4]`, `ccShiftHeld` | latest MIDI CC value per channel 1..11, the same per Shift state (not held / held) with a dirty bit per CC, the summed relative steps, and the controller's Shift (Stories 22.1 / 22.5, [§3.6](#36-controller-input-story-221)) |
+| `ccValue[11 × 128]`, `ccSlotValue[2 × 11 × 128]`, `ccDirty[2 × 11 × 2]`, `ccRelative[11 × 128]`, `ccPresses[11 × 128]`, `ccShiftCc[4]`, `ccShiftHeld` | latest MIDI CC value per channel 1..11, the same per Shift state (not held / held) with a dirty bit per CC, the summed relative steps, the button presses since the last poll, and the controller's Shift (Stories 22.1 / 22.5, [§3.6](#36-controller-input-story-221)) |
 
 ### 3.4 Timers
 
@@ -225,8 +225,11 @@ message-thread, checked by `JASS_Render --selftest`.
 - **Special targets (Story 22.5, processor side).** `param` may be `@module:1..7`
   (the n-th control of the selected module's bank of seven, with an optional
   `fallback` id used while nothing is selected), `@select` (picks the module;
-  with Shift held, the bank), `@shift`, or `@tempoFine` (relative encoder,
-  TEMPO ±1 BPM per message). Capture tracks Shift on the audio thread — its CCs
+  with Shift held, the bank), `@shift`, `@tempoFine` (relative encoder,
+  TEMPO ±1 BPM per message), or `@power` (a button: each press toggles the
+  selected frame's enable parameter, pushed as `ControllerFrame::enableParam`;
+  presses are counted per CC in `ccPresses`, so press and release inside one
+  tick are not lost and two presses cancel). Capture tracks Shift on the audio thread — its CCs
   (every `@shift` entry is the same Shift: the MiniLab 3 uses CC 27 in its DAW
   program and CC 9 in the ARTURIA one) are published by the message thread on
   every profile re-pick — and files each
