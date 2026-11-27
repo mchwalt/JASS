@@ -2394,8 +2394,16 @@ SynthyProcessor::ControllerSelection SynthyProcessor::getControllerSelection() c
 {
     auto s = controllerSel;
     if (const auto* f = selectedControllerFrame())
-        s.bankCount = ControllerProfiles::bankCount ((int) f->controls.size());
+        s.bankCount = controllerBankCount (*f);
     return s;
+}
+
+int SynthyProcessor::controllerBankCount (const ControllerFrame& f)
+{
+    int banks = 0;
+    for (const auto& c : f.controls)
+        banks = juce::jmax (banks, c.bank + 1);
+    return banks;
 }
 
 bool SynthyProcessor::selectControllerModule (const juce::String& entryId, bool layerB)
@@ -2419,7 +2427,7 @@ void SynthyProcessor::setControllerFrames (std::vector<ControllerFrame> frames)
                   frames.end());
     const int revisionBefore = controllerSelRevision;
     const auto* before = selectedControllerFrame();
-    const int banksBefore = before != nullptr ? ControllerProfiles::bankCount ((int) before->controls.size()) : 0;
+    const int banksBefore = before != nullptr ? controllerBankCount (*before) : 0;
     controllerFrames = std::move (frames);
     if (! controllerSel.valid)
         return;
@@ -2433,8 +2441,8 @@ void SynthyProcessor::setControllerFrames (std::vector<ControllerFrame> frames)
             (f.layerB == controllerSel.layerB ? same : other) = &f;
     if (const auto* f = same != nullptr ? same : other)
     {
-        const int banks = ControllerProfiles::bankCount ((int) f->controls.size());
-        setControllerSelection (f->entryId, f->layerB, juce::jlimit (0, banks - 1, controllerSel.bank));
+        const int banks = controllerBankCount (*f);
+        setControllerSelection (f->entryId, f->layerB, juce::jlimit (0, juce::jmax (0, banks - 1), controllerSel.bank));
         if (controllerSelRevision == revisionBefore && banks != banksBefore)
             ++controllerSelRevision;   // same module, layer and bank, but the marker's "n/m" changed
     }
@@ -2476,6 +2484,23 @@ void SynthyProcessor::applyModuleControl (const ControllerProfiles::ModuleContro
                 applyControllerValue (*p, p->convertTo0to1 (range.start + (float) item * juce::jmax (1.0f, range.interval)), false);
             }
             break;
+        case ControllerProfiles::ControlKind::List:
+            // A list combo: the knob steps through the items as shown, the parameter gets the
+            // item's own value (its position where the list has no values). Empty list: nothing.
+            if (mc.listCount)
+                if (const int item = ControllerProfiles::stepIndex (v01, mc.listCount()); item >= 0)
+                {
+                    int value = item;
+                    if (mc.listValues)
+                    {
+                        const auto values = mc.listValues();
+                        if (item >= values.size())
+                            break;
+                        value = values[item];
+                    }
+                    applyControllerValue (*p, p->convertTo0to1 ((float) value), false);
+                }
+            break;
         case ControllerProfiles::ControlKind::Toggle:
             applyControllerValue (*p, ControllerProfiles::toggleOn (ccValue7) ? 1.0f : 0.0f, false);
             break;
@@ -2496,6 +2521,13 @@ void SynthyProcessor::pollControllers()
     {
         dirty[i] = ccDirty[i].exchange (0);
         any = any || dirty[i] != 0;
+    }
+    // Shift not held: the bank selector has no reference — its next message under Shift only
+    // sets one. (Before the early return: a release by SysEx or an input change dirties nothing.)
+    if (! ccShiftHeld.load())
+    {
+        controllerBankRef = -1;
+        controllerBankTravel = 0;
     }
     if (! any)
         return;
@@ -2532,10 +2564,29 @@ void SynthyProcessor::pollControllers()
                     continue;
                 if (held)
                 {
-                    const float v01 = (float) ccSlotValue[kCcSlots + at].load() / 127.0f;
-                    if (const auto* f = selectedControllerFrame())   // ignored with nothing selected
+                    // Relative (click test b, 2026-11-28): the knob's position never picks a bank
+                    // — it was left by the module selection, and the first nudge under Shift
+                    // jumped to whatever bank it named. The first message under Shift only sets
+                    // the reference; every kBankStep of travel is one bank up / down from the
+                    // current one, clamped. At an end the knob repeats 127 / 0 while turned on.
+                    const int v = ccSlotValue[kCcSlots + at].load();
+                    const float v01 = (float) v / 127.0f;
+                    int steps = 0;
+                    if (controllerBankRef >= 0)
+                    {
+                        int d = v - controllerBankRef;
+                        if (d == 0 && v == 127) d = CP::kBankEndTravel;
+                        if (d == 0 && v == 0)   d = -CP::kBankEndTravel;
+                        if ((d > 0 && controllerBankTravel < 0) || (d < 0 && controllerBankTravel > 0))
+                            controllerBankTravel = 0;   // turned back: start counting afresh
+                        controllerBankTravel += d;
+                        steps = controllerBankTravel / CP::kBankStep;
+                        controllerBankTravel -= steps * CP::kBankStep;
+                    }
+                    controllerBankRef = v;
+                    if (const auto* f = selectedControllerFrame(); f != nullptr && steps != 0)   // ignored with nothing selected
                         setControllerSelection (f->entryId, f->layerB,
-                                                juce::jmax (0, CP::stepIndex (v01, CP::bankCount ((int) f->controls.size()))));
+                                                juce::jlimit (0, juce::jmax (0, controllerBankCount (*f) - 1), controllerSel.bank + steps));
                     // The knob stands somewhere else now: remember that position, so the first
                     // message after Shift is released does not jump to another module by itself.
                     controllerLastSelectIndex = CP::stepIndex (v01, (int) controllerFrames.size());
@@ -2599,13 +2650,15 @@ void SynthyProcessor::pollControllers()
             if (c.kind == CP::Kind::Module)
                 if (const auto* f = selectedControllerFrame())
                 {
-                    // The n-th control of the current bank; a knob beyond the list moves nothing.
-                    const size_t n = (size_t) (controllerSel.bank * CP::kBankSize + c.moduleSlot - 1);
-                    if (n < f->controls.size())
-                    {
-                        const auto mc = f->controls[n];   // a copy: a parameter write may relayout the rack
-                        applyModuleControl (mc, value);
-                    }
+                    // The n-th control of the current bank; a knob beyond the bank moves nothing.
+                    int inBank = 0;
+                    for (const auto& control : f->controls)
+                        if (control.bank == controllerSel.bank && ++inBank == c.moduleSlot)
+                        {
+                            const auto mc = control;   // a copy: a parameter write may relayout the rack
+                            applyModuleControl (mc, value);
+                            break;
+                        }
                     continue;
                 }
             // The fixed path: a plain entry, or an "@module:n" entry's fallback while nothing is selected.

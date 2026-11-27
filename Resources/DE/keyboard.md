@@ -22,12 +22,12 @@ Normale Tastaturen verschlucken manche Dreier-Kombinationen — der dritte Ton k
 Drehregler und Fader eines MIDI-Controllers bewegen JASS in der Standalone-App (in einer DAW dort zuweisen).
 
 - **Header-Auswahl** — **Auto** wählt das Profil nach dem Namen des MIDI-Eingangs (MiniLab 3, sonst Generic (GM)); oder von Hand wählen
-- **MiniLab 3 Regler 1–7** — die Regler des markierten Moduls, von links nach rechts: Drehregler, Combos (schalten ihre Einträge durch) und Schalter (an ab der Hälfte); übersprungen: Step-Zellen und die Listen-Combos SET, BANK, KIT sowie MOD und PARAM der MOD MATRIX
+- **MiniLab 3 Regler 1–7** — die Regler des markierten Moduls, von links nach rechts: Drehregler, Combos (schalten ihre Einträge durch) und Schalter (an ab der Hälfte); übersprungen: Step-Zellen und die Combos SET, BANK und KIT
 - **Nichts markiert** — Regler 1–7: Cutoff, Resonance, LFO 1 Rate, LFO 1 Depth, Chorus, Delay, Reverb
 - **Modul markieren** — mit dem MiniLab-3-Profil: auf die Titelleiste oder einen seiner Regler klicken, oder Regler 8 drehen (springt bei der ersten Berührung); das markierte Modul hat einen weißen Rahmen, seine Regler tragen die Nummer ihres Drehreglers; ein ausgegrauter Regler hat keine und wird nicht bewegt
 - **An / aus** — Hauptencoder drücken: schaltet das markierte Modul an oder aus
 - **Markierung aufheben** — noch einmal auf die Titelleiste des markierten Moduls klicken; ein Preset laden oder RESET hebt sie ebenfalls auf
-- **Bänke** — ein Modul mit mehr als 7 Reglern: Shift halten und Regler 8 drehen; die Titelleiste zeigt die Bank, z. B. 2/3
+- **Bänke** — ein Modul mit mehr als 7 Reglern: Shift halten und Regler 8 nach rechts / links drehen für die nächste / vorige Bank; die Titelleiste zeigt sie, z. B. 2/3; MOD MATRIX: eine Bank pro Slot
 - **Programme** — gleich im ARTURIA- und im DAW-Programm (Shift + Pad 3)
 - **MiniLab 3 Fader** — MASTER VOL, TEMPO, A LVL, B LVL, egal welchen Layer du bearbeitest
 - **Tempo fein** — Shift + Hauptencoder bewegt TEMPO um 1 BPM pro Raste

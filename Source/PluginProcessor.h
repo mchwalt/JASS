@@ -618,6 +618,9 @@ private:
     ControllerSelection controllerSel;                            // bankCount is filled by the getter
     int controllerSelRevision = 0;
     int controllerLastSelectIndex = -1;                           // the last index knob 8 produced
+    int controllerBankRef = -1;                                   // the selector's last value seen under Shift; -1 = none yet
+    int controllerBankTravel = 0;                                 // its travel since the last bank step, in CC units
+    static int controllerBankCount (const ControllerFrame& f);    // highest bank of its controls + 1
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR(SynthyProcessor)

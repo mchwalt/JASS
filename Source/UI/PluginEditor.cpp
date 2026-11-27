@@ -2560,6 +2560,7 @@ void SynthyEditor::buildRack()
     Combo bankCombo{ lid(pre, P::wavetableBank), "BANK",
                      std::function<juce::StringArray()>([] { return WavetableBankStore::instance().getNames(); }) };
     bankCombo.indexIsValue = true;
+    bankCombo.noController = true;   // 22.5: a hardware knob must not sweep through the banks (each step loads one)
     add(Rack::Zone::Generators, SizeClass::W10H1, ModuleType::Generator, "WAVETABLE", lid(pre, P::wavetableOn),   // W10: BANK+LOAD+7 knobs incl. FB+PAN (9 slots of 10)
         { bankCombo,
           FileAction{ "LOAD WAV",
@@ -2606,6 +2607,7 @@ void SynthyEditor::buildRack()
         Combo setCombo{ lid(pre, P::samplerSet), "SET",
                         std::function<juce::StringArray()>([] { return SampleBankStore::instance().getNames(); }) };
         setCombo.indexIsValue = true;
+        setCombo.noController = true;   // 22.5: stepping SET loads sample sets — not under a hardware knob
         // Standard width (2 slots), NOT the 3 it used to claim for long set names like
         // "SalamanderPiano" (user 2026-08-09: "beim SAMPLER ist die Combo noch zu breit").
         // Since every combo is now capped at one width, a wider one just stands out. The
@@ -3039,6 +3041,7 @@ void SynthyEditor::buildRack()
             return values;
         };
         kitCombo.indexIsValue = true;   // ... with itemValues supplying the value per position
+        kitCombo.noController = true;   // 22.5: stepping KIT loads drum kits — not under a hardware knob
         d.body.insert(d.body.begin() + 1, kitCombo);
         // NOTE reads out the instrument (decision B, 2026-08-10): the zone's own name if the kit
         // brought one, else the General MIDI drum map, else the note name. The MIDI number rides

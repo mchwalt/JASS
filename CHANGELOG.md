@@ -102,10 +102,17 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   right) - and knobs 1-7 move its controls left to right. The order is derived from the rack as
   it is drawn, not written per module, so every module is reachable and a new one needs nothing.
   Knobs, combos (stepped through over the knob's travel) and switches (on from half way) count;
-  spacers, displays, buttons and the step cells of STEP SEQ / PERC do not, nor do the list combos
-  whose items are not the parameter's range (SAMPLER SET, WAVETABLE BANK, PERC KIT, the MOD
-  MATRIX's MOD and PARAM). A module with more than seven controls has banks: Shift + knob 8
-  changes the bank, called a bank because 'page' already means the step pages. Each control
+  spacers, displays, buttons and the step cells of STEP SEQ / PERC do not, nor do the three
+  combos that load samples when stepped (SAMPLER SET, WAVETABLE BANK, PERC KIT) - a knob
+  sweeping through them would load every set on the way. The other list combos (the MOD
+  MATRIX's MOD and PARAM) are stepped through their own lists, in the order shown. A module
+  with more than seven controls has banks, called a bank because 'page' already means the step
+  pages: with Shift held, turning knob 8 right is the next bank, left the previous one. At
+  first the knob's position picked the bank - but that position was left by picking the module,
+  so the first nudge under Shift jumped to whatever bank it named (click test, 2026-11-28); now
+  nothing moves until the knob does, and never further than the neighbouring bank per step. A
+  module built from equal slots (the MOD MATRIX) has one bank per slot instead of sevens that
+  cut through the slots, and in every bank the knobs start at knob 1. Each control
   under a knob carries that knob's number (1-7) in its corner: after a bank change the bank
   alone did not say which seven controls the knobs now reach (click test, 2026-11-27).
   A control that is greyed out because it does not apply right now (RATE while SYNC is on a

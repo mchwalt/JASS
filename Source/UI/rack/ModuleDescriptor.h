@@ -193,6 +193,10 @@ namespace rack
         // bypassing ComboBoxParameterAttachment — whose value = index/(numItems-1) mismaps when the
         // item count varies against a fixed param range (MOD MATRIX PARAM: 1..N items, range 0..N-1).
         bool indexIsValue = false;
+        // Story 22.5: not reachable from a hardware controller. For a combo that LOADS something
+        // when stepped (SAMPLER SET, WAVETABLE BANK, PERC KIT): a knob sweeping through it would
+        // load every set on the way. Editor-set, beside indexIsValue.
+        bool noController = false;
         // Optional VALUES for the items, in the same order. Without it the item's POSITION is the
         // value, which is only safe while the list is the complete, unfiltered thing the parameter
         // indexes. PERC's KIT lists drum kits only (a single WAV would put the same recording on
@@ -547,22 +551,32 @@ namespace rack
     // What knob n of a controller reaches in a module: its knobs, combos and toggles in DISPLAY
     // order — derived from the descriptor as the rack shows it, never written per module.
     // Skipped: spacers, captions, displays and actions (no parameter); pattern cells and paged
-    // step knobs (a figure is not entered by hardware knobs); indexIsValue and itemValues combos
-    // (an item's position is not the parameter's value there) and a combo without items (a knob
-    // slot that could never react). A cell's corner switch (toggleParamId / accentParamId) and
-    // its alt row (altParamId) are not controls of their own — the cell's main id is.
+    // step knobs (a figure is not entered by hardware knobs); a combo flagged noController (it
+    // loads samples when stepped: SET, BANK, KIT) and a plain combo without items (a knob slot
+    // that could never react). A cell's corner switch (toggleParamId / accentParamId) and its
+    // alt row (altParamId) are not controls of their own — the cell's main id is.
+    // A LIST combo (indexIsValue / itemValues: an item's position is not the parameter's value)
+    // is reached through its own lists: the control carries the item count and the value list as
+    // providers, asked when a value arrives, so a dependent list (MOD MATRIX PARAM) is current.
+    // BANKS: every control carries its bank. A descriptor built from equal groups of controls
+    // (slotActivity.groupSize > 0 — the MOD MATRIX's slots) has one bank per group, so a bank
+    // never cuts through a slot; every other module has banks of seven. In every bank the knobs
+    // start at knob 1.
     // A control dimmed by activeWhen keeps its slot — the knob numbers of the others must not
     // shift when a module's state changes — but carries the predicate along (`active`), and a
     // hardware knob moves nothing on it while it is inactive (maintainer 2026-11-27).
     // Pure: ModuleFrame and JASS_Render --selftest both call it.
     struct CountableControl
     {
-        enum class Kind { Knob, Combo, Toggle };
+        enum class Kind { Knob, Combo, Toggle, List };   // List = an indexIsValue / itemValues combo
         juce::String paramId;     // as the descriptor carries it (a layer-B frame: the "b" id)
         Kind kind = Kind::Knob;
         int  items = 0;           // Combo: number of items right now (a provider is asked)
         int  bodyIndex = -1;      // its element in ModuleDescriptor::body (the frame finds the cell by it)
         std::function<bool()> active;   // the element's activeWhen; empty = always active
+        int  bank = 0;            // 0-based bank of knobs this control lies in
+        std::function<int()> listCount;                  // List: number of items right now
+        std::function<juce::Array<int>()> listValues;    // List: value per item; empty = the index is the value
     };
 
     inline std::vector<CountableControl> countableControls (const ModuleDescriptor& d)
@@ -589,8 +603,19 @@ namespace rack
             }
             else if (auto* c = std::get_if<Combo> (&el))
             {
-                if (c->paramId.isEmpty() || c->indexIsValue || c->itemValues)
+                if (c->paramId.isEmpty() || c->noController)
                     continue;
+                if (c->indexIsValue || c->itemValues)
+                {
+                    CountableControl list { c->paramId, CountableControl::Kind::List, 0, (int) bi, c->activeWhen };
+                    if (auto* statik = std::get_if<juce::StringArray> (&c->items))
+                        list.listCount = [n = statik->size()] { return n; };
+                    else if (auto* provider = std::get_if<std::function<juce::StringArray()>> (&c->items))
+                        list.listCount = [p = *provider] { return p ? p().size() : 0; };
+                    list.listValues = c->itemValues;
+                    out.push_back (std::move (list));
+                    continue;
+                }
                 int items = 0;
                 if (auto* statik = std::get_if<juce::StringArray> (&c->items))
                     items = statik->size();
@@ -605,6 +630,18 @@ namespace rack
                 if (t->paramId.isNotEmpty())
                     out.push_back ({ t->paramId, CountableControl::Kind::Toggle, 0, (int) bi, {} });
             }
+        }
+
+        // Banks: one per group of a grouped descriptor (a group with more than seven controls is
+        // split into chunks of seven, a group without countable controls gets none), else sevens.
+        const int groupSize = d.slotActivity.groupSize;
+        int bank = -1, inBank = 0, group = -1;
+        for (auto& c : out)
+        {
+            const int g = groupSize > 0 ? c.bodyIndex / groupSize : 0;
+            if (bank < 0 || g != group || inBank >= 7) { ++bank; inBank = 0; group = g; }
+            c.bank = bank;
+            ++inBank;
         }
         return out;
     }

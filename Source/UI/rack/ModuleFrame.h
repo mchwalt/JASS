@@ -197,6 +197,7 @@ namespace rack
         juce::String controllerBankText;      // "2/3"; empty with a single bank
         int controllerBank = 0;               // the bank whose controls carry the knob numbers
         std::vector<int> controllerCells;     // cell index per countable control, in countable order
+        std::vector<int> controllerCellBanks; // ...and the bank each of them lies in
 
         // --- live-feed targets (Story 1.4) ---
         // Knobs carrying a modTarget: their ring is animated by updateLiveFeed when the

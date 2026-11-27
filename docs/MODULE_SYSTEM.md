@@ -133,10 +133,12 @@ display-transform pair). `extraBody` is appended last.
 **The display order is also the hardware knob order (Story 22.5).** A
 controller's knobs 1–7 take the selected module's knobs, combos and toggles in
 the order the body shows them (`rack::countableControls`), so `params` /
-`bodyOrder` decide what lies under which knob. `indexIsValue` / `itemValues`
-combos and pattern cells are not reachable from a controller; a control whose
-`activeWhen` is false keeps its knob number but is not moved while inactive;
-more than seven controls means banks of seven. Details:
+`bodyOrder` decide what lies under which knob. Pattern cells and combos
+flagged `noController` (SET, BANK, KIT) are not reachable from a controller;
+an `indexIsValue` / `itemValues` combo is stepped through its own value list;
+a control whose `activeWhen` is false keeps its knob number but is not moved
+while inactive; more than seven controls means banks of seven, and a module
+with `slotActivity.groupSize` gets one bank per group. Details:
 [ARCHITECTURE §3.6](ARCHITECTURE.md#36-controller-input-story-221).
 
 ## 4. Registry (`ModuleRegistry`, `AllModules.h`)

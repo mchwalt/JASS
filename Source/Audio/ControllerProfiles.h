@@ -29,14 +29,16 @@
 //   "@module:1" .. "@module:7"  the n-th control of the selected module's current bank; an optional
 //                               "fallback": "<param id>" is what the entry moves while no module is
 //                               selected (the fixed 22.1 mapping)
-//   "@select"                   picks the module by its position; while Shift is held, the bank
+//   "@select"                   picks the module by its position; while Shift is held, turning it
+//                               right / left is the next / previous bank
 //   "@shift"                    the controller's momentary Shift (CC >= 64 = held); several entries
 //                               are the same Shift (a device may use one CC per program)
 //   "@tempoFine"                a relative encoder (binary offset 64): TEMPO +-1 BPM per message
 //   "@power"                    a button: each press (CC >= 64) switches the selected module on or
 //                               off (its enable switch); several entries, one per device program
 //
-// A bank is seven controls ("page" is taken by the step pages of STEP SEQ / PERC).
+// A bank is up to seven controls ("page" is taken by the step pages of STEP SEQ / PERC); which
+// bank a control lies in comes with the pushed control (ModuleControl::bank).
 class ControllerProfiles
 {
 public:
@@ -48,6 +50,11 @@ public:
     static constexpr const char* kGenericName = "Generic (GM)";   // the fallback when no "match" fits
 
     static constexpr int kBankSize = 7;                            // controls per bank (knobs 1..7)
+    // Shift + selector moves the bank RELATIVELY: this much knob travel (in CC units) is one bank.
+    static constexpr int kBankStep = 12;
+    // The selector is an endless encoder emulating an absolute value: at an end it keeps sending
+    // 127 (or 0) while turned further — a repeated end value counts as this much travel.
+    static constexpr int kBankEndTravel = 4;
 
     enum class Pin { Follow, A, B };
     enum class Kind { Param, Module, Select, Shift, TempoFine, Power };   // Param = a fixed parameter id
@@ -74,7 +81,7 @@ public:
         }
     };
     // One control of a selectable module as the rack shows it (pushed by the editor, display order).
-    enum class ControlKind { Knob, Combo, Toggle };
+    enum class ControlKind { Knob, Combo, Toggle, List };          // List: a combo stepped through its own value list
     struct ModuleControl
     {
         juce::String paramId;     // as the frame on screen uses it (a layer-B frame: the "b" id)
@@ -84,6 +91,11 @@ public:
         // note value) — it keeps its slot, but a knob moves nothing on it. Asked on the message
         // thread when a value arrives, so it follows the module's state without a new push.
         std::function<bool()> active;
+        int bank = 0;             // 0-based bank this control lies in ("@module:n" = the n-th of the current bank)
+        // List: the item count and the value per item (empty = the index is the value), asked on
+        // the message thread when a value arrives — a dependent list is always current.
+        std::function<int()> listCount;
+        std::function<juce::Array<int>()> listValues;
     };
     // The one conversion from the rack's countable control (rack::CountableControl — a template,
     // so this header needs no rack include). The editor and the selftest both push through it.
@@ -92,8 +104,9 @@ public:
     {
         using K = typename Countable::Kind;
         return { c.paramId,
-                 c.kind == K::Combo ? ControlKind::Combo : c.kind == K::Toggle ? ControlKind::Toggle : ControlKind::Knob,
-                 c.items, c.active };
+                 c.kind == K::Combo ? ControlKind::Combo : c.kind == K::Toggle ? ControlKind::Toggle
+               : c.kind == K::List  ? ControlKind::List  : ControlKind::Knob,
+                 c.items, c.active, c.bank, c.listCount, c.listValues };
     }
 
     //==============================================================================================

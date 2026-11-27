@@ -223,9 +223,12 @@ message-thread, checked by `JASS_Render --selftest`.
   gesture) works unchanged; the cost is up to ~33 ms of latency on a knob,
   and intermediate values inside one tick collapse to the last one.
 - **Special targets (Story 22.5, processor side).** `param` may be `@module:1..7`
-  (the n-th control of the selected module's bank of seven, with an optional
-  `fallback` id used while nothing is selected), `@select` (picks the module;
-  with Shift held, the bank), `@shift`, `@tempoFine` (relative encoder,
+  (the n-th control of the selected module's current bank, with an optional
+  `fallback` id used while nothing is selected), `@select` (picks the module
+  by its position; with Shift held it moves the bank relatively — the first
+  message only sets a reference, every `kBankStep` CC units of travel is one
+  bank up / down, clamped, and a repeated 127 / 0 at the knob's end counts as
+  travel), `@shift`, `@tempoFine` (relative encoder,
   TEMPO ±1 BPM per message), or `@power` (a button: each press toggles the
   selected frame's enable parameter, pushed as `ControllerFrame::enableParam`;
   presses are counted per CC in `ccPresses`, so press and release inside one
@@ -271,9 +274,15 @@ message-thread, checked by `JASS_Render --selftest`.
   module's knobs, combos and toggles in display order, from the descriptor the
   frame was built with (so the editor's adjustments after
   `makeModuleDescriptor` are in it). Skipped: captions, displays, actions,
-  pattern cells and paged step knobs, `indexIsValue` / `itemValues` combos and
-  combos without items; a cell's corner switch and alt row are not controls of
-  their own. A control dimmed by `activeWhen` keeps its slot (the knob
+  pattern cells and paged step knobs, combos flagged `noController` (SET, BANK,
+  KIT — stepping them loads samples) and plain combos without items; a cell's
+  corner switch and alt row are not controls of their own. An `indexIsValue` /
+  `itemValues` combo is a *list* control: it carries its item count and value
+  list as providers, asked when a value arrives (a dependent list such as MOD
+  MATRIX PARAM is current), and the parameter gets the item's own value. Each
+  control carries its bank: one bank per group where the descriptor has
+  `slotActivity.groupSize` (the MOD MATRIX's slots), banks of seven otherwise;
+  in every bank the knobs start at 1. A control dimmed by `activeWhen` keeps its slot (the knob
   numbers of the others must not shift when a module's state changes) but is
   not moved while inactive: the predicate travels with the pushed control
   (`ModuleControl::active`), `applyModuleControl` asks it when a value arrives,

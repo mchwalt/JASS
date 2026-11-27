@@ -1107,7 +1107,17 @@ namespace
                 { pre + "sustain", CP::ControlKind::Knob, 0 },      { pre + "release", CP::ControlKind::Knob, 0 },
                 { pre + "lfo1Rate", CP::ControlKind::Knob, 0 },     { pre + "lfo1Depth", CP::ControlKind::Knob, 0 } } };
             f.controls.resize ((size_t) count);
+            for (size_t i = 0; i < f.controls.size(); ++i)
+                f.controls[i].bank = (int) i / CP::kBankSize;   // banks of seven, as the rack assigns them
             return f;
+        };
+        // Shift + knob 8 turned right by one bank step (the first message is only the reference).
+        auto nextBank = [&]
+        {
+            run (mod, { Ev { 1, 27, 127 } });
+            run (mod, { Ev { 1, 40, 60 } });
+            run (mod, { Ev { 1, 40, 60 + CP::kBankStep } });
+            run (mod, { Ev { 1, 27, 0 } });
         };
         auto one = [] (const char* entry, const char* id) { return Frame { entry, false, { MC { id, CP::ControlKind::Knob, 0 } } }; };
         auto sixFrames = [&]
@@ -1164,14 +1174,31 @@ namespace
         run (mod, { Ev { 1, 34, 64 } });
         expect (toggleOff && raw ("filterOn") > 0.5f, "3rd control, a toggle: off at 63, on at 64");
 
-        // Banks: Shift held + knob 8.
+        // Banks: Shift held + knob 8, relative — the knob's position never picks a bank.
         r.set ("release", 0.0f);
         r.set ("attack", 0.0f);
         const float release0 = prm ("release")->getValue(), attack0 = prm ("attack")->getValue();
         run (mod, { Ev { 1, 27, 127 } });
         expect (r.p->controllerShiftHeldForTest(), "Shift CC 127: held");
         run (mod, { Ev { 1, 40, 127 } });
-        expect (sel().entryId == "filter" && sel().bank == 1 && sel().bankCount == 2, "Shift + knob 8 = 127: bank 2/2, the module stays");
+        expect (sel().entryId == "filter" && sel().bank == 0 && sel().bankCount == 2,
+                "Shift + knob 8, first message (knob at 127): only the reference - no jump to the last bank");
+        run (mod, { Ev { 1, 40, 127 } });
+        const int bankAfterOneRepeat = sel().bank;
+        run (mod, { Ev { 1, 40, 127 } });
+        run (mod, { Ev { 1, 40, 127 } });
+        expect (bankAfterOneRepeat == 0 && sel().bank == 1, "knob at its end, turned further (127 repeated): keeps advancing, bank 2 after a step of travel");
+        for (int i = 0; i < 6; ++i)
+            run (mod, { Ev { 1, 40, 127 } });
+        expect (sel().bank == 1, "clamped at the last bank, no wrap");
+        run (mod, { Ev { 1, 40, 127 - CP::kBankStep } });
+        expect (sel().bank == 0, "a step of travel left: the previous bank");
+        run (mod, { Ev { 1, 40, 127 - 3 * CP::kBankStep } });
+        expect (sel().bank == 0, "clamped at the first bank");
+        run (mod, { Ev { 1, 40, 127 - 3 * CP::kBankStep + CP::kBankStep - 1 } });
+        const int bankBeforeStep = sel().bank;
+        run (mod, { Ev { 1, 40, 127 - 2 * CP::kBankStep } });
+        expect (bankBeforeStep == 0 && sel().bank == 1 && sel().entryId == "filter", "less than a step: no move; the full step right: the next bank, the module stays");
         run (mod, { Ev { 1, 27, 0 } });
         expect (! r.p->controllerShiftHeldForTest(), "Shift CC 0: released");
         setup (0.3f, 0.2f, 0);
@@ -1180,12 +1207,12 @@ namespace
         run (mod, { Ev { 1, 35, 127 } });
         expect (prm ("attack")->getValue() == attack0, "bank 2 has 3 controls: knob 5 moves nothing");
         expect (r.p->selectControllerModule ("filter", false) && sel().bank == 1, "touching the selected module again keeps its bank");
-        // A short Shift press inside one tick: the knob-8 value sent under Shift is a bank move,
-        // not a module jump.
+        // A short Shift press inside one tick: the knob-8 value sent under Shift is no module
+        // jump — and, being the first under this Shift, no bank move either.
         run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 0 }, Ev { 1, 27, 0 } });
-        expect (sel().entryId == "filter" && sel().bank == 0 && ! r.p->controllerShiftHeldForTest(), "Shift press + knob 8 + release in one tick: bank 1, no module jump");
+        expect (sel().entryId == "filter" && sel().bank == 1 && ! r.p->controllerShiftHeldForTest(), "Shift press + knob 8 + release in one tick: no module jump, the bank stays");
         run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 }, Ev { 1, 27, 0 } });
-        expect (sel().entryId == "filter" && sel().bank == 1, "the same with knob 8 = 127: bank 2, still FILTER (not the last module)");
+        expect (sel().entryId == "filter" && sel().bank == 1, "the same with knob 8 = 127: still FILTER (not the last module), still bank 2 (a new Shift press starts a new reference)");
         run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 64 }, Ev { 1, 27, 0 } });
         run (mod, { Ev { 1, 40, 64 } });
         expect (sel().entryId == "filter" && sel().bank == 1, "knob 8 left where Shift + knob 8 put it: its first plain message does not jump to another module");
@@ -1231,7 +1258,7 @@ namespace
 
         // What the rack shows changes: the selection stays while the module is still on screen.
         r.p->selectControllerModule ("filter", false);
-        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 }, Ev { 1, 27, 0 } });
+        nextBank();
         {
             auto frames = sixFrames();
             frames[0] = filterFrame (true);
@@ -1253,10 +1280,11 @@ namespace
         }
         r.p->setControllerFrames (sixFrames());
         r.p->selectControllerModule ("filter", false);
-        run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 }, Ev { 1, 27, 0 } });
+        nextBank();
+        const int bankBeforeReselect = sel().bank;
         r.p->selectControllerModule ("amp", false);
         r.p->selectControllerModule ("filter", false);
-        expect (sel().bank == 0, "a new selection starts at bank 1");
+        expect (bankBeforeReselect == 1 && sel().bank == 0, "a new selection starts at bank 1");
         {
             const int rev = r.p->getControllerSelectionRevision();
             auto frames = sixFrames();
@@ -1407,8 +1435,8 @@ namespace
                     "layer B descriptors: the b ids, with and without bodyOrder");
 
             // A SYNTHETIC descriptor with every kind of element the editor adds after building
-            // (indexIsValue / itemValues combos, corner switches, alt rows, actions, captions,
-            // displays, toggles, paged step knobs). The editor-built descriptors themselves
+            // (indexIsValue / itemValues / noController combos, corner switches, alt rows, actions,
+            // captions, displays, toggles, paged step knobs). The editor-built descriptors themselves
             // (SAMPLER, WAVETABLE, PERC, MOD MATRIX) are not covered by the selftest.
             rack::ModuleDescriptor d;
             {
@@ -1418,6 +1446,9 @@ namespace
                 rack::Combo byValues { "noiseType", "KIT", juce::StringArray { "x", "y" } };
                 byValues.itemValues = [] { return juce::Array<int> { 3, 5 }; };
                 rack::Combo empty { "noiseType", "NONE", juce::StringArray {} };
+                rack::Combo loader { "noiseType", "SET", juce::StringArray { "s1", "s2" } };
+                loader.indexIsValue = true;
+                loader.noController = true;
                 rack::Combo dynamic { "noiseType", "DYN", std::function<juce::StringArray()> ([] { return juce::StringArray { "1", "2", "3", "4" }; }) };
                 rack::Knob cell { "filterCutoff", "CUT" };
                 cell.toggleParamId = "filterOn";
@@ -1430,15 +1461,20 @@ namespace
                 d.paging.stepsPerPage = 48;
                 d.paging.pagedPrefixes = { "seqPitch" };
                 d.body = { rack::Caption { "x" }, plain, rack::Action { "GO", {}, {} }, byIndex, byValues, empty, cell, pattern, paged,
-                           rack::Toggle { "filterOn", "ON" }, rack::Display { nullptr, 2 }, dynamic, rack::Knob { {}, "nothing" } };
+                           rack::Toggle { "filterOn", "ON" }, rack::Display { nullptr, 2 }, dynamic, rack::Knob { {}, "nothing" }, loader };
             }
             const auto mixed = rack::countableControls (d);
-            expect (rack::countableParamIds (d).joinIntoString (",") == "filterType,filterCutoff,filterOn,noiseType",
-                    "counted: combo, knob (its main id only), toggle, provider combo; skipped: caption, action, indexIsValue combo, itemValues combo, combo without items, pattern cell, paged step, display");
-            expect (mixed.size() == 4 && mixed[2].kind == CC::Kind::Toggle && mixed[3].kind == CC::Kind::Combo && mixed[3].items == 4,
+            expect (rack::countableParamIds (d).joinIntoString (",") == "filterType,noiseType,noiseType,filterCutoff,filterOn,noiseType",
+                    "counted: combo, two list combos, knob (its main id only), toggle, provider combo; skipped: caption, action, noController combo, combo without items, pattern cell, paged step, display");
+            expect (mixed.size() == 6 && mixed[4].kind == CC::Kind::Toggle && mixed[5].kind == CC::Kind::Combo && mixed[5].items == 4,
                     "a toggle is a toggle; a provider combo is asked for its items");
-            expect (mixed.size() == 4 && mixed[0].bodyIndex == 1 && mixed[1].bodyIndex == 6 && mixed[2].bodyIndex == 9 && mixed[3].bodyIndex == 11,
+            expect (mixed.size() == 6 && mixed[1].kind == CC::Kind::List && mixed[1].listCount && mixed[1].listCount() == 3 && ! mixed[1].listValues
+                    && mixed[2].kind == CC::Kind::List && mixed[2].listValues && mixed[2].listValues()[1] == 5,
+                    "an indexIsValue / itemValues combo is a list control: it carries its item count and its value list");
+            expect (mixed.size() == 6 && mixed[0].bodyIndex == 1 && mixed[1].bodyIndex == 3 && mixed[2].bodyIndex == 4 && mixed[3].bodyIndex == 6
+                    && mixed[4].bodyIndex == 9 && mixed[5].bodyIndex == 11,
                     "each countable control names its body element (the frame puts the knob number on that cell)");
+            expect (mixed.size() == 6 && mixed[0].bank == 0 && mixed[5].bank == 0, "no groups, six controls: one bank");
             expect (rack::countableParamIds (makeModuleDescriptor (Modules::filter())) == filterIds
                     && rack::countableParamIds (rack::ModuleDescriptor {}).isEmpty(),
                     "pure: the same descriptor gives the same list; an empty body has no countable control");
@@ -1472,6 +1508,63 @@ namespace
             expect (! sel().valid, "FILTER no longer shown: selection dropped");
             r.set ("filterType", 0.0f);
             r.set ("bfilterType", 0.0f);
+
+            // Slot banks and list combos: a descriptor of equal groups (the MOD MATRIX's slots) has
+            // one bank per group; a list combo is stepped through its own value list.
+            {
+                rack::Combo modList { "noiseType", "MOD", juce::StringArray { "d", "b", "c", "a" } };
+                modList.indexIsValue = true;
+                modList.itemValues = [] { return juce::Array<int> { 3, 1, 2, 0 }; };
+                int paramItems = 2;
+                rack::Combo paramList { "filterType", "PARAM", std::function<juce::StringArray()> ([&paramItems]
+                                        { juce::StringArray a; for (int i = 0; i < paramItems; ++i) a.add (juce::String (i)); return a; }) };
+                paramList.indexIsValue = true;
+                rack::ModuleDescriptor slots;
+                slots.slotActivity.groupSize = 5;
+                slots.body = { rack::Knob { "filterReso", "SRC" }, modList, paramList, rack::Knob { "attack", "QUANT" }, rack::Knob { "filterCutoff", "AMT" },
+                               rack::Knob { "filterReso", "SRC" }, modList, paramList, rack::Knob { "attack", "QUANT" }, rack::Knob { "filterTrack", "AMT" } };
+                const auto sc = rack::countableControls (slots);
+                bool banksOk = sc.size() == 10;
+                for (size_t i = 0; banksOk && i < sc.size(); ++i)
+                    banksOk = sc[i].bank == (int) i / 5;
+                expect (banksOk, "a descriptor of two groups of five: two banks, one per group (not sevens cutting through a slot)");
+                rack::ModuleDescriptor wide;
+                wide.slotActivity.groupSize = 9;
+                for (int i = 0; i < 9; ++i) wide.body.push_back (rack::Knob { "filterCutoff", "K" });
+                const auto wc = rack::countableControls (wide);
+                expect (wc.size() == 9 && wc[6].bank == 0 && wc[7].bank == 1 && wc[8].bank == 1, "a group of more than seven is split into chunks of seven");
+                const auto grainControls = rack::countableControls (makeModuleDescriptor (Modules::grain()));
+                bool sevens = grainControls.size() > 7;
+                for (size_t i = 0; i < grainControls.size(); ++i)
+                    sevens = sevens && grainControls[i].bank == (int) i / 7;
+                expect (sevens, "a module without groups (GRAIN's spec, more than seven controls): banks of seven");
+
+                r.p->setControllerFrames ({ frameOf ("modmatrix", false, slots) });
+                expect (r.p->selectControllerModule ("modmatrix", false) && sel().bank == 0 && sel().bankCount == 2, "slot banks: bank count = number of groups");
+                r.set ("noiseType", 1.0f);
+                run (mod, { Ev { 1, 31, 0 } });
+                const float modFirst = raw ("noiseType");
+                run (mod, { Ev { 1, 31, 127 } });
+                expect (modFirst == 3.0f && raw ("noiseType") == 0.0f, "list combo with itemValues: the first / last item as shown, the parameter gets the item's own value (3 / 0)");
+                r.set ("filterType", 0.0f);
+                run (mod, { Ev { 1, 34, 127 } });
+                const float paramLast = raw ("filterType");
+                paramItems = 0;
+                run (mod, { Ev { 1, 34, 0 } });
+                expect (paramLast == 1.0f && raw ("filterType") == 1.0f, "list combo without itemValues: the index is the value; an empty list (asked when the value arrives) moves nothing");
+                paramItems = 2;
+                cutoff->setValueNotifyingHost (0.3f);
+                prm ("filterTrack")->setValueNotifyingHost (0.0f);
+                run (mod, { Ev { 1, 35, 127 } });
+                const bool bank1Knob5 = cutoff->getValue() == 1.0f && prm ("filterTrack")->getValue() == 0.0f;
+                nextBank();
+                cutoff->setValueNotifyingHost (0.3f);
+                run (mod, { Ev { 1, 35, 127 } });
+                expect (bank1Knob5 && sel().bank == 1 && prm ("filterTrack")->getValue() == 1.0f && near (cutoff->getValue(), 0.3f),
+                        "slot banks: knob 5 is AMT of slot 1, after one bank step AMT of slot 2 - the numbering restarts at 1 in every bank");
+                r.set ("filterType", 0.0f);
+                prm ("filterTrack")->setValueNotifyingHost (0.0f);
+            }
 
             // "@power": a press on the button switches the selected module on or off.
             {

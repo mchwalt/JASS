@@ -247,6 +247,7 @@ namespace rack
         // order, except for a Display without a component — so a body index maps to a cell index
         // by counting. Looked up here, not at paint time (a combo's provider is asked).
         controllerCells.clear();
+        controllerCellBanks.clear();
         if (selected)
             for (const auto& c : rack::countableControls (desc))
             {
@@ -257,6 +258,7 @@ namespace rack
                     if (disp == nullptr || disp->component != nullptr) ++cell;
                 }
                 controllerCells.push_back (cell);
+                controllerCellBanks.push_back (c.bank);
             }
         repaint();
     }
@@ -1665,10 +1667,10 @@ namespace rack
             // bank text alone did not say WHICH seven controls the knobs now reach (click test b,
             // 2026-11-27). A control that is not on screen gets no badge; the others keep theirs.
             g.setFont (juce::FontOptions (11.0f, juce::Font::bold));
-            for (int k = 0; k < 7; ++k)
+            for (int n = 0, k = -1; n < (int) controllerCells.size(); ++n)
             {
-                const int n = controllerBank * 7 + k;
-                if (n < 0 || n >= (int) controllerCells.size()) break;
+                if (controllerCellBanks[(size_t) n] != controllerBank) continue;
+                ++k;   // in every bank the numbers start at 1 (a slot bank has fewer than seven)
                 const int ci = controllerCells[(size_t) n];
                 if (ci < 0 || ci >= (int) cells.size()) continue;
                 const auto& cell = cells[(size_t) ci];
