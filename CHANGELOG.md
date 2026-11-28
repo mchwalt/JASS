@@ -83,8 +83,8 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   with an optional `fallback` parameter, `@select`, `@shift` or `@tempoFine`. The DAW program's
   CCs (86-117 / 14-31, from Arturia's manual and the Bitwig and Live scripts) map to the same
   controls, so the knobs work whichever program the
-  MiniLab is in. The MASTER VOL fader jumps on first touch like every control: its top is full
-  level, the default is half. `Generic (GM)` uses the GM2 sound
+  MiniLab is in. No control jumps to its own position on first touch (soft takeover, below).
+  `Generic (GM)` uses the GM2 sound
   controller numbers most synths use (74 cutoff, 71 resonance, 73 attack, 72 release, 91 reverb,
   93 chorus), so a keyboard behind the UM-ONE does something sensible too. Both are copied in only
   when missing: an edited file is never overwritten, a deleted one comes back - so a
@@ -101,7 +101,8 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   switch or its reset, or by turning knob 8 through the modules on screen (top to bottom, left to
   right) - and knobs 1-7 move its controls left to right. The order is derived from the rack as
   it is drawn, not written per module, so every module is reachable and a new one needs nothing.
-  Knobs, combos (stepped through over the knob's travel) and switches (on from half way) count;
+  Knobs, combos (stepped through over the knob's travel) and switches (a clear turn right is on,
+  left is off) count;
   spacers, displays, buttons and the step cells of STEP SEQ / PERC do not, nor do the three
   combos that load samples when stepped (SAMPLER SET, WAVETABLE BANK, PERC KIT) - a knob
   sweeping through them would load every set on the way. The other list combos (the MOD
@@ -131,13 +132,40 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   RESET - a new sound starts from the same place - and then the knobs do what the
   entry above lists - so a patch can be played before anything is clicked. Marking exists only
   while the active profile has such knobs (`@module` / `@select`); with `Generic (GM)` the rack
-  looks and behaves as before, and in a DAW nothing is marked at all. Knob 8 is absolute like
-  every control, so it jumps on first touch. A press on the main encoder switches the marked
+  looks and behaves as before, and in a DAW nothing is marked at all. Knob 8 is
+  relative like the bank: right is the next module, left the previous one (next entry). A press
+  on the main encoder switches the marked
   module on or off: a module that is visible but off could be marked and adjusted, but not
   switched on without the mouse (maintainer 2026-11-27). In the profile it is the target
   `@power`; presses are counted, so a quick press that begins and ends between two reads is not
   lost. Nothing marked, or a module without a power switch: the press does nothing
   (Story 22.5, step b).
+- **Soft takeover - a controller knob or fader never makes a value jump.** A control set its own
+  position the moment it was touched, so the value on screen jumped to wherever the hardware
+  happened to stand: after every module or bank change all seven knobs were 'wrong', and a fader
+  threw MASTER VOL or TEMPO to its own position (maintainer 2026-11-28: the faders and knobs must
+  take over the values they find, without jumping back). This reverses the earlier decision to
+  leave takeover out. Now a control moves the value it finds, and the value is read at the moment
+  the control moves - so a mouse edit, a preset load, RESET or another module in between needs
+  no special case. How a control does it is a new field of its profile entry, `"takeover"`:
+  `"encoder"` for an endless knob (the MiniLab 3's knobs) adds what the knob was turned by, its
+  full travel being the parameter's full range; on a combo or list the same travel steps through
+  all items, on a switch a clear turn right is on and left is off. Such a knob keeps sending its
+  end value while turned further at its end - that keeps moving the value, so a value is never
+  out of reach. `"scale"` for anything with two physical ends (a fader) moves the value by the
+  same share of its remaining way as the fader moved of its own, so both arrive at the top and
+  the bottom together; it is the default, because it is safe for hardware JASS does not know.
+  `"jump"` is the old behaviour for whoever wants it. A fader at rest may flicker by one step;
+  that is not taken as a move, or the value would creep towards the fader. A 'pickup' that
+  ignores a control until it crosses the value was not built: it leaves a knob dead for a
+  moment, which is the other half of the same annoyance. The first message of a control after
+  a start only tells JASS where it stands and moves nothing. Knob 8 follows the same rule: it
+  no longer names a module by its position but steps to the next or previous one from the
+  marked module (with nothing marked: the first going right, the last going left). A program
+  change at the MiniLab makes JASS forget where the controls stand, because each program sends
+  its own numbers. The factory `MiniLab 3` profile marks its knobs 1-7 as encoders - an edited
+  or older `MiniLab 3.json` has no such field, so its knobs behave like faders until
+  `"takeover": "encoder"` is added or the file is deleted (Story 22.8).
 - **ARP SYNC - the arpeggio on the tempo grid.** The ARPEGGIATOR ran on RATE in steps per second
   only; it predates tempo sync and was never brought along when the LFOs, DELAY, STEP SEQ and PERC
   got it (maintainer 2026-11-23). SYNC offers the same note values as STEP SEQ against the MASTER

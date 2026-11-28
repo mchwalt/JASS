@@ -916,7 +916,7 @@ namespace
 
         CP::Profile test;
         const bool parsed = CP::parseText (R"({ "name": "Test", "match": "Test Box", "controls": [
-              { "name": "ok",     "cc": 74, "channel": 0, "param": "filterCutoff" },
+              { "name": "ok",     "cc": 74, "channel": 0, "param": "filterCutoff", "takeover": "jump" },
               { "name": "nope",   "cc": 75, "channel": 0, "param": "nope" },
               { "name": "badcc",  "cc": 300, "param": "filterReso" },
               { "name": "nocc",   "param": "filterReso" },
@@ -924,9 +924,9 @@ namespace
               { "name": "strch",  "cc": 77, "channel": "2", "param": "filterReso" },
               { "name": "resch",  "cc": 78, "channel": 15, "param": "filterReso" },
               { "name": "badpin", "cc": 76, "param": "filterReso", "layer": "C" },
-              { "name": "pinB",   "cc": 20, "channel": 2, "param": "filterCutoff", "layer": "B" },
-              { "name": "pinA",   "cc": 21, "param": "filterCutoff", "layer": "a" },
-              { "name": "tempo",  "cc": 22, "param": "syncTempo" },
+              { "name": "pinB",   "cc": 20, "channel": 2, "param": "filterCutoff", "layer": "B", "takeover": "jump" },
+              { "name": "pinA",   "cc": 21, "param": "filterCutoff", "layer": "a", "takeover": "jump" },
+              { "name": "tempo",  "cc": 22, "param": "syncTempo", "takeover": "jump" },
               42 ] })", "fallback", exists, test);
         expect (parsed && test.name == "Test", "profile parses");
         expect (test.controls.size() == 4, "unknown id and malformed entries skipped, the rest kept");
@@ -983,6 +983,10 @@ namespace
             r.p->runControllersForTest ({ test }, m);
         };
         auto near = [] (float x, float y) { return std::abs (x - y) < 0.005f; };
+        auto tight = [] (float x, float y) { return std::abs (x - y) < 0.0005f; };
+        const float u = 1.0f / 127.0f;   // one CC unit of a control's travel
+        // 22.8: these checks are about the path and the layer rules, so the test profile opts out
+        // of soft takeover ("takeover": "jump") - the position is the value, as in 22.1.
         setup (0.6f, 0.2f, 2);
         {
             const float a0 = cutoff->getValue(), b0 = cutoffB->getValue();
@@ -1034,10 +1038,10 @@ namespace
 
         CP::Profile mod;
         const bool modParsed = CP::parseText (R"({ "name": "Mod", "match": "Mod Box", "controls": [
-              { "name": "k1",    "cc": 30, "param": "@module:1", "fallback": "filterCutoff" },
-              { "name": "k2",    "cc": 31, "param": "@module:2", "fallback": "nope" },
-              { "name": "k3",    "cc": 34, "param": "@module:3" },
-              { "name": "k5",    "cc": 35, "param": "@module:5" },
+              { "name": "k1",    "cc": 30, "param": "@module:1", "fallback": "filterCutoff", "takeover": "jump" },
+              { "name": "k2",    "cc": 31, "param": "@module:2", "fallback": "nope", "takeover": "jump" },
+              { "name": "k3",    "cc": 34, "param": "@module:3", "takeover": "jump" },
+              { "name": "k5",    "cc": 35, "param": "@module:5", "takeover": "jump" },
               { "name": "k8",    "cc": 32, "param": "@module:8" },
               { "name": "k0",    "cc": 33, "param": "@module:0" },
               { "name": "what",  "cc": 36, "param": "@whatever" },
@@ -1045,7 +1049,7 @@ namespace
               { "name": "shift", "cc": 27, "param": "@shift" },
               { "name": "fine",  "cc": 29, "param": "@tempoFine" },
               { "name": "power", "cc": 42, "param": "@power" },
-              { "name": "vol",   "cc": 41, "param": "masterVol" } ] })", "fallback", exists, mod);
+              { "name": "vol",   "cc": 41, "param": "masterVol", "takeover": "jump" } ] })", "fallback", exists, mod);
         expect (modParsed && mod.controls.size() == 9 && mod.controls[7].kind == CP::Kind::Power, "special targets parse without a parameter check; @module:8, @module:0, @whatever skipped");
         expect (mod.hasModuleTargets() && ! test.hasModuleTargets(), "a profile knows whether it has @module / @select entries");
         expect (mod.controls.size() == 9 && mod.controls[1].kind == CP::Kind::Module && mod.controls[1].moduleSlot == 2 && mod.controls[1].param.isEmpty(),
@@ -1093,6 +1097,9 @@ namespace
             r.p->runControllersForTest ({ profile }, m);
         };
         auto sel = [&] { return r.p->getControllerSelection(); };
+        // 22.8: nobody knows where the controls stand (as after a start) - the next message of each
+        // only sets its reference.
+        auto forget = [&] { r.p->controllerInputsChangedForTest(); };
         using Frame = SynthyProcessor::ControllerFrame;
         using MC = CP::ModuleControl;
         const juce::String bp (Modules::kLayerBPrefix);
@@ -1144,18 +1151,90 @@ namespace
         expect (near (cutoff->getValue(), 0.3f) && cutoffB->getValue() == 1.0f, "nothing selected, focus B: the fallback's b id");
         r.set (Parameters::ID::layerFocus, 0.0f);
 
-        // Knob 8: first / last of the six selectable frames (the frame without controls is not one).
+        // Knob 8 (22.8) is relative: one module per kBankStep of travel, from the selected module -
+        // its position never names one. Six selectable frames (the one without controls is none).
+        forget();
         run (mod, { Ev { 1, 40, 0 } });
+        expect (! sel().valid, "knob 8, first message (at 0): only the reference - not the first module");
+        run (mod, { Ev { 1, 40, CP::kBankStep } });
         expect (sel().valid && sel().entryId == "filter" && ! sel().layerB && sel().bank == 0 && sel().bankCount == 2,
-                "knob 8 = 0: the first module, bank 1 of 2");
+                "nothing selected, knob 8 a step right: the first module, bank 1 of 2");
+        run (mod, { Ev { 1, 40, CP::kBankStep + 1 } });
+        const bool lessThanAStep = sel().entryId == "filter";
+        run (mod, { Ev { 1, 40, 2 * CP::kBankStep } });
+        expect (lessThanAStep && sel().entryId == "amp", "FILTER selected: less than a step moves nothing, the full step right is the next module in reading order");
         run (mod, { Ev { 1, 40, 127 } });
-        expect (sel().valid && sel().entryId == "reverb" && sel().bankCount == 1, "knob 8 = 127: the last of 6 selectable modules");
+        expect (sel().valid && sel().entryId == "reverb" && sel().bankCount == 1, "turned far right: clamped at the last of 6 selectable modules");
+        for (int i = 0; i < 3; ++i)
+            run (mod, { Ev { 1, 40, 127 } });
+        expect (sel().entryId == "reverb", "knob 8 at its end, turned further (127 repeated): stays on the last module, no wrap");
+        run (mod, { Ev { 1, 40, 127 - CP::kBankStep } });
+        expect (sel().entryId == "delay", "a step left: the previous module");
+        r.p->clearControllerSelection();
+        run (mod, { Ev { 1, 40, 127 - 2 * CP::kBankStep } });
+        expect (sel().valid && sel().entryId == "reverb", "nothing selected, knob 8 a step left: the last module");
         {
             const int rev = r.p->getControllerSelectionRevision();
             expect (r.p->selectControllerModule ("filter", false) && sel().entryId == "filter" && r.p->getControllerSelectionRevision() != rev,
                     "a click selects (profile with module targets)");
-            run (mod, { Ev { 1, 40, 126 } });
-            expect (sel().entryId == "filter", "knob 8 inside the same slot: a mouse selection is not overridden");
+            run (mod, { Ev { 1, 40, 127 - 2 * CP::kBankStep + 1 } });
+            const bool mouseKept = sel().entryId == "filter";
+            run (mod, { Ev { 1, 40, 127 - CP::kBankStep } });
+            expect (mouseKept && sel().entryId == "amp",
+                    "after a mouse selection knob 8 goes on from that module (FILTER -> AMP), never to the module its position would name");
+            // Nothing selected and a fast turn (more than two steps in one tick): exactly the
+            // first module going right, the last going left - not the second.
+            r.p->clearControllerSelection();
+            forget();
+            run (mod, { Ev { 1, 40, 40 } });
+            run (mod, { Ev { 1, 40, 40 + 2 * CP::kBankStep + 6 } });
+            const bool fastRight = sel().valid && sel().entryId == "filter";
+            r.p->clearControllerSelection();
+            run (mod, { Ev { 1, 40, 40 } });
+            expect (fastRight && sel().valid && sel().entryId == "reverb", "nothing selected, knob 8 turned fast: the first module going right, the last going left");
+            // Shift -> plain handover with a middle module selected: wherever Shift + knob 8 left
+            // the knob (right or left of its last plain position), nothing steps by itself.
+            r.p->selectControllerModule ("lfo1", false);
+            run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 110 }, Ev { 1, 27, 0 } });
+            run (mod, { Ev { 1, 40, 110 } });
+            const bool handoverRight = sel().entryId == "lfo1";
+            run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 5 }, Ev { 1, 27, 0 } });
+            run (mod, { Ev { 1, 40, 5 } });
+            const bool handoverLeft = sel().entryId == "lfo1";
+            // Shift released inside the tick: the plain value counts from the Shift position.
+            run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 90 }, Ev { 1, 27, 0 }, Ev { 1, 40, 91 } });
+            expect (handoverRight && handoverLeft && sel().entryId == "lfo1",
+                    "LFO 1 selected, Shift + knob 8 far right / far left, then plain: the travel made under Shift is no module travel - in the same tick either");
+            // The knob at its end has to go on: 14 modules, more than its travel reaches.
+            {
+                std::vector<Frame> many;
+                for (int i = 0; i < 14; ++i)
+                    many.push_back (Frame { "m" + juce::String (i), false, { MC { "attack", CP::ControlKind::Knob, 0 } } });
+                r.p->setControllerFrames (many);
+                const int ticks = CP::kBankStep / CP::kBankEndTravel;
+                forget();
+                run (mod, { Ev { 1, 40, 127 - 2 * CP::kBankStep } });
+                r.p->selectControllerModule ("m3", false);
+                run (mod, { Ev { 1, 40, 127 } });
+                const bool twoRight = sel().entryId == "m5";
+                for (int i = 0; i < ticks - 1; ++i)
+                    run (mod, { Ev { 1, 40, 127 } });
+                const bool notYetRight = sel().entryId == "m5";
+                run (mod, { Ev { 1, 40, 127 } });
+                const bool endRight = sel().entryId == "m6";
+                forget();
+                run (mod, { Ev { 1, 40, 2 * CP::kBankStep } });
+                r.p->selectControllerModule ("m8", false);
+                run (mod, { Ev { 1, 40, 0 } });
+                const bool twoLeft = sel().entryId == "m6";
+                for (int i = 0; i < ticks; ++i)
+                    run (mod, { Ev { 1, 40, 0 } });
+                expect (twoRight && notYetRight && endRight && twoLeft && sel().entryId == "m5",
+                        "knob 8 at its end, turned further (127 / 0 repeated): a bank step of end travel is the next / previous module");
+                r.p->setControllerFrames (sixFrames());
+                forget();
+            }
+            r.p->selectControllerModule ("filter", false);
             expect (! r.p->selectControllerModule ("nowhere", false) && ! r.p->selectControllerModule ("filter", true) && sel().entryId == "filter",
                     "a frame that is not on screen cannot be selected");
         }
@@ -1215,12 +1294,12 @@ namespace
         expect (sel().entryId == "filter" && sel().bank == 1, "the same with knob 8 = 127: still FILTER (not the last module), still bank 2 (a new Shift press starts a new reference)");
         run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 64 }, Ev { 1, 27, 0 } });
         run (mod, { Ev { 1, 40, 64 } });
-        expect (sel().entryId == "filter" && sel().bank == 1, "knob 8 left where Shift + knob 8 put it: its first plain message does not jump to another module");
+        expect (sel().entryId == "filter" && sel().bank == 1, "knob 8 left where Shift + knob 8 put it: its first plain message does not step to another module");
         // In the DAW program the selector's CC comes after the knobs: it is applied first all the same.
         r.p->selectControllerModule ("amp", false);
         r.set ("attack", 0.0f);
         setup (0.3f, 0.2f, 0);
-        run (mod, { Ev { 1, 30, 127 }, Ev { 1, 40, 0 } });
+        run (mod, { Ev { 1, 30, 127 }, Ev { 1, 40, 64 - CP::kBankStep } });   // a step left of AMP: FILTER
         expect (sel().entryId == "filter" && sel().bank == 0 && cutoff->getValue() == 1.0f && prm ("attack")->getValue() == attack0,
                 "selector and knob 1 in one tick: the module is picked first, the bank starts at 1");
 
@@ -1230,8 +1309,11 @@ namespace
         const bool stillHeld = r.p->controllerShiftHeldForTest();
         runMsg (mod, programChange);
         expect (stillHeld && ! r.p->controllerShiftHeldForTest(), "program-change SysEx releases Shift, another SysEx does not");
+        run (mod, { Ev { 1, 40, 127 - 2 * CP::kBankStep } });
+        const bool onlyReference = sel().entryId == "filter";
         run (mod, { Ev { 1, 40, 127 } });
-        expect (sel().entryId == "reverb", "after the SysEx knob 8 selects modules again");
+        expect (onlyReference && sel().entryId == "lfo1",
+                "after the SysEx knob 8 selects modules again - its first message only the reference (22.8: the program's positions are unknown), then two steps right");
         run (mod, { Ev { 1, 27, 127 } });
         r.p->controllerInputsChangedForTest();
         expect (! r.p->controllerShiftHeldForTest(), "MIDI inputs changed: Shift released");
@@ -1253,6 +1335,8 @@ namespace
         run (mod, {});
         r.p->clearControllerSelection();
         run (mod, { Ev { 1, 27, 127 }, Ev { 1, 40, 127 } });
+        for (int i = 0; i < 3; ++i)
+            run (mod, { Ev { 1, 40, 127 } });   // a bank step of travel at the knob's end
         expect (! sel().valid, "Shift + knob 8 with nothing selected: ignored");
         run (mod, { Ev { 1, 27, 0 } });
 
@@ -1305,6 +1389,328 @@ namespace
         r.p->clearControllerSelection();
         expect (! sel().valid, "clearControllerSelection: nothing selected");
 
+        //------------------------------------------------------------------------------------------
+        // Story 22.8: soft takeover - a control never writes its position, it moves the value it
+        // finds. Every row of the spec's matrix; "soft" has encoder knobs, a fader and the opt-out.
+        std::cout << "Controller profiles: soft takeover (22.8)" << std::endl;
+        CP::Profile soft;
+        {
+            using T = CP::Takeover;
+            expect (CP::encoderDelta (-1, 101, 2) == 0 && CP::encoderDelta (101, 111, 2) == 10 && CP::encoderDelta (111, 90, 2) == -21,
+                    "encoder: the first message is no travel, then the difference");
+            expect (CP::encoderDelta (127, 127, 2) == 2 && CP::encoderDelta (0, 0, 2) == -2 && CP::encoderDelta (50, 50, 2) == 0,
+                    "encoder: a repeated 127 / 0 is travel at the end, a repeated value elsewhere is none");
+            expect (tight (CP::scaledValue (0.5f, 0.2f, 0.6f), 0.75f) && tight (CP::scaledValue (0.5f, 0.6f, 0.3f), 0.25f),
+                    "scale: fader 0.2 -> 0.6 (half its way up) takes 0.5 to 0.75; 0.6 -> 0.3 (half its way down) halves it");
+            expect (CP::scaledValue (0.5f, 0.2f, 1.0f) == 1.0f && CP::scaledValue (0.5f, 0.2f, 0.0f) == 0.0f && CP::scaledValue (0.5f, 0.4f, 0.4f) == 0.5f
+                    && CP::scaledValue (0.3f, 1.0f, 1.0f) == 0.3f && CP::scaledValue (0.3f, 0.0f, 0.0f) == 0.3f,
+                    "scale: fader top / bottom = exactly max / min; a fader that did not move moves nothing, at an end either");
+            expect (tight (CP::takenOver (T::Encoder, 0.3f, 101, 111), 0.3f + 10.0f * u) && CP::takenOver (T::Encoder, 0.3f, -1, 101) == 0.3f
+                    && CP::takenOver (T::Scale, 0.5f, -1, 25) == 0.5f && tight (CP::takenOver (T::Jump, 0.5f, -1, 100), 100.0f * u)
+                    && CP::takenOver (T::Encoder, 0.99f, 0, 127) == 1.0f,
+                    "takeover: the first message moves nothing (encoder, scale); jump is the position; clamped at the top");
+            float travel = 0.0f;
+            const int s1 = CP::takeSteps (travel, 11.0f, 12.0f), s2 = CP::takeSteps (travel, 1.0f, 12.0f), s3 = CP::takeSteps (travel, 11.0f, 12.0f);
+            const int s4 = CP::takeSteps (travel, -11.0f, 12.0f), s5 = CP::takeSteps (travel, -25.0f, 12.0f);
+            expect (s1 == 0 && s2 == 1 && s3 == 0 && s4 == 0 && s5 == -3, "stepped travel: whole steps only, the rest is kept, a turn back counts afresh");
+            travel = 0.0f;
+            const int q1 = CP::steppedIndex (T::Encoder, 0, 4, 10, 41, travel), q2 = CP::steppedIndex (T::Encoder, 0, 4, 41, 42, travel);
+            expect (q1 == 0 && q2 == 1, "encoder on a combo with 4 items: a quarter of the travel (32 of 127) is one item");
+            travel = 0.0f;
+            const int w1 = CP::steppedIndex (T::Encoder, 0, 2, 60, 71, travel), w2 = CP::steppedIndex (T::Encoder, 0, 2, 71, 72, travel);
+            const int w3 = CP::steppedIndex (T::Encoder, 1, 2, 72, 60, travel);
+            expect (w1 == 0 && w2 == 1 && w3 == 0, "encoder on anything with two steps (a switch): a clear turn (a bank step) right is on, left is off");
+            expect (CP::steppedIndex (T::Jump, 0, 2, -1, 63, travel) == 0 && CP::steppedIndex (T::Jump, 0, 2, -1, 64, travel) == 1, "jump on a switch: on from CC 64, as in 22.5");
+            travel = 0.0f;
+            expect (CP::steppedIndex (T::Scale, 1, 4, 50, 127, travel) == 3 && CP::steppedIndex (T::Scale, 2, 4, 50, 0, travel) == 0
+                    && CP::steppedIndex (T::Scale, 2, 4, 127, 127, travel) == 2 && CP::steppedIndex (T::Encoder, 2, 4, -1, 90, travel) == 2
+                    && CP::steppedIndex (T::Jump, 0, 4, -1, 100, travel) == 3 && CP::steppedIndex (T::Encoder, 0, 0, 1, 2, travel) == -1,
+                    "stepped: fader top / bottom = last / first item, a repeated message and a first message move nothing, jump is the position, no items: nothing");
+            travel = 0.0f;
+            const int big1 = CP::steppedIndex (T::Encoder, 10, 300, 50, 51, travel), big2 = CP::steppedIndex (T::Encoder, 11, 300, 51, 49, travel);
+            expect (big1 == 11 && big2 == 9, "more than 127 items: one CC unit is one item, never two");
+            {
+                // A control with ends at rest flickers by one unit: no move. The ends always count.
+                int ref = -1, dir = 0;
+                const int first = CP::scaleReference (ref, 50, dir), up = CP::scaleReference (ref, 60, dir);
+                bool flickerIgnored = true;
+                for (int i = 0; i < 20; ++i)
+                    flickerIgnored = flickerIgnored && CP::scaleReference (ref, i % 2 == 0 ? 59 : 60, dir) == (i % 2 == 0 ? 59 : 60);
+                const int onward = CP::scaleReference (ref, 61, dir), back = CP::scaleReference (ref, 59, dir);
+                int endRef = 1, endDir = 1;
+                const int bottom = CP::scaleReference (endRef, 0, endDir);
+                expect (first == -1 && up == 50 && flickerIgnored && onward == 60 && back == 61 && ref == 59 && dir == -1 && bottom == 1 && endRef == 0,
+                        "scale: one unit against the last direction is no move (the reference stays), a unit onward and a real move back are, the bottom always counts");
+            }
+
+            const bool softParsed = CP::parseText (R"({ "name": "Soft", "match": "Soft Box", "controls": [
+                  { "name": "k1",   "cc": 30, "param": "@module:1", "fallback": "filterCutoff", "takeover": "encoder" },
+                  { "name": "k2",   "cc": 31, "param": "@module:2", "takeover": "encoder" },
+                  { "name": "k3",   "cc": 34, "param": "@module:3", "takeover": " Encoder " },
+                  { "name": "sel",  "cc": 40, "param": "@select" },
+                  { "name": "vol",  "cc": 41, "param": "masterVol" },
+                  { "name": "f2",   "cc": 46, "param": "@module:2", "takeover": "scale" },
+                  { "name": "odd",  "cc": 44, "param": "masterVol", "takeover": "pickup" },
+                  { "name": "jump", "cc": 45, "param": "masterVol", "takeover": "jump" },
+                  { "name": "pinA", "cc": 47, "param": "filterCutoff", "layer": "A" },
+                  { "name": "type", "cc": 48, "param": "filterType", "takeover": "encoder" } ] })", "fallback", exists, soft);
+            expect (softParsed && soft.controls.size() == 10 && soft.controls[0].takeover == T::Encoder && soft.controls[2].takeover == T::Encoder
+                    && soft.controls[4].takeover == T::Scale && soft.controls[5].takeover == T::Scale && soft.controls[7].takeover == T::Jump,
+                    "takeover parses: encoder (case and spaces ignored), scale, jump; a missing field is scale");
+            expect (soft.controls.size() == 10 && soft.controls[6].takeover == T::Scale && soft.controls[6].param == "masterVol",
+                    "an unknown takeover word keeps the entry, as scale");
+            if (minilab != nullptr && generic != nullptr)
+            {
+                int encoders = 0, scaled = 0;
+                bool rightKinds = true;
+                for (const auto& c : minilab->controls)
+                {
+                    if (c.takeover == T::Encoder) { ++encoders; rightKinds = rightKinds && c.kind == CP::Kind::Module; }
+                    if (c.kind == CP::Kind::Param)  { ++scaled;   rightKinds = rightKinds && c.takeover == T::Scale; }
+                }
+                bool genericScale = true;
+                for (const auto& c : generic->controls)
+                    genericScale = genericScale && c.takeover == T::Scale;
+                expect (encoders == 14 && scaled == 8 && rightKinds && genericScale,
+                        "MiniLab 3: the 14 entries of knobs 1..7 are encoders (knob 8, the selector, is relative by itself), the 8 fader entries scale; Generic (GM): all scale");
+            }
+
+            auto* vol = prm (Parameters::ID::masterVol);
+            const float volBefore = vol->getValue();
+            run (soft, {});
+            r.set (Parameters::ID::layerFocus, 0.0f);
+            r.p->setControllerFrames (sixFrames());
+            r.p->selectControllerModule ("filter", false);
+
+            // Encoder: first touch, turn, at its end, the mouse in between.
+            forget();
+            cutoff->setValueNotifyingHost (0.3f);
+            const float c0 = cutoff->getValue();
+            run (soft, { Ev { 1, 30, 101 } });
+            expect (cutoff->getValue() == c0, "encoder, first touch (knob at 101, Cutoff at 0.30): Cutoff stays");
+            run (soft, { Ev { 1, 30, 111 } });
+            expect (tight (cutoff->getValue(), c0 + 10.0f * u), "encoder, 101 -> 111: Cutoff + 10/127");
+            run (soft, { Ev { 1, 30, 127 } });
+            const float atEnd = cutoff->getValue();
+            run (soft, { Ev { 1, 30, 127 } });
+            const float oneTick = cutoff->getValue();
+            run (soft, { Ev { 1, 30, 127 } });
+            expect (tight (atEnd, c0 + 26.0f * u) && tight (oneTick, atEnd + (float) CP::kEncoderEndTravel * u)
+                    && tight (cutoff->getValue(), atEnd + 2.0f * (float) CP::kEncoderEndTravel * u),
+                    "encoder at its end (127 repeated): the value keeps rising a little per tick");
+            cutoff->setValueNotifyingHost (0.2f);
+            const float m0 = cutoff->getValue();
+            run (soft, { Ev { 1, 30, 120 } });
+            expect (tight (cutoff->getValue(), m0 - 7.0f * u), "value changed by the mouse, then the knob turned: it goes on from the mouse's value");
+
+            // Module change: the knob moves the new module's control from that control's own value.
+            r.p->selectControllerModule ("amp", false);
+            prm ("attack")->setValueNotifyingHost (0.4f);
+            const float a0 = prm ("attack")->getValue(), c1 = cutoff->getValue();
+            run (soft, { Ev { 1, 30, 125 } });
+            expect (tight (prm ("attack")->getValue(), a0 + 5.0f * u) && cutoff->getValue() == c1,
+                    "another module selected, knob 1 + 5: its 1st control rises by 5/127 from its own value, FILTER's stays");
+
+            // Encoder on a combo and on a switch.
+            r.p->selectControllerModule ("filter", false);
+            r.set ("noiseType", 0.0f);
+            forget();
+            run (soft, { Ev { 1, 31, 10 } });
+            run (soft, { Ev { 1, 31, 41 } });
+            const bool notYet = raw ("noiseType") == 0.0f;
+            run (soft, { Ev { 1, 31, 42 } });
+            const bool nextItem = raw ("noiseType") == 1.0f;
+            run (soft, { Ev { 1, 31, 10 } });
+            expect (notYet && nextItem && raw ("noiseType") == 0.0f,
+                    "encoder on a combo with 4 items: a quarter of the travel right is the next item, the same way back the previous one");
+            r.set ("filterOn", 0.0f);
+            run (soft, { Ev { 1, 34, 60 } });
+            run (soft, { Ev { 1, 34, 60 + CP::kBankStep - 1 } });
+            const bool stillOff = raw ("filterOn") < 0.5f;
+            run (soft, { Ev { 1, 34, 60 + CP::kBankStep } });
+            const bool nowOn = raw ("filterOn") > 0.5f;
+            run (soft, { Ev { 1, 34, 90 } });
+            const bool staysOn = raw ("filterOn") > 0.5f;
+            run (soft, { Ev { 1, 34, 90 - CP::kBankStep } });
+            expect (stillOff && nowOn && staysOn && raw ("filterOn") < 0.5f,
+                    "encoder on a switch: a clear turn right is on (further right stays on), a clear turn left is off");
+
+            // The travel belongs to its target: begun on one module's switch, it does not finish on
+            // the next module's.
+            {
+                r.p->setControllerFrames ({ Frame { "x", false, { MC { "filterOn", CP::ControlKind::Toggle, 0 } } },
+                                            Frame { "y", false, { MC { "bfilterOn", CP::ControlKind::Toggle, 0 } } } });
+                r.set ("filterOn", 0.0f);
+                r.set ("bfilterOn", 0.0f);
+                r.p->selectControllerModule ("x", false);
+                forget();
+                run (soft, { Ev { 1, 30, 40 } });
+                run (soft, { Ev { 1, 30, 40 + CP::kBankStep - 1 } });
+                const bool xOff = raw ("filterOn") < 0.5f;
+                r.p->selectControllerModule ("y", false);
+                run (soft, { Ev { 1, 30, 40 + CP::kBankStep } });
+                const bool yOff = raw ("bfilterOn") < 0.5f && raw ("filterOn") < 0.5f;
+                run (soft, { Ev { 1, 30, 40 + 2 * CP::kBankStep } });
+                expect (xOff && yOff && raw ("bfilterOn") > 0.5f,
+                        "11 units on one module's switch, another module selected, 1 more unit: its switch does not flip - a full clear turn does");
+                // The same switch, changed by the mouse in between: the travel starts afresh too.
+                r.set ("bfilterOn", 0.0f);
+                run (soft, { Ev { 1, 30, 40 + 3 * CP::kBankStep - 1 } });
+                const bool elevenAgain = raw ("bfilterOn") < 0.5f;
+                r.set ("bfilterOn", 1.0f);
+                run (soft, { Ev { 1, 30, 40 + 3 * CP::kBankStep - 1 } });
+                r.set ("bfilterOn", 0.0f);
+                run (soft, { Ev { 1, 30, 40 + 3 * CP::kBankStep } });
+                expect (elevenAgain && raw ("bfilterOn") < 0.5f, "a switch changed by the mouse in between: the travel made before does not count");
+                r.set ("bfilterOn", 0.0f);
+            }
+            // A list whose parameter holds a value the list does not show: its first item must be
+            // reachable (by any real move), but not by the control's first message.
+            {
+                MC list;
+                list.paramId = "noiseType";
+                list.kind = CP::ControlKind::List;
+                list.listCount = [] { return 2; };
+                list.listValues = [] { return juce::Array<int> { 2, 3 }; };
+                r.p->setControllerFrames ({ Frame { "list", false, { list } } });
+                r.p->selectControllerModule ("list", false);
+                r.set ("noiseType", 0.0f);
+                forget();
+                run (soft, { Ev { 1, 30, 60 } });
+                const bool listFirstTouch = raw ("noiseType") == 0.0f;
+                run (soft, { Ev { 1, 30, 59 } });
+                expect (listFirstTouch && raw ("noiseType") == 2.0f,
+                        "list that does not hold the parameter's value: the first message moves nothing, a turn left picks the first item");
+                r.set ("noiseType", 0.0f);
+            }
+            // A program change of the device (its SysEx): the positions are unknown again.
+            {
+                r.p->setControllerFrames (sixFrames());
+                r.p->selectControllerModule ("filter", false);
+                run (soft, { Ev { 1, 30, 50 } });
+                cutoff->setValueNotifyingHost (0.3f);
+                const float p0 = cutoff->getValue();
+                runMsg (soft, programChange);
+                run (soft, { Ev { 1, 30, 90 } });
+                const bool forgotten = cutoff->getValue() == p0;
+                run (soft, { Ev { 1, 30, 95 } });
+                expect (forgotten && tight (cutoff->getValue(), p0 + 5.0f * u),
+                        "program-change SysEx: a knob's next message only says where it stands in the new program, then it moves the value by its turn");
+            }
+            // A parameter that snaps: one CC unit per tick must add up, not be lost each time.
+            {
+                cutoff->setValueNotifyingHost (0.0f);
+                forget();
+                for (int v = 40; v <= 50; ++v)
+                    run (soft, { Ev { 1, 30, v } });
+                expect (near (cutoff->getValue(), 10.0f * u), "Cutoff at its range start, knob 1 turned by 10 single units: it has left the start by about 10/127");
+            }
+            // A fixed entry on a parameter with exactly two steps (a choice): a switch like any other.
+            {
+                r.set ("filterType", 0.0f);
+                forget();
+                run (soft, { Ev { 1, 48, 60 } });
+                run (soft, { Ev { 1, 48, 60 + CP::kBankStep - 1 } });
+                const bool typeStays = raw ("filterType") == 0.0f;
+                run (soft, { Ev { 1, 48, 60 + CP::kBankStep } });
+                expect (typeStays && raw ("filterType") == 1.0f, "fixed entry on a two-item choice: a clear turn right is its second item, as on a switch of a module");
+                r.set ("filterType", 0.0f);
+            }
+
+            // A knob on a parameter with few steps (an integer, a choice) steps it - a CC unit at a
+            // time would snap back on every message.
+            r.p->setControllerFrames ({ Frame { "noise", false, { MC { "noiseType", CP::ControlKind::Knob, 0 } } } });
+            r.p->selectControllerModule ("noise", false);
+            r.set ("noiseType", 1.0f);
+            forget();
+            run (soft, { Ev { 1, 30, 60 } });
+            run (soft, { Ev { 1, 30, 92 } });
+            const bool stepped = raw ("noiseType") == 2.0f;
+            run (soft, { Ev { 1, 30, 91 } });
+            expect (stepped && raw ("noiseType") == 2.0f, "encoder on a knob whose parameter has 4 steps: a quarter of the travel is one step");
+
+            // A control with ends ("scale") on a combo: it meets the list at its ends.
+            r.p->setControllerFrames (sixFrames());
+            r.p->selectControllerModule ("filter", false);
+            r.set ("noiseType", 1.0f);
+            forget();
+            run (soft, { Ev { 1, 46, 40 } });
+            const bool comboStays = raw ("noiseType") == 1.0f;
+            run (soft, { Ev { 1, 46, 127 } });
+            const bool comboTop = raw ("noiseType") == 3.0f;
+            run (soft, { Ev { 1, 46, 0 } });
+            expect (comboStays && comboTop && raw ("noiseType") == 0.0f, "scale on a combo: first touch nothing, top = last item, bottom = first item");
+
+            // Fader (the default, "scale"): first touch, up, down, the ends, a repeated message.
+            vol->setValueNotifyingHost (0.5f);
+            forget();
+            run (soft, { Ev { 1, 41, 27 } });
+            const bool volStays = vol->getValue() == 0.5f;
+            run (soft, { Ev { 1, 41, 77 } });
+            expect (volStays && tight (vol->getValue(), 0.75f), "fader, first touch: MASTER VOL 0.50 stays; then half of its remaining way up: 0.50 -> 0.75");
+            vol->setValueNotifyingHost (0.5f);
+            forget();
+            run (soft, { Ev { 1, 41, 80 } });
+            run (soft, { Ev { 1, 41, 40 } });
+            expect (tight (vol->getValue(), 0.25f), "fader down by half of its way: MASTER VOL halves");
+            run (soft, { Ev { 1, 41, 127 } });
+            const bool volTop = vol->getValue() == 1.0f;
+            run (soft, { Ev { 1, 41, 0 } });
+            expect (volTop && vol->getValue() == 0.0f, "fader to the top / bottom: MASTER VOL exactly max / min");
+            vol->setValueNotifyingHost (0.5f);
+            run (soft, { Ev { 1, 41, 0 } });
+            const bool repeatStays = vol->getValue() == 0.5f;
+            run (soft, { Ev { 1, 41, 13 } });
+            expect (repeatStays && near (vol->getValue(), 0.5f + 0.5f * 13.0f * u),
+                    "fader resting at the bottom, value moved by the mouse: a repeated message moves nothing, a move up goes on from the mouse's value");
+
+            // A fader at rest flickers by one unit: the value must not creep towards the fader.
+            vol->setValueNotifyingHost (0.5f);
+            forget();
+            run (soft, { Ev { 1, 41, 90 } });
+            run (soft, { Ev { 1, 41, 100 } });
+            const float rested = vol->getValue();
+            bool flickerStays = rested > 0.5f;
+            for (int i = 0; i < 20; ++i)
+            {
+                run (soft, { Ev { 1, 41, i % 2 == 0 ? 99 : 100 } });
+                flickerStays = flickerStays && vol->getValue() == rested;
+            }
+            run (soft, { Ev { 1, 41, 97 } });
+            expect (flickerStays && vol->getValue() < rested, "fader at rest, 20 flickers of one unit: the value stays where it was; a real move of 3 units down moves it");
+
+            // An unknown word behaves as scale; the opt-out is absolute as in 22.1.
+            vol->setValueNotifyingHost (0.5f);
+            forget();
+            run (soft, { Ev { 1, 44, 100 } });
+            const bool oddStays = vol->getValue() == 0.5f;
+            run (soft, { Ev { 1, 45, 100 } });
+            expect (oddStays && near (vol->getValue(), 100.0f * u), "unknown takeover word: first touch moves nothing (scale); \"takeover\": \"jump\": the position at once");
+
+            // Nothing selected: the fallback, by the focus; in A+B linked editing moves B alike.
+            r.p->clearControllerSelection();
+            setup (0.3f, 0.2f, 1);
+            forget();
+            const float fa = cutoff->getValue(), fb = cutoffB->getValue();
+            run (soft, { Ev { 1, 30, 50 } });
+            run (soft, { Ev { 1, 30, 60 } });
+            expect (cutoff->getValue() == fa && tight (cutoffB->getValue(), fb + 10.0f * u), "nothing selected, focus B: the knob moves the fallback's b id from its own value");
+            setup (0.6f, 0.2f, 2);
+            const float la = cutoff->getValue(), lb = cutoffB->getValue();
+            run (soft, { Ev { 1, 30, 70 } });
+            expect (tight (cutoff->getValue(), la + 10.0f * u) && tight (cutoffB->getValue(), lb + 10.0f * u), "A+B: A moves by the knob's turn, linked editing moves B by the same");
+            setup (0.6f, 0.2f, 2);
+            forget();
+            const float pa = cutoff->getValue(), pb = cutoffB->getValue();
+            run (soft, { Ev { 1, 47, 40 } });
+            const bool pinFirst = cutoff->getValue() == pa && cutoffB->getValue() == pb;
+            run (soft, { Ev { 1, 47, 127 } });
+            expect (pinFirst && cutoff->getValue() == 1.0f && cutoffB->getValue() == pb, "A+B, an entry pinned to A with the default takeover: A only, B is not carried along");
+            r.set (Parameters::ID::layerFocus, 0.0f);
+            vol->setValueNotifyingHost (volBefore);
+            run (mod, {});
+        }
+
         // Fine tempo: one message per detent, none lost inside a tick.
         r.set (Parameters::ID::syncTempo, 120.0f);
         run (mod, { Ev { 1, 29, 65 }, Ev { 1, 29, 65 }, Ev { 1, 29, 65 } });
@@ -1346,19 +1752,30 @@ namespace
                         r.set (Parameters::ID::layerFocus, 0.0f);
                         setParam (*r.p, globals[i], prm (globals[i])->getNormalisableRange().start);
                         r.set (Parameters::ID::layerFocus, (float) focus);
+                        forget();
+                        run (*minilab, { Ev { 1, ccs[i], 64 } });
+                        const bool stays = prm (globals[i])->getValue() == 0.0f;   // first touch
                         run (*minilab, { Ev { 1, ccs[i], 127 } });
-                        fadersOk = fadersOk && prm (globals[i])->getValue() == 1.0f;
+                        fadersOk = fadersOk && stays && prm (globals[i])->getValue() == 1.0f;
                     }
-            expect (fadersOk, "MiniLab 3: faders 1..4 move MASTER VOL, TEMPO, A LVL, B LVL in focus A, B and A+B, both programs");
+            expect (fadersOk, "MiniLab 3: faders 1..4 move MASTER VOL, TEMPO, A LVL, B LVL in focus A, B and A+B, both programs - nothing on first touch, the maximum at the top");
             setup (0.3f, 0.2f, 0);
-            run (*minilab, { Ev { 1, 74, 127 } });
-            const bool arturiaKnob = cutoff->getValue() == 1.0f;
+            forget();
+            const float k0 = cutoff->getValue();
+            run (*minilab, { Ev { 1, 74, 100 } });
+            const bool arturiaFirst = cutoff->getValue() == k0;
+            run (*minilab, { Ev { 1, 74, 110 } });
+            const bool arturiaKnob = arturiaFirst && tight (cutoff->getValue(), k0 + 10.0f * u);
             setup (0.3f, 0.2f, 0);
-            run (*minilab, { Ev { 1, 86, 127 } });
-            expect (arturiaKnob && cutoff->getValue() == 1.0f, "MiniLab 3, nothing selected: knob 1 (CC 74 / 86) moves FILTER Cutoff as in 22.1");
+            run (*minilab, { Ev { 1, 86, 100 } });
+            const bool dawFirst = cutoff->getValue() == k0;
+            run (*minilab, { Ev { 1, 86, 110 } });
+            expect (arturiaKnob && dawFirst && tight (cutoff->getValue(), k0 + 10.0f * u),
+                    "MiniLab 3, nothing selected: knob 1 (CC 74 / 86) moves FILTER Cutoff from its value by the knob's turn, nothing on first touch");
             const float glide0 = prm ("glideTime")->getValue();
             r.p->setControllerFrames ({});
-            run (*minilab, { Ev { 1, 16, glide0 > 0.5f ? 0 : 127 }, Ev { 1, 117, glide0 > 0.5f ? 0 : 127 } });
+            run (*minilab, { Ev { 1, 16, 0 }, Ev { 1, 117, 0 } });
+            run (*minilab, { Ev { 1, 16, 127 }, Ev { 1, 117, 127 } });
             expect (prm ("glideTime")->getValue() == glide0 && ! sel().valid, "MiniLab 3: knob 8 no longer moves GLIDE; with no frame list it selects nothing");
             r.set (Parameters::ID::syncTempo, 120.0f);
             run (*minilab, { Ev { 1, 27, 127 }, Ev { 1, 29, 65 }, Ev { 1, 27, 0 } });
@@ -1546,6 +1963,13 @@ namespace
                 const float modFirst = raw ("noiseType");
                 run (mod, { Ev { 1, 31, 127 } });
                 expect (modFirst == 3.0f && raw ("noiseType") == 0.0f, "list combo with itemValues: the first / last item as shown, the parameter gets the item's own value (3 / 0)");
+                forget();
+                run (soft, { Ev { 1, 31, 100 } });
+                const bool listStays = raw ("noiseType") == 0.0f;
+                run (soft, { Ev { 1, 31, 68 } });
+                expect (listStays && raw ("noiseType") == 2.0f,
+                        "22.8, encoder on a list combo (4 items, on the last): a quarter of the travel left is the item shown before it, with its own value (2)");
+                run (mod, {});
                 r.set ("filterType", 0.0f);
                 run (mod, { Ev { 1, 34, 127 } });
                 const float paramLast = raw ("filterType");

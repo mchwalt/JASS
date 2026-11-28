@@ -224,11 +224,16 @@ message-thread, checked by `JASS_Render --selftest`.
   and intermediate values inside one tick collapse to the last one.
 - **Special targets (Story 22.5, processor side).** `param` may be `@module:1..7`
   (the n-th control of the selected module's current bank, with an optional
-  `fallback` id used while nothing is selected), `@select` (picks the module
-  by its position; with Shift held it moves the bank relatively — the first
-  message only sets a reference, every `kBankStep` CC units of travel is one
-  bank up / down, clamped, and a repeated 127 / 0 at the knob's end counts as
-  travel), `@shift`, `@tempoFine` (relative encoder,
+  `fallback` id used while nothing is selected), `@select` (relative, Story
+  22.8: the first message only sets a reference, every `kBankStep` CC units of
+  travel is one step, clamped, a repeated 127 / 0 at the knob's end counts as
+  travel, a turn back starts counting afresh — a step is the next / previous
+  module in reading order from the selected one (nothing selected: exactly the
+  first going right, the last going left), or with Shift held the next /
+  previous bank; the knob's position never names a module or a bank, pass 1
+  owns its reference and takes the position reached under Shift as the
+  reference of the plain branch; its `"takeover"` is not read), `@shift`,
+  `@tempoFine` (relative encoder,
   TEMPO ±1 BPM per message), or `@power` (a button: each press toggles the
   selected frame's enable parameter, pushed as `ControllerFrame::enableParam`;
   presses are counted per CC in `ccPresses`, so press and release inside one
@@ -299,8 +304,41 @@ message-thread, checked by `JASS_Render --selftest`.
   first profile whose `match` occurs in an enabled MIDI input name (case and
   spaces ignored); else `Generic (GM)`. One profile at a time: the JUCE
   standalone merges every input into one buffer without a port id.
-- Values: absolute `v / 127` onto the normalised range (the parameter's skew
-  applies), jump on first touch. Not part of presets.
+- **Values — soft takeover (Story 22.8).** A control never writes its
+  position; it moves the value the parameter has at that moment (so a mouse
+  edit, a preset load, RESET, a module / bank change or a layer switch in
+  between needs no special case). The entry's `"takeover"` says how:
+  `"encoder"` adds the knob's turn (`now - last`, 127 CC units = the full
+  normalised range; a repeated 127 / 0 at its end counts as
+  `kEncoderEndTravel` per poll tick, so the value stays reachable);
+  `"scale"` (the default, safe for unknown hardware) moves the value by the
+  same share of its remaining way as the control moved of its own, so both
+  meet at the ends; `"jump"` is the 22.1 absolute `v / 127`. The message
+  thread keeps, per (channel, CC), `ControllerTouch`: the last value seen
+  (`-1` = unknown — after a start or a change of the MIDI inputs the first
+  message only sets it), a travel accumulator, and what the control last asked
+  of a parameter that snapped. A parameter with 2..128 steps (a choice, an
+  integer, a switch, a float with a coarse interval) would snap back on every
+  CC unit, so it is stepped by travel (`steppedIndex`: the full travel covers
+  all items, at most one item per CC unit; anything with exactly two steps is
+  a switch and flips after `kBankStep`, on either path); combos and lists of a
+  module go the same way by their item index. A `scale` fader on a switch
+  switches it on at its top and off at its bottom, and in between once it has
+  gone two thirds of its remaining way towards that end. The travel belongs to
+  one target in one state (`stepParam` / `stepIndex`): another module, bank,
+  layer or an index changed elsewhere starts it afresh. A list whose parameter
+  holds a value it does not show counts as on its first item and is written
+  by the first real move. `scale` has a hysteresis of one CC unit
+  (`scaleReference`): scaling up and down are not inverse, so a resting fader
+  that flickers would otherwise drag the value towards its own position.
+  The MiniLab's program-change SysEx forgets all positions like an input
+  change does - each program has its own CCs. A finer-snapping parameter continues
+  from the unsnapped value the control asked for, as long as nobody else moved
+  it. The math is pure (`encoderDelta`, `scaledValue`, `takeSteps`,
+  `takenOver`, `steppedIndex` in `ControllerProfiles.h`) and selftest-covered;
+  `applyControllerValue` stays the single write (gesture, `linkSuspended`).
+  No pickup dead zone, no smoothing, no feedback to the device. Not part of
+  presets.
 
 ---
 

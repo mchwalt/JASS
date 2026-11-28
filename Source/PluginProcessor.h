@@ -609,17 +609,43 @@ private:
     // Story 22.5 (message thread only).
     const ControllerProfiles::Profile* activeControllerProfile() const;
     void controllerProfilePicked();                               // after every re-pick: publish Shift CC, gate the selection
-    void controllerInputsChanged();                               // a lost Shift release must not stick
+    void controllerInputsChanged();                               // a lost Shift release must not stick; control positions are unknown again
     void applyControllerValue (juce::RangedAudioParameter& p, float v01, bool pinned);
-    void applyModuleControl (const ControllerProfiles::ModuleControl& mc, int ccValue7);
+    // Story 22.8 — soft takeover. Per (channel, CC), message thread only: where the control stood
+    // at its last message (-1 = not known yet: its first message moves nothing), its travel towards
+    // the next step of a stepped target (CC units), and what it last asked of a parameter that
+    // snapped (`wanted` vs. the value `written`), so small moves are not lost to the snapping.
+    // The travel belongs to one stepped target in one state (`stepParam` on item `stepIndex`): a
+    // new target, or an index somebody else changed, starts it afresh - what was turned on one
+    // module's switch must not flip the next one's. `scaleRef` / `scaleDir`: where a control with
+    // ends last really stood and which way it went (ControllerProfiles::scaleReference).
+    struct ControllerTouch
+    {
+        int last = -1;
+        float travel = 0.0f;
+        const juce::RangedAudioParameter* param = nullptr;
+        float wanted = 0.0f, written = 0.0f;
+        const juce::RangedAudioParameter* stepParam = nullptr;
+        int stepIndex = -1;
+        int scaleRef = -1, scaleDir = 0;
+    };
+    std::array<ControllerTouch, kCcSlots> controllerTouch {};
+    // The MiniLab changed its program: each program has its own CCs, so the positions noted for
+    // the other one may be stale. Set at capture (audio thread), taken by the poll.
+    std::atomic<bool> ccForgetPositions { false };
+    // A stepped target: item `index` of `count` -> the item the control moves it to (-1: none).
+    int stepControllerParam (size_t at, const juce::RangedAudioParameter& p, ControllerProfiles::Takeover mode,
+                             int index, int count, int last, int now);
+    // One hardware control moves one parameter by its takeover mode (`last` / `now`: CC values).
+    void moveControllerParam (juce::RangedAudioParameter& p, ControllerProfiles::Takeover mode, size_t at, int last, int now, bool pinned);
+    void applyModuleControl (const ControllerProfiles::ModuleControl& mc, ControllerProfiles::Takeover mode, size_t at, int last, int now);
     const ControllerFrame* selectedControllerFrame() const;
     void setControllerSelection (const juce::String& entryId, bool layerB, int bank);
     std::vector<ControllerFrame> controllerFrames;                // selectable frames on screen, reading order
     ControllerSelection controllerSel;                            // bankCount is filled by the getter
     int controllerSelRevision = 0;
-    int controllerLastSelectIndex = -1;                           // the last index knob 8 produced
     int controllerBankRef = -1;                                   // the selector's last value seen under Shift; -1 = none yet
-    int controllerBankTravel = 0;                                 // its travel since the last bank step, in CC units
+    float controllerBankTravel = 0.0f;                            // its travel since the last bank step, in CC units
     static int controllerBankCount (const ControllerFrame& f);    // highest bank of its controls + 1
 
     JUCE_DECLARE_WEAK_REFERENCEABLE(SynthyProcessor)   // for lifetime-guarding async (callAsync) callbacks

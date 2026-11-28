@@ -29,13 +29,26 @@
 //   "@module:1" .. "@module:7"  the n-th control of the selected module's current bank; an optional
 //                               "fallback": "<param id>" is what the entry moves while no module is
 //                               selected (the fixed 22.1 mapping)
-//   "@select"                   picks the module by its position; while Shift is held, turning it
-//                               right / left is the next / previous bank
+//   "@select"                   turning it right / left selects the next / previous module; while
+//                               Shift is held, the next / previous bank. Always relative.
 //   "@shift"                    the controller's momentary Shift (CC >= 64 = held); several entries
 //                               are the same Shift (a device may use one CC per program)
 //   "@tempoFine"                a relative encoder (binary offset 64): TEMPO +-1 BPM per message
 //   "@power"                    a button: each press (CC >= 64) switches the selected module on or
 //                               off (its enable switch); several entries, one per device program
+//
+// Story 22.8: a control never writes its position, it moves the value it finds. How is the entry's
+// optional "takeover":
+//
+//   "scale"    (the default, safe for unknown hardware) anything with physical ends, a fader: moved
+//              up by a share of its remaining way up, the value rises by the same share of its own
+//              remaining way (down likewise) - so both meet at the ends, top = maximum, always
+//   "encoder"  an endless knob: what it was turned by is added to the value; its full travel (127
+//              steps) is the parameter's full range. At its end it keeps sending 127 / 0 while
+//              turned further - that keeps moving the value
+//   "jump"     the 22.1 behaviour, an explicit opt-out: the position is the value
+//
+// The first message of a control (its position is not known yet) moves nothing.
 //
 // A bank is up to seven controls ("page" is taken by the step pages of STEP SEQ / PERC); which
 // bank a control lies in comes with the pushed control (ModuleControl::bank).
@@ -55,9 +68,13 @@ public:
     // The selector is an endless encoder emulating an absolute value: at an end it keeps sending
     // 127 (or 0) while turned further — a repeated end value counts as this much travel.
     static constexpr int kBankEndTravel = 4;
+    // The same for a knob that moves a value ("takeover": "encoder"): one poll tick with the end
+    // value repeated moves the value by this many CC units.
+    static constexpr int kEncoderEndTravel = 2;
 
     enum class Pin { Follow, A, B };
     enum class Kind { Param, Module, Select, Shift, TempoFine, Power };   // Param = a fixed parameter id
+    enum class Takeover { Scale, Encoder, Jump };                         // Story 22.8, see above
     struct Control
     {
         juce::String name;
@@ -67,6 +84,7 @@ public:
         Pin layer = Pin::Follow;
         Kind kind = Kind::Param;
         int moduleSlot = 0;       // Kind::Module: 1..kBankSize
+        Takeover takeover = Takeover::Scale;   // Kind::Param / Module: how the control moves the value
     };
     struct Profile
     {
@@ -113,7 +131,7 @@ public:
     // Pure value math (Story 22.5).
 
     // A knob's travel split into `count` equal parts: which part `v01` is in. -1 when count < 1.
-    // Used for the module selector, the bank selector and a combo's item.
+    // Used for a combo's item under "takeover": "jump" (the position is the value).
     static int stepIndex (float v01, int count) noexcept
     {
         if (count < 1) return -1;
@@ -126,6 +144,93 @@ public:
     // What one message counts: its direction only. Turned fast, the MiniLab 3 accelerates to
     // +-2 / +-3 per message (measured 2026-11-27) — a fine control wants one step per message.
     static int relativeStep (int ccValue) noexcept { return ccValue > 64 ? 1 : ccValue < 64 ? -1 : 0; }
+    //----------------------------------------------------------------------------------------------
+    // Story 22.8: soft takeover. `last` / `now` are CC values 0..127, `last` < 0 = not known yet.
+
+    // What an endless knob was turned by, in CC units. Its first message only says where it stands;
+    // at an end it repeats 127 / 0 while turned further, which counts as `endTravel`.
+    static int encoderDelta (int last, int now, int endTravel) noexcept
+    {
+        if (last < 0)    return 0;
+        if (now != last) return now - last;
+        if (now >= 127)  return endTravel;
+        if (now <= 0)    return -endTravel;
+        return 0;
+    }
+    // Value scaling: the control went from fPrev to fNow (0..1) - the value p (0..1) goes the same
+    // share of its own remaining way in that direction. Control at an end = value at that end.
+    static float scaledValue (float p, float fPrev, float fNow) noexcept
+    {
+        if (fNow > fPrev)
+            return fNow >= 1.0f ? 1.0f : p + (1.0f - p) * (fNow - fPrev) / (1.0f - fPrev);
+        if (fNow < fPrev)
+            return fNow <= 0.0f ? 0.0f : p * fNow / fPrev;
+        return p;
+    }
+    // A control with ends at rest may flicker by one CC unit, and scaling up and down are not
+    // inverse - the value would creep towards the control's position. So a one-unit move against
+    // the direction of the control's previous move is no move (the ends always count). `ref` is
+    // where the control last really stood (< 0 = not known yet), `dir` its last direction.
+    // Returns where to scale from: -1 on the first message, `now` (= nothing moves) for a move
+    // that is ignored, else the old reference - which then becomes `now`.
+    static int scaleReference (int& ref, int now, int& dir) noexcept
+    {
+        if (ref < 0) { ref = now; dir = 0; return -1; }
+        if (now == ref) return now;
+        const int d = now > ref ? 1 : -1;
+        if (std::abs (now - ref) == 1 && dir != 0 && d != dir && now > 0 && now < 127)
+            return now;
+        const int from = ref;
+        ref = now;
+        dir = d;
+        return from;
+    }
+    // Travel that steps (the module and bank selector, combos, lists, switches): `d` is added to
+    // `travel`, every whole `step` of it is one step, the rest stays. Turned back: counted afresh.
+    static int takeSteps (float& travel, float d, float step) noexcept
+    {
+        if ((d > 0.0f && travel < 0.0f) || (d < 0.0f && travel > 0.0f))
+            travel = 0.0f;
+        travel += d;
+        const int steps = (int) (travel / step);   // towards zero
+        travel -= (float) steps * step;
+        return steps;
+    }
+    // Where a continuous value p (0..1) goes.
+    static float takenOver (Takeover mode, float p, int last, int now) noexcept
+    {
+        if (mode == Takeover::Jump) return (float) now / 127.0f;
+        if (last < 0)               return p;
+        if (mode == Takeover::Encoder)
+            return juce::jlimit (0.0f, 1.0f, p + (float) encoderDelta (last, now, kEncoderEndTravel) / 127.0f);
+        return juce::jlimit (0.0f, 1.0f, scaledValue (p, (float) last / 127.0f, (float) now / 127.0f));
+    }
+    // Where a stepped value goes: item `index` of `count` (a combo, a list, a parameter with few
+    // steps). -1 when there is nothing to pick. An encoder's full travel steps through all items
+    // (never more than one item per CC unit); anything with exactly two steps is a switch: a clear
+    // turn (kBankStep) right is on, left is off. `travel` is the control's accumulator, in CC units.
+    static int steppedIndex (Takeover mode, int index, int count, int last, int now, float& travel) noexcept
+    {
+        if (count < 1) return -1;
+        index = juce::jlimit (0, count - 1, index);
+        if (mode == Takeover::Jump)
+            return stepIndex ((float) now / 127.0f, count);   // two steps: on from CC 64
+        if (last < 0 || (mode == Takeover::Scale && now == last))
+            return index;
+        const float step = juce::jmax (1.0f, 127.0f / (float) count);
+        int steps = 0;
+        if (mode == Takeover::Encoder)
+            steps = takeSteps (travel, (float) encoderDelta (last, now, kEncoderEndTravel), count == 2 ? (float) kBankStep : step);
+        else
+        {
+            if (now >= 127) return count - 1;
+            if (now <= 0)   return 0;
+            const float pos = juce::jlimit (0.0f, 1.0f, ((float) index + 0.5f) / (float) count + travel / 127.0f);
+            steps = takeSteps (travel, (scaledValue (pos, (float) last / 127.0f, (float) now / 127.0f) - pos) * 127.0f, step);
+        }
+        return juce::jlimit (0, count - 1, index + steps);
+    }
+
     // TEMPO after `detents` encoder steps: whole BPM, inside lo..hi.
     static double tempoAfterDetents (double bpm, int detents, double lo = 40.0, double hi = 250.0) noexcept
     {
@@ -204,6 +309,13 @@ public:
             else if (layer == "A")    c.layer = Pin::A;
             else if (layer == "B")    c.layer = Pin::B;
             else { DBG ("Controller profile '" << p.name << "': '" << c.name << "' layer must be A or B, skipped"); continue; }
+
+            // 22.8: how the control moves its value. An unknown word is not fatal: the default.
+            const auto takeover = eo->getProperty ("takeover").toString().trim().toLowerCase();
+            if      (takeover == "encoder") c.takeover = Takeover::Encoder;
+            else if (takeover == "jump")    c.takeover = Takeover::Jump;
+            else if (takeover.isNotEmpty() && takeover != "scale")
+            { DBG ("Controller profile '" << p.name << "': '" << c.name << "' unknown takeover '" << takeover << "', scale used"); }
 
             auto known = [&] (const juce::String& id)
             { return id.isNotEmpty() && ! id.startsWithChar ('@') && (paramExists == nullptr || paramExists (id)); };

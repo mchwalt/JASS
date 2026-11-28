@@ -2258,6 +2258,7 @@ void SynthyProcessor::captureControllers (const juce::MidiBuffer& midi) noexcept
         if (ControllerProfiles::isProgramChangeSysEx (meta.data, meta.numBytes))
         {
             ccShiftHeld.store (false);
+            ccForgetPositions.store (true);   // 22.8: the other program's CCs may stand elsewhere now
             continue;
         }
         if (meta.numBytes < 3 || (meta.data[0] & 0xF0) != 0xB0)
@@ -2349,10 +2350,12 @@ void SynthyProcessor::controllerProfilePicked()
 }
 
 // The enabled MIDI inputs changed (cable pulled, device switched off): a Shift that was held never
-// sends its release — do not stay in bank mode.
+// sends its release — do not stay in bank mode. And nobody knows where the controls of whatever is
+// connected now stand (22.8): the next message of each only says so, it moves nothing.
 void SynthyProcessor::controllerInputsChanged()
 {
     ccShiftHeld.store (false);
+    controllerTouch.fill ({});
 }
 
 bool SynthyProcessor::controllerProfileSelectsModules() const
@@ -2383,7 +2386,6 @@ void SynthyProcessor::setControllerSelection (const juce::String& entryId, bool 
 
 void SynthyProcessor::clearControllerSelection()
 {
-    controllerLastSelectIndex = -1;   // the selector's next message selects again
     if (! controllerSel.valid)
         return;
     controllerSel = {};
@@ -2460,50 +2462,124 @@ void SynthyProcessor::applyControllerValue (juce::RangedAudioParameter& p, float
     p.endChangeGesture();
 }
 
-// One control of the selected module. Its id is used as it is: a B frame carries the "b" id, an A
-// frame in A+B keeps linked editing. A combo steps through its items over the knob's travel, a
-// toggle is on from half way.
-void SynthyProcessor::applyModuleControl (const ControllerProfiles::ModuleControl& mc, int ccValue7)
+// Story 22.8 — soft takeover: one hardware control (`at`) moves one parameter from the value the
+// parameter has NOW (so a mouse edit, a preset load, a module or bank change in between needs no
+// special case), by `mode`. "jump" is the 22.1 behaviour: the position is the value.
+//
+// A parameter with few steps (a choice, an integer, a switch) cannot follow one CC unit at a time —
+// it would snap back on every message. It is stepped by the control's travel instead. A parameter
+// that snaps finer than that keeps what the control asked for next to what it became.
+void SynthyProcessor::moveControllerParam (juce::RangedAudioParameter& p, ControllerProfiles::Takeover mode,
+                                           size_t at, int last, int now, bool pinned)
 {
+    using CP = ControllerProfiles;
+    if (mode == CP::Takeover::Jump)
+    {
+        applyControllerValue (p, (float) now / 127.0f, pinned);
+        return;
+    }
+    auto& touch = controllerTouch[at];
+    const float current = p.getValue();
+    if (const int steps = p.getNumSteps(); steps >= 2 && steps <= 128)
+    {
+        const auto& range = p.getNormalisableRange();
+        const float interval = range.interval > 0.0f ? range.interval : 1.0f;
+        const int index = juce::jlimit (0, steps - 1, juce::roundToInt ((p.convertFrom0to1 (current) - range.start) / interval));
+        if (const int item = stepControllerParam (at, p, mode, index, steps, last, now); item >= 0 && item != index)
+            applyControllerValue (p, p.convertTo0to1 (range.start + (float) item * interval), pinned);
+        return;
+    }
+    // Nobody moved it since this control's last write: go on from what the control asked for.
+    const float base = (touch.param == &p && current == touch.written) ? touch.wanted : current;
+    const float target = CP::takenOver (mode, base, last, now);
+    if (target == base)
+        return;
+    applyControllerValue (p, target, pinned);
+    touch.param = &p;
+    touch.wanted = target;
+    touch.written = p.getValue();
+}
+
+// A stepped target under control `at`. The control's travel belongs to this parameter on this item:
+// another target under the same control (a new module, bank, layer, the fallback) or an index that
+// was changed elsewhere (mouse, preset) starts it afresh, so a nudge never finishes a step that was
+// begun somewhere else.
+int SynthyProcessor::stepControllerParam (size_t at, const juce::RangedAudioParameter& p, ControllerProfiles::Takeover mode,
+                                          int index, int count, int last, int now)
+{
+    auto& touch = controllerTouch[at];
+    if (touch.stepParam != &p || touch.stepIndex != index)
+        touch.travel = 0.0f;
+    const int item = ControllerProfiles::steppedIndex (mode, index, count, last, now, touch.travel);
+    touch.stepParam = &p;
+    touch.stepIndex = item >= 0 ? item : index;
+    return item;
+}
+
+// One control of the selected module. Its id is used as it is: a B frame carries the "b" id, an A
+// frame in A+B keeps linked editing. A combo or list steps through its items over the knob's
+// travel, a switch goes on by a clear turn right and off by one left (22.8; with "jump": the
+// position picks the item, a switch is on from half way).
+void SynthyProcessor::applyModuleControl (const ControllerProfiles::ModuleControl& mc, ControllerProfiles::Takeover mode,
+                                          size_t at, int last, int now)
+{
+    using CP = ControllerProfiles;
     auto* p = apvts.getParameter (mc.paramId);
     if (p == nullptr)
         return;
     if (mc.active && ! mc.active())   // dimmed on screen: the knob is idle, its slot stays
         return;
-    const float v01 = (float) ccValue7 / 127.0f;
+    const bool jump = mode == CP::Takeover::Jump;
+    // The control really moved (not its first message, not a repeat away from an end).
+    const bool moved = last >= 0 && (mode == CP::Takeover::Encoder ? CP::encoderDelta (last, now, 1) != 0 : now != last);
     switch (mc.kind)
     {
-        case ControllerProfiles::ControlKind::Knob:
-            applyControllerValue (*p, v01, false);
+        case CP::ControlKind::Knob:
+            moveControllerParam (*p, mode, at, last, now, false);
             break;
-        case ControllerProfiles::ControlKind::Combo:
-            if (const int item = ControllerProfiles::stepIndex (v01, mc.items); item >= 0)
-            {
-                // Item -> the parameter's own value: its range need not start at 0 or step by 1.
-                const auto& range = p->getNormalisableRange();
-                applyControllerValue (*p, p->convertTo0to1 (range.start + (float) item * juce::jmax (1.0f, range.interval)), false);
-            }
+        case CP::ControlKind::Combo:
+        {
+            // Item <-> the parameter's own value: its range need not start at 0 or step by 1.
+            const auto& range = p->getNormalisableRange();
+            const float interval = juce::jmax (1.0f, range.interval);
+            const int found = juce::roundToInt ((p->convertFrom0to1 (p->getValue()) - range.start) / interval);
+            const int index = juce::jlimit (0, juce::jmax (0, mc.items - 1), found);
+            // A value the combo does not show counts as the nearest end - and is written when the
+            // control moves, or that item could never be picked.
+            if (const int item = stepControllerParam (at, *p, mode, index, mc.items, last, now);
+                item >= 0 && (jump || item != index || (found != index && moved)))
+                applyControllerValue (*p, p->convertTo0to1 (range.start + (float) item * interval), false);
             break;
-        case ControllerProfiles::ControlKind::List:
+        }
+        case CP::ControlKind::List:
             // A list combo: the knob steps through the items as shown, the parameter gets the
             // item's own value (its position where the list has no values). Empty list: nothing.
             if (mc.listCount)
-                if (const int item = ControllerProfiles::stepIndex (v01, mc.listCount()); item >= 0)
+            {
+                const int count = mc.listCount();
+                const auto values = mc.listValues ? mc.listValues() : juce::Array<int>();
+                const int value = juce::roundToInt (p->convertFrom0to1 (p->getValue()));
+                // Where the list stands now; a value it does not hold counts as its first item (the
+                // nearest end without a value list) - and is written when the control moves, or
+                // that item could never be picked.
+                const int found = mc.listValues ? values.indexOf (value) : value;
+                const int index = juce::jlimit (0, juce::jmax (0, count - 1), found);
+                if (const int item = stepControllerParam (at, *p, mode, index, count, last, now);
+                    item >= 0 && (jump || item != index || (found != index && moved)))
                 {
-                    int value = item;
-                    if (mc.listValues)
-                    {
-                        const auto values = mc.listValues();
-                        if (item >= values.size())
-                            break;
-                        value = values[item];
-                    }
-                    applyControllerValue (*p, p->convertTo0to1 ((float) value), false);
+                    if (mc.listValues && item >= values.size())
+                        break;
+                    applyControllerValue (*p, p->convertTo0to1 ((float) (mc.listValues ? values[item] : item)), false);
                 }
+            }
             break;
-        case ControllerProfiles::ControlKind::Toggle:
-            applyControllerValue (*p, ControllerProfiles::toggleOn (ccValue7) ? 1.0f : 0.0f, false);
+        case CP::ControlKind::Toggle:
+        {
+            const int index = p->getValue() >= 0.5f ? 1 : 0;
+            if (const int item = stepControllerParam (at, *p, mode, index, 2, last, now); jump || item != index)
+                applyControllerValue (*p, item > 0 ? 1.0f : 0.0f, false);
             break;
+        }
     }
 }
 
@@ -2527,8 +2603,12 @@ void SynthyProcessor::pollControllers()
     if (! ccShiftHeld.load())
     {
         controllerBankRef = -1;
-        controllerBankTravel = 0;
+        controllerBankTravel = 0.0f;
     }
+    // The device changed its program: nobody knows where the controls of the program now active
+    // stand - the next message of each only says so. (Like a change of the MIDI inputs.)
+    if (ccForgetPositions.exchange (false))
+        controllerTouch.fill ({});
     if (! any)
         return;
     const int focus = getLayerFocus();
@@ -2554,6 +2634,11 @@ void SynthyProcessor::pollControllers()
     // Pass 1 — the selector, before any other control: in the DAW program knob 8 (CC 117) drains
     // after knobs 1..7, and they must already act on the module it picked. (Shift itself is
     // tracked at capture.) Shift held: the bank of the selected module; not held: the module.
+    // Both relative, by the same mechanics: a first message only sets the reference, every
+    // kBankStep CC units of travel is one step, a repeated 127 / 0 at the knob's end counts as
+    // travel, a turn back starts counting afresh.
+    // Pass 1 owns the selector's reference (`touch.last`): each Shift slot is read once, here.
+    std::bitset<kCcSlots> selectorOwned;
     if (const auto* profile = activeControllerProfile(); profile != nullptr && profile->hasModuleTargets())
         forEachDirty ([&] (int channel, int cc, size_t at, bool plain, bool held)
         {
@@ -2570,41 +2655,42 @@ void SynthyProcessor::pollControllers()
                     // the reference; every kBankStep of travel is one bank up / down from the
                     // current one, clamped. At an end the knob repeats 127 / 0 while turned on.
                     const int v = ccSlotValue[kCcSlots + at].load();
-                    const float v01 = (float) v / 127.0f;
-                    int steps = 0;
-                    if (controllerBankRef >= 0)
-                    {
-                        int d = v - controllerBankRef;
-                        if (d == 0 && v == 127) d = CP::kBankEndTravel;
-                        if (d == 0 && v == 0)   d = -CP::kBankEndTravel;
-                        if ((d > 0 && controllerBankTravel < 0) || (d < 0 && controllerBankTravel > 0))
-                            controllerBankTravel = 0;   // turned back: start counting afresh
-                        controllerBankTravel += d;
-                        steps = controllerBankTravel / CP::kBankStep;
-                        controllerBankTravel -= steps * CP::kBankStep;
-                    }
+                    const int steps = CP::takeSteps (controllerBankTravel, (float) CP::encoderDelta (controllerBankRef, v, CP::kBankEndTravel),
+                                                     (float) CP::kBankStep);
                     controllerBankRef = v;
                     if (const auto* f = selectedControllerFrame(); f != nullptr && steps != 0)   // ignored with nothing selected
                         setControllerSelection (f->entryId, f->layerB,
                                                 juce::jlimit (0, juce::jmax (0, controllerBankCount (*f) - 1), controllerSel.bank + steps));
-                    // The knob stands somewhere else now: remember that position, so the first
-                    // message after Shift is released does not jump to another module by itself.
-                    controllerLastSelectIndex = CP::stepIndex (v01, (int) controllerFrames.size());
+                    // The knob stands somewhere else now: that position is the module selector's
+                    // reference too, so neither the first message after Shift is released nor a
+                    // plain value of this same tick counts the travel made under Shift.
+                    controllerTouch[at].last = v;
+                    controllerTouch[at].travel = 0.0f;
+                    selectorOwned.set (at);
                 }
                 if (plain)
                 {
-                    // Absolute: the position picks the module, so the first touch jumps. A module is
-                    // selected only when the index differs from the last one this knob produced —
-                    // a list change or a mouse selection never reselects by itself.
-                    const float v01 = (float) ccSlotValue[at].load() / 127.0f;
-                    const int index = CP::stepIndex (v01, (int) controllerFrames.size());
-                    if (index >= 0 && index != controllerLastSelectIndex)
+                    // Relative as well (22.8, replacing the absolute selector of 22.5): the
+                    // position never names a module. From the selected module one step right is
+                    // the next on screen in reading order, left the previous one, clamped; with
+                    // nothing selected, the first going right, the last going left.
+                    auto& touch = controllerTouch[at];
+                    const int v = ccSlotValue[at].load();
+                    const int steps = CP::takeSteps (touch.travel, (float) CP::encoderDelta (touch.last, v, CP::kBankEndTravel),
+                                                     (float) CP::kBankStep);
+                    touch.last = v;
+                    selectorOwned.set (at);
+                    const int count = (int) controllerFrames.size();
+                    if (steps != 0 && count > 0)
                     {
-                        const auto& f = controllerFrames[(size_t) index];
+                        // Nothing selected: exactly the first / last module, however fast the turn.
+                        int index = steps > 0 ? 0 : count - 1;
+                        if (const auto* f = selectedControllerFrame())
+                            index = (int) (f - controllerFrames.data()) + steps;
+                        const auto& f = controllerFrames[(size_t) juce::jlimit (0, count - 1, index)];
                         if (! (controllerSel.valid && controllerSel.entryId == f.entryId && controllerSel.layerB == f.layerB))
                             setControllerSelection (f.entryId, f.layerB, 0);
                     }
-                    controllerLastSelectIndex = index;
                 }
             }
         });
@@ -2615,12 +2701,19 @@ void SynthyProcessor::pollControllers()
     {
         const int detents = ccRelative[at].exchange (0);
         const int presses = ccPresses[at].exchange (0);
+        // 22.8: where the control stood before this message (-1 = its first one: it moves nothing)
+        // and where it stands now — noted for every CC, mapped or not, it is the hardware's.
+        const int value = ccValue[at].load();
+        auto& touch = controllerTouch[at];
+        const int last = touch.last;
+        if (! selectorOwned[at])
+            touch.last = value;
+        // A control with ends scales from where it last really stood (one unit of flicker is no move).
+        const int scaleFrom = CP::scaleReference (touch.scaleRef, value, touch.scaleDir);
+        const auto from = [&] (CP::Takeover mode) { return mode == CP::Takeover::Scale ? scaleFrom : last; };
         const auto* profile = activeControllerProfile();
         if (profile == nullptr)
             return;
-        // Absolute 0..127 onto the knob's travel; the parameter's own skew applies. Jump on first
-        // touch.
-        const int value = ccValue[at].load();
         for (size_t i = 0; i < profile->controls.size(); ++i)
         {
             const auto& c = profile->controls[i];
@@ -2656,7 +2749,7 @@ void SynthyProcessor::pollControllers()
                         if (control.bank == controllerSel.bank && ++inBank == c.moduleSlot)
                         {
                             const auto mc = control;   // a copy: a parameter write may relayout the rack
-                            applyModuleControl (mc, value);
+                            applyModuleControl (mc, c.takeover, at, from (c.takeover), value);
                             break;
                         }
                     continue;
@@ -2665,7 +2758,7 @@ void SynthyProcessor::pollControllers()
             CP::Target t;
             if (CP::fixedTarget (c, focus, t))
                 if (auto* p = apvts.getParameter (t.paramId))
-                    applyControllerValue (*p, (float) value / 127.0f, t.pinned);
+                    moveControllerParam (*p, c.takeover, at, from (c.takeover), value, t.pinned);
         }
     });
 }
