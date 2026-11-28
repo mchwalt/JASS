@@ -1,6 +1,7 @@
 #pragma once
 #include <JuceHeader.h>
 #include <array>
+#include <cstdint>
 #include "../DSP/Oscillator.h"
 #include "../DSP/AdsrEnvelope.h"
 #include "../DSP/PitchEnvelope.h"
@@ -103,6 +104,29 @@ public:
         globalLfo[i] = on;
         globalLfoPrev[i] = globalLfoVal[i];   // the voice ramps prev → v across the block (no block-rate steps)
         globalLfoVal[i]  = v;
+    }
+
+    // Pitch bend (Story 22.2): the engine pushes its layer's bend in semitones (strip position ×
+    // the layer's BEND range) once per block. The voice ramps there (no block-rate stepping) and
+    // applies it as one more pitch factor beside the pitch envelope — never through
+    // transposeRatio, which SLIDE and the filter keytracking read. A voice playing one of the
+    // unbent channels (the drone, the step previews) ignores it; which it is, is decided at note-on.
+    void setBend (double semitones) noexcept
+    {
+        bendTarget = semitones;
+        if (bendable)
+            bendSemis.setTargetValue (semitones);
+    }
+    void setUnbentChannels (std::uint32_t mask) noexcept { unbentChannels = mask; }   // bit n = MIDI channel n
+
+    // Mod wheel (Story 22.2): CC 1 as a matrix source, 0..1, global like Chaos. Smoothed by TIME
+    // (the bend's ramp), not across a render call: the synthesiser renders a voice once per
+    // stretch between MIDI events, and the wheel's own CCs are such events — a per-call ramp
+    // snapped back at each of them, exactly while the wheel moved (review 2026-11-28).
+    void setModWheel (float v) noexcept
+    {
+        modWheelTarget = v;
+        modWheel.setTargetValue (v);
     }
 
     // ACCENT depth (15.2), pushed per block by the processor from STEP SEQ's knob: how much a
@@ -211,6 +235,18 @@ private:
     float   globalLfoVal[kNumLFOs] {};  // the processor's value for it at the END of this block
     float   globalLfoPrev[kNumLFOs] {}; // ...and at the end of the previous one: ramped per sample (review 2026-11-08)
     float   accentDepth = 0.0f;    // 15.2: velocity → gain/cutoff amount (STEP SEQ's ACCENT knob)
+    juce::SmoothedValue<float> modWheel;   // 22.2: the ModWheel source, ramped by time (setModWheel)
+    float   modWheelTarget = 0.0f;         // ...and where the wheel stands: a new note starts there
+
+    // Pitch bend (22.2). bendSemis is the smoothed bend of THIS note in semitones; bendMul its
+    // pitch factor, recomputed only while the ramp runs (exactly 1 at rest in the centre, so a
+    // patch without bend renders bit-identically).
+    static constexpr double kBendRampSeconds = 0.02;   // about two blocks: the block values join into one line
+    juce::SmoothedValue<double> bendSemis;
+    double        bendTarget = 0.0;      // the layer's bend as last pushed, bendable or not
+    double        bendMul = 1.0;
+    bool          bendable = true;       // false: this note plays an unbent channel
+    std::uint32_t unbentChannels = 0;    // bit n = MIDI channel n is never bent
 
     // Store base values for LFO modulation
     double baseFrequencies[3] = {};

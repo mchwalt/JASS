@@ -151,6 +151,7 @@ namespace Parameters
         constexpr const char* glideOn   = "glideOn";
         constexpr const char* glideTime = "glideTime";
         constexpr const char* glideMode = "glideMode";   // 0=Mono (one voice, distinct glide), 1=Poly (per-voice)
+        constexpr const char* bendRange = "bendRange";   // 22.2: pitch-bend range in semitones (0..24, symmetric); works with GLIDE off
 
         // Pitch envelope (one-shot pitch sweep; append-only)
         constexpr const char* pitchEnvOn     = "pitchEnvOn";
@@ -363,7 +364,7 @@ namespace Parameters
         X(grainKey) X(wavetableOn) X(wavetableBank) X(wavetablePosition) X(wavetableFreq) X(wavetableAmp) \
         X(wavetableUniVoices) X(wavetableUniDetune) X(wavetableFeedback) X(subOn) X(subWave) X(subLevel) \
         X(subFeedback) X(subOctave) X(delaySyncDiv) X(delayTime) X(glideOn) X(glideTime) \
-        X(glideMode) \
+        X(glideMode) X(bendRange) \
 
     #define JASS_PATCH_INDEXED_PARAMS(X) \
         X(oscOn, 3) X(oscWave, 3) X(oscFreq, 3) \

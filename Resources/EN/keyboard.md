@@ -17,6 +17,15 @@ The keyboard must have focus for the letter keys to sound (it grabs focus on lau
 
 Ordinary keyboards drop some three-key combinations — the third note never arrives. Shift the octave, or play chords over MIDI; the letter keys also send one fixed velocity.
 
+**Pitch bend and mod wheel**
+
+The pitch and mod strips (or wheels) of a MIDI keyboard work in the standalone app; in a DAW neither reaches JASS.
+
+- **Pitch strip** — bends the held and the sequenced notes (ARP, STEP SEQ) alike and returns when you let go
+- **Range** — **BEND** in the GLIDE module, in semitones, per layer: A and B may bend by different amounts
+- **Not bent** — PERC, KARPLUS (its pitch is set when the string is plucked), the auto-play drone and the step preview
+- **Mod strip** — the MOD MATRIX source **Mod Wheel**: route it to what the patch needs, e.g. Mod Wheel → FILTER · CUTOFF
+
 **MIDI controller (knobs and faders)**
 
 Knobs and faders of a MIDI controller move JASS in the standalone app (in a DAW, map them there).

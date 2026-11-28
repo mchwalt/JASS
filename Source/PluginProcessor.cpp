@@ -17,6 +17,12 @@ SynthyProcessor::SynthyProcessor()
       apvts(*this, nullptr, "Parameters", Parameters::createLayout())
 {
     // Voices, choke-group roster and GRAIN seeds: PatchEngine's constructor (Story 21.4).
+    // Story 22.2: the drone and the step previews are never bent — they audition the patch.
+    {
+        const std::uint32_t unbent = (1u << kDroneChannel) | (1u << kAuditionChannel) | (1u << kAuditionChannelB);
+        engineA.setUnbentChannels (unbent);
+        engineB.setUnbentChannels (unbent);
+    }
 
     // One-time rebrand of the app-data folder (%AppData%\Synthy -> JASS, *.synthy -> *.jass).
     // MUST run before anything touches jassFolder() (which would create JASS and suppress it).
@@ -436,6 +442,7 @@ namespace
             case ModSource::LFO4:     return ID::lfoOn (4);
             case ModSource::ChaosX:
             case ModSource::ChaosY:   return ID::chaosOn;
+            case ModSource::ModWheel: return {};   // 22.2: the hardware's wheel — no module
         }
         return {};
     }
@@ -784,6 +791,7 @@ void SynthyProcessor::randomize()
             {
                 // 21.8: B's STEP SEQ / ARP switches are performance, like A's (the A roll keeps both).
                 if (id == Parameters::ID::seqOn || id == Parameters::ID::arpOn) continue;
+                if (id == Parameters::ID::bendRange) continue;   // 22.2: B's own BEND range is how B is played, too
                 if (auto* a = apvts.getParameter(id))
                     if (auto* b = apvts.getParameter(bp + id))
                         b->setValueNotifyingHost(a->getValue());
@@ -835,6 +843,7 @@ void SynthyProcessor::randomizeLayerA()
     const float keepArpOn       = *apvts.getRawParameterValue(ID::arpOn);   // arp = performance, not sound design
     const float keepSeqOn       = *apvts.getRawParameterValue(ID::seqOn);   // so is the STEP SEQ (review E2, 2026-11-24)
     const float keepGlideOn     = *apvts.getRawParameterValue(ID::glideOn); // glide = performance, not sound design
+    const float keepBendRange   = *apvts.getRawParameterValue(ID::bendRange); // 22.2: so is the bend range (a random 0..24 would surprise the left hand)
     const float keepKeyboardOn  = *apvts.getRawParameterValue(ID::keyboardOn); // keyboard = input surface, not sound design
 
     // Random value for every parameter... (the MOD MATRIX is re-rolled CONTROLLED below —
@@ -906,6 +915,7 @@ void SynthyProcessor::randomizeLayerA()
     set(ID::arpOn,       keepArpOn);
     set(ID::seqOn,       keepSeqOn);
     set(ID::glideOn,     keepGlideOn);
+    set(ID::bendRange,   keepBendRange);
     set(ID::keyboardOn,  keepKeyboardOn);
 
     // Modulation matrix: RANDOM VARIES it too (it is the central movement layer). The blanket
@@ -938,7 +948,10 @@ void SynthyProcessor::randomizeLayerA()
             set(ID::modSlotModule(n + 1), 0.0f);   // 0 == "Off" (inactive slot)
             continue;
         }
-        const int   src = rng.nextInt(ModMatrixConfig::kNumSources);   // LFO1/Env/Vel/LFO2..4
+        // Any source but Mod Wheel (22.2): a random patch must not depend on where the strip
+        // happens to stand. Excluded by name, so a source appended later is rolled like the rest.
+        int src = rng.nextInt(ModMatrixConfig::kNumSources - 1);
+        if (src >= (int) ModSource::ModWheel) ++src;
         const float mag = 0.3f + rng.nextFloat() * 0.6f;              // 0.3..0.9 (audible, tame)
         auto        mp  = ModDest::fromLegacyTarget(rndTargets[n]);   // LFOTarget → (module, param)
         // Showcase per-OSC: FREQ/AMP/DETUNE sometimes target a SINGLE oscillator, not just "Alle OSC".
@@ -963,6 +976,7 @@ void SynthyProcessor::randomizeLayerA()
             case ModSource::Velocity: break;
             case ModSource::ChaosX:
             case ModSource::ChaosY: set(ID::chaosOn, 1.0f); break;
+            case ModSource::ModWheel: break;   // not rolled (see above); no module to enable
         }
     }
 
@@ -1206,6 +1220,41 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     if (! isHostedByDaw())
         captureControllers (midiMessages);
 
+    // Story 22.2: pitch bend and the mod wheel (CC 1) — the last value in the block is the block's
+    // value; the engines push it into their voices (bend × the layer's BEND range, smoothed there;
+    // the wheel as a matrix source). Channels 1..11 only: 12..16 are JASS's own. Both are the
+    // hardware's standing, not part of a patch: no preset load resets them.
+    // NOT gated on isHostedByDaw(), unlike captureControllers above, and on purpose: that gate
+    // keeps JASS from moving a parameter the host maps as well; bend and wheel are no parameters.
+    // Hosted, nothing arrives here anyway while CMakeLists.txt keeps
+    // JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0 (VST3 has no bend or CC events of its own).
+    // Switching that flag on would switch both on in a DAW — which is then what is wanted.
+    // What clears a standing value without the hardware: CC 121 (Reset All Controllers) recentres
+    // the bend and zeroes the wheel; a change of the enabled MIDI inputs (a device unplugged
+    // mid-bend never sends its 8192) recentres the bend — controllerInputsChanged sets the flag.
+    if (recentreBend.exchange (false))
+        pitchBend = 0.0f;
+    for (const auto meta : midiMessages)
+    {
+        if (meta.numBytes < 3) continue;
+        const int status = meta.data[0] & 0xF0;
+        if ((meta.data[0] & 0x0F) >= kCcChannels) continue;
+        if (status == 0xB0 && (meta.data[1] & 0x7F) == 121)
+        {
+            pitchBend = 0.0f;
+            modWheel.store (0.0f);
+            continue;
+        }
+        if (status == 0xE0)
+        {
+            const int v = (meta.data[1] & 0x7F) | ((meta.data[2] & 0x7F) << 7);   // 0..16383, centre 8192
+            // Full up is exactly +1 and full down exactly -1 (the two halves differ by one step).
+            pitchBend = v >= 8192 ? (float) (v - 8192) / 8191.0f : (float) (v - 8192) / 8192.0f;
+        }
+        else if (status == 0xB0 && (meta.data[1] & 0x7F) == 1)
+            modWheel.store ((float) (meta.data[2] & 0x7F) / 127.0f);
+    }
+
     keyboardState.processNextMidiBuffer(midiMessages, 0, buffer.getNumSamples(), true);
 
     // Tempo-Sync (Feature): resolve the effective LFO rate + delay time ONCE per block.
@@ -1296,8 +1345,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     // STEREO / MASTER / COMPRESSOR run on the SUMMED mix (further below), not per voice, so their
     // MOD MATRIX routings are applied HERE at block rate. Source values are the GLOBAL uiLfo values
     // from the PREVIOUS block (the engines display LFOs, advanced after the render) — a one-block lag that is
-    // inaudible. LFO and Chaos sources drive global targets (Velocity/Envelope have no single global
-    // value), which matches the editor's ring feed exactly, so ring == audio.
+    // inaudible. LFO, Chaos and Mod Wheel sources drive global targets (Velocity/Envelope have no
+    // single global value), which matches the editor's ring feed exactly, so ring == audio.
     // Which layers SOUND this block (21.6/21.7): live keys, a pattern aimed at them, or a release
     // tail still fading. One predicate for the render and the master-bus modulation (review).
     const auto playing = layersPlaying();
@@ -1321,6 +1370,15 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
         matrixEnablesDirty.store(true);
     }
 
+    // 22.2: the master bus's copy of the wheel — one pole, ~20 ms, because a CC that jumps several
+    // steps within a block would step these block-rate targets. Stays exactly 0 while the wheel
+    // is and has been at 0 (0 + c·0), and lands exactly on the wheel once it is close.
+    {
+        const float w = modWheel.load();
+        const float c = 1.0f - std::exp (-(float) buffer.getNumSamples() / (0.02f * (float) juce::jmax (1.0, getSampleRate())));
+        modWheelBus += c * (w - modWheelBus);
+        if (std::abs (w - modWheelBus) < 1.0e-4f) modWheelBus = w;
+    }
     std::array<double, ModMatrixConfig::kNumTargets> gMod {};
     {
         using namespace Parameters;
@@ -1345,6 +1403,7 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
                     for (int i = 0; i < kNumLFOs; ++i) if (src == kLfoSrc[i]) sv = layer->getLfoDisplayValue(i);
                     if (src == (int) ModSource::ChaosX) sv = chaosDisplay[0].load();   // global attractor —
                     if (src == (int) ModSource::ChaosY) sv = chaosDisplay[1].load();   // same values the voices get
+                    if (src == (int) ModSource::ModWheel) sv = modWheelBus;            // 22.2: global too (smoothed above)
                     const int tgt = (int) ModDest::targetOf(mod, par);
                     if (tgt > 0 && tgt < (int) gMod.size()) gMod[(size_t) tgt] += (double) amt * sv;
                 }
@@ -1365,6 +1424,8 @@ void SynthyProcessor::processBlock(juce::AudioBuffer<float>& buffer, juce::MidiB
     patchCtx.chaosX      = chaosDisplay[0].load();
     patchCtx.chaosY      = chaosDisplay[1].load();
     patchCtx.accentDepth = lanes[0].seqAccent->load();   // 15.2 — layer A's STEP SEQ ACCENT (B's: ctxB below)
+    patchCtx.bend        = pitchBend;                    // 22.2 — each engine applies its own range
+    patchCtx.modWheel    = modWheel.load();
     patchCtx.hosted      = hosted;
     patchCtx.hostPlaying = hostPlaying;
     patchCtx.hostPpq     = hostPpq;
@@ -2356,6 +2417,7 @@ void SynthyProcessor::controllerInputsChanged()
 {
     ccShiftHeld.store (false);
     controllerTouch.fill ({});
+    recentreBend.store (true);   // 22.2: a strip held when its device went never sends its release
 }
 
 bool SynthyProcessor::controllerProfileSelectsModules() const

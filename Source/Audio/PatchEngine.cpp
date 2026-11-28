@@ -112,6 +112,10 @@ void PatchEngine::beginBlock (const BlockContext& ctx)
     blockChaosX = ctx.chaosX;
     blockChaosY = ctx.chaosY;
     blockAccent = ctx.accentDepth;
+    // 22.2: each layer bends by its own range, so A and B may move apart on purpose. Centre × any
+    // range is exactly 0 — the voices then keep a pitch factor of exactly 1.
+    blockBendSemis = (double) ctx.bend * (double) juce::roundToInt (p.bendRange->load());
+    blockModWheel = ctx.modWheel;
     for (int li = 0; li < kNumLFOs; ++li)   // 20.1: a GLOBAL LFO's value — the engine's instance,
     {                                       // one block behind, like the rings
         globalLfoPushedBefore[li] = globalLfoPushed[li];
@@ -150,6 +154,8 @@ void PatchEngine::pushToVoice (SynthVoice& v)
     for (int li = 0; li < kNumLFOs; ++li)
         voice->setGlobalLfo(li, lfoGlobalActive[li], globalLfoPushed[li]);
     voice->setAccentDepth(blockAccent);   // 15.2
+    voice->setBend(blockBendSemis);       // 22.2: the voice ramps there; a new note starts at it
+    voice->setModWheel(blockModWheel);
     Parameters::applyToVoice(p, voice->getOscillators(),
                              voice->getEnvelope(), voice->getStrips(),   // Epic 10: per-channel FX strips
                              voice->getLFOs(), voice->getNoise(),

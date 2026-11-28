@@ -321,7 +321,7 @@ a header struct embedded in `SynthVoice` requires a clean rebuild**
 |---|---|---|
 | Voice count | `8` — bare literal in the ctor loop (no named constant) | `PluginProcessor.cpp` |
 | `kNumLFOs` | 4 | `DSP/LFO.h` |
-| `ModMatrixConfig::kNumSlots` / `kNumSources` | 8 / 6 | `DSP/ModMatrix.h` |
+| `ModMatrixConfig::kNumSlots` / `kNumSources` | 8 / 9 | `DSP/ModMatrix.h` |
 | `ModDest::kMaxParams` / `kOscRingSlots` | 6 / 6 | `DSP/ModMatrixCatalog.h` |
 | `kMaxOutChannels` / `kNumPanGenerators` | 2 / 9 | `DSP/ChannelStrip.h` |
 | `kDroneChannel` / `kDroneNote` | 16 / 60 | `PluginProcessor.h` |

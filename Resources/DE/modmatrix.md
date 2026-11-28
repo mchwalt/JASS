@@ -10,6 +10,7 @@ Die LFOs haben kein eigenes eingebautes Ziel — sie sind *reine* Matrix-Quellen
 - **Envelope** — die ADSR-Kontur. Braucht das **ENVELOPE**-Modul an und eine klingende Note. Ideal als Filter-Hüllkurve: Envelope → FILTER · CUTOFF.
 - **Velocity** — wie fest du spielst (fest pro Note). Gehört keinem Modul — einfach unterschiedlich stark spielen.
 - **Chaos X / Chaos Y** — die Lorenz-Bahn des CHAOS-Moduls: nie wiederholend, nie zufällig. X und Y reiten dieselbe Bahn — zwei Routings driften gemeinsam, aber nicht gleich. Braucht **CHAOS** an; läuft frei, seine Ringe bewegen sich also auch ohne Note.
+- **Mod Wheel** — das Mod-Rad oder der Mod-Strip einer MIDI-Tastatur (CC 1): unten 0, oben voll, für jede Note gleich. Gehört keinem Modul; ein Preset-Wechsel lässt es stehen, wo es steht. Nur Standalone — in einer DAW kommt es bei JASS nicht an.
 
 ## Ziel — erst MOD, dann PARAM
 
@@ -20,9 +21,9 @@ Praktisch jeder kontinuierliche Knopf jedes Moduls ist ein Ziel. Highlights:
 - **WAVETABLE** (POS · FREQ · AMP · VOICES · DETUNE), **SUB** (AMP), **NOISE** (AMP), **KARPLUS** (AMP · DAMP · STR), **PITCH ENV** (AMOUNT), **FILTER** (CUTOFF · RESO), **FORMANT** (VOWEL · RESO · MIX), **WAVEFOLD** (DRIVE · SYM · MIX), **DISTORTION** (DRIVE · MIX), **BITCRUSH** (BITS · RATE · MIX), **CHORUS** (RATE · DEPTH · MIX), **PHASER** (RATE · DEPTH · FB · MIX), **DELAY** (TIME · FB · MIX), **REVERB** (ROOM · DAMP · MIX).
 - **KARPLUS** bietet nur AMP · DAMP · STR — die Tonhöhe der Saite wird beim Anzupfen festgelegt, FREQ lässt sich während des Ausklingens also nicht modulieren.
 
-### Master-Bus-Ziele (nur LFO-Quellen)
+### Master-Bus-Ziele (nur LFO, Chaos und Mod Wheel)
 
-**STEREO** (WIDTH · TIME), **MASTER** (VOL · TEMPO) und **COMPRESSOR** (THRESH · RATIO · ATK · REL · GAIN) laufen einmalig auf dem fertigen Stereo-Mix, nicht pro Stimme. Sie lassen sich nur von **LFO**-Quellen treiben — Velocity und Envelope sind pro Note und haben am Master-Bus keinen Einzelwert, hier bewirken sie also nichts. **MASTER · VOL** = Master-Tremolo, **STEREO · WIDTH** = wanderndes Stereobild, und **MASTER · TEMPO** lässt die Tempo-Sync-BPM schwanken (driftende Sync-Delays/LFOs — „schwankende Beats").
+**STEREO** (WIDTH · TIME), **MASTER** (VOL · TEMPO) und **COMPRESSOR** (THRESH · RATIO · ATK · REL · GAIN) laufen einmalig auf dem fertigen Stereo-Mix, nicht pro Stimme. Sie lassen sich nur von **LFO**-, **Chaos**- und **Mod-Wheel**-Quellen treiben — Velocity und Envelope sind pro Note und haben am Master-Bus keinen Einzelwert, hier bewirken sie also nichts. **MASTER · VOL** = Master-Tremolo, **STEREO · WIDTH** = wanderndes Stereobild, und **MASTER · TEMPO** lässt die Tempo-Sync-BPM schwanken (driftende Sync-Delays/LFOs — „schwankende Beats").
 
 Ein gewähltes MODUL (außer „Alle OSC") wird automatisch aktiviert — und ein per-OSC-Routing schaltet genau diesen Oszillator an — damit das Routing hörbar ist; die Zeile löschen (MOD = Off) nimmt ein von JASS selbst gesetztes Aktivieren wieder zurück.
 

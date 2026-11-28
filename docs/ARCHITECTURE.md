@@ -364,6 +364,20 @@ message-thread, checked by `JASS_Render --selftest`.
   position-wise (pitch-sorted); Mono/Legato mode rebuilds the buffer with
   explicit note-offs for the previously sounding note. Voices consume the
   shared `GlideInfo` in `startNote` via a multiplicative `SmoothedValue`.
+- **Pitch bend** (Story 22.2) is held per layer in the engine, not left to JUCE's per-channel
+  `pitchWheelMoved` (which stays empty): `processBlock` reads the last 14-bit bend of the block
+  (channels 1–11) into −1..1, each `PatchEngine` multiplies it by its layer's `bendRange`
+  (BEND in GLIDE, 0–24 semitones, default 2, read whether GLIDE is on or off) and pushes the
+  semitones into its voices with the block push. So held and sequenced notes (pattern channels
+  13 / 14) bend alike, and A and B may bend by different amounts. The voice ramps there over
+  20 ms (`bendSemis`) and applies `bendMul` as one more factor beside `pitchEnvMul` on OSC 1–3,
+  WAVETABLE, SUB and GRAIN, and hands it to the SAMPLER as a rate factor (tape: on the step;
+  STRETCH: in the transpose factor). It never enters `transposeRatio`, which SLIDE and the filter
+  keytracking read. At rest in the centre `bendMul` is exactly 1 — the null test stays
+  bit-identical. Not bent: PERC, KARPLUS (pitch fixed at pluck time), and notes on the drone and
+  step-preview channels (decided per note in `startNote`). A note starts at the standing bend,
+  without a ramp. Standalone in practice: with `JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0` a
+  DAW delivers neither bend nor CC 1.
 - **[ADSR](Glossary.md#adsr)-off behaviour**: when the ADSR module is disabled, a 10 ms
   `SmoothedValue` gate (`bypassGate`) replaces the envelope both as gain and as
   the voice-free trigger — no clicks, no stuck voices.
@@ -485,9 +499,15 @@ voice** (`binaural[kNumPanGenerators]`, `hrtf[kNumPanGenerators]`).
 ### 5.1 Sources, slots, targets
 
 - **Sources** (`DSP/ModMatrix.h`, append-only):
-  `ModSource { LFO1, Envelope, Velocity, LFO2, LFO3, LFO4 }` — `kNumSources = 6`.
-  The envelope source is gated by the ADSR module enable;
-  [velocity](Glossary.md#velocity) is captured in `startNote`.
+  `ModSource { LFO1, Envelope, Velocity, LFO2, LFO3, LFO4, ChaosX, ChaosY, ModWheel }` —
+  `kNumSources = 9`. The envelope source is gated by the ADSR module enable;
+  [velocity](Glossary.md#velocity) is captured in `startNote`. `ChaosX` / `ChaosY` are the one
+  global Lorenz attractor; `ModWheel` (Story 22.2) is MIDI CC 1 as 0..1, read from the block's
+  buffer in `processBlock` (channels 1–11), global like Chaos, smoothed by time inside the
+  voice (20 ms, not per render call — the wheel's own CCs split the block into several) and by
+  one pole for the master-bus targets, not reset by a preset load and tied to no module. RANDOM
+  never rolls it. CC 121 zeroes it and recentres the bend; a change of the enabled MIDI inputs
+  recentres the bend.
   [LFOs](Glossary.md#lfo) have **no built-in target** anymore — they modulate
   exclusively through [matrix](Glossary.md#modmatrix) slots (`kNumLFOs = 4`,
   `DSP/LFO.h`).
@@ -518,8 +538,8 @@ byte-identical: inactive targets are never touched.
 STEREO / MASTER / COMPRESSOR run on the summed bus, so their routings cannot
 be applied per voice. `processBlock` accumulates them into a `gMod[]` array
 from the previous block's `lfoDisplayValues` (one-block latency, deliberately
-matching the ring feed). **Only LFO sources** drive global targets — velocity
-and envelope have no single global value. Consumers: master volume (ramped),
+matching the ring feed). **Only global sources** drive global targets — the LFOs, Chaos X / Y
+and Mod Wheel; velocity and envelope have no single global value. Consumers: master volume (ramped),
 master tempo (±90 BPM), compressor parameters, stereo width/time.
 
 ### 5.4 Auto-enable coupling
@@ -536,8 +556,8 @@ the message thread only (see [§3.2](#32-parameterchanged-deferral)).
 
 `rack::LiveModFeed` carries one value per target (`byTarget[kCount]`) plus a
 per-OSC matrix (`osc[3][kOscRingSlots]`). The editor's 30 Hz timer builds the
-feed from `lfoDisplayValues` (only LFO sources animate — Env/Vel need a
-sounding note) and fans it out through `Rack::updateLiveFeed` →
+feed from `lfoDisplayValues`, the Chaos snapshot and the Mod Wheel value (Env/Vel need a
+sounding note and light no idle ring) and fans it out through `Rack::updateLiveFeed` →
 `ModuleFrame::updateLiveFeed` → `SynthySlider::setModAmount`. Per-OSC routings
 light only the targeted oscillator's knob.
 
@@ -1085,9 +1105,10 @@ The formal architecture spine lives at
   voice, and a third simultaneous part (pad on A, a second sound on B, the figure on BASS).
   Decided by ear after S3 against `Light Duo`; if it goes, it is hidden and its parameters stay
   readable (append-only), never deleted.
-- **Out of scope here (Gemini features for later stories):** pitch bend, poly aftertouch,
-  ribbon and portamento fader (JASS has no pitch bend today), more voices, a per-layer MIDI
-  channel mode, a shared voice pool.
+- **Out of scope here (Gemini features for later stories):** poly aftertouch, ribbon and
+  portamento fader, more voices, a per-layer MIDI
+  channel mode, a shared voice pool. (Pitch bend, listed here until 2026-11-28, came with
+  Story 22.2 — see §4.1.)
 
 Per-story implementation notes (with the *why* behind most non-obvious code)
 are in `_bmad-output/implementation-artifacts/<epic>-<story>-*.md`.

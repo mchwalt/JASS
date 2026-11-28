@@ -1043,8 +1043,9 @@ void SynthyEditor::timerCallback()
     namespace P = Parameters::ID;
     auto& apvts = processor.getAPVTS();
 
-    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only FREE-RUNNING sources
-    // (LFOs, Chaos) animate at idle — Envelope/Velocity stay 0 (they need a sounding note; AC7).
+    // Build the ring feed (indexed by ModTarget == LFOTarget index). Only GLOBAL sources show at
+    // idle — the free-running LFOs and Chaos, and the Mod Wheel, which stands where the hand left
+    // it (22.2). Envelope/Velocity stay 0 (they need a sounding note; AC7).
     // lfoSrcVal[src] holds each such source's display value at its ModSource slot; note-bound
     // sources stay 0, so the matrix loop can add amt*lfoSrcVal[src] unconditionally.
     static constexpr int kLfoSourceIdx[kNumLFOs] = { (int) ModSource::LFO1, (int) ModSource::LFO2,
@@ -1062,6 +1063,7 @@ void SynthyEditor::timerCallback()
         lfoSrcVal[(size_t) kLfoSourceIdx[i]] = processor.getLfoDisplayValueOf(layerB, i);
     lfoSrcVal[(size_t) ModSource::ChaosX] = processor.getChaosDisplayValue(0);   // same snapshot the
     lfoSrcVal[(size_t) ModSource::ChaosY] = processor.getChaosDisplayValue(1);   // voices modulate with
+    lfoSrcVal[(size_t) ModSource::ModWheel] = processor.getModWheelValue();      // 22.2: the wheel stands where it stands, note or not
     {
         const juce::String rp = layerB ? juce::String (Modules::kLayerBPrefix) : juce::String();
         const bool matrixOn = *apvts.getRawParameterValue(lid(rp, P::modMatrixOn)) > 0.5f;
@@ -3106,7 +3108,9 @@ void SynthyEditor::buildRack()
         d.defaultVisible = false;   // seed for RackLayout.json: Init switches the matrix OFF (2026-10-03). This
                                     // descriptor is hand-built, so the flag in ModMatrixSpecs.h does not reach it.
 
-        const juce::StringArray srcItems { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y" };   // == ModSource
+        static constexpr const char* srcNames[] { "LFO 1", "Envelope", "Velocity", "LFO 2", "LFO 3", "LFO 4", "Chaos X", "Chaos Y", "Mod Wheel" };   // == ModSource
+        static_assert (std::size (srcNames) == (size_t) ModMatrixConfig::kNumSources, "SRC must list every ModSource");
+        const juce::StringArray srcItems (srcNames, (int) std::size (srcNames));
         // MOD lists the catalog's modules SORTED by name (maintainer 2026-11-08: the catalog is
         // append-only, so COMPRESSOR … GRAIN had piled up behind WAVETABLE). The catalog index stays
         // the persisted value; the combo shows items in display order and maps each position back

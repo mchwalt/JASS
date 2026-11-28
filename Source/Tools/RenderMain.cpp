@@ -883,6 +883,395 @@ namespace
             expect (std::abs (free - 3.0) <= 1.0,   layerB ? "B: ARP Free follows RATE 3"               : "A: ARP Free follows RATE 3");
         }
     }
+
+    // ---- Story 22.2: pitch bend and mod wheel ---------------------------------------------------
+    // The left channel of `seconds` of rendering.
+    std::vector<float> renderLeft (Rig& r, double seconds)
+    {
+        std::vector<float> x;
+        const int blocks = (int) (seconds * kSampleRate / kBlock);
+        x.reserve ((size_t) (blocks * kBlock));
+        for (int i = 0; i < blocks; ++i)
+        {
+            r.block();
+            const float* d = r.buf.getReadPointer (0);
+            x.insert (x.end(), d, d + kBlock);
+        }
+        return x;
+    }
+
+    // The frequency estimator the rig lacked: rising zero crossings, each placed between its two
+    // samples by linear interpolation, first to last. On a sine (what the checks below play) a
+    // 0.3 s window is good to a fraction of a cent. 0 = fewer than two crossings (silence).
+    double hzOf (const std::vector<float>& x)
+    {
+        double first = -1.0, last = -1.0;
+        int crossings = 0;
+        for (size_t i = 1; i < x.size(); ++i)
+            if (x[i - 1] < 0.0f && x[i] >= 0.0f)
+            {
+                const double t = (double) (i - 1) + (double) -x[i - 1] / ((double) x[i] - (double) x[i - 1]);
+                if (crossings++ == 0) first = t;
+                last = t;
+            }
+        return crossings >= 2 ? (double) (crossings - 1) / (last - first) * kSampleRate : 0.0;
+    }
+    double measureHz (Rig& r, double seconds) { return hzOf (renderLeft (r, seconds)); }
+
+    // The left channel of ONE block that carries `ev`, followed by `seconds` more — for what
+    // must hold from the very first sample after an event.
+    std::vector<float> renderLeftFrom (Rig& r, std::initializer_list<std::pair<int, juce::MidiMessage>> ev, double seconds)
+    {
+        r.block (ev);
+        const float* d = r.buf.getReadPointer (0);
+        std::vector<float> x (d, d + kBlock);
+        const auto rest = renderLeft (r, seconds);
+        x.insert (x.end(), rest.begin(), rest.end());
+        return x;
+    }
+
+    double measureRms (Rig& r, double seconds)
+    {
+        const auto x = renderLeft (r, seconds);
+        double sum = 0.0;
+        for (const float v : x) sum += (double) v * (double) v;
+        return x.empty() ? 0.0 : std::sqrt (sum / (double) x.size());
+    }
+
+    double cents (double f, double ref) { return f > 0.0 && ref > 0.0 ? 1200.0 * std::log2 (f / ref) : 1.0e9; }
+
+    void bendChecks()
+    {
+        using namespace Parameters;
+        const juce::String bp (Modules::kLayerBPrefix);
+        // One sine at the key, nothing that moves it: what the estimator reads cleanly.
+        auto sinePatch = [] (Rig& r, const juce::String& pre)
+        {
+            setParam (*r.p, pre + ID::oscOn (1), 1.0f);  setParam (*r.p, pre + ID::oscWave (1), 0.0f);
+            setParam (*r.p, pre + ID::oscFreq (1), 261.63f);
+            setParam (*r.p, pre + ID::oscOn (2), 0.0f);  setParam (*r.p, pre + ID::oscOn (3), 0.0f);
+            setParam (*r.p, pre + ID::filterOn, 0.0f);   setParam (*r.p, pre + ID::lfoOn (1), 0.0f);
+            setParam (*r.p, pre + ID::modMatrixOn, 0.0f);
+            setParam (*r.p, pre + ID::sustain, 1.0f);
+        };
+        auto bend = [] (Rig& r, int value14, int channel = 1)
+        {
+            r.block ({ { 0, juce::MidiMessage::pitchWheel (channel, value14) } });
+            r.run (0.1);   // past the voice's ramp
+        };
+        auto within = [] (double value, double target, double tol) { return std::abs (value - target) <= tol; };
+
+        std::cout << "Pitch bend: a held note, range 2 / 12 / 0 (Story 22.2)" << std::endl;
+        {
+            Rig r;
+            sinePatch (r, {});
+            expect (juce::roundToInt (r.p->getAPVTS().getRawParameterValue (ID::bendRange)->load()) == 2, "BEND defaults to 2 semitones");
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            r.run (0.1);
+            const double f0 = measureHz (r, 0.3);
+            expect (within (f0, 261.63, 0.5), "the estimator reads C4 as 261.6 Hz");
+            bend (r, 16383);
+            expect (within (cents (measureHz (r, 0.3), f0), 200.0, 2.0), "range 2, strip fully up: +2 semitones");
+            bend (r, 0);
+            expect (within (cents (measureHz (r, 0.3), f0), -200.0, 2.0), "range 2, strip fully down: -2 semitones");
+            bend (r, 8192);
+            expect (within (cents (measureHz (r, 0.3), f0), 0.0, 0.5), "strip released (8192): back on the note");
+            r.set (ID::bendRange, 12.0f);
+            bend (r, 16383);
+            expect (within (cents (measureHz (r, 0.3), f0), 1200.0, 2.0), "range 12, strip fully up: +1 octave");
+            r.set (ID::bendRange, 0.0f);
+            r.run (0.1);
+            expect (within (cents (measureHz (r, 0.3), f0), 0.0, 0.5), "range 0: the strip moves nothing");
+            r.set (ID::bendRange, 2.0f);
+            bend (r, 8192);
+            bend (r, 16383, SynthyProcessor::kPatternChannel);   // JASS's own channels are not read
+            expect (within (cents (measureHz (r, 0.3), f0), 0.0, 0.5), "pitch bend on a reserved channel (14) is ignored");
+            // A note that starts under a standing bend starts AT it, no ramp from the centre.
+            r.block ({ { 0, juce::MidiMessage::noteOff (1, 60) } });
+            r.run (1.0);
+            bend (r, 16383);
+            // Measured from the note-on block itself, 50 ms: a note ramping in from the centre
+            // (20 ms) would read some 40 cents flat here.
+            const auto start = renderLeftFrom (r, { { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } }, 0.05);
+            expect (within (cents (hzOf (start), f0), 200.0, 5.0), "a note started under a standing bend is bent from its first cycle");
+            // What clears a standing bend without the hardware.
+            r.block ({ { 0, juce::MidiMessage::controllerEvent (1, 121, 0) } });
+            r.run (0.1);
+            expect (within (cents (measureHz (r, 0.3), f0), 0.0, 0.5), "CC 121 (Reset All Controllers) recentres the bend");
+            bend (r, 16383);
+            r.p->controllerInputsChangedForTest();
+            r.run (0.1);
+            expect (within (cents (measureHz (r, 0.3), f0), 0.0, 0.5), "the MIDI inputs changed (device gone mid-bend): the bend recentres");
+        }
+        std::cout << "Pitch bend: WAVETABLE and SUB bend like the oscillators" << std::endl;
+        for (const bool sub : { false, true })
+        {
+            Rig r;   // one generator alone; the ratio bent / unbent is what counts, whatever its waveform
+            sinePatch (r, {});
+            setParam (*r.p, ID::oscOn (1), 0.0f);
+            if (sub) { r.set (ID::subOn, 1.0f); r.set (ID::subLevel, 0.8f); }
+            else     { r.set (ID::wavetableOn, 1.0f); r.set (ID::wavetableFreq, 261.63f); r.set (ID::wavetableAmp, 0.8f); }
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            r.run (0.1);
+            const double f0 = measureHz (r, 0.3);
+            bend (r, 16383);
+            expect (f0 > 20.0 && within (cents (measureHz (r, 0.3), f0), 200.0, 2.0),
+                    sub ? "SUB alone: +2 semitones under the full strip" : "WAVETABLE alone: +2 semitones under the full strip");
+        }
+        std::cout << "Pitch bend: sequenced notes bend, the step preview does not" << std::endl;
+        {
+            Rig r;   // a one-step figure, 2 s per step: the pattern channel holds one note
+            sinePatch (r, {});
+            auto& st = r.p->getPatterns().steps[0];
+            st.setOn (0, true); st.setPitch (0, 0);
+            r.set (ID::seqLength, 1.0f); r.set (ID::seqSync, 0.0f); r.set (ID::seqRate, 0.5f); r.set (ID::seqGate, 1.0f);
+            r.set (ID::seqOn, 1.0f);
+            PresetIO::hooks (r.p->getAPVTS()).applySeqLatchRoot (0, 60);
+            r.run (0.2);
+            const double f0 = measureHz (r, 0.3);
+            expect (within (f0, 261.63, 0.5), "the latched figure plays C4");
+            bend (r, 16383);
+            expect (within (cents (measureHz (r, 0.3), f0), 200.0, 2.0), "STEP SEQ note under the strip: +2 semitones");
+        }
+        {
+            Rig r;
+            sinePatch (r, {});
+            r.block ({ { 0, juce::MidiMessage::pitchWheel (1, 16383) } });
+            r.block ({ { 0, juce::MidiMessage::noteOn (SynthyProcessor::kAuditionChannel, 60, 0.8f) } });
+            r.run (0.1);
+            expect (within (measureHz (r, 0.3), 261.63, 0.5), "step preview (ch 15) under a full bend stays on C4");
+        }
+        {
+            Rig r;
+            sinePatch (r, {});
+            r.block ({ { 0, juce::MidiMessage::pitchWheel (1, 16383) } });
+            r.block ({ { 0, juce::MidiMessage::noteOn (SynthyProcessor::kDroneChannel, 60, 0.8f) } });
+            r.run (0.1);
+            expect (within (measureHz (r, 0.3), 261.63, 0.5), "the drone's channel (16) under a full bend stays on C4");
+        }
+        {
+            Rig r;   // layer B's preview: B alone sounds it (selection A, nothing held)
+            sinePatch (r, bp);
+            setParam (*r.p, bp + ID::filterTrack, 0.0f);
+            r.block ({ { 0, juce::MidiMessage::pitchWheel (1, 16383) } });
+            r.block ({ { 0, juce::MidiMessage::noteOn (SynthyProcessor::kAuditionChannelB, 60, 0.8f) } });
+            r.run (0.1);
+            expect (within (measureHz (r, 0.3), 261.63, 0.5), "layer B's step preview (ch 12) under a full bend stays on C4");
+        }
+        std::cout << "Pitch bend: each layer its own range (A 2, B 12)" << std::endl;
+        {
+            Rig r;
+            sinePatch (r, {}); sinePatch (r, bp);
+            setParam (*r.p, bp + ID::filterTrack, 0.0f);
+            setParam (*r.p, bp + ID::bendRange, 12.0f);
+            r.set (ID::layerFocus, 2.0f);   // A+B: the key plays both
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            bend (r, 16383);
+            r.set (ID::layerBLevel, 0.0f); r.run (0.1);
+            const double a = measureHz (r, 0.3);
+            r.set (ID::layerBLevel, 1.0f); r.set (ID::layerALevel, 0.0f); r.run (0.1);
+            const double b = measureHz (r, 0.3);
+            expect (within (cents (a, 261.63), 200.0, 3.0), "layer A alone: a whole tone up");
+            expect (within (cents (b, 261.63), 1200.0, 3.0), "layer B alone: an octave up");
+        }
+        std::cout << "Pitch bend: the SAMPLER's rate follows (tape and STRETCH)" << std::endl;
+        {
+            // Directly at a SamplePlayer: one second of a 262 Hz sine as a looped single sample.
+            SampleZone z;
+            z.fileSampleRate = kSampleRate;
+            z.data[0].resize ((size_t) kSampleRate);
+            for (size_t i = 0; i < z.data[0].size(); ++i)
+                z.data[0][i] = 0.5f * (float) std::sin (juce::MathConstants<double>::twoPi * 262.0 * (double) i / kSampleRate);
+            std::vector<SampleZone> zones;
+            zones.push_back (std::move (z));
+            const SampleSet set ("sine", std::move (zones), false);
+            const double up2 = std::pow (2.0, 2.0 / 12.0);
+            for (const bool stretch : { false, true })
+            {
+                SamplePlayer sp;
+                sp.setSampleRate (kSampleRate);
+                sp.setEnabled (true);
+                sp.setMode (SamplePlayer::Mode::Loop);
+                sp.setStretchMode (stretch);
+                sp.setSource (&set);
+                auto play = [&sp] (double seconds)
+                {
+                    std::vector<float> x ((size_t) (seconds * kSampleRate));
+                    for (auto& v : x) v = sp.nextSample().l;
+                    return x;
+                };
+                sp.trigger (1.0, 60);
+                play (0.3);
+                const double f0 = hzOf (play (0.5));
+                sp.setPitchBend (up2);
+                play (0.3);
+                const double f1 = hzOf (play (0.5));
+                sp.setPitchBend (1.0);
+                play (0.3);
+                const double f2 = hzOf (play (0.5));
+                const double tol = stretch ? 10.0 : 1.0;   // the stretch engine's pitch is not sample-exact
+                expect (within (f0, 262.0, 0.5) && within (cents (f1, f0), 200.0, tol) && within (cents (f2, f0), 0.0, tol),
+                        stretch ? "STRETCH: bend factor 2 semitones up and back" : "tape: bend factor 2 semitones up and back");
+                // A note started under a held strip: the factor is there BEFORE the trigger.
+                SamplePlayer held;
+                held.setSampleRate (kSampleRate);
+                held.setEnabled (true);
+                held.setMode (SamplePlayer::Mode::Loop);
+                held.setStretchMode (stretch);
+                held.setSource (&set);
+                held.setPitchBend (up2);
+                held.trigger (1.0, 60);
+                std::vector<float> y ((size_t) (0.8 * kSampleRate));
+                for (auto& v : y) v = held.nextSample().l;
+                y.erase (y.begin(), y.begin() + (int) (0.3 * kSampleRate));
+                expect (within (cents (hzOf (y), 262.0), 200.0, tol),
+                        stretch ? "STRETCH: a note triggered under a set bend plays bent" : "tape: a note triggered under a set bend plays bent");
+            }
+        }
+        std::cout << "Pitch bend: BEND in presets (appended, missing = 2)" << std::endl;
+        {
+            Rig src;
+            src.set (ID::bendRange, 7.0f);
+            setParam (*src.p, bp + ID::bendRange, 5.0f);
+            auto raw = [] (Rig& r, const juce::String& id) { return juce::roundToInt (r.p->getAPVTS().getRawParameterValue (id)->load()); };
+            const auto text = juce::JSON::toString (PresetIO::toVar (src.p->getAPVTS(), "bend"), false, 12);
+            {
+                Rig dst;
+                PresetIO::applyVar (dst.p->getAPVTS(), juce::JSON::parse (text));
+                expect (raw (dst, ID::bendRange) == 7 && raw (dst, bp + ID::bendRange) == 5, "save -> load: A's range 7 and B's 5 are back");
+            }
+            {
+                auto v = juce::JSON::parse (text);   // a file from before 22.2: no BendRange
+                auto* glide = v["LayerA"]["Glide"].getDynamicObject();
+                const bool had = glide != nullptr && glide->hasProperty ("BendRange");
+                expect (had, "the range is written as LayerA.Glide.BendRange");
+                if (glide != nullptr) glide->removeProperty ("BendRange");
+                Rig dst;
+                dst.set (ID::bendRange, 9.0f);
+                PresetIO::applyVar (dst.p->getAPVTS(), v);
+                expect (raw (dst, ID::bendRange) == 2, "a file without BendRange loads range 2");
+            }
+        }
+
+        std::cout << "Mod Wheel: CC 1 as the ninth matrix source" << std::endl;
+        auto wheel = [] (Rig& r, int value, int channel = 1)
+        {
+            r.block ({ { 0, juce::MidiMessage::controllerEvent (channel, 1, value) } });
+            r.run (0.1);
+        };
+        auto route = [] (Rig& r, int module, int param, float amount)
+        {
+            r.set (ID::modMatrixOn, 1.0f);
+            setParam (*r.p, ID::modSlotSource (1), (float) (int) ModSource::ModWheel);
+            setParam (*r.p, ID::modSlotModule (1), (float) module);
+            setParam (*r.p, ID::modSlotParam (1),  (float) param);
+            setParam (*r.p, ID::modSlotAmount (1), amount);
+        };
+        {
+            Rig r;
+            const auto* srcParam = dynamic_cast<juce::AudioParameterChoice*> (r.p->getAPVTS().getParameter (ID::modSlotSource (1)));
+            expect (srcParam != nullptr && srcParam->choices.size() == ModMatrixConfig::kNumSources
+                    && srcParam->choices[(int) ModSource::ModWheel] == "Mod Wheel" && srcParam->choices[(int) ModSource::ChaosY] == "Chaos Y",
+                    "SRC lists Mod Wheel last, after Chaos Y");
+            wheel (r, 127);
+            expect (within (r.p->getModWheelValue(), 1.0, 1.0e-6), "CC 1 = 127 on channel 1: the wheel is at 1");
+            wheel (r, 0, SynthyProcessor::kPatternChannelB);
+            expect (within (r.p->getModWheelValue(), 1.0, 1.0e-6), "CC 1 on a reserved channel (13) is ignored");
+            r.p->resetToDefault();
+            expect (within (r.p->getModWheelValue(), 1.0, 1.0e-6), "RESET leaves the wheel where it stands");
+            r.block ({ { 0, juce::MidiMessage::controllerEvent (1, 121, 0) } });
+            expect (within (r.p->getModWheelValue(), 0.0, 1.0e-6), "CC 121 (Reset All Controllers) zeroes the wheel");
+        }
+        {
+            Rig r;   // Mod Wheel -> Alle OSC FREQ, AMT 1: the source's value reads as octaves
+            sinePatch (r, {});
+            const auto mp = ModDest::fromLegacyTarget ((int) LFOTarget::Frequency);
+            route (r, mp.module, mp.param, 1.0f);
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            r.run (0.1);
+            const double f0 = measureHz (r, 0.3);
+            expect (within (f0, 261.63, 0.5), "wheel at 0: the routing moves nothing");
+            wheel (r, 127);
+            expect (within (cents (measureHz (r, 0.3), f0), 1200.0, 2.0), "wheel at 127, AMT 1 on FREQ: +1 octave");
+            wheel (r, 64);
+            expect (within (cents (measureHz (r, 0.3), f0), 1200.0 * 64.0 / 127.0, 2.0), "wheel at 64: 64/127 of it");
+            // A moving wheel: four CCs inside ONE block split the voice's render into five calls.
+            // The pitch must only rise - every cycle at most as long as the one before (a ramp
+            // per render call snapped back at each event).
+            r.set (ID::stereoOn, 0.0f);   // the widener's delayed copy beats against a moving pitch
+            wheel (r, 0);
+            const auto sweep = renderLeftFrom (r, { { 0,   juce::MidiMessage::controllerEvent (1, 1, 20) },
+                                                    { 128, juce::MidiMessage::controllerEvent (1, 1, 60) },
+                                                    { 256, juce::MidiMessage::controllerEvent (1, 1, 100) },
+                                                    { 384, juce::MidiMessage::controllerEvent (1, 1, 127) } }, 0.06);
+            std::vector<double> crossing;
+            for (size_t i = 1; i < sweep.size(); ++i)
+                if (sweep[i - 1] < 0.0f && sweep[i] >= 0.0f)
+                    crossing.push_back ((double) (i - 1) + (double) -sweep[i - 1] / ((double) sweep[i] - (double) sweep[i - 1]));
+            bool monotonic = crossing.size() > 8;
+            for (size_t i = 2; i < crossing.size(); ++i)
+                if (crossing[i] - crossing[i - 1] > crossing[i - 1] - crossing[i - 2] + 0.5)
+                    monotonic = false;
+            const double lastPeriod = crossing.size() > 2 ? crossing.back() - crossing[crossing.size() - 2] : 0.0;            expect (monotonic && within (lastPeriod, kSampleRate / (2.0 * f0), 1.0),
+                    "four CC 1 events in one block: the pitch rises without stepping back, and arrives");
+        }
+        {
+            Rig r;   // Mod Wheel -> FILTER Cutoff, AMT 0.5: a saw behind a low lowpass opens
+            sinePatch (r, {});
+            setParam (*r.p, ID::oscWave (1), 1.0f);
+            r.set (ID::filterOn, 1.0f); r.set (ID::filterType, 0.0f); r.set (ID::filterCutoff, 200.0f);
+            route (r, ModDest::moduleIndexForLabel ("FILTER"), 0, 0.5f);
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.8f) } });
+            r.run (0.2);
+            const double closed = measureRms (r, 0.3);
+            wheel (r, 127);
+            const double open = measureRms (r, 0.3);
+            expect (closed > 0.0 && open > closed * 1.2, "wheel up: FILTER Cutoff opens (the saw gets louder)");
+            wheel (r, 0);
+            expect (within (measureRms (r, 0.3), closed, closed * 0.02), "wheel back down: the filter closes again");
+        }
+        {
+            Rig r;   // a master-bus target: Mod Wheel -> COMPRESSOR GAIN, AMT 1 = +6 dB make-up
+            sinePatch (r, {});
+            r.set (ID::compOn, 1.0f); r.set (ID::compThreshold, 0.0f); r.set (ID::compMakeup, 0.0f);
+            const auto mp = ModDest::fromLegacyTarget ((int) LFOTarget::CompMakeup);
+            route (r, mp.module, mp.param, 1.0f);
+            r.block ({ { 0, juce::MidiMessage::noteOn (1, 60, 0.3f) } });
+            r.run (0.3);
+            const double quiet = measureRms (r, 0.3);
+            wheel (r, 127);
+            r.run (0.2);
+            const double loud = measureRms (r, 0.3);
+            expect (quiet > 0.0 && within (20.0 * std::log10 (loud / quiet), 6.0, 0.5), "wheel up on COMPRESSOR GAIN: +6 dB on the master bus");
+        }
+        std::cout << "Mod Wheel: RANDOM never rolls it as a source" << std::endl;
+        {
+            Rig r;
+            bool rolled = false;
+            for (int i = 0; i < 40 && ! rolled; ++i)
+            {
+                r.p->randomize();
+                for (int n = 1; n <= ModMatrixConfig::kNumSlots; ++n)
+                    if (juce::roundToInt (r.p->getAPVTS().getRawParameterValue (ID::modSlotSource (n))->load()) == (int) ModSource::ModWheel
+                        && r.p->getAPVTS().getRawParameterValue (ID::modSlotModule (n))->load() > 0.5f)
+                        rolled = true;
+            }
+            expect (! rolled, "40 rolls: no routed slot has Mod Wheel as its source");
+            r.set (ID::bendRange, 7.0f);
+            r.p->randomize();
+            expect (juce::roundToInt (r.p->getAPVTS().getRawParameterValue (ID::bendRange)->load()) == 7, "RANDOM keeps the BEND range");
+            for (const int focus : { 1, 2 })
+            {
+                r.set (ID::bendRange, 7.0f);
+                setParam (*r.p, bp + ID::bendRange, 5.0f);
+                r.set (ID::layerFocus, (float) focus);
+                r.p->randomize();
+                const bool kept = juce::roundToInt (r.p->getAPVTS().getRawParameterValue (ID::bendRange)->load()) == 7
+                               && juce::roundToInt (r.p->getAPVTS().getRawParameterValue (bp + ID::bendRange)->load()) == 5;
+                expect (kept, focus == 1 ? "RANDOM with B lit: A's range 7 and B's 5 both kept" : "RANDOM with A+B lit: A's range 7 and B's 5 both kept");
+            }
+        }
+    }
 }
 
 namespace
@@ -2067,6 +2456,7 @@ int main (int argc, char* argv[])
         juce::ScopedJuceInitialiser_GUI juceInit;
         routerChecks();
         processorChecks();
+        bendChecks();
         presetChecks();
         controllerChecks();
         std::cout << (fails == 0 ? "selftest: all passed" : "selftest: FAILED") << std::endl;

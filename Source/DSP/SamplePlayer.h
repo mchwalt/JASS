@@ -67,6 +67,19 @@ public:
     void setMode(Mode m)                       { mode = m; }
     void setSpeed(double s)                    { speed = std::clamp(s, 0.05, 8.0); }   // rate multiplier
 
+    // Story 22.2: the layer's pitch bend as a rate factor (1 = none), pushed by the voice. TAPE:
+    // one more factor on the step, so the recording runs faster or slower like a tape. STRETCH:
+    // it goes into the engine's transpose factor, the walk along the time axis is untouched.
+    // Exactly 1 leaves both paths bit-identical to a build without bend.
+    void setPitchBend(double factor)
+    {
+        if (factor == bend)
+            return;
+        bend = factor;
+        if (zone != nullptr)
+            stretch.setTransposeFactor((float) (pitchFactorBase * bend));
+    }
+
     // 12.3: pitch/time decoupling toggle. Switching MID-NOTE re-parks the engine (reset stays
     // within configure()'s capacity — no allocation) so the voice continues cleanly in the new
     // regime instead of replaying stale FIFO content.
@@ -137,7 +150,7 @@ public:
             {
                 dkZone   = zone;
                 dkPos    = pos;
-                dkStep   = ((mode == Mode::Reverse || mode == Mode::RevLoop) ? -1.0 : 1.0) * rate * speed;
+                dkStep   = ((mode == Mode::Reverse || mode == Mode::RevLoop) ? -1.0 : 1.0) * rate * speed * bend;
                 dkRemain = kXfadeSamples;
             }
             else
@@ -267,7 +280,7 @@ public:
             {
                 dkZone   = zone;
                 dkPos    = pos;
-                dkStep   = ((mode == Mode::Reverse || mode == Mode::RevLoop) ? -1.0 : 1.0) * rate * speed;
+                dkStep   = ((mode == Mode::Reverse || mode == Mode::RevLoop) ? -1.0 : 1.0) * rate * speed * bend;
                 dkRemain = kXfadeSamples;
             }
             else
@@ -329,7 +342,7 @@ public:
             --dkRemain;
         }
 
-        const double step = rate * speed;   // SPEED rides on top of the key-derived rate, live
+        const double step = rate * speed * bend;   // SPEED rides on top of the key-derived rate, live; so does the bend (22.2)
         pos += rev ? -step : step;
 
         if (!rev && pos >= s1)      { if (looping) pos -= len; else active = false; }
@@ -382,7 +395,8 @@ private:
         const double pitchFactor = lastRatio * std::pow(2.0, (60.0 - root) / 12.0) * zone->tuneRatio;
         timeStepBase = zone->fileSampleRate / hostSampleRate;
         rate = pitchFactor * timeStepBase;
-        stretch.setTransposeFactor((float) pitchFactor);
+        pitchFactorBase = pitchFactor;
+        stretch.setTransposeFactor((float) (pitchFactor * bend));
         const double x = lastVel / 127.0;
         noteGain = zone->gainLin * (float) (1.0 + zone->veltrack * (x * x - 1.0));
     }
@@ -480,6 +494,8 @@ private:
     double rate  = 1.0;                 // tape-mode step (pitch × time)
     double timeStepBase = 1.0;          // stretch-mode step base (fileSR/hostSR, time only)
     double speed = 1.0;
+    double bend  = 1.0;                 // 22.2: pitch-bend rate factor (setPitchBend)
+    double pitchFactorBase = 1.0;       // the note's pitch factor without the bend (computeRate)
     double pos   = 0.0;
     double syncPhase = 0.0;             // master loop phase (shared clock, set per block)
 

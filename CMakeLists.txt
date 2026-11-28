@@ -133,10 +133,13 @@ target_compile_definitions(JASS PUBLIC
     JUCE_USE_CURL=0
     JUCE_VST3_CAN_REPLACE_VST2=0
     # VST3 has no MIDI CC events, so JUCE emulates them with 16 x 130 parameters ("MIDI CC 0|1" ...)
-    # that Cubase lists in full. JASS reads no controller, no pitch wheel and no aftertouch
-    # (pitchWheelMoved is empty by design), so the 2080 entries buy nothing and go (2026-10-10,
-    # maintainer in Cubase: hundreds of MIDI entries next to the rack modules). The controller
-    # profiles of Story 22.1 act in the standalone only, so the VST3 still reads no CC.
+    # that Cubase lists in full: 2080 entries next to the rack modules (2026-10-10, maintainer in
+    # Cubase: hundreds of MIDI entries). They stay off for that reason. Since Story 22.2 this has
+    # a price: JASS reads pitch bend and the mod wheel (CC 1) from the MIDI buffer in
+    # processBlock, and with the emulation off a DAW delivers neither — both work in the
+    # standalone only (the help says so). Switching the flag on would switch them on in a DAW
+    # with no further change. The controller profiles of Story 22.1 are standalone-only by their
+    # own gate (isHostedByDaw), whatever this flag says.
     JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0
     _USE_MATH_DEFINES
 )

@@ -17,6 +17,15 @@ Die Klaviatur muss den Fokus haben, damit die Buchstabentasten klingen (holt ihn
 
 Normale Tastaturen verschlucken manche Dreier-Kombinationen — der dritte Ton kommt nie an. Oktave verschieben oder über MIDI spielen; die Buchstabentasten senden zudem eine feste Anschlagstärke.
 
+**Pitch-Bend und Mod-Wheel**
+
+Pitch- und Mod-Strip (oder -Rad) einer MIDI-Tastatur wirken in der Standalone-App; in einer DAW kommt keins von beiden bei JASS an.
+
+- **Pitch-Strip** — biegt gehaltene und sequenzierte Noten (ARP, STEP SEQ) gleichermaßen und kehrt beim Loslassen zurück
+- **Bereich** — **BEND** im GLIDE-Modul, in Halbtönen, pro Layer: A und B dürfen verschieden weit biegen
+- **Nicht gebogen** — PERC, KARPLUS (die Tonhöhe steht mit dem Anzupfen fest), der Auto-Play-Drone und die Step-Vorschau
+- **Mod-Strip** — die MOD-MATRIX-Quelle **Mod Wheel**: dorthin routen, wo der Patch sie braucht, z. B. Mod Wheel → FILTER · CUTOFF
+
 **MIDI-Controller (Drehregler und Fader)**
 
 Drehregler und Fader eines MIDI-Controllers bewegen JASS in der Standalone-App (in einer DAW dort zuweisen).

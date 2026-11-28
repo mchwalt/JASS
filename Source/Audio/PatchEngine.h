@@ -25,6 +25,8 @@ public:
         float  chaosX       = 0.0f;        // the one global attractor's snapshot (0 when CHAOS is off)
         float  chaosY       = 0.0f;
         float  accentDepth  = 0.0f;        // STEP SEQ ACCENT (15.2)
+        float  bend         = 0.0f;        // 22.2: pitch strip / wheel, -1..1 (0 = centre); × the layer's BEND range
+        float  modWheel     = 0.0f;        // 22.2: CC 1, 0..1 — the ModWheel matrix source
         bool   hosted       = false;
         bool   hostPlaying  = true;
         juce::Optional<double> hostPpq;
@@ -33,6 +35,13 @@ public:
     PatchEngine (juce::AudioProcessorValueTreeState& apvts, const juce::String& idPrefix);
 
     void prepare (double sampleRate, int samplesPerBlock);
+
+    // Story 22.2: MIDI channels whose notes are never bent (bit n = channel n) — the instrument's
+    // drone and step previews. Set once by the processor; an engine on its own bends every channel.
+    void setUnbentChannels (std::uint32_t mask)
+    {
+        for (auto* v : voiceRoster) v->setUnbentChannels (mask);
+    }
 
     const Parameters::PatchParams& params() const noexcept { return p; }
 
@@ -108,6 +117,8 @@ private:
     bool   lfoGlobalActive[kNumLFOs] {};   // 20.1: on && GLOBAL => the engine's instance is the LFO
     double blockDelayTimeSec = 0.0;
     float  blockChaosX = 0.0f, blockChaosY = 0.0f, blockAccent = 0.0f;
+    double blockBendSemis = 0.0;           // 22.2: this layer's bend = strip position × its BEND range
+    float  blockModWheel = 0.0f;           // 22.2: the ModWheel source; the voice smooths it by time
     // The GLOBAL LFO values pushed this block and the block before. setGlobalLfo keeps the previous
     // value (the voice ramps prev → current across the block), so a stale voice gets both, in order.
     float  globalLfoPushed[kNumLFOs] {}, globalLfoPushedBefore[kNumLFOs] {};

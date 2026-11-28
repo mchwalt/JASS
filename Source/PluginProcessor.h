@@ -228,6 +228,7 @@ public:
     // Voices whose key is down in layer A / B (JASS_Render --selftest: hanging notes, mono glide).
     int layerKeysDown (bool layerB) const { return (layerB ? engineB : engineA).keysDown(); }
     float getChaosDisplayValue(int i) const { return chaosDisplay[i & 1].load(); } // 0=X, 1=Y (for the rings)
+    float getModWheelValue() const { return modWheel.load(); }                     // 22.2: CC 1, 0..1 (rings, selftest)
 
     // Name of the currently loaded/active preset (shown in the header). It is
     // persisted into the LiveState file so it survives a restart. Touched only
@@ -399,6 +400,12 @@ private:
     // so display == audio by construction. Free-running: never reset (see DSP/ChaosLorenz.h).
     ChaosLorenz chaos;
     std::atomic<float> chaosDisplay[2] {};   // [0]=X, [1]=Y — published each block (0 when off)
+    // Story 22.2: the keyboard's left-hand controls, read from the MIDI buffer in processBlock
+    // (channels 1..11). Where the hardware stands, not patch state: nothing resets them.
+    float pitchBend = 0.0f;                  // -1..1, 0 = centre; audio thread only
+    std::atomic<float> modWheel { 0.0f };    // CC 1, 0..1 — the ModWheel matrix source (voices, master bus, rings)
+    float modWheelBus = 0.0f;                // its one-pole copy for the block-rate master-bus targets; audio thread only
+    std::atomic<bool> recentreBend { false };   // message thread (controllerInputsChanged) → processBlock: bend back to centre
     // Host gain (AD-13): a fixed pad equal to VOL's default, so a patch has the level in a DAW that
     // it has in the standalone at VOL 0.5 (see processBlock, master stage).
     static constexpr float kHostPad = 0.5f;

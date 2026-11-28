@@ -276,7 +276,7 @@ Three data tables cooperate (all dependency-free headers under `Source/DSP/`):
    WAVETABLE; later modules were appended). Reordering params requires a real
    preset migration (v6 did exactly that — `v5ParamRemap`).
 3. **`ModMatrix.h`** — sources, slots and the accumulate function
-   (`kNumSlots = 8`, `kNumSources = 6`).
+   (`kNumSlots = 8`, `kNumSources = 9`).
 
 **How a parameter becomes a matrix destination:**
 

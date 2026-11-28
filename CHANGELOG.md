@@ -63,6 +63,40 @@ contract — currently `12`; see [`docs/JASS_Preset_Format.md`](docs/JASS_Preset
   pages); since 2026.09.0 both run up to 768 steps on sixteen pages of 48.
 
 ### Added
+- **Pitch bend and mod wheel (standalone app).** The pitch strip bends the notes, the mod strip
+  is a new MOD MATRIX source. Both work in the standalone app only: a DAW does not pass pitch
+  bend or CC 1 on to JASS (the VST3 build keeps `JUCE_VST3_EMULATE_MIDI_CC_WITH_PARAMETERS=0`,
+  which would otherwise add some 2080 host parameters). Until now JASS ignored both strips: only
+  GLIDE and SLIDE moved a pitch, and nothing the left hand did reached the sound (maintainer
+  2026-11-27, Story 22.2).
+  - **Pitch bend** bends every pitched source of a layer - OSC 1-3, WAVETABLE, SUB, GRAIN and
+    the SAMPLER (its playback rate; in STRETCH its pitch). It is kept per layer in the engine
+    instead of per MIDI channel, so notes the ARP and the STEP SEQ play bend like held ones. The
+    movement is smoothed inside the voice, so the strip does not step, and a note started while
+    the strip is held starts bent.
+  - **BEND**, a new knob in GLIDE, sets the range per layer: 0-24 semitones, default 2. It works
+    whether GLIDE is on or off - GLIDE is the module for pitch movement and exists per layer
+    already; show the module to reach the knob. In LAYER and SPLIT, A and B may therefore bend
+    by different amounts on purpose. GLIDE is one column wider for it.
+  - **Mod Wheel** (MIDI CC 1) is a ninth MOD MATRIX source rather than a fixed vibrato: the
+    player routes it to what the patch needs. It is global like Chaos, needs no module switched
+    on, and also drives the master-bus targets (a source that worked on some targets only would
+    need explaining). A preset load leaves it where the strip stands.
+  - **Not bent:** PERC, the auto-play drone and the step preview (they audition the patch as it
+    is), and KARPLUS, whose pitch is fixed the moment the string is plucked.
+  - **RANDOM** never picks Mod Wheel as a source - a random patch must not depend on where the
+    strip happens to be - and keeps each layer's BEND range, which is how you play, not sound
+    design.
+  - **A value that stands without its hardware** can be cleared: MIDI CC 121 (Reset All
+    Controllers) recentres the bend and zeroes the wheel, and a change of the enabled MIDI
+    inputs recentres the bend - a device unplugged mid-bend never sends its release.
+  - **Known limitations:** a bent SAMPLER note in LOOP mode is pulled back to the shared loop
+    clock at each pass; KARPLUS is not bent; filter keytracking follows the played key, not the
+    bend.
+  - No format change: BEND is an appended parameter (a preset without it reads 2), the source
+    list grew at its end, and with the strip at rest every preset renders bit-identically (24
+    of 24). Covered by `JASS_Render --selftest` with a frequency estimator; the feel at the
+    MiniLab 3 is the maintainer's to confirm.
 - **Controller profiles - hardware knobs and faders move JASS.** JASS ignored every MIDI
   controller message, so a MiniLab 3's knobs did nothing and the sound could only be shaped with
   the mouse (maintainer 2026-11-24). A profile is an editable JSON file in

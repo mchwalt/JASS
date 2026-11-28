@@ -11,6 +11,11 @@ void SynthVoice::prepareToPlay(double sampleRate, int /*samplesPerBlock*/)
     currentSampleRate = sampleRate;
     glideRatio.reset(sampleRate, 0.0);
     glideRatio.setCurrentAndTargetValue(1.0);
+    bendSemis.reset(sampleRate, kBendRampSeconds);   // 22.2
+    bendSemis.setCurrentAndTargetValue(0.0);
+    bendMul = 1.0;
+    modWheel.reset(sampleRate, kBendRampSeconds);
+    modWheel.setCurrentAndTargetValue(0.0f);
     for (auto& osc : oscillators)
         osc.setSampleRate(sampleRate);
     subOsc.setSampleRate(sampleRate);
@@ -69,6 +74,19 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
         glideRatio.setCurrentAndTargetValue(transposeRatio);
     }
 
+    // Pitch bend (22.2): a new note starts AT the layer's bend, no ramp from the last note's.
+    // The drone and the step previews play unbent — the channel is known here (the synthesiser
+    // sets it before startNote).
+    bendable = true;
+    for (int ch = 1; ch <= 16; ++ch)
+        if (((unbentChannels >> ch) & 1u) != 0 && isPlayingChannel(ch))
+            bendable = false;
+    const double bendNow = bendable ? bendTarget : 0.0;
+    bendSemis.setCurrentAndTargetValue(bendNow);
+    bendMul = bendNow != 0.0 ? std::pow(2.0, bendNow / 12.0) : 1.0;
+    sampler.setPitchBend(bendMul);   // before trigger: the stretch engine takes its factor there
+    modWheel.setCurrentAndTargetValue(modWheelTarget);   // the wheel too: no sweep in from the last note's
+
     for (auto& osc : oscillators)
         osc.reset();
     subOsc.reset();
@@ -95,8 +113,8 @@ void SynthVoice::startNote(int midiNoteNumber, float velocity,
         grain.setMaterial(z->getData(0), z->isStereo() ? z->getData(1) : nullptr,
                           z->getLength(), z->fileSampleRate);
         grainZoneFactor = sampler.pitchFactorForZone() / transposeRatio;   // f(C4)/f(zone root) · tune
-        grain.setPitchFactor(grainZoneFactor * transposeRatio);
-        grain.setNoteHz(transposeRatio * kC4Hz);   // 17.2 KEY: rate = note
+        grain.setPitchFactor(grainZoneFactor * transposeRatio * bendMul);
+        grain.setNoteHz(transposeRatio * kC4Hz * bendMul);   // 17.2 KEY: rate = note
         grain.trigger();
     }
     else
@@ -420,9 +438,16 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         // when glide is off). Oscillator frequencies are (re)applied every sample so both
         // the glide and the frequency modulation take effect.
         const double ratio = glideRatio.getNextValue();
+        // Pitch bend (22.2): the smoothed semitones become a factor only while the ramp runs; at
+        // rest bendMul stands (exactly 1 in the centre). The SAMPLER's rate follows it here too.
+        if (bendSemis.isSmoothing())
+        {
+            bendMul = std::pow(2.0, bendSemis.getNextValue() / 12.0);
+            sampler.setPitchBend(bendMul);
+        }
         // GRAIN follows the same glided ratio (both modes; a new grain reads it at spawn time).
-        grain.setPitchFactor(grainZoneFactor * ratio);
-        grain.setNoteHz(ratio * kC4Hz);
+        grain.setPitchFactor(grainZoneFactor * ratio * bendMul);
+        grain.setNoteHz(ratio * kC4Hz * bendMul);
 
         // Modulation sources this sample. lfo.process() advances the shared LFO ONCE (its
         // value feeds both the implicit LFO routing and any slot whose source is LFO 1).
@@ -446,6 +471,7 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         for (int i = 0; i < kNumLFOs; ++i) srcVals[(size_t) kLfoSourceIdx[i]] = lfoVals[i];
         srcVals[(size_t) ModSource::ChaosX] = chaosSrc[0];   // global attractor, block-constant
         srcVals[(size_t) ModSource::ChaosY] = chaosSrc[1];   // (0 when CHAOS is off)
+        srcVals[(size_t) ModSource::ModWheel] = modWheel.getNextValue();   // 22.2: exactly the target at rest
 
         // Sum the explicit matrix slots into the per-target offset + the per-OSC offsets
         // (LFOs are just sources now).
@@ -467,12 +493,12 @@ void SynthVoice::renderNextBlock(juce::AudioBuffer<float>& outputBuffer,
         for (int i = 0; i < 3; ++i)
         {
             const double oct = std::clamp(gPitch + oscOffset.pitch[i], -kMaxPitchOct, kMaxPitchOct);
-            oscillators[i].setFrequency(baseFrequencies[i] * ratio * std::pow(2.0, oct) * pitchEnvMul);
+            oscillators[i].setFrequency(baseFrequencies[i] * ratio * std::pow(2.0, oct) * pitchEnvMul * bendMul);
         }
         const double wtOct = std::clamp(gPitch + modOffset[(size_t) LFOTarget::WavetableFreq], -kMaxPitchOct, kMaxPitchOct);
-        wavetable.setFrequency(baseWtFreq * ratio * std::pow(2.0, wtOct) * pitchEnvMul);
+        wavetable.setFrequency(baseWtFreq * ratio * std::pow(2.0, wtOct) * pitchEnvMul * bendMul);
         subOsc.setFrequency(baseFrequencies[0] * ratio * subMul
-                            * std::pow(2.0, std::clamp(gPitch, -kMaxPitchOct, kMaxPitchOct)) * pitchEnvMul);
+                            * std::pow(2.0, std::clamp(gPitch, -kMaxPitchOct, kMaxPitchOct)) * pitchEnvMul * bendMul);
 
         // GENERATOR-target modulation (pre-pan, applied to the shared generators ONCE). The FX-target
         // modulation moved into applyFxMods() above and runs per channel strip in the chain loop below.
